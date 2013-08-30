@@ -1,0 +1,13 @@
+#!/bin/bash
+
+release="precise"
+section="8"
+man1list="http://manpages.ubuntu.com/manpages/$release/en/man$section/"
+gzroot="http://manpages.ubuntu.com/manpages.gz/$release/man$section/"
+filename="index$secion.html"
+
+if ! [ -f $filename ]; then
+	curl -o $filename "$man1list"
+fi
+
+grep 'alt="\[TXT\]"' $filename | cut -d '<' -f 3 | cut -d '>' -f 2 | sed 's/\.html//' | sed -e 's/$/.gz/' -e "s|^|$gzroot|" > gzlist$section

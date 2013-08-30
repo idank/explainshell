@@ -1,0 +1,76 @@
+body {
+    font-family: "Courier New", Courier, Monaco, Menlo, Consolas, monospace;
+}
+
+a {
+    color: #66a3ff;
+}
+
+.program-text {
+    font-weight: bold;
+}
+
+#command {
+	font-size: 18px;
+    word-spacing: 10px;
+	text-align: center;
+}
+
+#about {
+	text-align: justify;
+    width: 700px;
+    margin:0 auto;
+}
+
+.btn, #explain {
+	font-family: Courier;
+}
+
+#canvas {
+    position:absolute;
+    z-index:-1;
+    width: 100%;
+    left: 0;
+}
+
+.small-push {
+    height: 20px;
+}
+
+.push {
+    height: 40px;
+}
+
+.taggernooption {
+    background-color: #f8c7c7;
+}
+
+.taggeroption {
+    background-color: #caf8c7;
+}
+
+.taggercurrent {
+    border-color: red;
+    border-width: 2px;
+}
+
+.dropdown-menu {
+    font-size: 14px;
+}
+
+#examples a {
+    font-size: 15px;
+}
+
+#examples h3 {
+    font-family: 'Berkshire Swash', cursive;
+}
+
+.menu {
+    width: auto;
+    position: relative;
+    top: -30px;
+    left: 240px;
+    font-family: 'Berkshire Swash', cursive;
+    font-size: 24px;
+}

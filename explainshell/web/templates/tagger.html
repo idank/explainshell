@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+	{% block content %}
+            <div class="small-push"></div>
+            <div class="push"></div>
+            <div id="command">
+                <a href="http://manpages.ubuntu.com/manpages/precise/en/man1/{{ m.name }}.html">{{ m.name|e }}</a> - {{ m.synopsis|e }}
+            </div>
+            <div class="small-push"></div>
+            <div style="width: 1000px;">
+                <table id="help" width="100%">
+                    <tbody>
+                        {% for p in m.paragraphs -%}
+                        <tr>
+                            <td>
+                                {% if p.is_option %}
+                                <pre section="{{ p.section }}" paragraph-id="{{ p.idx }}" class="taggeroption">{{ p.text|safe }}</pre>
+                                {% else %}
+                                <pre section="{{ p.section }}" paragraph-id="{{ p.idx }}" class="taggernooption">{{ p.text|safe }}</pre>
+                                {% endif %}
+                            <span style="float: right">
+                                <input type='text' placeholder="short" class='input-small' {% if p.is_option and p.short %}value="{{ p.short|join(', ') }}"{% endif %}/>
+                                <input type='text' placeholder="long" class='input-small' {% if p.is_option and p.long %}value="{{ p.long|join(', ') }}"{% endif %}/>
+                                <input type='text' placeholder="expectsarg" class='input-small' {% if p.is_option and p.expectsarg %}value="{{ p.expectsarg }}"{% endif %}/>
+                                <input type='text' placeholder="argument" class='input-small' {% if p.is_option and p.argument %}value="{{ p.argument }}"{% endif %}/>
+                            </span>
+                            </td>
+                        </tr>
+                        {%- endfor %}
+                    </tbody>
+                </table>
+                <form id='tagsform' method='post'>
+                    <input name='paragraphs' type='hidden' id='paragraphs'/>
+                    <div><input type='submit' class='btn'/></div>
+                </form>
+            </div>
+{% endblock %}
+{% block js %}
+            <script type='text/javascript'>
+                //$(".taggeroption").parent().find("i").addClass("icon-ok");
+                //$(".taggernooption").parent().find("i").addClass("icon-remove");
+                var current = $("[paragraph-id=0]");
+                var timeoutId;
+
+                function select() {
+                    $(current).removeClass('taggercurrent')
+                    current = $(this);
+                    $(current).addClass('taggercurrent')
+                }
+
+                function scrollTo(elem) {
+                    if (timeoutId)
+                        clearTimeout(timeoutId);
+                    timeoutId = setTimeout(scroll, 300);
+                    function scroll() {
+                        $('html, body').scrollTop(elem.offset().top);
+                    }
+
+                    $(current).removeClass('taggercurrent')
+                    current = elem;
+                    $(current).addClass('taggercurrent')
+                }
+
+                function gotoNext() {
+                    var next = $(current).parent().parent().next().find("[paragraph-id]")
+
+                    scrollTo(next);
+                }
+
+                function gotoPrev() {
+                    var prev = $(current).parent().parent().prev().find("[paragraph-id]")
+
+                    scrollTo(prev);
+                }
+
+                function toggleCurrent() {
+                    $(current).toggleClass("taggeroption").toggleClass("taggernooption");
+                    gotoNext();
+                }
+
+                function mergeCurrent() {
+                    var next = $(current).parent().parent().next().remove();
+                    var html = $(current).html();
+                    html += '\n\n';
+                    html += next.find("[paragraph-id]").html();
+                    $(current).html(html);
+                }
+
+                function splitCurrent() {
+                    var newelement = $(current).parent().parent().clone(true);
+                    var html = $(current).html();
+                    var splitted = html.split('\n\n');
+                    if (splitted.length < 2)
+                        return;
+                    html = splitted.shift();
+                    $(current).html(html);
+
+                    newelement.find("input").val('');
+                    var par = newelement.find("[paragraph-id]");
+                    par.removeClass('taggercurrent')
+                    par.attr('paragraph-id', parseInt($(current).attr('paragraph-id')) + 1);
+                    par.html(splitted.join('\n\n'));
+                    $(current).parent().parent().after(newelement);
+                }
+
+                $("[paragraph-id]").click(select);
+
+                $("body").keyup(function(event) {
+                    var code = event.keyCode;
+
+                    if (code == 74) // j
+                        gotoNext();
+                    else if (code == 75) // k
+                        gotoPrev();
+                    else if (code == 77) // m
+                        mergeCurrent();
+                    else if (code == 83) // s
+                        splitCurrent();
+                    else if (code == 222) // '
+                        toggleCurrent();
+                    else if (code == 68) // d
+                        $('#tagsform').submit();
+                });
+
+                function setResults() {
+                    var all = $("[paragraph-id]");
+                    var p = new Array();
+
+                    all.each(function(i, e) {
+                        var id = parseInt($(e).attr('paragraph-id'));
+
+                        var d = {}
+                        d["idx"] = id;
+                        d["section"] = $(e).attr('section');
+                        d["text"] = $(e).html();
+                        if ($(e).hasClass('taggeroption')) {
+                            d["is_option"] = true;
+                        }
+                        else {
+                            d["is_option"] = false;
+                        }
+
+                        var inputs = $(e).parent().find("input");
+                        d["short"] = inputs[0].value ? inputs[0].value.split(',') : [];
+                        d["long"] = inputs[1].value ? inputs[1].value.split(',') : [];
+                        d["expectsarg"] = inputs[2].value;
+                        if (d["expectsarg"].indexOf(",") != -1)
+                            d["expectsarg"] = d["expectsarg"].split(",");
+                        d["argument"] = inputs[3].value;
+                        p.push(d)
+                    });
+
+                    $("#paragraphs").val(JSON.stringify(p));
+                }
+                $(document).ready(function() {
+                    scrollTo(current);
+
+                    $('#tagsform').submit(function() {
+                        setResults();
+                    });
+                });
+            </script>
+{% endblock %}

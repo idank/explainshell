@@ -1,0 +1,38 @@
+{% macro outputcommand(mp, others) -%}
+    {% if others|length == 0 %}
+    <a href="http://manpages.ubuntu.com/manpages/precise/en/man{{ mp.section }}/{{ mp.source }}.html">{{ mp.program|e }}</a>
+    {% else %}
+        <span class="dropdown">
+            <b class="caret" data-toggle="dropdown"></b>
+            <a href="http://manpages.ubuntu.com/manpages/precise/en/man{{ mp.section }}/{{ mp.source }}.html">{{ mp.program|e }}</a>
+            <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu">
+              <li>other manpages</li>
+              <li class="divider"></li>
+            {% for d in others %}
+              <li><a tabindex="-1" href="/explain/{{ d.link }}">{{ d.name }}</a></li>
+            {% endfor %}
+            </ul>
+        </span>
+    {% endif %}
+    {% if mp.synopsis %}- {{ mp.synopsis|e }}{% endif %}
+{%- endmacro %}
+
+{% macro outputcommandexplain(d, others, getargs) -%}
+    {% if others|length == 0 -%}
+    <span style="word-spacing: 0px;"><a href="/explain/{{ d.section }}/{{ d.source }}">{{ d.match|e }}</a></span>
+    {%- else -%}
+                <span class="dropdown">
+                    <span style="word-spacing: 0px;">
+                    <b class="caret" data-toggle="dropdown"></b>
+                    <a href="/explain/{{ d.section }}/{{ d.source }}">{{ d.match|e }}</a>
+                    <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu">
+                      <li>other manpages</li>
+                      <li class="divider"></li>
+                      {% for d in others -%}
+                      <li><a tabindex="-1" href="/explain/{{ d.link }}?args={{ getargs|urlencode }}">{{ d.name|e }}</a></li>
+                      {%- endfor %}
+                    </ul>
+                    </span>
+                </span>
+    {%- endif %}
+{%- endmacro %}

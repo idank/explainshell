@@ -1,0 +1,4 @@
+Flask
+nltk
+nose
+pymongo

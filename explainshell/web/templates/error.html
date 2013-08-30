@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+            {% block content -%}
+            <div class="push"></div>
+            <div class="row">
+                <div class="span8 offset2">
+                    <div class="alert alert-error">
+                        No manpage found for <span class="program-text">{{ prog|e }}</span>.
+                        <br/><br/>
+                        Send me a link of the manpage to idan at explainshell
+                        dot com if you'd like me to add it.
+                    </div>
+                </div>
+            </div>
+            {%- endblock %}

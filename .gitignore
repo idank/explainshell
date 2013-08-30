@@ -1,0 +1,4 @@
+*.pyc
+*.swp
+.coverage
+.vagrant

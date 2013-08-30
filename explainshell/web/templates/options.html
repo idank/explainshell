@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% set t = mp.program|e %}
+{% if mp.synopsis %}
+{% set t = mp.program|e + ' - ' + mp.synopsis|e %}
+{% endif %}
+{% block title %} - {{ t }}{% endblock %}
+	{% block content %}
+            <div class="small-push"></div>
+            <div class="push"></div>
+            <div id="command" style="word-spacing: 0px;">
+                {% import 'macros.html' as macros %}
+                {{ macros.outputcommand(mp, othersections) }}
+            </div>
+            <div class="small-push"></div>
+            <div>
+                <table id="help" width="100%">
+                    <tbody>
+                        {% for desc in mp.options -%}
+                        <tr>
+                            <td>
+                                <pre>{{ desc|safe }}</pre>
+                            </td>
+                        </tr>
+                        {%- endfor %}
+                    </tbody>
+                </table>
+            </div>
+{% endblock %}

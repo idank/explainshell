@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %} - {{ matches[0].match|e }} {{ getargs|e }}{% endblock %}
+	{% block content %}
+            <div class="small-push"></div>
+            <svg id="canvas">
+            </svg>
+            <div class="push"></div>
+            <div id="command">
+                {% import 'macros.html' as macros -%}
+                {% for d in matches %}{% if loop.index == 1 -%}{{ macros.outputcommandexplain(d, othersections, getargs) }}{% elif d.unknown -%}<span class="unknown">{{ d.match|e }}</span>{% else -%}<span id="option{{ loop.index }}">{{ d.match|e }}</span>{%- endif %}{{ d.spaces }}{% endfor %}
+            </div>
+            <div style="height: 5px;"></div>
+            <div style="height: 100px;"></div>
+            <div>
+                <table id="help" width="100%">
+                    <tbody>
+                        {% for d in matches -%}
+                            {% if d.text -%}
+                        <tr>
+                            <td>
+                                <pre id="help{{ loop.index }}">{{ d.text|safe }}</pre>
+                            </td>
+                        </tr>
+                            {%- endif %}
+                        {%- endfor %}
+                    </tbody>
+                </table>
+            </div>
+{% endblock %}
+{% block footer -%}
+<div class="push"></div><div class="text-center"><small><a href="http://manpages.ubuntu.com/manpages/precise/en/man{{ program.section }}/{{ program.source|e }}.html">source manpage</a></small></div>
+{%- endblock %}
+{% block js -%}
+        <script src="/static/js/d3.v3.min.js"></script>
+        <script type="text/javascript">
+            drawlines();
+
+            $(window).resize(function(){
+                $("#canvas").empty();
+                drawlines();
+            });
+        </script>
+{%- endblock %}
