@@ -6,6 +6,7 @@ To get a working environment that lets you run the web interface locally, you'll
 
   # load classifier data
   $ mongorestore dump/explainshell && mongorestore -d explainshell_tests dump/explainshell
+
   $ make tests
   .....................................................
   ----------------------------------------------------------------------
