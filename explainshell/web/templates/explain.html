@@ -31,7 +31,11 @@
 <div class="push"></div><div class="text-center"><small><a href="http://manpages.ubuntu.com/manpages/precise/en/man{{ program.section }}/{{ program.source|e }}.html">source manpage</a></small></div>
 {%- endblock %}
 {% block js -%}
+{% if config.DEBUG %}
         <script src="/static/js/d3.v3.min.js"></script>
+{% else %}
+        <script src="//cdnjs.cloudflare.com/ajax/libs/d3/3.1.6/d3.min.js"></script>
+{%- endif %}
         <script type="text/javascript">
             drawlines();
 

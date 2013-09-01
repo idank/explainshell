@@ -4,8 +4,12 @@
         <title>explainshell.com{% block title %}{% endblock %}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <!-- Bootstrap -->
+{%- if config.DEBUG %}
         <link href="/static/css/bootstrap.min.css" rel="stylesheet" media="screen">
-        <link href="//netdna.bootstrapcdn.com/font-awesome/3.2.1/css/font-awesome.css" rel="stylesheet">
+{% else %}
+        <link href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/css/bootstrap.min.css" rel="stylesheet" media="screen">
+{%- endif %}
+        <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/3.2.1/css/font-awesome.min.css" rel="stylesheet">
         <link href="/static/css/es.css" rel="stylesheet" media="screen">
         <link href='http://fonts.googleapis.com/css?family=Berkshire+Swash' rel='stylesheet' type='text/css'>
         {% block head %}{% endblock %}
@@ -28,9 +32,15 @@
             {% block content %}{% endblock %}
         </div>
         {% block footer %}{% endblock %}
+{%- if config.DEBUG %}
         <script src="/static/js/jquery.js"></script>
         <script src="/static/js/underscore.js"></script>
         <script src="/static/js/bootstrap.min.js"></script>
+{% else %}
+        <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+        <script src="//cdnjs.cloudflare.com/ajax/libs/underscore.js/1.4.4/underscore-min.js"></script>
+        <script src="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/js/bootstrap.min.js"></script>
+{%- endif %}
         <script src="/static/js/es.js"></script>
         {% if not config.DEBUG -%}
         <script>
@@ -44,6 +54,6 @@
 
         </script>
         {%- endif %}
-        {% block js %}{% endblock %}
+        {%- block js %}{% endblock %}
     </body>
 </html>
