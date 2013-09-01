@@ -1,0 +1,7 @@
+{% extends "error.html" %}
+            {% block message -%}
+                        No manpage found for <span class="program-text">{{ prog|e }}</span>.
+                        <br/><br/>
+                        Reply <a href="https://github.com/idank/explainshell/issues/1">here</a> with
+                        a link and I'll add it.
+            {%- endblock %}

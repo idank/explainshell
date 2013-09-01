@@ -63,4 +63,4 @@ def explain(section, program):
             logger.info('others: %s', othersections)
             return render_template('options.html', mp=mp, othersections=helpers.others(mps))
     except errors.ProgramDoesNotExist, e:
-        return render_template('error.html', prog=e.args[0])
+        return render_template('missingmanpage.html', prog=e.args[0])
