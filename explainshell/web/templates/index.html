@@ -37,11 +37,13 @@
             {%- endblock %}
 {% block js -%}
         <script type="text/javascript">
-        $("#form").on("submit", function(event) {
-            event.preventDefault();
+            $("#form").on("submit", function(event) {
+                event.preventDefault();
 
-            var et = $("#explain");
-            window.location.href = commandlinetourl(et.val());
-        });
+                var et = $("#explain");
+                window.location.href = commandlinetourl(et.val());
+            });
+
+            $("#explain").focus();
         </script>
 {%- endblock %}
