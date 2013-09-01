@@ -22,9 +22,9 @@ def explain(section, program):
     try:
         if 'args' in request.args:
             args = request.args['args']
-	    if program is None:
-		program = args.split(' ')[0]
-		args = ' '.join(args.split(' ')[1:])
+            if program is None:
+                program = args.split(' ')[0]
+                args = ' '.join(args.split(' ')[1:])
             command = '%s %s' % (program, args)
             matcher_ = matcher.matcher(command, s, section)
             mrs = matcher_.match()
