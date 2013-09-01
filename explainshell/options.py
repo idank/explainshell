@@ -2,7 +2,7 @@ import re, collections, logging
 import shlex
 
 from cStringIO import StringIO
-from explainshell import store, util
+from explainshell import store, util, errors
 
 tokenstate = collections.namedtuple('tokenstate', 'startpos endpos token')
 
@@ -24,55 +24,58 @@ def tokenize(s):
 
     startpos = 0
     it = util.peekable(lexer)
-    for t in it:
-        endpos = stream.tell()
+    try:
+        for t in it:
+            endpos = stream.tell()
 
-        # remember endpos, we're going to peek next which will move the underlying
-        # string pointer
-        tt = endpos
+            # remember endpos, we're going to peek next which will move the underlying
+            # string pointer
+            tt = endpos
 
-        # if we have another token, backup one char to not include the space
-        # between args
-        if it.hasnext():
-            endpos -= 1
+            # if we have another token, backup one char to not include the space
+            # between args
+            if it.hasnext():
+                endpos -= 1
 
-        # startpos is the previous endpos which may include a lot of spaces
-        # between arguments
+            # startpos is the previous endpos which may include a lot of spaces
+            # between arguments
 
-        # before: 'a     b'
-        #           ^
-        while s[startpos].isspace():
-            startpos += 1
-        # after:  'a     b'
-        #                ^
+            # before: 'a     b'
+            #           ^
+            while s[startpos].isspace():
+                startpos += 1
+            # after:  'a     b'
+            #                ^
 
-        yielded = False
-        if '=' in t:
-            x, y = t.split('=', 1)
-            # was it something like 'x=..'?
-            if x:
-                # was it 'x='?
-                if not y:
-                    # we don't want to lose the =, so yield it by itself and
-                    # it will be marked as unknown by the matcher
+            yielded = False
+            if '=' in t:
+                x, y = t.split('=', 1)
+                # was it something like 'x=..'?
+                if x:
+                    # was it 'x='?
+                    if not y:
+                        # we don't want to lose the =, so yield it by itself and
+                        # it will be marked as unknown by the matcher
 
-                    # yield 'x' and '='
-                    yield tokenstate(startpos, startpos+len(x), x)
-                    yield tokenstate(startpos+len(x), startpos+len(x)+1, '=')
-                else:
-                    # yield 'x=..'
-                    yield tokenstate(startpos, startpos+len(x), x)
-                yielded = True
-            if y:
-                # yield '=y'
-                yield tokenstate(startpos+len(x), endpos, '=' + y)
-                yielded = True
+                        # yield 'x' and '='
+                        yield tokenstate(startpos, startpos+len(x), x)
+                        yield tokenstate(startpos+len(x), startpos+len(x)+1, '=')
+                    else:
+                        # yield 'x=..'
+                        yield tokenstate(startpos, startpos+len(x), x)
+                    yielded = True
+                if y:
+                    # yield '=y'
+                    yield tokenstate(startpos+len(x), endpos, '=' + y)
+                    yielded = True
 
-        if not yielded:
-            # no '=' in current token or it was literally just '='
-            yield tokenstate(startpos, endpos, t)
+            if not yielded:
+                # no '=' in current token or it was literally just '='
+                yield tokenstate(startpos, endpos, t)
 
-        startpos = tt
+            startpos = tt
+    except ValueError, e:
+        raise errors.ParsingError(str(e), s, stream.tell())
 
 def extract(manpage):
     '''extract options from all paragraphs that have been classified as containing
