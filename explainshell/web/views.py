@@ -64,3 +64,5 @@ def explain(section, program):
             return render_template('options.html', mp=mp, othersections=helpers.others(mps))
     except errors.ProgramDoesNotExist, e:
         return render_template('missingmanpage.html', prog=e.args[0])
+    except errors.ParsingError, e:
+        return render_template('error.html', message='Parsing error: %s' % str(e))
