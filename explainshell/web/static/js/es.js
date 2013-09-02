@@ -8,6 +8,9 @@ var colors = ['#3182bd', '#6baed6', '#9ecae1', '#c6dbef', '#e6550d', '#fd8d3c', 
 
 var shuffledcolors;
 
+var vtimeout,
+    changewait = 250;
+
 function eslink(option, mid) {
     this.option = option;
     this.color = shuffledcolors.shift();
@@ -244,24 +247,39 @@ function drawlines() {
 
             $(link.help).add(link.option).hover(
                 function() {
+                    /*
+                     * we're highlighting a new block,
+                     * disable timeout to make all blocks visible
+                     **/
+                    clearTimeout(vtimeout);
+
                     $(link.option).css({'font-weight':'bold'});
+                    $(link.option).add(link.help).css({opacity: 1.0});
 
                     groups.attr('visibility', function(other) {
                         return link != other ? 'hidden' : null; })
 
                     others.each(function(other) {
                         $(other.help).add(other.option).css({opacity: 0.4});
+                        $(other.help).add(other.option).css({'font-weight':'normal'});
                     });
                 },
                 function() {
-                    $(link.option).css({'font-weight':'normal'});
+                    /*
+                     * we're leaving a block,
+                     * make all blocks visible unless we enter a
+                     * new block within changewait ms
+                     **/
+                    vtimeout = setTimeout(function(){
+                        $(link.option).css({'font-weight':'normal'});
 
-                    groups.attr('visibility', function(other) {
-                        return link != other ? 'visible' : null; })
+                        groups.attr('visibility', function(other) {
+                            return link != other ? 'visible' : null; })
 
-                    others.each(function(other) {
-                        $(other.help).add(other.option).css({opacity: 1});
-                    });
+                        others.each(function(other) {
+                            $(other.help).add(other.option).css({opacity: 1});
+                        });
+                    }, changewait);
                 }
             );
         });
