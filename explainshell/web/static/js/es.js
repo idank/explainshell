@@ -297,3 +297,18 @@ function commandlinetourl(s) {
         loc += '?' + $('<input/>', {type: 'hidden', name: 'args', value: q.join(' ')}).serialize();
     return loc;
 }
+
+// very simple adjustment of the command div font size so it doesn't overflow
+function adjustcommandfontsize() {
+    // select each span, but deal with the first one specially because of the dropdown
+    var commandlength = $.trim($("#command>span").slice(1).add("#command span>a").text()).length;
+
+    if (commandlength > 120)
+        $("#command").css('font-size', '10px');
+    else if (commandlength > 110)
+        $("#command").css('font-size', '12px');
+    else if (commandlength > 90)
+        $("#command").css('font-size', '14px');
+    else if (commandlength > 75)
+        $("#command").css('font-size', '16px');
+}
