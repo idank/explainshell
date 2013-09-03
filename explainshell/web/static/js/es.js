@@ -232,6 +232,7 @@ function drawlines() {
                 .attr("fill", 'white')
                 .attr("text-anchor", "middle")
                 .attr("y", ".35em")
+                .attr("font-family", "Arial")
                 .text(link.text);
         }
 
