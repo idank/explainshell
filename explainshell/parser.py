@@ -48,6 +48,11 @@ class Node(object):
             chunks.append('%s=%r' % (k, v))
         return '%sNode(%s)' % (kind.title(), ' '.join(chunks))
 
+    def __eq__(self, other):
+        if not isinstance(other, Node):
+            return False
+        return self.__dict__ == other.__dict__
+
 class CommandLineParser(object):
     """
     This class implements a fairly unsophisticated recursive descent parser for
