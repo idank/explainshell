@@ -37,6 +37,7 @@ class Node(object):
     """
 
     def __init__(self, **kwargs):
+        assert 'kind' in kwargs
         self.__dict__.update(kwargs)
 
     def __repr__(self):
