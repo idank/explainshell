@@ -44,7 +44,7 @@ class Node(object):
         d = dict(self.__dict__)
         kind = d.pop('kind')
         for k, v in sorted(d.items()):
-            chunks.append('%s=%s' % (k, v))
+            chunks.append('%s=%r' % (k, v))
         return '%sNode(%s)' % (kind.title(), ' '.join(chunks))
 
 class CommandLineParser(object):
@@ -255,3 +255,28 @@ def parse_command_line(source, posix=None):
     if posix is None:
         posix = os.name == 'posix'
     return CommandLineParser().parse(source, posix=posix)
+
+def dump(node, indent='  '):
+    def _format(node, level=0):
+        if isinstance(node, Node):
+            d = node.__dict__
+            kind = d.pop('kind')
+            fields = [(k, _format(v, level)) for k, v in sorted(d.items())]
+            return ''.join([
+                '%sNode' % kind.title(),
+                '(',
+                ', '.join(('%s=%s' % field for field in fields)),
+                ')'])
+        elif isinstance(node, list):
+            lines = ['[']
+            lines.extend((indent * (level + 2) + _format(x, level + 2) + ','
+                         for x in node))
+            if len(lines) > 1:
+                lines.append(indent * (level + 1) + ']')
+            else:
+                lines[-1] += ']'
+            return '\n'.join(lines)
+        return repr(node)
+    if not isinstance(node, Node):
+        raise TypeError('expected Node, got %r' % node.__class__.__name__)
+    return _format(node)
