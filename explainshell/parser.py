@@ -134,64 +134,64 @@ class CommandLineParser(object):
 
     def parse_list(self):
         parts = [self.parse_pipeline()]
-        tt = self.peek_token()
-        while tt in (';', '&'):
-            self.consume(tt)
-            part = self.parse_pipeline()
-            parts.append(Node(kind='sync', sync=tt))
-            parts.append(part)
+        op = self.peek_token()
+        while op in (';', '&', '&&', '||'):
+            self.consume(op)
             tt = self.peek_token()
+            if tt in (')', '}'):
+                parts.append(Node(kind='operator', op=op))
+                break
+            part = self.parse_pipeline()
+            parts.append(Node(kind='operator', op=op))
+            parts.append(part)
+            op = self.peek_token()
         if len(parts) == 1:
             node = parts[0]
         else:
             node = Node(kind='list', parts=parts)
-        parse_logger.debug('returning %r', node)
+            parse_logger.debug('returning %r', node)
         return node
 
     def parse_pipeline(self):
-        parts = [self.parse_logical()]
         tt = self.peek_token()
-        while tt in ('&&', '||'):
+        parts = []
+        if tt == '!':
             self.consume(tt)
-            part = self.parse_logical()
-            parts.append(Node(kind='check', check=tt))
+            parts.append(Node(kind='negate'))
+        parts.append(self.parse_command())
+        tt = self.peek_token()
+        while tt in ('|', '|&'):
+            self.consume(tt)
+            part = self.parse_command()
+            parts.append(Node(kind='pipe', pipe=tt))
             parts.append(part)
             tt = self.peek_token()
         if len(parts) == 1:
             node = parts[0]
         else:
             node = Node(kind='pipeline', parts=parts)
-        parse_logger.debug('returning %r', node)
+            parse_logger.debug('returning %r', node)
         return node
 
-    def parse_logical(self):
+    def parse_command(self):
         tt = self.peek_token()
         if tt == '(':
             self.consume(tt)
             node = self.parse_list()
             self.consume(')')
+        elif tt == '{':
+            self.consume(tt)
+            node = self.parse_list()
+            self.consume('}')
         else:
-            parts = [self.parse_command()]
-            tt = self.peek_token()
-            while tt in ('|', '|&'):
-                self.consume(tt)
-                part = self.parse_command()
-                parts.append(Node(kind='pipe', pipe=tt))
-                parts.append(part)
-                tt = self.peek_token()
-            if len(parts) == 1:
-                node = parts[0]
-            else:
-                node = Node(kind='logical', parts=parts)
+            return self.parse_simple_command()
+
+        node = Node(kind='compound', group=tt, list=node, redirects=[])
+        self.parse_redirections(node)
         parse_logger.debug('returning %r', node)
         return node
 
-    def add_redirection(self, node, fd, kind, dest):
-        if fd in node.redirects:
-            raise ValueError('semantics: cannot redirect stream %d twice' % fd)
-        node.redirects[fd] = (kind, dest)
-
-    def parse_command(self):
+    def parse_simple_command(self):
         node = self.parse_command_part()
         tt = self.peek_token()
         while tt in ('word', 'number'):
@@ -202,12 +202,7 @@ class CommandLineParser(object):
         parse_logger.debug('returning %r', node)
         return node
 
-    def parse_command_part(self):
-        node = Node(kind='command', command=[self.peek[1]], redirects=[])
-        if self.peek[0] == 'word':
-            self.consume('word')
-        else:
-            self.consume('number')
+    def parse_redirections(self, node):
         tt = self.peek_token()
         while tt in ('>', '>>'):
             num = 1     # default value
@@ -226,9 +221,9 @@ class CommandLineParser(object):
             redirect_kind = tt
             self.consume(tt)
             tt = self.peek_token()
-            if tt not in ('word', '&'):
+            if tt not in ('word', 'number', '&'):
                 raise ValueError('syntax: expecting filename or &')
-            if tt == 'word':
+            if tt in ('word', 'number'):
                 redirect_target = self.peek[1]
                 self.consume(tt)
             else:
@@ -240,7 +235,15 @@ class CommandLineParser(object):
                 self.consume('number')
             node.redirects.append((num, redirect_kind, redirect_target))
             tt = self.peek_token()
-        parse_logger.debug('returning %r', node)
+        return node
+
+    def parse_command_part(self):
+        node = Node(kind='command', command=[self.peek[1]], redirects=[])
+        if self.peek[0] == 'word':
+            self.consume('word')
+        else:
+            self.consume('number')
+        self.parse_redirections(node)
         return node
 
 def parse_command_line(source, posix=None):
