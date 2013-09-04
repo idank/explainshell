@@ -118,7 +118,7 @@ class CommandLineParser(object):
         self.token = self.peek
         self.peek = self.next_token()
         if self.token[0] != tt:
-            raise ValueError('consume: expected %r', tt)
+            raise ValueError('consume: expected %r' % tt)
 
     def parse(self, source, posix=None):
         self.source = source
