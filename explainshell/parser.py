@@ -261,7 +261,15 @@ def dump(node, indent='  '):
         if isinstance(node, Node):
             d = node.__dict__
             kind = d.pop('kind')
-            fields = [(k, _format(v, level)) for k, v in sorted(d.items())]
+            if kind == 'list' and level > 0:
+                level = level + 1
+            fields = [(k, _format(v, level)) for k, v in sorted(d.items()) if v]
+            if kind == 'list' and level > 0:
+                return ''.join([
+                    '\n%s%sNode' % (indent * level, kind.title()),
+                    '(',
+                    ', '.join(('%s=%s' % field for field in fields)),
+                    ')'])
             return ''.join([
                 '%sNode' % kind.title(),
                 '(',
