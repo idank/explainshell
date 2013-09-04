@@ -29,16 +29,6 @@ else:
     string_types = str,
     basestring = str
 
-#
-# A dummy redirects dict which indicates a desire to swap stdout and stderr
-# in the child.
-#
-SWAP_OUTPUTS = {
-    1: ('>', ('&', 2)),
-    2: ('>', ('&', 3)),
-    3: ('>', ('&', 1)),
-    }
-
 class Node(object):
     """
     This class represents a node in the AST built while parsing command lines.
@@ -184,13 +174,6 @@ class CommandLineParser(object):
             parts = [self.parse_command()]
             tt = self.peek_token()
             while tt in ('|', '|&'):
-                last_part = parts[-1]
-                if ((tt == '|' and 1 in last_part.redirects) or
-                    (tt == '|&' and 2 in last_part.redirects)):
-                    if last_part.redirects != SWAP_OUTPUTS:
-                        raise ValueError(
-                            'semantics: cannot redirect and pipe the '
-                            'same stream')
                 self.consume(tt)
                 part = self.parse_command()
                 parts.append(Node(kind='pipe', pipe=tt))
@@ -214,21 +197,13 @@ class CommandLineParser(object):
         while tt in ('word', 'number'):
             part = self.parse_command_part()
             node.command.extend(part.command)
-            for fd, v in part.redirects.items():
-                self.add_redirection(node, fd, v[0], v[1])
+            node.redirects.extend(part.redirects)
             tt = self.peek_token()
         parse_logger.debug('returning %r', node)
-        if node.redirects != SWAP_OUTPUTS:
-            d = dict(node.redirects)
-            d.pop(1, None)
-            d.pop(2, None)
-            if d:
-                raise ValueError('semantics: can only redirect stdout and '
-                                 'stderr, not %s' % list(d.keys()))
         return node
 
     def parse_command_part(self):
-        node = Node(kind='command', command=[self.peek[1]], redirects={})
+        node = Node(kind='command', command=[self.peek[1]], redirects=[])
         if self.peek[0] == 'word':
             self.consume('word')
         else:
@@ -263,7 +238,7 @@ class CommandLineParser(object):
                 n = int(self.peek[1])
                 redirect_target = ('&', n)
                 self.consume('number')
-            self.add_redirection(node, num, redirect_kind, redirect_target)
+            node.redirects.append((num, redirect_kind, redirect_target))
             tt = self.peek_token()
         parse_logger.debug('returning %r', node)
         return node
