@@ -320,7 +320,7 @@ class CommandLineParser(object):
         self.parse_redirections(node)
         return node
 
-def parse_command_line(source, posix=None):
+def parse_command_line(source, posix=None, convertpos=False):
     """
     Parse a command line into an AST.
 
@@ -331,7 +331,14 @@ def parse_command_line(source, posix=None):
     """
     if posix is None:
         posix = os.name == 'posix'
-    return CommandLineParser(source, posix=posix).parse()
+    ast = CommandLineParser(source, posix=posix).parse()
+    if convertpos:
+        class v(NodeVisitor):
+            def visitnode(self, node):
+                s, e = node.__dict__.pop('pos')
+                node.s = source[s:e]
+        v().visit(ast)
+    return ast
 
 def dump(node, indent='  '):
     def _format(node, level=0):
