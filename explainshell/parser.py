@@ -61,6 +61,15 @@ class CommandLineParser(object):
 
     permitted_tokens = ('&&', '||', '|&', '>>')
 
+    def __init__(self, source, posix=None):
+        self.source = source
+        parse_logger.debug('starting parse of %r', source)
+        if posix is None:
+            posix = os.name == 'posix'
+        self.lex = shell_shlex(source, posix=posix, control=True)
+        self.token = None
+        self.peek = None
+
     def next_token(self):
         t = self.lex.get_token()
         if not t:
@@ -126,17 +135,9 @@ class CommandLineParser(object):
         if self.token[0] != tt:
             raise ValueError('consume: expected %r' % tt)
 
-    def parse(self, source, posix=None):
-        self.source = source
-        parse_logger.debug('starting parse of %r', source)
-        if posix is None:
-            posix = os.name == 'posix'
-        self.lex = shell_shlex(source, posix=posix, control=True)
-        self.token = None
-        self.peek = None
+    def parse(self):
         self.peek_token()
-        result = self.parse_list()
-        return result
+        return self.parse_list()
 
     def parse_list(self):
         parts = [self.parse_pipeline()]
@@ -263,7 +264,7 @@ def parse_command_line(source, posix=None):
     """
     if posix is None:
         posix = os.name == 'posix'
-    return CommandLineParser().parse(source, posix=posix)
+    return CommandLineParser(source, posix=posix).parse()
 
 def dump(node, indent='  '):
     def _format(node, level=0):
