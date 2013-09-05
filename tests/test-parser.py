@@ -61,12 +61,15 @@ class test_parser(unittest.TestCase):
 
     def test_command(self):
         s = 'a b c'
-        self.assertEquals(parse(s), commandnode(['a', 'b', 'c'], 'a b c'))
+        self.assertASTEquals(parse(s), commandnode(['a', 'b', 'c'], 'a b c'))
         s = 'a b "c"'
-        self.assertEquals(parse(s), commandnode(['a', 'b', 'c'], 'a b "c"'))
+        self.assertASTEquals(parse(s), commandnode(['a', 'b', 'c'], 'a b "c"'))
         s = '2>/dev/null a b "c"'
         self.assertASTEquals(parse(s),
                 commandnode(['a', 'b', 'c'], s, redirects=[(2, '>', '/dev/null')]))
+        s = 'a b>&1 2>&1'
+        self.assertASTEquals(parse(s),
+                commandnode(['a', 'b'], s, redirects=[(1, '>', ('&', 1)), (2, '>', ('&', 1))]))
 
     def test_redirection(self):
         trythese = [('', '1'), ('', '3'), ('', '&1'), ('', '&3'), ('', 'file'),
