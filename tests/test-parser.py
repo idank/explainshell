@@ -4,8 +4,14 @@ from explainshell import parser
 
 parse = functools.partial(parser.parse_command_line, convertpos=True)
 
-def commandnode(command, s, redirects=[]):
-    return parser.Node(kind='command', s=s, command=command, redirects=redirects)
+def commandnode(s, *parts):
+    return parser.Node(kind='command', s=s, parts=list(parts))
+
+def wordnode(word, s):
+    return parser.Node(kind='word', word=word, s=s)
+
+def redirectnode(s, input, type, output):
+    return parser.Node(kind='redirect', input=input, type=type, output=output, s=s)
 
 def pipenode(pipe, s):
     return parser.Node(kind='pipe', pipe=pipe, s=s)
@@ -61,15 +67,34 @@ class test_parser(unittest.TestCase):
 
     def test_command(self):
         s = 'a b c'
-        self.assertASTEquals(parse(s), commandnode(['a', 'b', 'c'], 'a b c'))
+        self.assertASTEquals(parse(s),
+                commandnode(s,
+                  wordnode('a', 'a'),
+                  wordnode('b', 'b'),
+                  wordnode('c', 'c')))
+
         s = 'a b "c"'
-        self.assertASTEquals(parse(s), commandnode(['a', 'b', 'c'], 'a b "c"'))
+        self.assertASTEquals(parse(s),
+                commandnode(s,
+                  wordnode('a', 'a'),
+                  wordnode('b', 'b'),
+                  wordnode('c', '"c"')))
+
         s = '2>/dev/null a b "c"'
         self.assertASTEquals(parse(s),
-                commandnode(['a', 'b', 'c'], s, redirects=[(2, '>', '/dev/null')]))
+                commandnode(s,
+                  redirectnode('2>/dev/null', 2, '>', '/dev/null'),
+                  wordnode('a', 'a'),
+                  wordnode('b', 'b'),
+                  wordnode('c', '"c"')))
+
         s = 'a b>&1 2>&1'
         self.assertASTEquals(parse(s),
-                commandnode(['a', 'b'], s, redirects=[(1, '>', ('&', 1)), (2, '>', ('&', 1))]))
+                commandnode(s,
+                  wordnode('a', 'a'),
+                  wordnode('b', 'b'),
+                  redirectnode('>&1', 1, '>', ('&', 1)),
+                  redirectnode('2>&1', 2, '>', ('&', 1))))
 
     def test_redirection(self):
         trythese = [('', '1'), ('', '3'), ('', '&1'), ('', '&3'), ('', 'file'),
@@ -81,17 +106,20 @@ class test_parser(unittest.TestCase):
 
         for redirecttype in ('>', '>>'):
             for (src, dst), expected in zip(trythese, results):
-                s = 'a %s%s%s' % (src, redirecttype, dst)
-                node = commandnode(['a'], s, [(expected[0], redirecttype, expected[1])])
+                redirect = '%s%s%s' % (src, redirecttype, dst)
+                s = 'a %s' % redirect
+                node = commandnode(s,
+                        wordnode('a', 'a'),
+                        redirectnode(redirect, expected[0], redirecttype, expected[1]))
                 self.assertEquals(parse(s), node)
 
     def test_pipeline(self):
         s = 'a | b'
-        self.assertEquals(parse(s),
+        self.assertASTEquals(parse(s),
                           pipelinenode(s,
-                            commandnode(['a'], 'a'),
+                            commandnode('a', wordnode('a', 'a')),
                             pipenode('|', '|'),
-                            commandnode(['b'], 'b')))
+                            commandnode('b', wordnode('b', 'b'))))
 
         # negate doesn't work
         #s = '! a | b'
@@ -100,60 +128,74 @@ class test_parser(unittest.TestCase):
 
     def test_list(self):
         s = 'a && b'
-        self.assertEquals(parse(s),
+        self.assertASTEquals(parse(s),
                           listnode(s,
-                            commandnode(['a'], 'a'),
+                            commandnode('a', wordnode('a', 'a')),
                             operatornode('&&', '&&'),
-                            commandnode(['b'], 'b')
+                            commandnode('b', wordnode('b', 'b'))
                           ))
 
         s = 'a; b; c& d'
-        self.assertEquals(parse(s),
+        self.assertASTEquals(parse(s),
                           listnode(s,
-                            commandnode(['a'], 'a'),
+                            commandnode('a', wordnode('a', 'a')),
                             operatornode(';', ';'),
-                            commandnode(['b'], 'b'),
+                            commandnode('b', wordnode('b', 'b')),
                             operatornode(';', ';'),
-                            commandnode(['c'], 'c'),
+                            commandnode('c', wordnode('c', 'c')),
                             operatornode('&', '&'),
-                            commandnode(['d'], 'd')
+                            commandnode('d', wordnode('d', 'd'))
                           ))
 
         s = 'a | b && c'
-        self.assertEquals(parse(s),
+        self.assertASTEquals(parse(s),
                           listnode(s,
                             pipelinenode('a | b',
-                              commandnode(['a'], 'a'),
+                              commandnode('a', wordnode('a', 'a')),
                               pipenode('|', '|'),
-                              commandnode(['b'], 'b')),
+                              commandnode('b', wordnode('b', 'b'))),
                             operatornode('&&', '&&'),
-                            commandnode(['c'], 'c')
+                            commandnode('c', wordnode('c', 'c'))
                           ))
 
     def test_compound(self):
         s = '(a) && (b)'
         self.assertASTEquals(parse(s),
                           listnode('(a) && (b)',
-                            compoundnode('(', commandnode(['a'], 'a'), '(a)'),
+                            compoundnode('(',
+                              commandnode('a',
+                                wordnode('a', 'a')), '(a)'),
                             operatornode('&&', '&&'),
-                            compoundnode('(', commandnode(['b'], 'b'), '(b)'),
+                            compoundnode('(',
+                              commandnode('b',
+                                wordnode('b', 'b')), '(b)'),
                           ))
 
         s = '(a) | (b)'
         self.assertASTEquals(parse(s),
                           pipelinenode(s,
-                            compoundnode('(', commandnode(['a'], 'a'), '(a)'),
+                            compoundnode('(',
+                              commandnode('a',
+                                wordnode('a', 'a')), '(a)'),
                             pipenode('|', '|'),
-                            compoundnode('(', commandnode(['b'], 'b'), '(b)'),
+                            compoundnode('(',
+                              commandnode('b',
+                                wordnode('b', 'b')), '(b)'),
                           ))
 
         s = '(a) | (b) > /dev/null'
         self.assertASTEquals(parse(s),
                           pipelinenode(s,
-                            compoundnode('(', commandnode(['a'], 'a'), '(a)'),
+                            compoundnode('(',
+                              commandnode('a',
+                                wordnode('a', 'a')), '(a)'),
                             pipenode('|', '|'),
-                            compoundnode('(', commandnode(['b'], 'b'), '(b) > /dev/null',
-                                         redirects=[(1, '>', '/dev/null')]),
+                            compoundnode('(',
+                              commandnode('b',
+                                wordnode('b', 'b')),
+                              '(b) > /dev/null',
+                              redirects=[
+                                redirectnode('> /dev/null', 1, '>', '/dev/null')]),
                           ))
 
         s = '(a && (b; c&)) || d'
@@ -161,28 +203,33 @@ class test_parser(unittest.TestCase):
                 listnode(s,
                   compoundnode('(',
                     listnode('a && (b; c&)',
-                      commandnode(['a'], 'a'),
+                      commandnode('a',
+                        wordnode('a', 'a')),
                       operatornode('&&', '&&'),
                       compoundnode('(',
                         listnode('b; c&',
-                          commandnode(['b'], 'b'),
+                          commandnode('b',
+                            wordnode('b', 'b')),
                           operatornode(';', ';'),
-                          commandnode(['c'], 'c'),
+                          commandnode('c',
+                            wordnode('c', 'c')),
                           operatornode('&', '&'),
                         ), '(b; c&)'),
                     ), '(a && (b; c&))'
                   ),
                   operatornode('||', '||'),
-                  commandnode(['d'], 'd'),
+                  commandnode('d',
+                    wordnode('d', 'd')),
                 ))
 
     def test_compound_redirection(self):
         s = '(a) > /dev/null'
         self.assertASTEquals(parse(s),
                 compoundnode('(',
-                  commandnode(['a'], 'a'),
+                  commandnode('a',
+                    wordnode('a', 'a')),
                   s,
-                  redirects=[(1, '>', '/dev/null')]
+                  redirects=[redirectnode('> /dev/null', 1, '>', '/dev/null')]
                 ))
 
     def test_compound_pipe(self):
@@ -190,8 +237,10 @@ class test_parser(unittest.TestCase):
         self.assertASTEquals(parse(s),
                 pipelinenode(s,
                   compoundnode('(',
-                    commandnode(['a'], 'a'), '(a)'
+                    commandnode('a',
+                      wordnode('a', 'a')), '(a)'
                   ),
                   pipenode('|', '|'),
-                  commandnode(['b'], 'b')
+                  commandnode('b',
+                    wordnode('b', 'b'))
                 ))

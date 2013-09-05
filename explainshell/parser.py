@@ -79,8 +79,16 @@ class NodeVisitor(object):
         elif k == 'compound':
             self._visitnode(node, node.group, node.list, node.redirects)
             self.visit(node.list)
+            for child in node.redirects:
+                self.visit(child)
         elif k == 'command':
-            self._visitnode(node, node.command, node.redirects)
+            self._visitnode(node, node.parts)
+            for child in node.parts:
+                self.visit(child)
+        elif k == 'redirect':
+            self._visitnode(node, node.input, node.type, node.output)
+        elif k == 'word':
+            self._visitnode(node, node.word)
         else:
             raise ValueError('unknown node kind %r' % k)
     def visitnode(self, node):
@@ -97,7 +105,11 @@ class NodeVisitor(object):
         pass
     def visitcompound(self, node, group, list, redirects):
         pass
-    def visitcommand(self, node, command, redirects):
+    def visitcommand(self, node, parts):
+        pass
+    def visitword(self, node, word):
+        pass
+    def visitredirect(self, node, input, type, output):
         pass
 
 token = collections.namedtuple('token', 'type t preceding start end')
@@ -265,36 +277,41 @@ class CommandLineParser(object):
             return self.parse_simple_command()
 
         node = Node(kind='compound', group=tt, list=node, redirects=[], pos=(s, self.token.end))
-        self.parse_redirections(node)
+        redirects, _ = self.parse_redirections(node)
+        node.redirects.extend(redirects)
+        if node.redirects:
+            node.pos = (node.pos[0], node.redirects[-1].pos[1])
         parse_logger.debug('returning %r', node)
         return node
 
     def parse_simple_command(self):
-        node = self.parse_command_part()
+        parts = self.parse_command_part()
         tt = self.peek_token()
         while tt in ('word', 'number'):
-            part = self.parse_command_part()
-            node.command.extend(part.command)
-            node.redirects.extend(part.redirects)
+            parts.extend(self.parse_command_part())
             tt = self.peek_token()
-        node.pos = (node.pos[0], self.token.end)
+        node = Node(kind='command', parts=parts, pos=(parts[0].pos[0], parts[-1].pos[1]))
         parse_logger.debug('returning %r', node)
         return node
 
     def parse_redirections(self, node):
+        parts = []
         tt = self.peek_token()
         while tt in ('>', '>>'):
             num = 1     # default value
+            start = self.peek.start
             if self.peek.preceding == '':
+                assert node.kind == 'word'
                 # > or >> seen without preceding whitespace. So see if the
                 # last token is a positive integer. If it is, assume it's
                 # an fd to redirect and pop it, else leave it in as part of
                 # the command line.
                 try:
-                    try_num = int(node.command[-1])
+                    try_num = int(node.word)
                     if try_num > 0:
                         num = try_num
-                        node.command.pop()
+                        start = node.pos[0]
+                        node = None
                 except ValueError:
                     pass
             redirect_kind = tt
@@ -312,20 +329,23 @@ class CommandLineParser(object):
                 n = int(self.peek.t)
                 redirect_target = ('&', n)
                 self.consume('number')
-            node.redirects.append((num, redirect_kind, redirect_target))
+            parts.append(Node(kind='redirect', input=num, type=redirect_kind,
+                         output=redirect_target, pos=(start, self.token.end)))
             tt = self.peek_token()
-        node.pos = (node.pos[0], self.token.end)
-        return node
+        return parts, node is None
 
     def parse_command_part(self):
-        node = Node(kind='command', command=[self.peek.t], redirects=[],
+        node = Node(kind='word', word=self.peek.t,
                     pos=(self.peek.start, self.peek.end))
         if self.peek.type == 'word':
             self.consume('word')
         else:
             self.consume('number')
-        self.parse_redirections(node)
-        return node
+        redirections, usednode = self.parse_redirections(node)
+        if usednode:
+            return redirections
+        else:
+            return [node] + redirections
 
 def parse_command_line(source, posix=None, convertpos=False):
     """
