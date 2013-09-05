@@ -134,12 +134,15 @@ class CommandLineParser(object):
                 t = t[1:-1]
             elif tt == 'a':
                 endpos += len(t)
+                if self.source[self.lexpos] in self.lex.quotes:
+                    endpos += 1
                 try:
                     int(t)
                     tt = 'number'
                 except ValueError:
                     tt = 'word'
             elif tt == 'c':
+                advance = False
                 # the shlex parser will return arbitrary runs of 'control'
                 # characters, but only some runs will be valid for us. We
                 # split into the valid runs and push all the others back,
@@ -149,11 +152,8 @@ class CommandLineParser(object):
                     valid = self.get_valid_controls(t)
                     t = valid.pop(0)
                     if valid:
-                        advance = False
                         for other in reversed(valid):
                             self.lex.push_token(other)
-                else:
-                    advance = False
                 tt = t
                 endpos += len(t)
             if advance and (not self.lex.pbchars or self.lex.pbchars[0] not in self.lex.control):
@@ -212,17 +212,18 @@ class CommandLineParser(object):
         while op in (';', '&', '&&', '||'):
             self.consume(op)
             tt = self.peek_token()
+            s, e = self.token.start, self.token.end
             if tt in (')', '}'):
-                parts.append(Node(kind='operator', op=op))
+                parts.append(Node(kind='operator', op=op, pos=(s, e)))
                 break
             part = self.parse_pipeline()
-            parts.append(Node(kind='operator', op=op))
+            parts.append(Node(kind='operator', op=op, pos=(s, e)))
             parts.append(part)
             op = self.peek_token()
         if len(parts) == 1:
             node = parts[0]
         else:
-            node = Node(kind='list', parts=parts)
+            node = Node(kind='list', parts=parts, pos=(parts[0].pos[0], parts[-1].pos[1]))
             parse_logger.debug('returning %r', node)
         return node
 
@@ -231,19 +232,20 @@ class CommandLineParser(object):
         parts = []
         if tt == '!':
             self.consume(tt)
-            parts.append(Node(kind='negate'))
+            parts.append(Node(kind='negate', pos=(self.token.start, self.token.end)))
         parts.append(self.parse_command())
         tt = self.peek_token()
         while tt in ('|', '|&'):
             self.consume(tt)
+            s, e = self.token.start, self.token.end
             part = self.parse_command()
-            parts.append(Node(kind='pipe', pipe=tt))
+            parts.append(Node(kind='pipe', pipe=tt, pos=(s, e)))
             parts.append(part)
             tt = self.peek_token()
         if len(parts) == 1:
             node = parts[0]
         else:
-            node = Node(kind='pipeline', parts=parts)
+            node = Node(kind='pipeline', parts=parts, pos=(parts[0].pos[0], parts[-1].pos[1]))
             parse_logger.debug('returning %r', node)
         return node
 
@@ -251,16 +253,18 @@ class CommandLineParser(object):
         tt = self.peek_token()
         if tt == '(':
             self.consume(tt)
+            s = self.token.start
             node = self.parse_list()
             self.consume(')')
         elif tt == '{':
             self.consume(tt)
+            s = self.token.start
             node = self.parse_list()
             self.consume('}')
         else:
             return self.parse_simple_command()
 
-        node = Node(kind='compound', group=tt, list=node, redirects=[])
+        node = Node(kind='compound', group=tt, list=node, redirects=[], pos=(s, self.token.end))
         self.parse_redirections(node)
         parse_logger.debug('returning %r', node)
         return node
@@ -273,6 +277,7 @@ class CommandLineParser(object):
             node.command.extend(part.command)
             node.redirects.extend(part.redirects)
             tt = self.peek_token()
+        node.pos = (node.pos[0], self.token.end)
         parse_logger.debug('returning %r', node)
         return node
 
@@ -309,10 +314,12 @@ class CommandLineParser(object):
                 self.consume('number')
             node.redirects.append((num, redirect_kind, redirect_target))
             tt = self.peek_token()
+        node.pos = (node.pos[0], self.token.end)
         return node
 
     def parse_command_part(self):
-        node = Node(kind='command', command=[self.peek.t], redirects=[])
+        node = Node(kind='command', command=[self.peek.t], redirects=[],
+                    pos=(self.peek.start, self.peek.end))
         if self.peek.type == 'word':
             self.consume('word')
         else:
