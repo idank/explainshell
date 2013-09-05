@@ -4,6 +4,7 @@
 #
 import logging
 import os
+import collections
 
 import sys
 
@@ -52,6 +53,8 @@ class Node(object):
         if not isinstance(other, Node):
             return False
         return self.__dict__ == other.__dict__
+
+token = collections.namedtuple('token', 'type t preceding start end')
 
 class CommandLineParser(object):
     """
@@ -111,7 +114,7 @@ class CommandLineParser(object):
                 while (endpos < len(self.source) and
                        self.source[endpos] not in self.lex.whitespace):
                     endpos += 1
-        r = tt, t, self.lex.preceding, self.lexpos, endpos
+        r = token(tt, t, self.lex.preceding, self.lexpos, endpos)
         while (endpos < len(self.source) and
                self.source[endpos] in self.lex.whitespace):
             endpos += 1
@@ -145,12 +148,12 @@ class CommandLineParser(object):
     def peek_token(self):
         if self.peek is None:
             self.peek = self.next_token()
-        return self.peek[0]
+        return self.peek.type
 
     def consume(self, tt):
         self.token = self.peek
         self.peek = self.next_token()
-        if self.token[0] != tt:
+        if self.token.type != tt:
             raise ValueError('consume: expected %r' % tt)
 
     def parse(self):
@@ -231,7 +234,7 @@ class CommandLineParser(object):
         tt = self.peek_token()
         while tt in ('>', '>>'):
             num = 1     # default value
-            if self.peek[2] == '':
+            if self.peek.preceding == '':
                 # > or >> seen without preceding whitespace. So see if the
                 # last token is a positive integer. If it is, assume it's
                 # an fd to redirect and pop it, else leave it in as part of
@@ -249,13 +252,13 @@ class CommandLineParser(object):
             if tt not in ('word', 'number', '&'):
                 raise ValueError('syntax: expecting filename or &')
             if tt in ('word', 'number'):
-                redirect_target = self.peek[1]
+                redirect_target = self.peek.t
                 self.consume(tt)
             else:
                 self.consume('&')
                 if self.peek_token() != 'number':
                     raise ValueError('syntax: number expected after &')
-                n = int(self.peek[1])
+                n = int(self.peek.t)
                 redirect_target = ('&', n)
                 self.consume('number')
             node.redirects.append((num, redirect_kind, redirect_target))
@@ -263,8 +266,8 @@ class CommandLineParser(object):
         return node
 
     def parse_command_part(self):
-        node = Node(kind='command', command=[self.peek[1]], redirects=[])
-        if self.peek[0] == 'word':
+        node = Node(kind='command', command=[self.peek.t], redirects=[])
+        if self.peek.type == 'word':
             self.consume('word')
         else:
             self.consume('number')
