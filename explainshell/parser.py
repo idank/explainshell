@@ -399,3 +399,8 @@ def dump(node, indent='  '):
     if not isinstance(node, Node):
         raise TypeError('expected Node, got %r' % node.__class__.__name__)
     return _format(node)
+
+def findfirstkind(parts, kind):
+    for node in parts:
+        if node.kind == kind:
+            return node
