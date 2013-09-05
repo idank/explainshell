@@ -37,6 +37,28 @@ class test_parser(unittest.TestCase):
         self.assertEquals(result, expected,
                 'ASTs not equal\n\n%s\n\n!=\n\n%s' % (parser.dump(result), parser.dump(expected)))
 
+    def assertPositions(self, s, expected):
+        p = parser.CommandLineParser(s)
+        nexttoken = p.next_token()
+        expected = iter(expected)
+
+        while nexttoken[0]:
+            tt, t, preceding, start, end = nexttoken
+            expecteds = expected.next()
+            self.assertEquals(s[start:end], expecteds)
+            nexttoken = p.next_token()
+
+    def test_positions(self):
+        s = 'ab cd'
+        expected = ['ab', 'cd']
+        self.assertPositions(s, expected)
+
+        s = 'ab "cd" >&2 || ef\\"gh | ij >>> kl <mn \'|\''
+        expected = ['ab', '"cd"', '>', '&', '2', '||',
+                    'ef\\"gh', '|', 'ij', '>>', '>', 'kl',
+                    '<', 'mn', "'|'"]
+        self.assertPositions(s, expected)
+
     def test_command(self):
         s = 'a b c'
         self.assertEquals(parse(s), commandnode(['a', 'b', 'c']))

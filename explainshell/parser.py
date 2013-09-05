@@ -67,19 +67,24 @@ class CommandLineParser(object):
         if posix is None:
             posix = os.name == 'posix'
         self.lex = shell_shlex(source, posix=posix, control=True)
+        self.lexpos = 0
         self.token = None
         self.peek = None
 
     def next_token(self):
         t = self.lex.get_token()
+        endpos = self.lexpos
         if not t:
             tt = None
         else:
+            advance = True
             tt = self.lex.token_type
             if tt in ('"', "'"):
+                endpos += len(t)
                 tt = 'word'
                 t = t[1:-1]
             elif tt == 'a':
+                endpos += len(t)
                 try:
                     int(t)
                     tt = 'number'
@@ -95,10 +100,23 @@ class CommandLineParser(object):
                     valid = self.get_valid_controls(t)
                     t = valid.pop(0)
                     if valid:
+                        advance = False
                         for other in reversed(valid):
                             self.lex.push_token(other)
+                else:
+                    advance = False
                 tt = t
-        return tt, t, self.lex.preceding
+                endpos += len(t)
+            if advance and (not self.lex.pbchars or self.lex.pbchars[0] not in self.lex.control):
+                while (endpos < len(self.source) and
+                       self.source[endpos] not in self.lex.whitespace):
+                    endpos += 1
+        r = tt, t, self.lex.preceding, self.lexpos, endpos
+        while (endpos < len(self.source) and
+               self.source[endpos] in self.lex.whitespace):
+            endpos += 1
+        self.lexpos = endpos
+        return r
 
     def get_valid_controls(self, t):
         if len(t) == 1:
