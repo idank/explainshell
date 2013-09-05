@@ -54,6 +54,52 @@ class Node(object):
             return False
         return self.__dict__ == other.__dict__
 
+class NodeVisitor(object):
+    def _visitnode(self, node, *args, **kwargs):
+        k = node.kind
+        self.visitnode(node)
+        getattr(self, 'visit%s' % k)(node, *args, **kwargs)
+
+    def visit(self, node):
+        k = node.kind
+        if k == 'operator':
+            self._visitnode(node, node.op)
+        elif k == 'list':
+            self._visitnode(node, node.parts)
+            for child in node.parts:
+                self.visit(child)
+        elif k == 'negate':
+            self._visitnode(node)
+        elif k == 'pipe':
+            self._visitnode(node, node.pipe)
+        elif k == 'pipeline':
+            self._visitnode(node, node.parts)
+            for child in node.parts:
+                self.visit(child)
+        elif k == 'compound':
+            self._visitnode(node, node.group, node.list, node.redirects)
+            self.visit(node.list)
+        elif k == 'command':
+            self._visitnode(node, node.command, node.redirects)
+        else:
+            raise ValueError('unknown node kind %r' % k)
+    def visitnode(self, node):
+        pass
+    def visitoperator(self, node, op):
+        pass
+    def visitlist(self, node, parts):
+        pass
+    def visitnegate(self, node):
+        pass
+    def visitpipe(self, node, pipe):
+        pass
+    def visitpipeline(self, node, parts):
+        pass
+    def visitcompound(self, node, group, list, redirects):
+        pass
+    def visitcommand(self, node, command, redirects):
+        pass
+
 token = collections.namedtuple('token', 'type t preceding start end')
 
 class CommandLineParser(object):
