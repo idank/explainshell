@@ -1,6 +1,6 @@
 import unittest, functools
 
-from explainshell import parser
+from explainshell import parser, errors
 
 parse = functools.partial(parser.parse_command_line, convertpos=True)
 
@@ -244,3 +244,21 @@ class test_parser(unittest.TestCase):
                   commandnode('b',
                     wordnode('b', 'b'))
                 ))
+
+    def test_invalid_control(self):
+        s = 'a &| b'
+        self.assertRaisesRegexp(errors.ParsingError, "expected 'number'.*position 3", parse, s)
+
+    def test_invalid_redirect(self):
+        s = 'a >|b'
+        self.assertRaisesRegexp(errors.ParsingError, "expecting filename or &.*position 3", parse, s)
+
+        s = 'a >&b'
+        self.assertRaisesRegexp(errors.ParsingError, "number expected after &.*position 4", parse, s)
+
+    def test_shlex_error(self):
+        s = "a 'b"
+        self.assertRaisesRegexp(errors.ParsingError, "No closing quotation.*position 2", parse, s)
+
+        s = "a b\\"
+        self.assertRaisesRegexp(errors.ParsingError, "No escaped character.*position 2", parse, s)

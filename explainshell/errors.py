@@ -10,5 +10,12 @@ class ParsingError(Exception):
         self.s = s
         self.position = position
 
-        message = '%s (position %d, ...%s)' % (message, position, s[max(0, position-5):])
+        assert position < len(s)
+
+        prefix = '%s (position %d, ' % (message, position)
+        indent = len(prefix)
+        if position - 5 > 0:
+            indent -= (position - 5)
+        indent += position
+        message = prefix + '%s)\n%s^' % (s[max(0, position - 5):], (indent * ' '))
         super(ParsingError, self).__init__(message)

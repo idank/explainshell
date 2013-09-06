@@ -7,6 +7,7 @@ import os
 import collections
 
 import sys
+from explainshell import errors
 
 from explainshell.shlext import shell_shlex
 
@@ -133,7 +134,10 @@ class CommandLineParser(object):
         self.peek = None
 
     def next_token(self):
-        t = self.lex.get_token()
+        try:
+            t = self.lex.get_token()
+        except ValueError, e:
+            raise errors.ParsingError(str(e), self.source, self.lexpos)
         endpos = self.lexpos
         if not t:
             tt = None
@@ -212,7 +216,7 @@ class CommandLineParser(object):
         self.token = self.peek
         self.peek = self.next_token()
         if self.token.type != tt:
-            raise ValueError('consume: expected %r' % tt)
+            raise errors.ParsingError('consume: expected %r' % tt, self.source, self.token.start)
 
     def parse(self):
         self.peek_token()
@@ -318,14 +322,14 @@ class CommandLineParser(object):
             self.consume(tt)
             tt = self.peek_token()
             if tt not in ('word', 'number', '&'):
-                raise ValueError('syntax: expecting filename or &')
+                raise errors.ParsingError('syntax: expecting filename or &', self.source, self.peek.start)
             if tt in ('word', 'number'):
                 redirect_target = self.peek.t
                 self.consume(tt)
             else:
                 self.consume('&')
                 if self.peek_token() != 'number':
-                    raise ValueError('syntax: number expected after &')
+                    raise errors.ParsingError('syntax: number expected after &', self.source, self.peek.start)
                 n = int(self.peek.t)
                 redirect_target = ('&', n)
                 self.consume('number')

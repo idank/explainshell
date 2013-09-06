@@ -163,14 +163,3 @@ class test_options(unittest.TestCase):
     def test_help(self):
         s = '\t-?, --help description'
         self.assertEquals(options.extract_option(s), (['-?'], ['--help']))
-
-    def test_parsing_error(self):
-        s = 'no escaped character\\'
-        message = r'No escaped character \(position 21, ...cter\\\)'
-        with self.assertRaisesRegexp(errors.ParsingError, message):
-            list(options.tokenize(s))
-
-        s = 'no closing "quotation'
-        message = r'No closing quotation \(position 21, ...ation\)'
-        with self.assertRaisesRegexp(errors.ParsingError, message):
-            list(options.tokenize(s))
