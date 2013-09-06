@@ -214,8 +214,10 @@ class test_matcher(unittest.TestCase):
 
     def test_unparsed(self):
         cmd = '(bar; bar) c'
-        matchedresult = [[(0, 1, None, '('),
-                          (4, 5, helpconstants.OPERATORS[';'], ';'), (9, 12, None, ') c')],
+        matchedresult = [[(0, 1, helpconstants.SUBSHELL, '('),
+                          (4, 5, helpconstants.OPERATORS[';'], ';'),
+                          (9, 10, helpconstants.SUBSHELL, ')'),
+                          (11, 12, None, 'c')],
                          [(1, 4, 'bar synopsis', 'bar')],
                          [(6, 9, 'bar synopsis', 'bar')]]
 

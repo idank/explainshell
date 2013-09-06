@@ -74,6 +74,12 @@ class matcher(parser.NodeVisitor):
         self.groups[0].results.append(
                 matchresult(node.pos[0], node.pos[1], helpconstants.REDIRECTION, None))
 
+    def visitcompound(self, node, group, list, redirects):
+        helptext = helpconstants.COMPOUND[group]
+        # we add a matchresult for the start and end of the compound command
+        self.groups[0].results.append(matchresult(node.pos[0], node.pos[0]+1, helptext, None))
+        self.groups[0].results.append(matchresult(node.pos[1]-1, node.pos[1], helptext, None))
+
     def visitcommand(self, node, parts):
         assert parts
         name = 'command%d' % len([g for g in self.groups if g.name.startswith('command')])

@@ -59,3 +59,16 @@ REDIRECTION = textwrap.dedent('''       Before a command is executed, its input 
        by  the  shell.   Redirection  may  also  be used to open and close files for the current shell execution
        environment.  The following redirection operators may precede or appear anywhere within a <u>simple</u>  <u>command</u>
        or may follow a <u>command</u>.  Redirections are processed in the order they appear, from left to right.''')
+
+GROUP = textwrap.dedent('''       { <u>list</u>; }
+              <u>list</u> is simply executed in the current shell environment.  <u>list</u> must be terminated with a  newline
+              or  semicolon.   This  is known as a <u>group</u> <u>command</u>.  The return status is the exit status of <u>list</u>.
+              Note that unlike the metacharacters <b>(</b> and <b>)</b>, <b>{</b> and <b>}</b> are <u>reserved</u> <u>words</u> and  must  occur  where  a
+              reserved  word  is permitted to be recognized.  Since they do not cause a word break, they must be
+              separated from <u>list</u> by whitespace or another shell metacharacter.''')
+
+SUBSHELL = textwrap.dedent('''       (<u>list</u>) <u>list</u> is executed in a subshell environment (see <b>COMMAND</b> <b>EXECUTION</b>  <b>ENVIRONMENT</b>  below).   Variable
+              assignments and builtin commands that affect the shell's environment do not remain in effect after
+              the command completes.  The return status is the exit status of <u>list</u>.''')
+
+COMPOUND = {'{' : GROUP, '(' : SUBSHELL}
