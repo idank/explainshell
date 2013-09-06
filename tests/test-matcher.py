@@ -1,6 +1,6 @@
 import unittest
 
-from explainshell import matcher, store, errors, options
+from explainshell import matcher, store, errors, options, helpconstants
 
 class mockstore(object):
     def __init__(self):
@@ -234,3 +234,13 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(groups[0].results, matchedresult[0])
         self.assertEquals(groups[1].results, matchedresult[1])
         self.assertEquals(groups[2].results, matchedresult[2])
+
+    def test_pipe(self):
+        cmd = 'bar | baz'
+        matchedresult = [[(4, 5, helpconstants.PIPELINES, '|')],
+                         [(0, 3, 'bar synopsis', 'bar')],
+                         [(6, 9, 'baz synopsis', 'baz')]]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(groups[0].results, matchedresult[0])
+        self.assertEquals(groups[1].results, matchedresult[1])

@@ -1,5 +1,6 @@
 import collections, logging, itertools
-from explainshell import errors, util, parser
+
+from explainshell import errors, util, parser, helpconstants
 
 class matchgroup(object):
     '''a class to group matchresults together
@@ -60,6 +61,10 @@ class matcher(parser.NodeVisitor):
     def unknown(self, token, start, end):
         logger.debug('nothing to do with token %r', token)
         return matchresult(start, end, None, None)
+
+    def visitpipe(self, node, pipe):
+        self.groups[0].results.append(
+                matchresult(node.pos[0], node.pos[1], helpconstants.PIPELINES, None))
 
     def visitcommand(self, node, parts):
         assert parts
