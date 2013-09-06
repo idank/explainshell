@@ -214,7 +214,8 @@ class test_matcher(unittest.TestCase):
 
     def test_unparsed(self):
         cmd = '(bar; bar) c'
-        matchedresult = [[(0, 1, None, '('), (4, 5, None, ';'), (9, 12, None, ') c')],
+        matchedresult = [[(0, 1, None, '('),
+                          (4, 5, helpconstants.OPERATORS[';'], ';'), (9, 12, None, ') c')],
                          [(1, 4, 'bar synopsis', 'bar')],
                          [(6, 9, 'bar synopsis', 'bar')]]
 
@@ -225,7 +226,8 @@ class test_matcher(unittest.TestCase):
 
     def test_known_and_unknown_program(self):
         cmd = 'bar; foo arg >f; baz'
-        matchedresult = [[(3, 4, None, ';'), (13, 16, None, '>f;')],
+        matchedresult = [[(3, 4, helpconstants.OPERATORS[';'], ';'), (13, 15, None, '>f'),
+                          (15, 16, helpconstants.OPERATORS[';'], ';')],
                          [(0, 3, 'bar synopsis', 'bar')],
                          [(5, 12, None, 'foo arg')],
                          [(17, 20, 'baz synopsis', 'baz')]]

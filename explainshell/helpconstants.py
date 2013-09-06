@@ -32,3 +32,25 @@ PIPELINES = textwrap.dedent('''   <b>Pipelines</b>
        to specify the format of the time information.
 
        Each command in a pipeline is executed as a separate process (i.e., in a subshell).''')
+
+OPSEMICOLON = textwrap.dedent('''       Commands separated  by  a <b>;</b> are executed sequentially; the shell waits for each command to terminate in turn.  The
+       return status is the exit status of the last command executed.''')
+
+OPBACKGROUND = textwrap.dedent('''       If a command is terminated by the control operator <b>&amp;</b>, the shell executes the command in the <u>background</u> in
+       a subshell.  The shell does not wait for the command to finish, and the return  status  is  0.''')
+
+OPANDOR = textwrap.dedent('''       AND and OR lists are sequences of one of more pipelines separated by the <b>&amp;&amp;</b>  and  <b>||</b>  control  operators,
+       respectively.  AND and OR lists are executed with left associativity.  An AND list has the form
+
+              <u>command1</u> <b>&amp;&amp;</b> <u>command2</u>
+
+       <u>command2</u> is executed if, and only if, <u>command1</u> returns an exit status of zero.
+
+       An OR list has the form
+
+              <u>command1</u> <b>||</b> <u>command2</u>
+
+       <u>command2</u>  is  executed  if and only if <u>command1</u> returns a non-zero exit status.  The return status of AND
+       and OR lists is the exit status of the last command executed in the list.''')
+
+OPERATORS = {';' : OPSEMICOLON, '&' : OPBACKGROUND, '&&' : OPANDOR, '||' : OPANDOR}

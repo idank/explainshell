@@ -62,6 +62,10 @@ class matcher(parser.NodeVisitor):
         logger.debug('nothing to do with token %r', token)
         return matchresult(start, end, None, None)
 
+    def visitoperator(self, node, op):
+        helptext = helpconstants.OPERATORS[op]
+        self.groups[0].results.append(matchresult(node.pos[0], node.pos[1], helptext, None))
+
     def visitpipe(self, node, pipe):
         self.groups[0].results.append(
                 matchresult(node.pos[0], node.pos[1], helpconstants.PIPELINES, None))
