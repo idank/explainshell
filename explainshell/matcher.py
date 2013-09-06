@@ -233,24 +233,19 @@ class matcher(parser.NodeVisitor):
     def _mergeadjacent(self, matches):
         merged = []
         resultindex = self._resultindex()
-        it = util.peekable(iter(matches))
-        curr = it.next()
-        while it.hasnext():
-            next = it.peek()
-            # we have to make sure that there's no matchresult from another group
-            # between curr and next
-            if curr.text != next.text or (resultindex[curr] != resultindex[next] - 1):
-                merged.append(curr)
-                curr = it.next()
-            else:
-                logger.debug('merging adjacent identical matches %d and %d', it.index - 1, it.index)
-                del resultindex[curr]
-                newindex = resultindex[next]
-                del resultindex[next]
-                it.next()
-                curr = matchresult(curr.start, next.end, curr.text, curr.match)
-                resultindex[curr] = newindex
-        merged.append(curr)
+        sametext = itertools.groupby(matches, lambda m: m.text)
+        for text, ll in sametext:
+            for l in util.groupcontinuous(ll, key=lambda m: resultindex[m]):
+                if len(l) == 1:
+                    merged.append(l[0])
+                else:
+                    start = l[0].start
+                    end = l[-1].end
+                    endindex = resultindex[l[-1]]
+                    for mr in l:
+                        del resultindex[mr]
+                    merged.append(matchresult(start, end, text, None))
+                    resultindex[merged[-1]] = endindex
         return merged
 
     def _mergeunknowns(self, matches):
