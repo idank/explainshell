@@ -154,6 +154,7 @@ class matcher(parser.NodeVisitor):
 
         logger.debug('%r matches:\n%s', self.s, debugmatch())
 
+        self._markunparsedunknown()
         self.matches = self._mergeunknowns(self.matches)
         self.matches = self._mergeadjacent(self.matches)
 
@@ -166,6 +167,27 @@ class matcher(parser.NodeVisitor):
         for mp in self.mps[1:]:
             r.append((mp, None))
         return r
+
+    def _markunparsedunknown(self):
+        '''the parser may leave a remainder at the end of the string if it doesn't
+        match any of the rules, mark them as unknowns'''
+        parsed = [False]*len(self.s)
+        for i in range(len(parsed)):
+            # whitespace is always 'unparsed'
+            if self.s[i].isspace():
+                parsed[i] = True
+            else:
+                # go over all existing matches to see if we've covered the
+                # current position
+                for start, end, _, _ in self.matches:
+                    if start <= i < end:
+                        parsed[i] = True
+                        break
+            if not parsed[i]:
+                self.matches.append(self.unknown(self.s[i], i, i+1))
+
+        # there are no overlaps, so sorting by the start is enough
+        self.matches.sort(key=lambda mr: mr.start)
 
     def _mergeadjacent(self, matches):
         merged = []

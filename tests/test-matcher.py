@@ -204,3 +204,14 @@ class test_matcher(unittest.TestCase):
             (12, 13, None, '-')])
 
         self.assertEquals(matcher.matcher(cmd, s).match(), [matchedresult])
+
+    def test_unparsed(self):
+        cmd = '(bar; bar) c'
+        matchedresult = ('bar', [
+            (0, 1, None, '('),
+            (1, 4, 'bar synopsis', 'bar'),
+            (4, 5, None, ';'),
+            (6, 9, 'bar synopsis', 'bar'),
+            (9, 12, None, ') c')])
+
+        self.assertEquals(matcher.matcher(cmd, s).match(), [matchedresult])
