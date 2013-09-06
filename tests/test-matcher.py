@@ -226,7 +226,8 @@ class test_matcher(unittest.TestCase):
 
     def test_known_and_unknown_program(self):
         cmd = 'bar; foo arg >f; baz'
-        matchedresult = [[(3, 4, helpconstants.OPERATORS[';'], ';'), (13, 15, None, '>f'),
+        matchedresult = [[(3, 4, helpconstants.OPERATORS[';'], ';'),
+                          (13, 15, helpconstants.REDIRECTION, '>f'),
                           (15, 16, helpconstants.OPERATORS[';'], ';')],
                          [(0, 3, 'bar synopsis', 'bar')],
                          [(5, 12, None, 'foo arg')],

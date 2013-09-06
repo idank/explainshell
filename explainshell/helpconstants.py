@@ -54,3 +54,8 @@ OPANDOR = textwrap.dedent('''       AND and OR lists are sequences of one of mor
        and OR lists is the exit status of the last command executed in the list.''')
 
 OPERATORS = {';' : OPSEMICOLON, '&' : OPBACKGROUND, '&&' : OPANDOR, '||' : OPANDOR}
+
+REDIRECTION = textwrap.dedent('''       Before a command is executed, its input and output may be <u>redirected</u> using a special notation interpreted
+       by  the  shell.   Redirection  may  also  be used to open and close files for the current shell execution
+       environment.  The following redirection operators may precede or appear anywhere within a <u>simple</u>  <u>command</u>
+       or may follow a <u>command</u>.  Redirections are processed in the order they appear, from left to right.''')

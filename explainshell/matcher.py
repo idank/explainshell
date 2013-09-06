@@ -70,6 +70,10 @@ class matcher(parser.NodeVisitor):
         self.groups[0].results.append(
                 matchresult(node.pos[0], node.pos[1], helpconstants.PIPELINES, None))
 
+    def visitredirect(self, node, input, type, output):
+        self.groups[0].results.append(
+                matchresult(node.pos[0], node.pos[1], helpconstants.REDIRECTION, None))
+
     def visitcommand(self, node, parts):
         assert parts
         name = 'command%d' % len([g for g in self.groups if g.name.startswith('command')])
