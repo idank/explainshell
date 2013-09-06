@@ -1,5 +1,14 @@
-import collections, logging
+import collections, logging, itertools
 from explainshell import options, errors, util, parser
+
+class matchgroup(object):
+    '''a class to group matchresults together
+
+    we group all shell results in one group and create a new group for every
+    command'''
+    def __init__(self, name):
+        self.name = name
+        self.results = []
 
 class matchresult(collections.namedtuple('matchresult', 'start end text match')):
     @property
@@ -20,7 +29,16 @@ class matcher(parser.NodeVisitor):
         self.store = store
         self.manpage = None
         self._prevoption = self._currentoption = None
-        self.matches = []
+        self.groups = [matchgroup('shell')]
+
+    @property
+    def matches(self):
+        '''return the list of results from the most recently created group'''
+        return self.groups[-1].results
+
+    @property
+    def allmatches(self):
+        return list(itertools.chain.from_iterable(g.results for g in self.groups))
 
     def find_option(self, opt):
         self._currentoption = self.manpage.find_option(opt)
@@ -61,6 +79,13 @@ class matcher(parser.NodeVisitor):
                 endpos = nextwordnode.pos[1]
             except errors.ProgramDoesNotExist:
                 logger.info('no manpage %r for multicommand %r', multi, self.manpage)
+
+        # create a new matchgroup for the current command
+        name = 'command%d' % len([g for g in self.groups if g.name.startswith('command')])
+        mg = matchgroup(name)
+        mg.others = self.mps
+        self.groups.append(mg)
+
         self.matches.append(matchresult(node.pos[0], endpos, self.manpage.synopsis, None))
 
     def visitword(self, node, word):
@@ -132,7 +157,7 @@ class matcher(parser.NodeVisitor):
                     logger.info('one of %r was unknown', word)
                     self.matches.append(self.unknown(word, node.pos[0], node.pos[1]))
                 else:
-                    self.matches += m
+                    self.matches.extend(m)
             elif self.manpage.arguments:
                 d = self.manpage.arguments
                 k = list(d.keys())[0]
@@ -155,15 +180,20 @@ class matcher(parser.NodeVisitor):
         logger.debug('%r matches:\n%s', self.s, debugmatch())
 
         self._markunparsedunknown()
-        self.matches = self._mergeunknowns(self.matches)
-        self.matches = self._mergeadjacent(self.matches)
 
-        # add matchresult.match to existing matches
-        for i, m in enumerate(self.matches):
-            assert m.end <= len(self.s), '%d %d' % (m.end, len(self.s))
-            self.matches[i] = matchresult(m.start, m.end, m.text, self.s[m.start:m.end])
+        # fix each matchgroup seperately
+        for group in self.groups:
+            if group.results:
+                group.results = self._mergeunknowns(group.results)
+                group.results = self._mergeadjacent(group.results)
 
-        r = [(self.manpage.name, self.matches)]
+                # add matchresult.match to existing matches
+                for i, m in enumerate(group.results):
+                    assert m.end <= len(self.s), '%d %d' % (m.end, len(self.s))
+                    group.results[i] = matchresult(m.start, m.end, m.text, self.s[m.start:m.end])
+
+        # take all matches for now
+        r = [(self.manpage.name, sorted(self.allmatches, key=lambda mr: mr.start))]
         for mp in self.mps[1:]:
             r.append((mp, None))
         return r
@@ -179,39 +209,64 @@ class matcher(parser.NodeVisitor):
             else:
                 # go over all existing matches to see if we've covered the
                 # current position
-                for start, end, _, _ in self.matches:
+                for start, end, _, _ in self.allmatches:
                     if start <= i < end:
                         parsed[i] = True
                         break
             if not parsed[i]:
-                self.matches.append(self.unknown(self.s[i], i, i+1))
+                # add unparsed results to the 'shell' group
+                self.groups[0].results.append(self.unknown(self.s[i], i, i+1))
 
         # there are no overlaps, so sorting by the start is enough
-        self.matches.sort(key=lambda mr: mr.start)
+        self.groups[0].results.sort(key=lambda mr: mr.start)
+
+    def _resultindex(self):
+        '''return a mapping of matchresults to their index among all
+        matches, sorted by the start position of the matchresult'''
+        d = {}
+        i = 0
+        for result in sorted(self.allmatches, key=lambda mr: mr.start):
+            d[result] = i
+            i += 1
+        return d
 
     def _mergeadjacent(self, matches):
         merged = []
+        resultindex = self._resultindex()
         it = util.peekable(iter(matches))
         curr = it.next()
         while it.hasnext():
             next = it.peek()
-            if curr.text != next.text:
+            # we have to make sure that there's no matchresult from another group
+            # between curr and next
+            if curr.text != next.text or (resultindex[curr] != resultindex[next] - 1):
                 merged.append(curr)
                 curr = it.next()
             else:
                 logger.debug('merging adjacent identical matches %d and %d', it.index - 1, it.index)
+                del resultindex[curr]
+                newindex = resultindex[next]
+                del resultindex[next]
                 it.next()
                 curr = matchresult(curr.start, next.end, curr.text, curr.match)
+                resultindex[curr] = newindex
         merged.append(curr)
         return merged
 
     def _mergeunknowns(self, matches):
         merged = []
-        for l in util.consecutive(matches, lambda m: m.unknown):
-            if len(l) == 1:
-                merged.append(l[0])
-            else:
-                start = l[0].start
-                end = l[-1].end
-                merged.append(matchresult(start, end, None, None))
+        resultindex = self._resultindex()
+        consecutiveunknowns = util.consecutive(matches, lambda m: m.unknown)
+        for ll in consecutiveunknowns:
+            for l in util.groupcontinuous(ll, key=lambda m: resultindex[m]):
+                if len(l) == 1:
+                    merged.append(l[0])
+                else:
+                    start = l[0].start
+                    end = l[-1].end
+                    endindex = resultindex[l[-1]]
+                    for mr in l:
+                        del resultindex[mr]
+                    merged.append(matchresult(start, end, None, None))
+                    resultindex[merged[-1]] = endindex
         return merged

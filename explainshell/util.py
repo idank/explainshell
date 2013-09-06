@@ -1,4 +1,5 @@
 import itertools
+from operator import itemgetter
 
 def consecutive(l, fn):
     '''yield consecutive items from l that fn returns True for them
@@ -32,6 +33,18 @@ def consecutive(l, fn):
     except StopIteration:
         if ll:
             yield ll
+
+def groupcontinuous(l, key=None):
+    '''
+    >>> list(groupcontinuous([1, 2, 4, 5, 7, 8, 10]))
+    [[1, 2], [4, 5], [7, 8], [10]]
+    >>> list(groupcontinuous(range(5)))
+    [[0, 1, 2, 3, 4]]
+    '''
+    if key is None:
+        key = lambda x: x
+    for k, g in itertools.groupby(enumerate(l), lambda (i, x): i-key(x)):
+        yield map(itemgetter(1), g)
 
 def toposorted(graph, parents):
     """
