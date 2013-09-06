@@ -23,8 +23,6 @@ def get_features(paragraph):
     features['first_line_word_count'] = algo.features.first_line_word_count(ptext)
     features['is_good_section'] = algo.features.is_good_section(paragraph)
     features['word_count'] = algo.features.word_count(ptext)
-    #features['bold'] = algo.features.is_first_word_bold(manpage, paragraph.text)
-    #features['has_bold'] = algo.features.has_bold(paragraph.text)
 
     return features
 

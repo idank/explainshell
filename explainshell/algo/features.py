@@ -56,35 +56,6 @@ def is_good_section(paragraph):
         return True
     return False
 
-def is_first_word_bold(name, paragraph):
-    '''
-    # >>> is_first_word_bold('cat', '-A, --show-all\\n\\t\\tfoo')
-    # True
-    '''
-    import subprocess, re
-    first_line = extract_first_line(paragraph)
-    #match = re.match(r'^\s*(?:\$|\\|{|\[|/|~|\.|@|\'|\*)*\s*([\w-]+)', first_line)
-    match = re.search(r'(\w+)', first_line)
-    if not match:
-        return False
-    first_word = match.group(1)
-    txt = repr(open('/home/idan/dev/explainshell/typescripts/' + name).read())
-    try:
-        if txt.count(first_word) > 1:
-            return False
-    except Exception, e:
-        raise
-    idx = txt.find(first_word)
-    end = txt.find('\\n', idx)
-    if end < 0:
-        end = len(txt)
-    start = txt.rfind('\\n', 0, idx)
-    if start < 0:
-        start = 0
-    if txt.find('\\x1b[1m', start, end) > 0 and txt.find('\\x1b[0m', start, end) > 0:
-        return True
-    return False
-
 def word_count(text):
     return round(len(re.findall(r'\w+', text)), -1)
 
