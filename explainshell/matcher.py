@@ -61,8 +61,8 @@ class matcher(parser.NodeVisitor):
     def visitcommand(self, node, parts):
         assert parts
         wordnode = parts.pop(0)
-        self.mps = self.findmanpages(wordnode.word)
-        manpage = self.mps[0]
+        mps = self.findmanpages(wordnode.word)
+        manpage = mps[0]
         endpos = wordnode.pos[1]
         nextwordnode = parser.findfirstkind(parts, 'word')
 
@@ -70,8 +70,8 @@ class matcher(parser.NodeVisitor):
             try:
                 multi = '%s %s' % (wordnode.word, nextwordnode.word)
                 logger.info('%r is a multicommand, trying to get another token and look up %r', manpage, multi)
-                self.mps = self.findmanpages(multi)
-                manpage = self.mps[0]
+                mps = self.findmanpages(multi)
+                manpage = mps[0]
                 idx = 0 # parts.index(nextwordnode)
                 for p in parts:
                     if p is nextwordnode:
@@ -87,7 +87,7 @@ class matcher(parser.NodeVisitor):
         name = 'command%d' % len([g for g in self.groups if g.name.startswith('command')])
         mg = matchgroup(name)
         mg.manpage = manpage
-        mg.others = self.mps
+        mg.others = mps[1:]
         self.groups.append(mg)
 
         self.matches.append(matchresult(node.pos[0], endpos, manpage.synopsis, None))
@@ -197,7 +197,7 @@ class matcher(parser.NodeVisitor):
 
         # take all matches for now
         r = [(self.manpage.name, sorted(self.allmatches, key=lambda mr: mr.start))]
-        for mp in self.mps[1:]:
+        for mp in self.groups[1].others:
             r.append((mp, None))
         return r
 
