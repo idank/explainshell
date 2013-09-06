@@ -23,8 +23,8 @@ def explain(section, program):
             args = request.args['args']
             command = '%s %s' % (program, args)
             matcher_ = matcher.matcher(command, s, section)
-            mrs = matcher_.match()
-            mr = mrs[0][1]
+            groups = matcher_.match()
+            mr = groups[1].results
             l = []
             it = util.peekable(iter(mr))
             while it.hasnext():
@@ -40,10 +40,10 @@ def explain(section, program):
                 l.append(d)
 
             d = l[0]
-            d['section'] = matcher_.manpage.section
+            d['section'] = groups[1].manpage.section
             d['match'] = '%s(%s)' % (d['match'], d['section'])
-            d['source'] = matcher_.manpage.source[:-5]
-            others = helpers.others([x[0] for x in mrs[1:]])
+            d['source'] = groups[1].manpage.source[:-5]
+            others = helpers.others(groups[1].others)
 
             return render_template('explain.html', program=l[0], matches=l,
                                    othersections=others, getargs=args)

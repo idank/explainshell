@@ -10,7 +10,8 @@ class test_integration(unittest.TestCase):
         cmd = 'echo -en foobar --version'
 
         m = matcher.matcher(cmd, mngr.store)
-        matchprog, matches = m.match()[0]
+        group = m.match()[1]
+        matchprog, matches = group.manpage.name, group.results
 
         self.assertEquals(matchprog, 'echo')
 

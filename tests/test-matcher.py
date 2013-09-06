@@ -41,177 +41,184 @@ class mockstore(object):
 s = mockstore()
 
 class test_matcher(unittest.TestCase):
+    def assertMatchSingle(self, what, expectedmanpage, expectedresults):
+        m = matcher.matcher(what, s)
+        groups = m.match()
+        self.assertEquals(len(groups), 2)
+        self.assertEquals(groups[1].manpage, expectedmanpage)
+        self.assertEquals(groups[1].results, expectedresults)
+
     def test_unknown_prog(self):
         self.assertRaises(errors.ProgramDoesNotExist, matcher.matcher('foo', s).match)
 
     def test_no_options(self):
-        matchedresult = ('bar', [(0, 3, 'bar synopsis', 'bar')])
-        self.assertEquals(matcher.matcher('bar', s).match(), [matchedresult])
+        matchedresult = [(0, 3, 'bar synopsis', 'bar')]
+        self.assertMatchSingle('bar', s.findmanpage('bar')[0], matchedresult)
 
     def test_known_arg(self):
-        matchedresult = ('bar', [
+        matchedresult = [
             (0, 3, 'bar synopsis', 'bar'),
             (4, 10, '-a desc', '-a --a'),
-            (11, 13, '-? help text', '-?')])
+            (11, 13, '-? help text', '-?')]
 
-        self.assertEquals(matcher.matcher('bar -a --a -?', s).match(), [matchedresult])
+        self.assertMatchSingle('bar -a --a -?', s.findmanpage('bar')[0], matchedresult)
 
     def test_arg_in_fuzzy_with_expected_value(self):
         cmd = 'baz -ab arg'
-        matchedresult = ('baz', [
+        matchedresult = [
             (0, 3, 'baz synopsis', 'baz'),
             (4, 6, '-a desc', '-a'),
-            (6, 11, '-b <arg> desc', 'b arg')])
+            (6, 11, '-b <arg> desc', 'b arg')]
 
-        self.assertEquals(matcher.matcher(cmd, s).match(), [matchedresult])
+        self.assertMatchSingle(cmd, s.findmanpage('baz')[0], matchedresult)
 
     def test_arg_with_expected_value(self):
         cmd = 'bar -b arg --b arg'
-        matchedresult = ('bar', [
+        matchedresult = [
             (0, 3, 'bar synopsis', 'bar'),
-            (4, 18, '-b <arg> desc', '-b arg --b arg')])
+            (4, 18, '-b <arg> desc', '-b arg --b arg')]
 
-        self.assertEquals(matcher.matcher(cmd, s).match(), [matchedresult])
+        self.assertMatchSingle(cmd, s.findmanpage('bar')[0], matchedresult)
 
     def test_arg_with_expected_value_from_list(self):
         cmd = 'bar -c one'
-        matchedresult = ('bar', [
+        matchedresult = [
             (0, 3, 'bar synopsis', 'bar'),
-            (4, 10, '-c=one,two\ndesc', '-c one')])
+            (4, 10, '-c=one,two\ndesc', '-c one')]
 
-        self.assertEquals(matcher.matcher(cmd, s).match(), [matchedresult])
+        self.assertMatchSingle(cmd, s.findmanpage('bar')[0], matchedresult)
 
         cmd = 'bar -c notinlist'
-        matchedresult = ('bar', [
+        matchedresult = [
             (0, 3, 'bar synopsis', 'bar'),
             (4, 6, '-c=one,two\ndesc', '-c'),
-            (7, 16, None, 'notinlist')])
+            (7, 16, None, 'notinlist')]
 
-        self.assertEquals(matcher.matcher(cmd, s).match(), [matchedresult])
+        self.assertMatchSingle(cmd, s.findmanpage('bar')[0], matchedresult)
 
     def test_arg_with_expected_value_clash(self):
         '''the first option expects an arg but the arg is actually an option'''
         cmd = 'bar -b -a'
-        matchedresult = ('bar', [
+        matchedresult = [
             (0, 3, 'bar synopsis', 'bar'),
             (4, 6, '-b <arg> desc', '-b'),
-            (7, 9, '-a desc', '-a')])
+            (7, 9, '-a desc', '-a')]
 
-        self.assertEquals(matcher.matcher(cmd, s).match(), [matchedresult])
+        self.assertMatchSingle(cmd, s.findmanpage('bar')[0], matchedresult)
 
     def test_arg_with_expected_value_no_clash(self):
         '''the first option expects an arg but the arg is not an option even though
         it looks like one'''
         cmd = 'bar -b -xa'
-        matchedresult = ('bar', [
+        matchedresult = [
             (0, 3, 'bar synopsis', 'bar'),
             (4, 6, '-b <arg> desc', '-b'),
             (7, 9, None, '-x'),
-            (9, 10, '-a desc', 'a')])
+            (9, 10, '-a desc', 'a')]
 
-        self.assertEquals(matcher.matcher(cmd, s).match(), [matchedresult])
+        self.assertMatchSingle(cmd, s.findmanpage('bar')[0], matchedresult)
 
     def test_unknown_arg(self):
-        matchedresult = ('bar', [(0, 3, 'bar synopsis', 'bar'), (4, 6, None, '-x')])
-        self.assertEquals(matcher.matcher('bar -x', s).match(), [matchedresult])
+        matchedresult = [(0, 3, 'bar synopsis', 'bar'), (4, 6, None, '-x')]
+        self.assertMatchSingle('bar -x', s.findmanpage('bar')[0], matchedresult)
 
         # merges
-        matchedresult = ('bar', [(0, 3, 'bar synopsis', 'bar'), (4, 10, None, '-x --x')])
-        self.assertEquals(matcher.matcher('bar -x --x', s).match(), [matchedresult])
+        matchedresult = [(0, 3, 'bar synopsis', 'bar'), (4, 10, None, '-x --x')]
+        self.assertMatchSingle('bar -x --x', s.findmanpage('bar')[0], matchedresult)
 
-        matchedresult = ('bar', [(0, 3, 'bar synopsis', 'bar'), (4, 8, None, '-xyz')])
-        self.assertEquals(matcher.matcher('bar -xyz', s).match(), [matchedresult])
+        matchedresult = [(0, 3, 'bar synopsis', 'bar'), (4, 8, None, '-xyz')]
+        self.assertMatchSingle('bar -xyz', s.findmanpage('bar')[0], matchedresult)
 
-        matchedresult = ('bar', [(0, 3, 'bar synopsis', 'bar'),
+        matchedresult = [(0, 3, 'bar synopsis', 'bar'),
                                  (4, 6, None, '-x'),
-                                 (6, 7, '-a desc', 'a'), (7, 8, None, 'z')])
+                                 (6, 7, '-a desc', 'a'), (7, 8, None, 'z')]
 
-        self.assertEquals(matcher.matcher('bar -xaz', s).match(), [matchedresult])
+        self.assertMatchSingle('bar -xaz', s.findmanpage('bar')[0], matchedresult)
 
     def test_merge_same_match(self):
-        matchedresult = ('bar', [(0, 3, 'bar synopsis', 'bar'), (4, 8, '-a desc', '-aaa')])
-        self.assertEquals(matcher.matcher('bar -aaa', s).match(), [matchedresult])
+        matchedresult = [(0, 3, 'bar synopsis', 'bar'), (4, 8, '-a desc', '-aaa')]
+        self.assertMatchSingle('bar -aaa', s.findmanpage('bar')[0], matchedresult)
 
     def test_known_and_unknown_arg(self):
-        matchedresult = ('bar', [(0, 3, 'bar synopsis', 'bar'), (4, 6, '-a desc', '-a'), (7, 9, None, '-x')])
-        self.assertEquals(matcher.matcher('bar -a -x', s).match(), [matchedresult])
+        matchedresult = [(0, 3, 'bar synopsis', 'bar'), (4, 6, '-a desc', '-a'), (7, 9, None, '-x')]
+        self.assertMatchSingle('bar -a -x', s.findmanpage('bar')[0], matchedresult)
 
-        matchedresult = ('bar', [(0, 3, 'bar synopsis', 'bar'), (4, 6, '-a desc', '-a'), (6, 7, None, 'x')])
-        self.assertEquals(matcher.matcher('bar -ax', s).match(), [matchedresult])
+        matchedresult = [(0, 3, 'bar synopsis', 'bar'), (4, 6, '-a desc', '-a'), (6, 7, None, 'x')]
+        self.assertMatchSingle('bar -ax', s.findmanpage('bar')[0], matchedresult)
 
     def test_long(self):
         cmd = 'bar --b=b'
-        matchedresult = ('bar', [
+        matchedresult = [
             (0, 3, 'bar synopsis', 'bar'),
-            (4, 9, '-b <arg> desc', '--b=b')])
+            (4, 9, '-b <arg> desc', '--b=b')]
 
-        self.assertEquals(matcher.matcher(cmd, s).match(), [matchedresult])
+        self.assertMatchSingle(cmd, s.findmanpage('bar')[0], matchedresult)
 
     def test_arg_no_dash(self):
         cmd = 'baz ab -x'
-        matchedresult = ('baz', [
+        matchedresult = [
             (0, 3, 'baz synopsis', 'baz'),
             (4, 5, '-a desc', 'a'),
             (5, 6, '-b <arg> desc', 'b'),
-            (7, 9, None, '-x')])
+            (7, 9, None, '-x')]
 
-        self.assertEquals(matcher.matcher(cmd, s).match(), [matchedresult])
+        self.assertMatchSingle(cmd, s.findmanpage('baz')[0], matchedresult)
 
     def test_multicommand(self):
         cmd = 'bar baz --b foo'
-        matchedresult = ('bar', [
+        matchedresult = [
             (0, 3, 'bar synopsis', 'bar'),
             (4, 7, None, 'baz'),
-            (8, 15, '-b <arg> desc', '--b foo')])
+            (8, 15, '-b <arg> desc', '--b foo')]
 
-        self.assertEquals(matcher.matcher(cmd, s).match(), [matchedresult])
+        self.assertMatchSingle(cmd, s.findmanpage('bar')[0], matchedresult)
 
         cmd = 'bar foo --b foo'
-        matchedresult = ('bar-foo', [
+        matchedresult = [
             (0, 7, 'bar foo synopsis', 'bar foo'),
-            (8, 15, '-b <arg> desc', '--b foo')])
+            (8, 15, '-b <arg> desc', '--b foo')]
 
-        self.assertEquals(matcher.matcher(cmd, s).match(), [matchedresult])
+        self.assertMatchSingle(cmd, s.findmanpage('bar foo')[0], matchedresult)
 
     def test_multiple_matches(self):
         cmd = 'dup -ab'
-        matchedresult = ('dup', [
+        matchedresult = [
             (0, 3, 'dup1 synopsis', 'dup'),
             (4, 6, '-a desc', '-a'),
-            (6, 7, '-b <arg> desc', 'b')])
+            (6, 7, '-b <arg> desc', 'b')]
 
-        mr = matcher.matcher(cmd, s).match()
-        self.assertEquals(mr[0], matchedresult)
-        self.assertEquals(mr[1][0].source, 'dup.2.gz')
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(groups[1].results, matchedresult)
+        self.assertEquals(groups[1].others[0].source, 'dup.2.gz')
 
     def test_arguments(self):
         cmd = 'withargs -x -b freearg freearg'
-        matchedresult = ('withargs', [
+        matchedresult = [
             (0, 8, 'withargs synopsis', 'withargs'),
             # tokens that look like options are still unknown
             (9, 11, None, '-x'),
             (12, 22, '-b <arg> desc', '-b freearg'),
-            (23, 30, 'FILE argument', 'freearg')])
+            (23, 30, 'FILE argument', 'freearg')]
 
-        self.assertEquals(matcher.matcher(cmd, s).match(), [matchedresult])
+        self.assertMatchSingle(cmd, s.findmanpage('withargs')[0], matchedresult)
 
     def test_arg_is_dash(self):
         cmd = 'bar -b - -a -'
-        matchedresult = ('bar', [
+        matchedresult = [
             (0, 3, 'bar synopsis', 'bar'),
             (4, 8, '-b <arg> desc', '-b -'),
             (9, 11, '-a desc', '-a'),
-            (12, 13, None, '-')])
+            (12, 13, None, '-')]
 
-        self.assertEquals(matcher.matcher(cmd, s).match(), [matchedresult])
+        self.assertMatchSingle(cmd, s.findmanpage('bar')[0], matchedresult)
 
     def test_unparsed(self):
         cmd = '(bar; bar) c'
-        matchedresult = ('bar', [
-            (0, 1, None, '('),
-            (1, 4, 'bar synopsis', 'bar'),
-            (4, 5, None, ';'),
-            (6, 9, 'bar synopsis', 'bar'),
-            (9, 12, None, ') c')])
+        matchedresult = [[(0, 1, None, '('), (4, 5, None, ';'), (9, 12, None, ') c')],
+                         [(1, 4, 'bar synopsis', 'bar')],
+                         [(6, 9, 'bar synopsis', 'bar')]]
 
-        self.assertEquals(matcher.matcher(cmd, s).match(), [matchedresult])
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(groups[0].results, matchedresult[0])
+        self.assertEquals(groups[1].results, matchedresult[1])
+        self.assertEquals(groups[2].results, matchedresult[2])

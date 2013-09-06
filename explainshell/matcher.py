@@ -10,6 +10,9 @@ class matchgroup(object):
         self.name = name
         self.results = []
 
+    def __repr__(self):
+        return '<matchgroup %r with %d results>' % (self.name, len(self.results))
+
 class matchresult(collections.namedtuple('matchresult', 'start end text match')):
     @property
     def unknown(self):
@@ -195,11 +198,7 @@ class matcher(parser.NodeVisitor):
                     assert m.end <= len(self.s), '%d %d' % (m.end, len(self.s))
                     group.results[i] = matchresult(m.start, m.end, m.text, self.s[m.start:m.end])
 
-        # take all matches for now
-        r = [(self.manpage.name, sorted(self.allmatches, key=lambda mr: mr.start))]
-        for mp in self.groups[1].others:
-            r.append((mp, None))
-        return r
+        return self.groups
 
     def _markunparsedunknown(self):
         '''the parser may leave a remainder at the end of the string if it doesn't
