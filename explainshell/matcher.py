@@ -27,7 +27,6 @@ class matcher(parser.NodeVisitor):
         self.s = s
         self.section = section
         self.store = store
-        self.manpage = None
         self._prevoption = self._currentoption = None
         self.groups = [matchgroup('shell')]
 
@@ -39,6 +38,10 @@ class matcher(parser.NodeVisitor):
     @property
     def allmatches(self):
         return list(itertools.chain.from_iterable(g.results for g in self.groups))
+
+    @property
+    def manpage(self):
+        return self.groups[-1].manpage
 
     def find_option(self, opt):
         self._currentoption = self.manpage.find_option(opt)
@@ -59,16 +62,16 @@ class matcher(parser.NodeVisitor):
         assert parts
         wordnode = parts.pop(0)
         self.mps = self.findmanpages(wordnode.word)
-        self.manpage = self.mps[0]
+        manpage = self.mps[0]
         endpos = wordnode.pos[1]
         nextwordnode = parser.findfirstkind(parts, 'word')
 
-        if self.manpage.multicommand and nextwordnode:
+        if manpage.multicommand and nextwordnode:
             try:
                 multi = '%s %s' % (wordnode.word, nextwordnode.word)
-                logger.info('%r is a multicommand, trying to get another token and look up %r', self.manpage, multi)
+                logger.info('%r is a multicommand, trying to get another token and look up %r', manpage, multi)
                 self.mps = self.findmanpages(multi)
-                self.manpage = self.mps[0]
+                manpage = self.mps[0]
                 idx = 0 # parts.index(nextwordnode)
                 for p in parts:
                     if p is nextwordnode:
@@ -78,15 +81,16 @@ class matcher(parser.NodeVisitor):
                 parts.pop(idx)
                 endpos = nextwordnode.pos[1]
             except errors.ProgramDoesNotExist:
-                logger.info('no manpage %r for multicommand %r', multi, self.manpage)
+                logger.info('no manpage %r for multicommand %r', multi, manpage)
 
         # create a new matchgroup for the current command
         name = 'command%d' % len([g for g in self.groups if g.name.startswith('command')])
         mg = matchgroup(name)
+        mg.manpage = manpage
         mg.others = self.mps
         self.groups.append(mg)
 
-        self.matches.append(matchresult(node.pos[0], endpos, self.manpage.synopsis, None))
+        self.matches.append(matchresult(node.pos[0], endpos, manpage.synopsis, None))
 
     def visitword(self, node, word):
         def attemptfuzzy(chars):
