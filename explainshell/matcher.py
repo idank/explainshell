@@ -184,7 +184,6 @@ class matcher(parser.NodeVisitor):
         # fix each matchgroup seperately
         for group in self.groups:
             if group.results:
-                group.results = self._mergeunknowns(group.results)
                 group.results = self._mergeadjacent(group.results)
 
                 # add matchresult.match to existing matches
@@ -245,23 +244,5 @@ class matcher(parser.NodeVisitor):
                     for mr in l:
                         del resultindex[mr]
                     merged.append(matchresult(start, end, text, None))
-                    resultindex[merged[-1]] = endindex
-        return merged
-
-    def _mergeunknowns(self, matches):
-        merged = []
-        resultindex = self._resultindex()
-        consecutiveunknowns = util.consecutive(matches, lambda m: m.unknown)
-        for ll in consecutiveunknowns:
-            for l in util.groupcontinuous(ll, key=lambda m: resultindex[m]):
-                if len(l) == 1:
-                    merged.append(l[0])
-                else:
-                    start = l[0].start
-                    end = l[-1].end
-                    endindex = resultindex[l[-1]]
-                    for mr in l:
-                        del resultindex[mr]
-                    merged.append(matchresult(start, end, None, None))
                     resultindex[merged[-1]] = endindex
         return merged
