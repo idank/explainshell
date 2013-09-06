@@ -63,10 +63,25 @@ class matcher(parser.NodeVisitor):
 
     def visitcommand(self, node, parts):
         assert parts
+        name = 'command%d' % len([g for g in self.groups if g.name.startswith('command')])
         wordnode = parts.pop(0)
-        mps = self.findmanpages(wordnode.word)
-        manpage = mps[0]
         endpos = wordnode.pos[1]
+
+        try:
+            mps = self.findmanpages(wordnode.word)
+        except errors.ProgramDoesNotExist, e:
+            logger.info('no manpage found for %r', wordnode.word)
+
+            mg = matchgroup(name)
+            mg.error = e
+            mg.manpage = None
+            mg.others = None
+            self.groups.append(mg)
+
+            self.matches.append(matchresult(node.pos[0], endpos, None, None))
+            return
+
+        manpage = mps[0]
         nextwordnode = parser.findfirstkind(parts, 'word')
 
         if manpage.multicommand and nextwordnode:
@@ -87,7 +102,6 @@ class matcher(parser.NodeVisitor):
                 logger.info('no manpage %r for multicommand %r', multi, manpage)
 
         # create a new matchgroup for the current command
-        name = 'command%d' % len([g for g in self.groups if g.name.startswith('command')])
         mg = matchgroup(name)
         mg.manpage = manpage
         mg.others = mps[1:]
@@ -120,6 +134,11 @@ class matcher(parser.NodeVisitor):
                     m.append(self.unknown(t, pos, pos+len(t)))
                 pos += len(t)
             return m
+
+        if not self.manpage:
+            logger.info('inside an unknown command, giving up on %r', word)
+            self.matches.append(self.unknown(word, node.pos[0], node.pos[1]))
+            return
 
         logger.info('trying to match token: %r', word)
 
@@ -179,6 +198,11 @@ class matcher(parser.NodeVisitor):
         logger.info('matching string %r', self.s)
         self.ast = parser.parse_command_line(self.s)
         self.visit(self.ast)
+
+        # if we only have one command in there and no shell results, reraise
+        # the original exception
+        if len(self.groups) == 2 and not self.groups[0].results and self.groups[1].manpage is None:
+            raise self.groups[1].error
 
         def debugmatch():
             s = '\n'.join(['%d) %r = %r' % (i, self.s[m.start:m.end], m.text) for i, m in enumerate(self.matches)])

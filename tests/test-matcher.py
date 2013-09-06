@@ -222,3 +222,15 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(groups[0].results, matchedresult[0])
         self.assertEquals(groups[1].results, matchedresult[1])
         self.assertEquals(groups[2].results, matchedresult[2])
+
+    def test_known_and_unknown_program(self):
+        cmd = 'bar; foo arg >f; baz'
+        matchedresult = [[(3, 4, None, ';'), (13, 16, None, '>f;')],
+                         [(0, 3, 'bar synopsis', 'bar')],
+                         [(5, 12, None, 'foo arg')],
+                         [(17, 20, 'baz synopsis', 'baz')]]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(groups[0].results, matchedresult[0])
+        self.assertEquals(groups[1].results, matchedresult[1])
+        self.assertEquals(groups[2].results, matchedresult[2])
