@@ -2,7 +2,9 @@ import unittest, functools
 
 from explainshell import parser, errors
 
+token = parser.token
 parse = functools.partial(parser.parse_command_line, convertpos=True)
+tokenize = parser.tokenize_command_line
 
 def commandnode(s, *parts):
     return parser.Node(kind='command', s=s, parts=list(parts))
@@ -262,3 +264,39 @@ class test_parser(unittest.TestCase):
 
         s = "a b\\"
         self.assertRaisesRegexp(errors.ParsingError, "No escaped character.*position 2", parse, s)
+
+    def test_tokenize(self):
+        s = 'bar -x'
+        t = tokenize(s)
+        expected = [token('word', 'bar', '', 0, 3), token('word', '-x', ' ', 4, 6)]
+        self.assertTokensEquals(s, t, expected, ('bar', '-x'))
+
+        s = 'wx    y =z '
+        t = tokenize(s)
+        expected = [token('word', 'wx', '', 0, 2),
+                    token('word', 'y', ' ', 6, 7), token('word', '=z', ' ', 8, 10)]
+        self.assertTokensEquals(s, t, expected, ('wx', 'y', '=z'))
+
+        s = "a 'b' c"
+        t = tokenize(s)
+        expected = [token('word', 'a', '', 0, 1), token('word', 'b', ' ', 2, 5),
+                    token('word', 'c', ' ', 6, 7)]
+        self.assertTokensEquals(s, t, expected, ('a', "'b'", 'c'))
+
+        s = "a 'b  ' c"
+        t = tokenize(s)
+        expected = [token('word', 'a', '', 0, 1), token('word', 'b  ', ' ', 2, 7),
+                    token('word', 'c', ' ', 8, 9)]
+        self.assertTokensEquals(s, t, expected, ('a', "'b  '", 'c'))
+
+    def test_quote_state(self):
+        s = "x \"\\'\"y z"
+        t = tokenize(s)
+        expected = [token('word', 'x', '', 0, 1), token('word', "\\'y", ' ', 2, 7),
+                    token('word', 'z', ' ', 8, 9)]
+        self.assertTokensEquals(s, t, expected, ('x', "\"\\'\"y", 'z'))
+
+    def assertTokensEquals(self, s, got, expected, substrings):
+        self.assertEquals(got, expected)
+        for (tt, t, preceding, start, end), ss in zip(got, substrings):
+            self.assertEquals(s[start:end], ss)

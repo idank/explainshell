@@ -2,61 +2,7 @@ import unittest
 
 from explainshell import options, store, errors
 
-ts = options.tokenstate
-
 class test_options(unittest.TestCase):
-    def test_tokenize(self):
-        s = 'bar -x'
-        t = list(options.tokenize(s))
-        expected = [ts(0, 3, 'bar'), ts(4, 6, '-x')]
-        self.assertTokensEquals(s, t, expected, ('bar', '-x'))
-
-        s = 'wx    y =z '
-        t = list(options.tokenize(s))
-        expected = [ts(0, 2, 'wx'), ts(6, 7, 'y'), ts(8, 10, '=z')]
-        self.assertTokensEquals(s, t, expected, ('wx', 'y', '=z'))
-
-        s = "a 'b' c"
-        t = list(options.tokenize(s))
-        expected = [ts(0, 1, 'a'), ts(2, 5, 'b'), ts(6, 7, 'c')]
-        self.assertTokensEquals(s, t, expected, ('a', "'b'", 'c'))
-
-        s = "a 'b  ' c"
-        t = list(options.tokenize(s))
-        expected = [ts(0, 1, 'a'), ts(2, 7, 'b  '), ts(8, 9, 'c')]
-        self.assertTokensEquals(s, t, expected, ('a', "'b  '", 'c'))
-
-    def assertTokensEquals(self, s, got, expected, substrings):
-        self.assertEquals(got, expected)
-        for (s_, e, t), ss in zip(got, substrings):
-            self.assertEquals(s[s_:e], ss)
-
-    def test_tokenize_equals(self):
-        s = 'a b=c'
-        t = list(options.tokenize(s))
-        expected = [ts(0, 1, 'a'), ts(2, 3, 'b'), ts(3, 5, '=c')]
-        self.assertTokensEquals(s, t, expected, ('a', 'b', '=c'))
-
-        s = 'a b =c'
-        t = list(options.tokenize(s))
-        expected = [ts(0, 1, 'a'), ts(2, 3, 'b'), ts(4, 6, '=c')]
-        self.assertTokensEquals(s, t, expected, ('a', 'b', '=c'))
-
-        s = 'a b= c'
-        t = list(options.tokenize(s))
-        expected = [ts(0, 1, 'a'), ts(2, 3, 'b'), ts(3, 4, '='), ts(5, 6, 'c')]
-        self.assertTokensEquals(s, t, expected, ('a', 'b', '=', 'c'))
-
-        s = 'a b = c'
-        t = list(options.tokenize(s))
-        expected = [ts(0, 1, 'a'), ts(2, 3, 'b'), ts(4, 5, '='), ts(6, 7, 'c')]
-        self.assertTokensEquals(s, t, expected, ('a', 'b', '=', 'c'))
-
-        s = 'a b  = c'
-        t = list(options.tokenize(s))
-        expected = [ts(0, 1, 'a'), ts(2, 3, 'b'), ts(5, 6, '='), ts(7, 8, 'c')]
-        self.assertTokensEquals(s, t, expected, ('a', 'b', '=', 'c'))
-
     def test_simple(self):
         s = '\t-a description'
         self.assertEquals(options.extract_option(s), (['-a'], []))

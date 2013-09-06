@@ -351,6 +351,18 @@ class CommandLineParser(object):
         else:
             return [node] + redirections
 
+def tokenize_command_line(source, posix=None):
+    if posix is None:
+        posix = os.name == 'posix'
+    parser = CommandLineParser(source, posix=posix)
+    tokens = []
+    while True:
+        token = parser.next_token()
+        if token.t is None:
+            break
+        tokens.append(token)
+    return tokens
+
 def parse_command_line(source, posix=None, convertpos=False):
     """
     Parse a command line into an AST.
