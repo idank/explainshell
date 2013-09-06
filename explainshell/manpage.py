@@ -181,7 +181,7 @@ class manpage(object):
         self._text = subprocess.check_output(cmd, stderr=devnull, env=ENV)
         try:
             self.synopsis = subprocess.check_output(['lexgrog', self.path], stderr=devnull).rstrip()
-        except subprocess.CalledProcessError, e:
+        except subprocess.CalledProcessError:
             logger.error('failed to extract synopsis for %s', self.name)
 
     def parse(self):

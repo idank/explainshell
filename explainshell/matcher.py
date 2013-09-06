@@ -1,5 +1,5 @@
 import collections, logging, itertools
-from explainshell import options, errors, util, parser
+from explainshell import errors, util, parser
 
 class matchgroup(object):
     '''a class to group matchresults together

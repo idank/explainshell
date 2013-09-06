@@ -1,4 +1,4 @@
-import sys, os, subprocess, logging, argparse, logging, glob
+import sys, os, argparse, logging, glob
 
 from explainshell import options, store, fixer, manpage, errors, util, config
 from explainshell.algo import classifier

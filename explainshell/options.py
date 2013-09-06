@@ -1,6 +1,6 @@
 import re, collections, logging
 
-from explainshell import store, util, errors
+from explainshell import store
 
 tokenstate = collections.namedtuple('tokenstate', 'startpos endpos token')
 

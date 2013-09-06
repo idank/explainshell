@@ -1,5 +1,5 @@
 '''data objects to save processed man pages to mongodb'''
-import pymongo, collections, os, re, logging
+import pymongo, collections, re, logging
 
 from explainshell import errors, util
 

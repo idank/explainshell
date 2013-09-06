@@ -5,7 +5,7 @@ import nltk.metrics
 import nltk.classify
 import nltk.classify.maxent
 
-from explainshell import store, algo, options, config, util
+from explainshell import algo, config
 
 logger = logging.getLogger(__name__)
 

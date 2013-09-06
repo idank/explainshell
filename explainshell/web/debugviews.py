@@ -1,8 +1,8 @@
-import logging, os, glob
+import logging
 
-from flask import render_template, request, send_from_directory, abort, redirect, url_for, json
+from flask import render_template, request, abort, redirect, url_for, json
 
-from explainshell import manager, config, manpage, store
+from explainshell import manager, config, store
 from explainshell.web import app, helpers
 
 logger = logging.getLogger(__name__)

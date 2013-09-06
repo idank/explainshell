@@ -5,7 +5,6 @@
 # Enhancements in shlex to tokenize closer to the way real shells do
 #
 from collections import deque
-from io import StringIO
 import shlex
 import sys
 
