@@ -80,7 +80,8 @@ function initialize() {
     else if ($("#command span[id^=command1]").length == 0)
         currentgroup = 'all';
 
-    var commandselector, helpselector;
+    var commandselector, helpselector, head = {'name' : currentgroup};
+
     if (currentgroup == 'all') {
         commandselector = $("#command span[id]");
         helpselector = $("#help pre");
@@ -88,10 +89,31 @@ function initialize() {
     else {
         commandselector = $("#command span[id^=" + currentgroup + "]");
         helpselector = $("#help pre[id^=help-" + currentgroup + "]");
+
+        // construct a doubly linked list of previous/next groups. this is used
+        // by the navigation buttons to move between groups
+        if (currentgroup == 'shell')
+        {
+            var i = 0, g = "command" + i, s = $("#command span[id^=" + g + "]"),
+                prev = head;
+            while (s.length > 0) {
+                var curr = {'name' : g, 'commandselector' : s,
+                         'helpselector' : $("#help pre[id^=help-" + g + "]")}
+
+                curr['prev'] = prev
+                prev['next'] = curr;
+                prev = curr;
+                i++;
+                g = "command" + i;
+                s = $("#command span[id^=" + g + "]")
+            }
+        }
     }
 
-    return {'name' : currentgroup, 'commandselector' : commandselector,
-            'helpselector' : helpselector}
+    head['commandselector'] = commandselector;
+    head['helpselector'] = helpselector;
+
+    return head;
 }
 
 function drawgrouplines(commandselector, helpselector) {
