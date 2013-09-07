@@ -318,6 +318,11 @@ function drawgrouplines(commandselector, helpselector) {
     }
 }
 
+function clear() {
+    $("#canvas").empty();
+    $("#command span[id]").add("#help pre").unbind("hover");
+}
+
 function commandlinetourl(s) {
     if (!$.trim(s))
         return '/';
