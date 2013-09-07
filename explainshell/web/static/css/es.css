@@ -74,3 +74,17 @@ a {
     font-family: 'Berkshire Swash', cursive;
     font-size: 24px;
 }
+
+#top-search {
+   width: 150px;
+   -webkit-transition: all .5s ease;
+   -moz-transition: all .5s ease;
+   transition: all .5s ease;
+   position: relative;
+   top: -3px; // looks a bit unaligned without this in chrome
+}
+
+#top-search:focus {
+   left: -110px;
+   width: 260px;
+}
