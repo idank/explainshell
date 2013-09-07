@@ -53,6 +53,70 @@
             currentgroup = initialize();
             drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
 
+            // if we have more groups, show the prev/next buttons
+            if (currentgroup.next) {
+                var prev = $('<li><i class="icon-arrow-left icon-2" style="cursor: pointer;"></i><span></span></li>');
+                prev.css({opacity: 0.5});
+                var next = $('<li><i class="icon-arrow-right icon-2" style="cursor: pointer;"></i><span></span></li>');
+                var prevnext = $('<ul class="unstyled" id="prevnext"><li>showing <u>shell syntax</u>, navigate:</li></ul>');
+                prevnext.append(prev).append(next);
+                $("#command").before(prevnext);
+
+                var nextext = next.find("span"),
+                    prevtext = prev.find("span"),
+                    currentext = prevnext.find("u");
+
+                nextext.text(" explain " + currentgroup.next.commandselector.first().text());
+
+                prev.click(function() {
+                    if (currentgroup.prev) {
+                        currentgroup = currentgroup.prev
+                        if (currentgroup.name == 'shell')
+                            currentext.text('shell syntax');
+                        else
+                            currentext.text(currentgroup.commandselector.first().text());
+
+                        clear();
+                        drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
+
+                        if (!currentgroup.prev) {
+                            prev.css({opacity: 0.5});
+                            prevtext.text('');
+                        }
+                        if (currentgroup.next) {
+                            next.css({opacity: 1});
+                            nextext.text(" explain " + currentgroup.next.commandselector.first().text());
+                        }
+                    }
+                });
+
+                next.click(function() {
+                    if (currentgroup.next) {
+                        currentgroup = currentgroup.next
+                        if (currentgroup.name == 'shell')
+                            currentext.text('shell syntax');
+                        else
+                            currentext.text(currentgroup.commandselector.first().text());
+
+                        clear();
+                        drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
+
+                        if (!currentgroup.next) {
+                            next.css({opacity: 0.5});
+                            nextext.text('');
+                        }
+                        if (currentgroup.prev) {
+                            prev.css({opacity: 1});
+                            if (currentgroup.prev.name == 'shell')
+                                prevtext.text(" explain shell syntax");
+                            else
+                                prevtext.text(" explain " + currentgroup.prev.commandselector.first().text());
+                        }
+                    }
+                });
+            }
+
+
             $(window).resize(function(){
                 clear();
                 drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);

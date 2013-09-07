@@ -89,3 +89,8 @@ a {
    left: -110px;
    width: 260px;
 }
+
+#prevnext {
+    position: absolute;
+    right: 250px;
+}
