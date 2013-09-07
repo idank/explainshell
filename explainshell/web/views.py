@@ -1,4 +1,4 @@
-import logging
+import logging, itertools
 from flask import render_template, request
 
 from explainshell import matcher, errors, util, store, config
@@ -24,29 +24,53 @@ def explain(section, program):
             command = '%s %s' % (program, args)
             matcher_ = matcher.matcher(command, s, section)
             groups = matcher_.match()
-            mr = groups[1].results
+            shellgroup = groups[0]
+            commandgroups = groups[1:]
+            matches = []
+
             l = []
-            it = util.peekable(iter(mr))
+            for m in shellgroup.results:
+                text = m.text
+                if text:
+                    text = text.decode('utf-8')
+                d = {'match' : m.match, 'unknown' : m.unknown, 'text' : text,
+                     'start' : m.start, 'end' : m.end,
+                     'id' : '%s-%d' % (shellgroup.name, len(l))}
+                l.append(d)
+            matches.append(l)
+
+            for commandgroup in commandgroups:
+                l = []
+                for m in commandgroup.results:
+                    text = m.text
+                    if text:
+                        text = text.decode('utf-8')
+                    d = {'match' : m.match, 'unknown' : m.unknown, 'text' : text,
+                         'start' : m.start, 'end' : m.end,
+                         'id' : '%s-%d' % (commandgroup.name, len(l))}
+                    l.append(d)
+
+                d = l[0]
+                if commandgroup.manpage:
+                    d['name'] = commandgroup.manpage.name
+                    d['section'] = commandgroup.manpage.section
+                    d['match'] = '%s(%s)' % (d['match'], d['section'])
+                    d['source'] = commandgroup.manpage.source[:-5]
+                    d['others'] = helpers.others(commandgroup.others)
+                matches.append(l)
+
+            matches = list(itertools.chain.from_iterable(matches))
+            matches.sort(key=lambda d: d['start'])
+
+            it = util.peekable(iter(matches))
             while it.hasnext():
                 m = it.next()
                 spaces = 0
                 if it.hasnext():
-                    spaces = it.peek().start - m.end
-                spaces = ' ' * spaces
-                text = m.text
-                if text:
-                    text = text.decode('utf-8')
-                d = {'match' : m.match, 'unknown' : m.unknown, 'text' : text, 'spaces' : spaces}
-                l.append(d)
+                    spaces = it.peek()['start'] - m['end']
+                m['spaces'] = ' ' * spaces
 
-            d = l[0]
-            d['section'] = groups[1].manpage.section
-            d['match'] = '%s(%s)' % (d['match'], d['section'])
-            d['source'] = groups[1].manpage.source[:-5]
-            others = helpers.others(groups[1].others)
-
-            return render_template('explain.html', program=l[0], matches=l,
-                                   othersections=others, getargs=args)
+            return render_template('explain.html', matches=matches, getargs=args)
         else:
             logger.info('/explain section=%r program=%r', section, program)
             mps = s.findmanpage(program, section)

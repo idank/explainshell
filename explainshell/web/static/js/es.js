@@ -22,10 +22,7 @@ function eslink(option, mid) {
     this.directiondown = true;
 
     if (option.getAttribute('id')) {
-        var oregex = /(\d+)$/g;
-
-        this.index = oregex.exec(option.getAttribute('id'))[1];
-        this.help = $("#help" + this.index)[0];
+        this.help = $("#help-" + option.getAttribute('id'))[0];
         var rr = option.getBoundingClientRect();
         var rrmid = rr.left + rr.width / 2;
         this.goingleft = rrmid <= mid;
@@ -69,7 +66,7 @@ function reorder(lefteslinks) {
     }
 }
 
-function drawlines() {
+function drawlines(commandselector, helpselector) {
     shuffledcolors = _.shuffle(colors);
 
     var sidespace = 20, toppadding = 25, sidepadding = 15, edgedistance = 5,
@@ -78,7 +75,14 @@ function drawlines() {
     var canvas = d3.select("#canvas"),
         canvastop = $("#canvas")[0].getBoundingClientRect().top;
 
-    $("#canvas").height($("#help pre").last()[0].getBoundingClientRect().bottom - canvastop);
+    // if the current group isn't all, hide the rest of the help, and show
+    // the help of the current group
+    if (currentgroup != 'all') {
+        $("#help pre").not(helpselector.selector).parent().parent().hide();
+        helpselector.parent().parent().show();
+    }
+
+    $("#canvas").height(helpselector.last()[0].getBoundingClientRect().bottom - canvastop);
 
     var commandrect = $("#command")[0].getBoundingClientRect(),
         mid = commandrect.left + commandrect.width / 2;
@@ -89,7 +93,7 @@ function drawlines() {
         right = helprect.right + sidepadding,
         topheight = Math.abs(commandrect.bottom - top);
 
-    var links = $("#command span[id]").map(function(i, span) {
+    var links = commandselector.filter(":not(.unknown)").map(function(i, span) {
             return new eslink(span, mid);
         }),
         starty = commandrect.bottom - canvastop,
@@ -154,7 +158,7 @@ function drawlines() {
         link.paths.push(path);
     }
 
-    $("#command .unknown").each(function(i, span) {
+    commandselector.filter(".unknown").each(function(i, span) {
         var link = new eslink(span, mid),
             rr = link.option.getBoundingClientRect(),
             rrright = rr.right - strokewidth,

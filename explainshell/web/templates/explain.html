@@ -6,19 +6,27 @@
             </svg>
             <div class="push"></div>
             <div id="command">
-                {% import 'macros.html' as macros -%}
-                {% for d in matches %}{% if loop.index == 1 -%}{{ macros.outputcommandexplain(d, othersections, getargs) }}{% elif d.unknown -%}<span class="unknown">{{ d.match|e }}</span>{% else -%}<span id="option{{ loop.index }}">{{ d.match|e }}</span>{%- endif %}{{ d.spaces }}{% endfor %}
+            {% import 'macros.html' as macros -%}
+            {% for m in matches -%}
+                {%- if m.name -%}
+                    {{ macros.outputcommandexplain(m, getargs) }}
+                {%- elif m.unknown -%}
+                    <span id="{{ m.id }}" class="unknown">{{ m.match|e }}</span>
+                {%- else -%}
+                    <span id="{{ m.id }}">{{ m.match|e }}</span>
+                {%- endif -%}{{ m.spaces|safe }}
+            {%- endfor %}
             </div>
             <div style="height: 5px;"></div>
             <div style="height: 100px;"></div>
             <div>
                 <table id="help" width="100%">
                     <tbody>
-                        {% for d in matches -%}
-                            {% if d.text -%}
+                        {% for m in matches -%}
+                            {% if m.text -%}
                         <tr>
                             <td>
-                                <pre id="help{{ loop.index }}">{{ d.text|safe }}</pre>
+                                <pre id="help-{{ m.id }}">{{ m.text|safe }}</pre>
                             </td>
                         </tr>
                             {%- endif %}
@@ -28,7 +36,12 @@
             </div>
 {% endblock %}
 {% block footer -%}
-<div class="push"></div><div class="text-center"><small><a href="http://manpages.ubuntu.com/manpages/precise/en/man{{ program.section }}/{{ program.source|e }}.html">source manpage</a></small></div>
+<div class="push"></div><div class="text-center"><small>
+{% for m in matches if m.name %}
+{% if loop.first %}source manpages: {% endif %}
+<a href="http://manpages.ubuntu.com/manpages/precise/en/man{{ m.section }}/{{ m.source|e }}.html">{{ m.name|e }}</a>{% if not loop.last %},&nbsp;{% endif %}
+{% endfor %}
+</small></div>
 {%- endblock %}
 {% block js -%}
 {% if config.DEBUG %}
@@ -37,11 +50,28 @@
         <script src="//cdnjs.cloudflare.com/ajax/libs/d3/3.1.6/d3.min.js"></script>
 {%- endif %}
         <script type="text/javascript">
-            drawlines();
+            currentgroup = 'shell';
+            var s = $("#command span[id^=shell]");
+            if (!s.length)
+                currentgroup = 'command0';
+            else if ($("#command span[id^=command1]").length == 0)
+                currentgroup = 'all';
+
+            var commandselector, helpselector;
+            if (currentgroup == 'all') {
+                commandselector = $("#command span[id]");
+                helpselector = $("#help pre");
+            }
+            else {
+                commandselector = $("#command span[id^=" + currentgroup + "]");
+                helpselector = $("#help pre[id^=help-" + currentgroup + "]");
+            }
+
+            drawlines(commandselector, helpselector);
 
             $(window).resize(function(){
                 $("#canvas").empty();
-                drawlines();
+                drawlines(commandselector, helpselector);
             });
         </script>
 {%- endblock %}

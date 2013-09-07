@@ -17,19 +17,19 @@
     {% if mp.synopsis %}- {{ mp.synopsis|e }}{% endif %}
 {%- endmacro %}
 
-{% macro outputcommandexplain(d, others, getargs) -%}
-    {% if others|length == 0 -%}
-    <span style="word-spacing: 0px;"><a href="/explain/{{ d.section }}/{{ d.source }}">{{ d.match|e }}</a></span>
+{%- macro outputcommandexplain(d, getargs) -%}
+    {% if d.others|length == 0 -%}
+    <span id="{{ d.id }}" style="word-spacing: 0px;"><a href="/explain/{{ d.section }}/{{ d.source }}">{{ d.match|e }}</a></span>
     {%- else -%}
                 <span class="dropdown">
                     <span style="word-spacing: 0px;">
                     <b class="caret" data-toggle="dropdown"></b>
-                    <a href="/explain/{{ d.section }}/{{ d.source }}">{{ d.match|e }}</a>
+                    <span id="{{ d.id }}"><a href="/explain/{{ d.section }}/{{ d.source }}">{{ d.match|e }}</a></span>
                     <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu">
                       <li>other manpages</li>
                       <li class="divider"></li>
-                      {% for d in others -%}
-                      <li><a tabindex="-1" href="/explain/{{ d.link }}?args={{ getargs|urlencode }}">{{ d.name|e }}</a></li>
+                      {% for dd in d.others -%}
+                      <li><a tabindex="-1" href="/explain/{{ dd.link }}?args={{ getargs|urlencode }}">{{ dd.name|e }}</a></li>
                       {%- endfor %}
                     </ul>
                     </span>
