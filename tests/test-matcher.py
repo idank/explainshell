@@ -249,3 +249,17 @@ class test_matcher(unittest.TestCase):
         groups = matcher.matcher(cmd, s).match()
         self.assertEquals(groups[0].results, matchedresult[0])
         self.assertEquals(groups[1].results, matchedresult[1])
+
+    def test_subshells(self):
+        cmd = '((bar); bar)'
+        matchedresult = [[(0, 2, helpconstants.SUBSHELL, '(('),
+                          (5, 6, helpconstants.SUBSHELL, ')'),
+                          (6, 7, helpconstants.OPERATORS[';'], ';'),
+                          (11, 12, helpconstants.SUBSHELL, ')')],
+                         [(2, 5, 'bar synopsis', 'bar')],
+                         [(8, 11, 'bar synopsis', 'bar')]]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(groups[0].results, matchedresult[0])
+        self.assertEquals(groups[1].results, matchedresult[1])
+        self.assertEquals(groups[2].results, matchedresult[2])
