@@ -50,28 +50,12 @@
         <script src="//cdnjs.cloudflare.com/ajax/libs/d3/3.1.6/d3.min.js"></script>
 {%- endif %}
         <script type="text/javascript">
-            currentgroup = 'shell';
-            var s = $("#command span[id^=shell]");
-            if (!s.length)
-                currentgroup = 'command0';
-            else if ($("#command span[id^=command1]").length == 0)
-                currentgroup = 'all';
-
-            var commandselector, helpselector;
-            if (currentgroup == 'all') {
-                commandselector = $("#command span[id]");
-                helpselector = $("#help pre");
-            }
-            else {
-                commandselector = $("#command span[id^=" + currentgroup + "]");
-                helpselector = $("#help pre[id^=help-" + currentgroup + "]");
-            }
-
-            drawlines(commandselector, helpselector);
+            currentgroup = initialize();
+            drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
 
             $(window).resize(function(){
                 $("#canvas").empty();
-                drawlines(commandselector, helpselector);
+                drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
             });
         </script>
 {%- endblock %}

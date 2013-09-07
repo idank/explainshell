@@ -66,7 +66,35 @@ function reorder(lefteslinks) {
     }
 }
 
-function drawlines(commandselector, helpselector) {
+// initialize the lines logic, deciding which group of elements should be displayed
+// returns the name of the group (with 'all' meaning draw everything) and two
+// selectors: one selects which spans in #command and the other selects their
+// matching help text in #help
+function initialize() {
+    var currentgroup = 'shell';
+    var s = $("#command span[id^=shell]");
+    // if there are no 'shell' explanations, show the first (and only) command
+    if (!s.length)
+        currentgroup = 'command0';
+    // if we have only one command in there, show everything
+    else if ($("#command span[id^=command1]").length == 0)
+        currentgroup = 'all';
+
+    var commandselector, helpselector;
+    if (currentgroup == 'all') {
+        commandselector = $("#command span[id]");
+        helpselector = $("#help pre");
+    }
+    else {
+        commandselector = $("#command span[id^=" + currentgroup + "]");
+        helpselector = $("#help pre[id^=help-" + currentgroup + "]");
+    }
+
+    return {'name' : currentgroup, 'commandselector' : commandselector,
+            'helpselector' : helpselector}
+}
+
+function drawgrouplines(commandselector, helpselector) {
     shuffledcolors = _.shuffle(colors);
 
     var sidespace = 20, toppadding = 25, sidepadding = 15, edgedistance = 5,
