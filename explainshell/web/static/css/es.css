@@ -82,6 +82,7 @@ a {
    transition: all .5s ease;
    position: relative;
    top: -3px; // looks a bit unaligned without this in chrome
+   left: 0;
 }
 
 #top-search:focus {
