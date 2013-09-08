@@ -301,14 +301,20 @@ function commandlinetourl(s) {
 // very simple adjustment of the command div font size so it doesn't overflow
 function adjustcommandfontsize() {
     // select each span, but deal with the first one specially because of the dropdown
-    var commandlength = $.trim($("#command>span").slice(1).add("#command span>a").text()).length;
+    var commandlength = $.trim($("#command>span").slice(1).add("#command span>a").text()).length,
+        commandfontsize;
 
-    if (commandlength > 120)
-        $("#command").css('font-size', '10px');
-    else if (commandlength > 110)
-        $("#command").css('font-size', '12px');
-    else if (commandlength > 90)
-        $("#command").css('font-size', '14px');
-    else if (commandlength > 75)
-        $("#command").css('font-size', '16px');
+    if (commandlength > 115)
+        commandfontsize = '10px';
+    else if (commandlength > 105)
+        commandfontsize = '12px';
+    else if (commandlength > 85)
+        commandfontsize = '14px';
+    else if (commandlength > 70)
+        commandfontsize = '16px';
+
+    if (commandfontsize) {
+        console.log('command length', commandlength, ', adjusting font size to', commandfontsize);
+        $("#command").css('font-size', commandfontsize);
+    }
 }
