@@ -71,13 +71,14 @@
                 prev.click(function() {
                     if (currentgroup.prev) {
                         console.log('moving to the previous group (%s), current group is %s', currentgroup.prev.name, currentgroup.name);
+                        var oldgroup = currentgroup;
                         currentgroup = currentgroup.prev
                         if (currentgroup.name == 'shell')
                             currentext.text('shell syntax');
                         else
                             currentext.text(currentgroup.commandselector.first().text());
 
-                        clear();
+                        clear(oldgroup);
                         drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
 
                         if (!currentgroup.prev) {
@@ -105,13 +106,14 @@
                 next.click(function() {
                     if (currentgroup.next) {
                         console.log('moving to the next group (%s), current group is %s', currentgroup.next.name, currentgroup.name);
+                        var oldgroup = currentgroup;
                         currentgroup = currentgroup.next
                         if (currentgroup.name == 'shell')
                             currentext.text('shell syntax');
                         else
                             currentext.text(currentgroup.commandselector.first().text());
 
-                        clear();
+                        clear(oldgroup);
                         drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
 
                         if (!currentgroup.next) {
@@ -138,7 +140,7 @@
 
 
             $(window).resize(function(){
-                clear();
+                clear(currentgroup);
                 drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
             });
         </script>

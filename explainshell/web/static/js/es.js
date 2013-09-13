@@ -325,24 +325,26 @@ function drawgrouplines(commandselector, helpselector) {
                      * new block within changewait ms
                      **/
                     vtimeout = setTimeout(function(){
-                        $(link.option).css({'font-weight':'normal'});
+                        $(linkgroup.options).css({'font-weight':'normal'});
 
                         groups.attr('visibility', function(other) {
-                            return link != other ? 'visible' : null; })
+                            return linkgroup != other ? 'visible' : null; })
 
-                        others.each(function(other) {
-                            $(other.help).add(other.option).css({opacity: 1});
+                        othergroups.each(function(other) {
+                            $(other.help).add(other.options).css({opacity: 1});
                         });
                     }, changewait);
+
+                    console.log('leaving link group =', linkgroup, 'setTimeout =', vtimeout);
                 }
             );
         });
     }
 }
 
-function clear() {
+function clear(oldgroup) {
     $("#canvas").empty();
-    $("#command span[id]").add("#help pre").unbind("hover");
+    oldgroup.commandselector.add(oldgroup.helpselector).unbind('mouseenter mouseleave');
 }
 
 function commandlinetourl(s) {
