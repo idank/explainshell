@@ -6,10 +6,11 @@
         <!-- Bootstrap -->
 {%- if config.DEBUG %}
         <link href="/static/css/bootstrap.min.css" rel="stylesheet" media="screen">
+        <link href="/static/css/font-awesome.min.css" rel="stylesheet" media="screen">
 {% else %}
         <link href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/css/bootstrap.min.css" rel="stylesheet" media="screen">
-{%- endif %}
         <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/3.2.1/css/font-awesome.min.css" rel="stylesheet">
+{%- endif %}
         <link href="/static/css/es.css" rel="stylesheet" media="screen">
         <link href='http://fonts.googleapis.com/css?family=Berkshire+Swash' rel='stylesheet' type='text/css'>
         {% block head %}{% endblock %}
