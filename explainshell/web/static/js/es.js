@@ -306,6 +306,7 @@ function drawgrouplines(commandselector, helpselector) {
                 .attr("fill", 'white')
                 .attr("text-anchor", "middle")
                 .attr("y", ".35em")
+                .attr("font-family", "Arial")
                 .text(link.text);
         }
 
@@ -378,4 +379,24 @@ function commandlinetourl(s) {
     if (q.length)
         loc += '?' + $('<input/>', {type: 'hidden', name: 'args', value: q.join(' ')}).serialize();
     return loc;
+}
+
+// very simple adjustment of the command div font size so it doesn't overflow
+function adjustcommandfontsize() {
+    var commandlength = $.trim($("#command span[class^=command]").add("#command span[class^=shell]").text()).length,
+        commandfontsize;
+
+    if (commandlength > 115)
+        commandfontsize = '10px';
+    else if (commandlength > 105)
+        commandfontsize = '12px';
+    else if (commandlength > 85)
+        commandfontsize = '14px';
+    else if (commandlength > 70)
+        commandfontsize = '16px';
+
+    if (commandfontsize) {
+        console.log('command length', commandlength, ', adjusting font size to', commandfontsize);
+        $("#command").css('font-size', commandfontsize);
+    }
 }
