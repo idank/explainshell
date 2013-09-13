@@ -10,10 +10,8 @@
             {% for m in matches -%}
                 {%- if m.name -%}
                     {{ macros.outputcommandexplain(m, getargs) }}
-                {%- elif m.unknown -%}
-                    <span id="{{ m.id }}" class="unknown">{{ m.match|e }}</span>
                 {%- else -%}
-                    <span id="{{ m.id }}">{{ m.match|e }}</span>
+                    <span class="{{ m.id }}">{{ m.match|e }}</span>
                 {%- endif -%}{{ m.spaces|safe }}
             {%- endfor %}
             </div>
@@ -22,14 +20,12 @@
             <div>
                 <table id="help" width="100%">
                     <tbody>
-                        {% for m in matches -%}
-                            {% if m.text -%}
+                        {% for text, id in helptext -%}
                         <tr>
                             <td>
-                                <pre id="help-{{ m.id }}">{{ m.text|safe }}</pre>
+                                <pre class="help-{{ id }}">{{ text|safe }}</pre>
                             </td>
                         </tr>
-                            {%- endif %}
                         {%- endfor %}
                     </tbody>
                 </table>

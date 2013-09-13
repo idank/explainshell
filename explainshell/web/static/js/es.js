@@ -11,9 +11,16 @@ var shuffledcolors;
 var vtimeout,
     changewait = 250;
 
-function eslink(option, mid) {
+function eslinkgroup(clazz, options, mid) {
+    var color = shuffledcolors.shift();
+    this.links = options.map(function(option) { return new eslink(clazz, option, mid, color); });
+    this.options = _.pluck(this.links, 'option');
+    this.help = _.pluck(this.links, 'help');
+}
+
+function eslink(clazz, option, mid, color) {
     this.option = option;
-    this.color = shuffledcolors.shift();
+    this.color = color;
     this.paths = new Array();
     this.lines = new Array();
     this.circle = null;
@@ -21,8 +28,8 @@ function eslink(option, mid) {
     this.unknown = false;
     this.directiondown = true;
 
-    if (option.getAttribute('id')) {
-        this.help = $("#help-" + option.getAttribute('id'))[0];
+    if (clazz) {
+        this.help = $(".help-" + clazz)[0];
         var rr = option.getBoundingClientRect();
         var rrmid = rr.left + rr.width / 2;
         this.goingleft = rrmid <= mid;
@@ -72,40 +79,40 @@ function reorder(lefteslinks) {
 // matching help text in #help
 function initialize() {
     var currentgroup = 'shell';
-    var s = $("#command span[id^=shell]");
+    var s = $("#command span[class^=shell]");
     // if there are no 'shell' explanations, show the first (and only) command
     if (!s.length)
         currentgroup = 'command0';
     // if we have only one command in there, show everything
-    else if ($("#command span[id^=command1]").length == 0)
+    else if ($("#command span[class^=command1]").length == 0)
         currentgroup = 'all';
 
     var commandselector, helpselector, head = {'name' : currentgroup};
 
     if (currentgroup == 'all') {
-        commandselector = $("#command span[id]");
+        commandselector = $("#command span[class]").filter(":not(.dropdown)");
         helpselector = $("#help pre");
     }
     else {
-        commandselector = $("#command span[id^=" + currentgroup + "]");
-        helpselector = $("#help pre[id^=help-" + currentgroup + "]");
+        commandselector = $("#command span[class^=" + currentgroup + "]");
+        helpselector = $("#help pre[class^=help-" + currentgroup + "]");
 
         // construct a doubly linked list of previous/next groups. this is used
         // by the navigation buttons to move between groups
         if (currentgroup == 'shell')
         {
-            var i = 0, g = "command" + i, s = $("#command span[id^=" + g + "]"),
+            var i = 0, g = "command" + i, s = $("#command span[class^=" + g + "]"),
                 prev = head;
             while (s.length > 0) {
                 var curr = {'name' : g, 'commandselector' : s,
-                         'helpselector' : $("#help pre[id^=help-" + g + "]")}
+                         'helpselector' : $("#help pre[class^=help-" + g + "]")}
 
                 curr['prev'] = prev
                 prev['next'] = curr;
                 prev = curr;
                 i++;
                 g = "command" + i;
-                s = $("#command span[id^=" + g + "]")
+                s = $("#command span[class^=" + g + "]")
             }
         }
     }
@@ -127,7 +134,7 @@ function drawgrouplines(commandselector, helpselector) {
 
     // if the current group isn't all, hide the rest of the help, and show
     // the help of the current group
-    if (currentgroup != 'all') {
+    if (currentgroup.name != 'all') {
         $("#help pre").not(helpselector.selector).parent().parent().hide();
         helpselector.parent().parent().show();
     }
@@ -143,9 +150,13 @@ function drawgrouplines(commandselector, helpselector) {
         right = helprect.right + sidepadding,
         topheight = Math.abs(commandrect.bottom - top);
 
-    var links = commandselector.filter(":not(.unknown)").map(function(i, span) {
-            return new eslink(span, mid);
-        }),
+    var groupedoptions = _.groupBy(commandselector.filter(":not(.unknown)"), function(span) { return $(span).attr('class'); });
+
+    var linkgroups = _.map(groupedoptions, function(spans, clazz) {
+            return new eslinkgroup(clazz, spans, mid);
+    });
+
+    var links = _.flatten(_.pluck(linkgroups, 'links'), true),
         starty = commandrect.bottom - canvastop,
         startytop = commandrect.top - canvastop;
 
@@ -208,13 +219,15 @@ function drawgrouplines(commandselector, helpselector) {
         link.paths.push(path);
     }
 
-    commandselector.filter(".unknown").each(function(i, span) {
-        var link = new eslink(span, mid),
-            rr = link.option.getBoundingClientRect(),
+    var unknowngroup = new eslinkgroup(null, commandselector.filter(".unknown").toArray(), mid);
+    var linkslengthnounknown = links.length;
+
+    $.each(unknowngroup.links, function(i, link) {
+        var rr = link.option.getBoundingClientRect(),
             rrright = rr.right - strokewidth,
-            nextspan = $(span).next()[0],
+            nextspan = $(link.option).next()[0],
             nextlink = _.find(links, function(l) { return l.option == nextspan; });
-            prevspan = $(span).prev()[0],
+            prevspan = $(link.option).prev()[0],
             prevlink = _.find(links, function(l) { return l.option == prevspan; });
 
         link.unknown = true;
@@ -240,16 +253,23 @@ function drawgrouplines(commandselector, helpselector) {
         links.push(link);
     });
 
+    if (unknowngroup.links.length > 0)
+        linkgroups.push(unknowngroup);
+
     var fline = d3.svg.line()
         .x(function(d) { return d.x; })
         .y(function(d) { return d.y; })
         .interpolate("step-before");
 
     var groups = canvas.selectAll("g")
-        .data(links)
+        .data(linkgroups)
         .enter().append("g");
 
-    groups.each(function(link) {
+    var moregroups = groups.selectAll("g")
+        .data(function(esg) { return esg.links; })
+        .enter().append("g");
+
+    moregroups.each(function(link) {
         var g = d3.select(this);
 
         if (link.directiondown)
@@ -294,28 +314,30 @@ function drawgrouplines(commandselector, helpselector) {
         }
     });
 
-    if (links.length > 1) {
-        groups.each(function(link) {
-            var g = d3.select(this);
-            var others = groups.filter(function(other) { return link != other; });
+    if (linkslengthnounknown > 1) {
+        groups.each(function(linkgroup) {
+            var othergroups = groups.filter(function(other) { return linkgroup != other; });
 
-            $(link.help).add(link.option).hover(
+            var s = $(linkgroup.help).add(linkgroup.options);
+            console.log('s=', s);
+            s.hover(
                 function() {
                     /*
                      * we're highlighting a new block,
                      * disable timeout to make all blocks visible
                      **/
+                    console.log('entering link group =', linkgroup, 'clearTimeout =', vtimeout);
                     clearTimeout(vtimeout);
 
-                    $(link.option).css({'font-weight':'bold'});
-                    $(link.option).add(link.help).css({opacity: 1.0});
+                    $(linkgroup.options).css({'font-weight':'bold'});
+                    $(linkgroup.help).add(linkgroup.options).css({opacity: 1.0});
 
                     groups.attr('visibility', function(other) {
-                        return link != other ? 'hidden' : null; })
+                        return linkgroup != other ? 'hidden' : null; })
 
-                    others.each(function(other) {
-                        $(other.help).add(other.option).css({opacity: 0.4});
-                        $(other.help).add(other.option).css({'font-weight':'normal'});
+                    othergroups.each(function(other) {
+                        $(other.help).add(other.options).css({opacity: 0.4});
+                        $(other.help).add(other.options).css({'font-weight':'normal'});
                     });
                 },
                 function() {

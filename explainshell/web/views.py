@@ -28,26 +28,45 @@ def explain(section, program):
             commandgroups = groups[1:]
             matches = []
 
+            # save a mapping between the help text to its assigned id,
+            # we're going to reuse ids that have the same text
+            texttoid = {}
+
+            # remember where each assigned id has started in the source,
+            # we're going to use it later on to sort the help text by start
+            # position
+            idstartpos = {}
+
             l = []
             for m in shellgroup.results:
+                id_ = '%s-%d' % (shellgroup.name, len(l))
                 text = m.text
                 if text:
                     text = text.decode('utf-8')
-                d = {'match' : m.match, 'unknown' : m.unknown, 'text' : text,
+                    id_ = texttoid.setdefault(text, id_)
+                else:
+                    assert False
+                idstartpos.setdefault(id_, m.start)
+                d = {'match' : m.match, 'unknown' : m.unknown,
                      'start' : m.start, 'end' : m.end,
-                     'id' : '%s-%d' % (shellgroup.name, len(l))}
+                     'id' : id_}
                 l.append(d)
             matches.append(l)
 
             for commandgroup in commandgroups:
                 l = []
                 for m in commandgroup.results:
+                    id_ = '%s-%d' % (commandgroup.name, len(l))
                     text = m.text
                     if text:
                         text = text.decode('utf-8')
-                    d = {'match' : m.match, 'unknown' : m.unknown, 'text' : text,
+                        id_ = texttoid.setdefault(text, id_)
+                    else:
+                        id_ = '%s unknown' % commandgroup.name
+                    idstartpos.setdefault(id_, m.start)
+                    d = {'match' : m.match, 'unknown' : m.unknown,
                          'start' : m.start, 'end' : m.end,
-                         'id' : '%s-%d' % (commandgroup.name, len(l))}
+                         'id' : id_}
                     l.append(d)
 
                 d = l[0]
@@ -70,7 +89,8 @@ def explain(section, program):
                     spaces = it.peek()['start'] - m['end']
                 m['spaces'] = ' ' * spaces
 
-            return render_template('explain.html', matches=matches, getargs=args)
+            helptext = sorted(texttoid.iteritems(), key=lambda (k, v): idstartpos[v])
+            return render_template('explain.html', matches=matches, helptext=helptext, getargs=args)
         else:
             logger.info('/explain section=%r program=%r', section, program)
             mps = s.findmanpage(program, section)
