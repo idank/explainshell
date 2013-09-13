@@ -70,6 +70,7 @@
 
                 prev.click(function() {
                     if (currentgroup.prev) {
+                        console.log('moving to the previous group (%s), current group is %s', currentgroup.prev.name, currentgroup.name);
                         currentgroup = currentgroup.prev
                         if (currentgroup.name == 'shell')
                             currentext.text('shell syntax');
@@ -80,18 +81,30 @@
                         drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
 
                         if (!currentgroup.prev) {
+                            console.log("new current group is the first group, disabling prev button");
                             prev.css({opacity: 0.5});
                             prevtext.text('');
                         }
+                        else {
+                            console.log("setting prev button text to new current group prev %s", currentgroup.prev.name);
+
+                            if (currentgroup.prev.name == 'shell')
+                                prevtext.text(" explain shell syntax");
+                            else
+                                prevtext.text(" explain " + currentgroup.prev.commandselector.first().text());
+                        }
+
                         if (currentgroup.next) {
                             next.css({opacity: 1});
                             nextext.text(" explain " + currentgroup.next.commandselector.first().text());
+                            console.log("setting next button text to new current group next %s", currentgroup.next.name);
                         }
                     }
                 });
 
                 next.click(function() {
                     if (currentgroup.next) {
+                        console.log('moving to the next group (%s), current group is %s', currentgroup.next.name, currentgroup.name);
                         currentgroup = currentgroup.next
                         if (currentgroup.name == 'shell')
                             currentext.text('shell syntax');
@@ -102,15 +115,22 @@
                         drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
 
                         if (!currentgroup.next) {
+                            console.log("new current group is the last group, disabling next button");
                             next.css({opacity: 0.5});
                             nextext.text('');
                         }
+                        else {
+                            console.log("setting next button text to new current group next %s", currentgroup.next.name);
+                            nextext.text(" explain " + currentgroup.next.commandselector.first().text());
+                        }
+
                         if (currentgroup.prev) {
                             prev.css({opacity: 1});
                             if (currentgroup.prev.name == 'shell')
                                 prevtext.text(" explain shell syntax");
                             else
                                 prevtext.text(" explain " + currentgroup.prev.commandselector.first().text());
+                            console.log("setting prev button text to new current group prev %s", currentgroup.prev.name);
                         }
                     }
                 });
