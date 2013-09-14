@@ -137,6 +137,15 @@ function drawgrouplines(commandselector, helpselector) {
     if (currentgroup.name != 'all') {
         $("#help pre").not(helpselector.selector).parent().parent().hide();
         helpselector.parent().parent().show();
+
+        // the first item in a non-shell group is always the synopsis of the
+        // command (unless it's unknown). we display it at the top without a
+        // connecting line, so remove it from the selectors
+        if (currentgroup.name != 'shell' && !$(commandselector[0]).hasClass('unknown')) {
+            console.log('slicing command selector');
+            commandselector = commandselector.slice(1);
+            helpselector = helpselector.slice(1);
+        }
     }
 
     if (helpselector.length > 0)
