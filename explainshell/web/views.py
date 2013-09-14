@@ -39,8 +39,8 @@ def explainold(section, program):
             matches, helptext = explaincommand(command, s)
             return render_template('explain.html', matches=matches, helptext=helptext, getargs=args)
         else:
-            mp, othersections = explainprogram(program, s)
-            return render_template('options.html', mp=mp, othersections=othersections)
+            mp, suggestions = explainprogram(program, s)
+            return render_template('options.html', mp=mp, suggestions=suggestions)
     except errors.ProgramDoesNotExist, e:
         return render_template('missingmanpage.html', prog=e.args[0])
     except errors.ParsingError, e:
@@ -57,9 +57,9 @@ def explainprogram(program, store):
           'synopsis' : mp.synopsis,
           'options' : [o.text.decode('utf-8') for o in mp.options]}
 
-    othersections = helpers.others(mps)
-    logger.info('others: %s', othersections)
-    return mp, othersections
+    suggestions = helpers.suggestions(mps)
+    logger.info('suggestions: %s', suggestions)
+    return mp, suggestions
 
 def explaincommand(command, store):
     matcher_ = matcher.matcher(command, store)
@@ -115,12 +115,12 @@ def explaincommand(command, store):
             d['section'] = commandgroup.manpage.section
             if '.' not in d['match']:
                 d['match'] = '%s(%s)' % (d['match'], d['section'])
-            d['others'] = commandgroup.others
+            d['suggestions'] = commandgroup.suggestions
             d['source'] = commandgroup.manpage.source[:-5]
         matches.append(l)
 
     matches = list(itertools.chain.from_iterable(matches))
-    helpers.others(matches, command)
+    helpers.suggestions(matches, command)
     matches.sort(key=lambda d: d['start'])
 
     it = util.peekable(iter(matches))

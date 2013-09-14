@@ -18,7 +18,7 @@
 {%- endmacro %}
 
 {%- macro outputcommandexplain(d, getargs) -%}
-    {% if d.others|length == 0 -%}
+    {% if d.suggestions|length == 0 -%}
     <span class="{{ d.id }}" style="word-spacing: 0px;"><a href="/explain/{{ d.section }}/{{ d.source }}">{{ d.match|e }}</a></span>
     {%- else -%}
                 <span class="dropdown">
@@ -28,7 +28,7 @@
                     <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu">
                       <li>other manpages</li>
                       <li class="divider"></li>
-                      {% for dd in d.others -%}
+                      {% for dd in d.suggestions -%}
                       <li><a tabindex="-1" href="/explain?cmd={{ dd.cmd|urlencode }}">{{ dd.text|e }}</a></li>
                       {%- endfor %}
                     </ul>

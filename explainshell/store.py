@@ -292,15 +292,16 @@ class store(object):
         # find all srcs that point to oid
         srcs = [d['src'] for d in cursor]
         # find all dsts of srcs
-        otheroids = self.mapping.find({'src' : {'$in' : srcs}}, {'dst' : 1})
+        suggestionoids = self.mapping.find({'src' : {'$in' : srcs}}, {'dst' : 1})
         # remove already discovered
-        otheroids = [d['dst'] for d in otheroids if d['dst'] not in skip]
-        if not otheroids:
+        suggestionoids = [d['dst'] for d in suggestionoids if d['dst'] not in skip]
+        if not suggestionoids:
             return []
 
         # get just the name and source of found suggestions
-        otheroids = self.manpage.find({'_id' : {'$in' : otheroids}}, {'name' : 1, 'source' : 1})
-        return [(d.pop('_id'), manpage.from_store_name_only(**d)) for d in otheroids]
+        suggestionoids = self.manpage.find({'_id' : {'$in' : suggestionoids}},
+                                           {'name' : 1, 'source' : 1})
+        return [(d.pop('_id'), manpage.from_store_name_only(**d)) for d in suggestionoids]
 
     def addmapping(self, src, dst, score):
         self.mapping.insert({'src' : src, 'dst' : dst, 'score' : score})

@@ -91,7 +91,7 @@ class matcher(parser.NodeVisitor):
             mg = matchgroup(name)
             mg.error = e
             mg.manpage = None
-            mg.others = None
+            mg.suggestions = None
             self.groups.append(mg)
 
             self.matches.append(matchresult(node.pos[0], endpos, None, None))
@@ -120,7 +120,7 @@ class matcher(parser.NodeVisitor):
         # create a new matchgroup for the current command
         mg = matchgroup(name)
         mg.manpage = manpage
-        mg.others = mps[1:]
+        mg.suggestions = mps[1:]
         self.groups.append(mg)
 
         self.matches.append(matchresult(node.pos[0], endpos, manpage.synopsis, None))

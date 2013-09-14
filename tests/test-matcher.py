@@ -189,7 +189,7 @@ class test_matcher(unittest.TestCase):
 
         groups = matcher.matcher(cmd, s).match()
         self.assertEquals(groups[1].results, matchedresult)
-        self.assertEquals(groups[1].others[0].source, 'dup.2.gz')
+        self.assertEquals(groups[1].suggestions[0].source, 'dup.2.gz')
 
     def test_arguments(self):
         cmd = 'withargs -x -b freearg freearg'
