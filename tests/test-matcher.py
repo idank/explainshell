@@ -51,6 +51,13 @@ class test_matcher(unittest.TestCase):
     def test_unknown_prog(self):
         self.assertRaises(errors.ProgramDoesNotExist, matcher.matcher('foo', s).match)
 
+    def test_unicode(self):
+        matchedresult = [
+            (0, 3, 'bar synopsis', 'bar'),
+            (4, 13, '-b <arg> desc', '-b uni???')]
+
+        self.assertMatchSingle(u'bar -b uni\u05e7\u05d5\u05d3', s.findmanpage('bar')[0], matchedresult)
+
     def test_no_options(self):
         matchedresult = [(0, 3, 'bar synopsis', 'bar')]
         self.assertMatchSingle('bar', s.findmanpage('bar')[0], matchedresult)

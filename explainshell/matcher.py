@@ -26,7 +26,7 @@ class matcher(parser.NodeVisitor):
     each token.
     '''
     def __init__(self, s, store):
-        self.s = s
+        self.s = s.encode('latin1', 'replace')
         self.store = store
         self._prevoption = self._currentoption = None
         self.groups = [matchgroup('shell')]
