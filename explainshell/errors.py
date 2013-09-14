@@ -10,7 +10,7 @@ class ParsingError(Exception):
         self.s = s
         self.position = position
 
-        assert position < len(s)
+        assert position <= len(s)
 
         prefix = '%s (position %d, ' % (message, position)
         indent = len(prefix)
