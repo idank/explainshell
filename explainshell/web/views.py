@@ -26,23 +26,27 @@ def explain(section, program):
             return render_template('explain.html', matches=matches, helptext=helptext, getargs=args)
         else:
             logger.info('/explain section=%r program=%r', section, program)
-            mps = s.findmanpage(program, section)
-            mp = mps.pop(0)
-            program = mp.namesection
-
-            mp = {'source' : mp.source[:-3],
-                  'section' : mp.section,
-                  'program' : program,
-                  'synopsis' : mp.synopsis,
-                  'options' : [o.text.decode('utf-8') for o in mp.options]}
-
-            othersections = helpers.others(mps)
-            logger.info('others: %s', othersections)
-            return render_template('options.html', mp=mp, othersections=helpers.others(mps))
+            mp, othersections = explainprogram(program, section, s)
+            return render_template('options.html', mp=mp, othersections=othersections)
     except errors.ProgramDoesNotExist, e:
         return render_template('missingmanpage.html', prog=e.args[0])
     except errors.ParsingError, e:
         return render_template('error.html', message='Parsing error: %s' % str(e))
+
+def explainprogram(program, section, store):
+    mps = store.findmanpage(program, section)
+    mp = mps.pop(0)
+    program = mp.namesection
+
+    mp = {'source' : mp.source[:-3],
+          'section' : mp.section,
+          'program' : program,
+          'synopsis' : mp.synopsis,
+          'options' : [o.text.decode('utf-8') for o in mp.options]}
+
+    othersections = helpers.others(mps)
+    logger.info('others: %s', othersections)
+    return mp, othersections
 
 def explaincommand(command, section, store):
     matcher_ = matcher.matcher(command, store, section)
