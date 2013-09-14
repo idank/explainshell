@@ -18,7 +18,7 @@ class test_manager(unittest.TestCase):
         m = self._getmanager(['tar.1.gz'])
         m.run()
 
-        self.assertRaises(errors.ProgramDoesNotExist, m.store.findmanpage, 'tar', '2')
+        self.assertRaises(errors.ProgramDoesNotExist, m.store.findmanpage, 'tar.2')
         mp = m.store.findmanpage('tar')[0]
         self.assertEquals(mp.source, 'tar.1.gz')
         self.assertEquals(mp.name, 'tar')
@@ -129,7 +129,7 @@ class test_manager(unittest.TestCase):
         a, e = m.run()
         self.assertEquals(len(a), 2)
         self.assertEquals(len(m.store.findmanpage('node')), 2)
-        mps = m.store.findmanpage('node', '8')
+        mps = m.store.findmanpage('node.8')
         self.assertEquals(len(mps), 2)
         self.assertEquals(mps[0].section, '8')
 
@@ -138,6 +138,6 @@ class test_manager(unittest.TestCase):
         a, e = m.run()
         self.assertEquals(len(a), 2)
         self.assertEquals(len(m.store.findmanpage('xargs')), 2)
-        mps = m.store.findmanpage('xargs', '1posix')
+        mps = m.store.findmanpage('xargs.1posix')
         self.assertEquals(len(mps), 2)
         self.assertEquals(mps[0].section, '1posix')

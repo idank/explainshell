@@ -96,8 +96,7 @@ class manager(object):
                 m = manpage.manpage(path)
                 logger.info('handling manpage %s (from %s)', m.name, path)
                 try:
-                    name, section = util.namesection(m.shortpath[:-3])
-                    mps = self.store.findmanpage(name, section)
+                    mps = self.store.findmanpage(m.shortpath[:-3])
                     mps = [mp for mp in mps if m.shortpath == mp.source]
                     if mps:
                         assert len(mps) == 1

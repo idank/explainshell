@@ -20,30 +20,34 @@ def explain():
         return redirect('/')
     command = request.args['cmd']
     s = store.store('explainshell', config.MONGO_URI)
-    matches, helptext = explaincommand(command, None, s)
+    matches, helptext = explaincommand(command, s)
     return render_template('explain.html', matches=matches, helptext=helptext, getargs=command)
 
 @app.route('/explain/<program>', defaults={'section' : None})
 @app.route('/explain/<section>/<program>')
 def explainold(section, program):
+    logger.info('/explain section=%r program=%r', section, program)
+
     s = store.store('explainshell', config.MONGO_URI)
     try:
+        if section is not None:
+            program = '%s.%s' % (program, section)
+
         if 'args' in request.args:
             args = request.args['args']
             command = '%s %s' % (program, args)
-            matches, helptext = explaincommand(command, section, s)
+            matches, helptext = explaincommand(command, s)
             return render_template('explain.html', matches=matches, helptext=helptext, getargs=args)
         else:
-            logger.info('/explain section=%r program=%r', section, program)
-            mp, othersections = explainprogram(program, section, s)
+            mp, othersections = explainprogram(program, s)
             return render_template('options.html', mp=mp, othersections=othersections)
     except errors.ProgramDoesNotExist, e:
         return render_template('missingmanpage.html', prog=e.args[0])
     except errors.ParsingError, e:
         return render_template('error.html', message='Parsing error: %s' % str(e))
 
-def explainprogram(program, section, store):
-    mps = store.findmanpage(program, section)
+def explainprogram(program, store):
+    mps = store.findmanpage(program)
     mp = mps.pop(0)
     program = mp.namesection
 
@@ -57,8 +61,8 @@ def explainprogram(program, section, store):
     logger.info('others: %s', othersections)
     return mp, othersections
 
-def explaincommand(command, section, store):
-    matcher_ = matcher.matcher(command, store, section)
+def explaincommand(command, store):
+    matcher_ = matcher.matcher(command, store)
     groups = matcher_.match()
     shellgroup = groups[0]
     commandgroups = groups[1:]

@@ -24,12 +24,9 @@ logger = logging.getLogger(__name__)
 class matcher(parser.NodeVisitor):
     '''parse a command line and return a list of matchresults describing
     each token.
-
-    passing in a section causes the store to do look up the command in a
-    specific section'''
-    def __init__(self, s, store, section=None):
+    '''
+    def __init__(self, s, store):
         self.s = s
-        self.section = section
         self.store = store
         self._prevoption = self._currentoption = None
         self.groups = [matchgroup('shell')]
@@ -54,7 +51,7 @@ class matcher(parser.NodeVisitor):
 
     def findmanpages(self, prog):
         logger.info('looking up %r in store', prog)
-        manpages = self.store.findmanpage(prog, self.section)
+        manpages = self.store.findmanpage(prog)
         logger.info('found %r in store, got: %r, using %r', prog, manpages, manpages[0])
         return manpages
 

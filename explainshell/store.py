@@ -173,7 +173,7 @@ class manpage(object):
     @staticmethod
     def from_store(d):
         paragraphs = []
-        for pd in d['paragraphs']:
+        for pd in d.get('paragraphs', []):
             pp = paragraph.from_store(pd)
             if pp.is_option == True and 'short' in pd:
                 pp = option.from_store(pd)
@@ -182,6 +182,10 @@ class manpage(object):
         return manpage(d['source'], d['name'], d['synopsis'], paragraphs,
                        [tuple(x) for x in d['aliases']], d['partialmatch'],
                        d['multicommand'], d['updated'])
+
+    @staticmethod
+    def from_store_name_only(name, source):
+        return manpage(source, name, None, [], [], None, None, None)
 
     def __repr__(self):
         return '<manpage %r(%s), %d options>' % (self.name, self.section, len(self.options))
@@ -226,10 +230,13 @@ class store(object):
         for d in self.manpage.find():
             yield manpage.from_store(d)
 
-    def findmanpage(self, name, section=None):
-        '''find a man page by its name, optionally in the specified section
+    def findmanpage(self, name):
+        '''find a man page by its name, everything following the last dot (.) in name,
+        is taken as the section of the man page
 
-        we return the man page found with the highest score'''
+        we return the man page found with the highest score, and a list of
+        suggestions that also matched the given name (only the first item
+        is prepopulated with the option data)'''
         if name.endswith('.gz'):
             logger.info('name ends with .gz, looking up an exact match by source')
             d = self.manpage.find_one({'source':name})
@@ -239,6 +246,13 @@ class store(object):
             logger.info('returning %s', m)
             return [m]
 
+        origname = name
+        splitted = name.rsplit('.', 1)
+        name = splitted[0]
+        if len(splitted) > 1:
+            section = splitted[1]
+        else:
+            section = None
         logger.info('looking up manpage in mapping with src %r', name)
         cursor = self.mapping.find({'src' : name})
         count = cursor.count()
@@ -246,21 +260,47 @@ class store(object):
             raise errors.ProgramDoesNotExist(name)
 
         dsts = dict(((d['dst'], d['score']) for d in cursor))
-        cursor = self.manpage.find({'_id' : {'$in' : list(dsts.keys())}})
+        cursor = self.manpage.find({'_id' : {'$in' : list(dsts.keys())}}, {'name' : 1, 'source' : 1})
         if cursor.count() != len(dsts):
             logger.error('one of %r mappings is missing in manpage collection '
                          '(%d mappings, %d found)', dsts, len(dsts), cursor.count())
-        results = [(d['_id'], manpage.from_store(d)) for d in cursor]
+        results = [(d.pop('_id'), manpage.from_store_name_only(**d)) for d in cursor]
         results.sort(key=lambda x: dsts.get(x[0], 0), reverse=True)
-        results = [x[1] for x in results]
         logger.info('got %s', results)
         if section is not None:
             if len(results) > 1:
-                results.sort(key=lambda m: m.section == section, reverse=True)
+                results.sort(key=lambda (oid, m): m.section == section, reverse=True)
                 logger.info(r'sorting %r so %s is first', results, section)
-            if not results[0].section == section:
-                raise errors.ProgramDoesNotExist('%s.%s' % (name, section))
+            if not results[0][1].section == section:
+                raise errors.ProgramDoesNotExist(origname)
+            results.extend(self._discovermanpagesuggestions(results[0][0], results))
+
+        oid = results[0][0]
+        results = [x[1] for x in results]
+        results[0] = manpage.from_store(self.manpage.find_one({'_id' : oid}))
         return results
+
+    def _discovermanpagesuggestions(self, oid, existing):
+        '''find suggestions for a given man page
+
+        oid is the objectid of the man page in question,
+        existing is a list of (oid, man page) of suggestions that were
+        already discovered
+        '''
+        skip = set([oid for oid, m in existing])
+        cursor = self.mapping.find({'dst' : oid})
+        # find all srcs that point to oid
+        srcs = [d['src'] for d in cursor]
+        # find all dsts of srcs
+        otheroids = self.mapping.find({'src' : {'$in' : srcs}}, {'dst' : 1})
+        # remove already discovered
+        otheroids = [d['dst'] for d in otheroids if d['dst'] not in skip]
+        if not otheroids:
+            return []
+
+        # get just the name and source of found suggestions
+        otheroids = self.manpage.find({'_id' : {'$in' : otheroids}}, {'name' : 1, 'source' : 1})
+        return [(d.pop('_id'), manpage.from_store_name_only(**d)) for d in otheroids]
 
     def addmapping(self, src, dst, score):
         self.mapping.insert({'src' : src, 'dst' : dst, 'score' : score})
