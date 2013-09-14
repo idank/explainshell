@@ -15,8 +15,8 @@
             <div class="push"></div>
             <div class="text-center">
                 <div class="input-append">
-                    <form id='form' method="get">
-                        <input class="span10" id="explain" type="text" name="args" autocapitalize="off" autocorrect="off"></input>
+                    <form action='/explain' method="get">
+                        <input id='explain' class="span10" type="text" name="cmd" autocapitalize="off" autocorrect="off"></input>
                         <button class="btn" type="submit">EXPLAIN</button>
                     </form>
                 </div>
@@ -38,13 +38,6 @@
             {%- endblock %}
 {% block js -%}
         <script type="text/javascript">
-            $("#form").on("submit", function(event) {
-                event.preventDefault();
-
-                var et = $("#explain");
-                window.location.href = commandlinetourl(et.val());
-            });
-
             $("#explain").focus();
         </script>
 {%- endblock %}

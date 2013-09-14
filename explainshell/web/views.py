@@ -1,5 +1,5 @@
 import logging, itertools
-from flask import render_template, request
+from flask import render_template, request, redirect
 
 from explainshell import matcher, errors, util, store, config
 from explainshell.web import app, helpers
@@ -14,9 +14,18 @@ def index():
 def about():
     return render_template('about.html')
 
+@app.route('/explain')
+def explain():
+    if 'cmd' not in request.args:
+        return redirect('/')
+    command = request.args['cmd']
+    s = store.store('explainshell', config.MONGO_URI)
+    matches, helptext = explaincommand(command, None, s)
+    return render_template('explain.html', matches=matches, helptext=helptext, getargs=command)
+
 @app.route('/explain/<program>', defaults={'section' : None})
 @app.route('/explain/<section>/<program>')
-def explain(section, program):
+def explainold(section, program):
     s = store.store('explainshell', config.MONGO_URI)
     try:
         if 'args' in request.args:

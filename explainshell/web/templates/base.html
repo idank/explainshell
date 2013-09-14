@@ -25,7 +25,7 @@
                 <ul class="inline menu">
                   <li><a href="/about">about</a></li>
                   <li><a href="https://github.com/idank/explainshell"><i class="icon-github"></i></a></li>
-                  {% block menu %}<li><form id='top-search-form' method='get'><input id="top-search" type="text" autocapitalize="off" autocorrect="off" placeholder="explain..."></input></form></li>{% endblock %}
+                  {% block menu %}<li><form action='/explain' method='get'><input id="top-search" name='cmd' type="text" autocapitalize="off" autocorrect="off" placeholder="explain..."></input></form></li>{% endblock %}
                 </ul>
                 <div class="text-center">
                     {% block header %}{% endblock %}
@@ -56,14 +56,6 @@
 
         </script>
         {%- endif %}
-        <script type="text/javascript">
-            $("#top-search-form").on("submit", function(event) {
-                event.preventDefault();
-
-                var et = $("#top-search");
-                window.location.href = commandlinetourl(et.val());
-            });
-        </script>
         {%- block js %}{% endblock %}
     </body>
 </html>
