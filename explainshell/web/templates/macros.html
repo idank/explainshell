@@ -29,7 +29,7 @@
                       <li>other manpages</li>
                       <li class="divider"></li>
                       {% for dd in d.others -%}
-                      <li><a tabindex="-1" href="/explain/{{ dd.link }}?args={{ getargs|urlencode }}">{{ dd.name|e }}</a></li>
+                      <li><a tabindex="-1" href="/explain?cmd={{ dd.cmd|urlencode }}">{{ dd.text|e }}</a></li>
                       {%- endfor %}
                     </ul>
                     </span>

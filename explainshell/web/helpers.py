@@ -5,7 +5,16 @@ def convertparagraphs(manpage):
         p.text = p.text.decode('utf-8')
     return manpage
 
-def others(mps):
-    mps.sort(key=lambda mp: mp.section)
-    return [{'link' : '%s/%s' % (mp.section, util.namesection(mp.source[:-3])[0]),
-             'name' : mp.namesection} for mp in mps]
+def others(matches, command):
+    '''enrich command matches with links to other man pages with the
+    same name'''
+    for m in matches:
+        if 'name' in m and 'others' in m:
+            before = command[:m['start']]
+            after = command[m['end']:]
+            newothers = []
+            for othermp in sorted(m['others'], key=lambda mp: mp.section):
+                mid = '%s.%s' % (othermp.name, othermp.section)
+                newothers.append({'cmd' : ''.join([before, mid, after]),
+                                  'text' : othermp.namesection})
+            m['others'] = newothers

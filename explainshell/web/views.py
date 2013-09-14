@@ -109,12 +109,14 @@ def explaincommand(command, section, store):
         if commandgroup.manpage:
             d['name'] = commandgroup.manpage.name
             d['section'] = commandgroup.manpage.section
-            d['match'] = '%s(%s)' % (d['match'], d['section'])
+            if '.' not in d['match']:
+                d['match'] = '%s(%s)' % (d['match'], d['section'])
+            d['others'] = commandgroup.others
             d['source'] = commandgroup.manpage.source[:-5]
-            d['others'] = helpers.others(commandgroup.others)
         matches.append(l)
 
     matches = list(itertools.chain.from_iterable(matches))
+    helpers.others(matches, command)
     matches.sort(key=lambda d: d['start'])
 
     it = util.peekable(iter(matches))
