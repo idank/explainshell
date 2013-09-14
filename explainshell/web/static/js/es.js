@@ -139,7 +139,8 @@ function drawgrouplines(commandselector, helpselector) {
         helpselector.parent().parent().show();
     }
 
-    $("#canvas").height(helpselector.last()[0].getBoundingClientRect().bottom - canvastop);
+    if (helpselector.length > 0)
+        $("#canvas").height(helpselector.last()[0].getBoundingClientRect().bottom - canvastop);
 
     var commandrect = $("#command")[0].getBoundingClientRect(),
         mid = commandrect.left + commandrect.width / 2;
