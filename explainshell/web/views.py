@@ -22,74 +22,7 @@ def explain(section, program):
         if 'args' in request.args:
             args = request.args['args']
             command = '%s %s' % (program, args)
-            matcher_ = matcher.matcher(command, s, section)
-            groups = matcher_.match()
-            shellgroup = groups[0]
-            commandgroups = groups[1:]
-            matches = []
-
-            # save a mapping between the help text to its assigned id,
-            # we're going to reuse ids that have the same text
-            texttoid = {}
-
-            # remember where each assigned id has started in the source,
-            # we're going to use it later on to sort the help text by start
-            # position
-            idstartpos = {}
-
-            l = []
-            for m in shellgroup.results:
-                id_ = '%s-%d' % (shellgroup.name, len(l))
-                text = m.text
-                if text:
-                    text = text.decode('utf-8')
-                    id_ = texttoid.setdefault(text, id_)
-                else:
-                    assert False
-                idstartpos.setdefault(id_, m.start)
-                d = {'match' : m.match, 'unknown' : m.unknown,
-                     'start' : m.start, 'end' : m.end,
-                     'id' : id_}
-                l.append(d)
-            matches.append(l)
-
-            for commandgroup in commandgroups:
-                l = []
-                for m in commandgroup.results:
-                    id_ = '%s-%d' % (commandgroup.name, len(l))
-                    text = m.text
-                    if text:
-                        text = text.decode('utf-8')
-                        id_ = texttoid.setdefault(text, id_)
-                    else:
-                        id_ = '%s unknown' % commandgroup.name
-                    idstartpos.setdefault(id_, m.start)
-                    d = {'match' : m.match, 'unknown' : m.unknown,
-                         'start' : m.start, 'end' : m.end,
-                         'id' : id_}
-                    l.append(d)
-
-                d = l[0]
-                if commandgroup.manpage:
-                    d['name'] = commandgroup.manpage.name
-                    d['section'] = commandgroup.manpage.section
-                    d['match'] = '%s(%s)' % (d['match'], d['section'])
-                    d['source'] = commandgroup.manpage.source[:-5]
-                    d['others'] = helpers.others(commandgroup.others)
-                matches.append(l)
-
-            matches = list(itertools.chain.from_iterable(matches))
-            matches.sort(key=lambda d: d['start'])
-
-            it = util.peekable(iter(matches))
-            while it.hasnext():
-                m = it.next()
-                spaces = 0
-                if it.hasnext():
-                    spaces = it.peek()['start'] - m['end']
-                m['spaces'] = ' ' * spaces
-
-            helptext = sorted(texttoid.iteritems(), key=lambda (k, v): idstartpos[v])
+            matches, helptext = explaincommand(command, section, s)
             return render_template('explain.html', matches=matches, helptext=helptext, getargs=args)
         else:
             logger.info('/explain section=%r program=%r', section, program)
@@ -110,3 +43,74 @@ def explain(section, program):
         return render_template('missingmanpage.html', prog=e.args[0])
     except errors.ParsingError, e:
         return render_template('error.html', message='Parsing error: %s' % str(e))
+
+def explaincommand(command, section, store):
+    matcher_ = matcher.matcher(command, store, section)
+    groups = matcher_.match()
+    shellgroup = groups[0]
+    commandgroups = groups[1:]
+    matches = []
+
+    # save a mapping between the help text to its assigned id,
+    # we're going to reuse ids that have the same text
+    texttoid = {}
+
+    # remember where each assigned id has started in the source,
+    # we're going to use it later on to sort the help text by start
+    # position
+    idstartpos = {}
+
+    l = []
+    for m in shellgroup.results:
+        id_ = '%s-%d' % (shellgroup.name, len(l))
+        text = m.text
+        if text:
+            text = text.decode('utf-8')
+            id_ = texttoid.setdefault(text, id_)
+        else:
+            assert False
+        idstartpos.setdefault(id_, m.start)
+        d = {'match' : m.match, 'unknown' : m.unknown,
+             'start' : m.start, 'end' : m.end,
+             'id' : id_}
+        l.append(d)
+    matches.append(l)
+
+    for commandgroup in commandgroups:
+        l = []
+        for m in commandgroup.results:
+            id_ = '%s-%d' % (commandgroup.name, len(l))
+            text = m.text
+            if text:
+                text = text.decode('utf-8')
+                id_ = texttoid.setdefault(text, id_)
+            else:
+                id_ = '%s unknown' % commandgroup.name
+            idstartpos.setdefault(id_, m.start)
+            d = {'match' : m.match, 'unknown' : m.unknown,
+                 'start' : m.start, 'end' : m.end,
+                 'id' : id_}
+            l.append(d)
+
+        d = l[0]
+        if commandgroup.manpage:
+            d['name'] = commandgroup.manpage.name
+            d['section'] = commandgroup.manpage.section
+            d['match'] = '%s(%s)' % (d['match'], d['section'])
+            d['source'] = commandgroup.manpage.source[:-5]
+            d['others'] = helpers.others(commandgroup.others)
+        matches.append(l)
+
+    matches = list(itertools.chain.from_iterable(matches))
+    matches.sort(key=lambda d: d['start'])
+
+    it = util.peekable(iter(matches))
+    while it.hasnext():
+        m = it.next()
+        spaces = 0
+        if it.hasnext():
+            spaces = it.peek()['start'] - m['end']
+        m['spaces'] = ' ' * spaces
+
+    helptext = sorted(texttoid.iteritems(), key=lambda (k, v): idstartpos[v])
+    return matches, helptext
