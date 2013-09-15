@@ -278,8 +278,14 @@ class CommandLineParser(object):
             self.consume(')')
         elif tt == '{':
             self.consume(tt)
+            self.peek_token()
+            if self.peek.preceding != ' ':
+                raise errors.ParsingError('syntax: expected space after {', self.source, self.peek.start)
             s = self.token.start
             node = self.parse_list()
+            if (node.kind != 'list' or node.parts[-1].kind != 'operator' or
+                node.parts[-1].op != ';'):
+                    raise errors.ParsingError('syntax: group command list must terminate with semicolon', self.source, node.pos[1])
             self.consume('}')
         else:
             return self.parse_simple_command()

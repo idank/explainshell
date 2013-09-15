@@ -167,6 +167,59 @@ class test_parser(unittest.TestCase):
                             commandnode('c', wordnode('c', 'c'))
                           ))
 
+    def test_invalid_group(self):
+        # no space after {
+        self.assertRaisesRegexp(errors.ParsingError, "expected space after {.*position 1",
+                                parse, '{a; }')
+
+        # no terminating semicolon
+        self.assertRaisesRegexp(errors.ParsingError, "group command list must terminate.*position 3",
+                                parse, '{ a}')
+        self.assertRaisesRegexp(errors.ParsingError, "group command list must terminate.*position 3",
+                                parse, '{ a      }')
+
+        # no closing }
+        self.assertRaisesRegexp(errors.ParsingError, "expected '}' \\(got EOF\\).*position 4",
+                                parse, '{ a;')
+
+    def test_group(self):
+        s = '{ a; }'
+        self.assertASTEquals(parse(s),
+                          compoundnode('{',
+                            listnode('a;',
+                              commandnode('a', wordnode('a', 'a')),
+                              operatornode(';', ';'),
+                            ),
+                            '{ a; }'
+                          ))
+
+        s = '{ a; b; }'
+        self.assertASTEquals(parse(s),
+                          compoundnode('{',
+                            listnode('a; b;',
+                              commandnode('a', wordnode('a', 'a')),
+                              operatornode(';', ';'),
+                              commandnode('b', wordnode('b', 'b')),
+                              operatornode(';', ';')
+                            ),
+                            '{ a; b; }'
+                          ))
+
+        s = '(a) && { b; }'
+        self.assertASTEquals(parse(s),
+                          listnode('(a) && { b; }',
+                            compoundnode('(',
+                              commandnode('a',
+                                wordnode('a', 'a')), '(a)'),
+                            operatornode('&&', '&&'),
+                            compoundnode('{',
+                              listnode('b;',
+                                commandnode('b',
+                                  wordnode('b', 'b')),
+                                operatornode(';', ';')), '{ b; }'
+                              )
+                          ))
+
     def test_compound(self):
         s = '(a) && (b)'
         self.assertASTEquals(parse(s),
