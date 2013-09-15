@@ -233,7 +233,7 @@ class CommandLineParser(object):
             self.consume(op)
             tt = self.peek_token()
             s, e = self.token.start, self.token.end
-            if tt in (')', '}'):
+            if tt in (')', '}') or (tt is None and op in (';', '&')):
                 parts.append(Node(kind='operator', op=op, pos=(s, e)))
                 break
             part = self.parse_pipeline()

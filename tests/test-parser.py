@@ -129,6 +129,13 @@ class test_parser(unittest.TestCase):
         #                  pipelinenode(commandnode(['a']), pipenode('|'), commandnode(['b'])))
 
     def test_list(self):
+        s = 'a;'
+        self.assertASTEquals(parse(s),
+                          listnode(s,
+                            commandnode('a', wordnode('a', 'a')),
+                            operatornode(';', ';'),
+                          ))
+
         s = 'a && b'
         self.assertASTEquals(parse(s),
                           listnode(s,
