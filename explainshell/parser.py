@@ -216,7 +216,11 @@ class CommandLineParser(object):
         self.token = self.peek
         self.peek = self.next_token()
         if self.token.type != tt:
-            raise errors.ParsingError('consume: expected %r' % tt, self.source, self.token.start)
+            got = self.token.type
+            if got is None:
+                got = 'EOF'
+            raise errors.ParsingError('consume: expected %r (got %s)' % (tt, got),
+                                      self.source, self.token.start)
 
     def parse(self):
         self.peek_token()
