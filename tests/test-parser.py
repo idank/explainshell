@@ -6,6 +6,9 @@ token = parser.token
 parse = functools.partial(parser.parse_command_line, convertpos=True)
 tokenize = parser.tokenize_command_line
 
+def negatenode():
+    return parser.Node(kind='negate', s='!')
+
 def commandnode(s, *parts):
     return parser.Node(kind='command', s=s, parts=list(parts))
 
@@ -19,12 +22,15 @@ def pipenode(pipe, s):
     return parser.Node(kind='pipe', pipe=pipe, s=s)
 
 def pipelinenode(s, *parts):
+    oldparts = parts
+    if parts[0].kind == 'negate':
+        parts = parts[1:]
     for i in range(len(parts)):
         if i % 2 == 0:
             assert parts[i].kind in ('command', 'compound'), parts[i].kind
         else:
             assert parts[i].kind == 'pipe', parts[i].kind
-    return parser.Node(kind='pipeline', s=s, parts=list(parts))
+    return parser.Node(kind='pipeline', s=s, parts=list(oldparts))
 
 def operatornode(op, s):
     return parser.Node(kind='operator', op=op, s=s)
@@ -123,10 +129,14 @@ class test_parser(unittest.TestCase):
                             pipenode('|', '|'),
                             commandnode('b', wordnode('b', 'b'))))
 
-        # negate doesn't work
-        #s = '! a | b'
-        #self.assertEquals(parse(s),
-        #                  pipelinenode(commandnode(['a']), pipenode('|'), commandnode(['b'])))
+        s = '! a | b'
+        self.assertASTEquals(parse(s),
+                          pipelinenode(s,
+                            negatenode(),
+                            commandnode('a', wordnode('a', 'a')),
+                            pipenode('|', '|'),
+                            commandnode('b', wordnode('b', 'b'))
+                          ))
 
     def test_list(self):
         s = 'a;'
@@ -235,6 +245,23 @@ class test_parser(unittest.TestCase):
                                 commandnode('b',
                                   wordnode('b', 'b')),
                                 operatornode(';', ';')), '{ b; }'
+                              )
+                          ))
+
+        s = 'a; ! { b; }'
+        self.assertASTEquals(parse(s),
+                          listnode(s,
+                            commandnode('a', wordnode('a', 'a')),
+                            operatornode(';', ';'),
+                              pipelinenode('! { b; }',
+                                negatenode(),
+                                compoundnode('{',
+                                  listnode('b;',
+                                    commandnode('b', wordnode('b', 'b')),
+                                    operatornode(';', ';'),
+                                  ),
+                                  '{ b; }'
+                                )
                               )
                           ))
 

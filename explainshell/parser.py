@@ -127,7 +127,7 @@ class CommandLineParser(object):
     """
 
     permitted_tokens = ('&&', '||', '|&', '>>')
-    reserved_words = ('{', '}')
+    reserved_words = ('{', '}', '!')
 
     def __init__(self, source, posix=None):
         self.source = source
@@ -272,7 +272,7 @@ class CommandLineParser(object):
     def parse_pipeline(self):
         tt = self.peek_token()
         parts = []
-        if tt == '!':
+        if self.is_reserved(self.peek) == '!':
             self.consume(tt)
             parts.append(Node(kind='negate', pos=(self.token.start, self.token.end)))
         parts.append(self.parse_command())

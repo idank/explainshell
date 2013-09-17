@@ -31,7 +31,7 @@ class shell_shlex(shlex.shlex):
             instream = instream.encode('utf-8')
         shlex.shlex.__init__(self, instream, **kwargs)
         self.control = control
-        self.wordchars += '+-./*?=$%:@~`^,[]{}\\'   # these chars allowed in params
+        self.wordchars += '+-./*?=$%:@~`^,[]{}!\\'   # these chars allowed in params
         if self.control:
             self.pbchars = deque()
 
