@@ -150,7 +150,7 @@ class CommandLineParser(object):
                 t = t[1:-1]
             elif tt == 'a':
                 endpos += len(t)
-                if self.source[self.lexpos] in self.lex.quotes:
+                if endpos < len(self.source) and self.source[self.lexpos] in self.lex.quotes:
                     endpos += 1
                 try:
                     int(t)
@@ -176,6 +176,7 @@ class CommandLineParser(object):
                 while (endpos < len(self.source) and
                        self.source[endpos] not in self.lex.whitespace):
                     endpos += 1
+        assert endpos <= len(self.source), 'endpos passed the end of source (%d > %d)' % (endpos, len(self.source))
         r = token(tt, t, self.lex.preceding, self.lexpos, endpos)
         while (endpos < len(self.source) and
                self.source[endpos] in self.lex.whitespace):
