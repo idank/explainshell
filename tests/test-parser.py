@@ -42,8 +42,8 @@ def compoundnode(group, list, s, redirects=[]):
 
 class test_parser(unittest.TestCase):
     def assertASTEquals(self, result, expected):
-        self.assertEquals(result, expected,
-                'ASTs not equal\n\n%s\n\n!=\n\n%s' % (parser.dump(result), parser.dump(expected)))
+        msg = 'ASTs not equal\n\n%s\n\n!=\n\n%s' % (parser.dump(result), parser.dump(expected))
+        self.assertEquals(result, expected, msg)
 
     def assertPositions(self, s, expected):
         p = parser.CommandLineParser(s)
@@ -168,21 +168,39 @@ class test_parser(unittest.TestCase):
                           ))
 
     def test_invalid_group(self):
-        # no space after {
-        self.assertRaisesRegexp(errors.ParsingError, "expected space after {.*position 1",
+        # unexpected reserved word
+        self.assertRaisesRegexp(errors.ParsingError, "unexpected reserved word '}'.*position 0",
+                                parse, '}')
+
+        # unexpected reserved word
+        self.assertRaisesRegexp(errors.ParsingError, "unexpected reserved word '}'.*position 4",
                                 parse, '{a; }')
 
         # no terminating semicolon
-        self.assertRaisesRegexp(errors.ParsingError, "group command list must terminate.*position 3",
+        self.assertRaisesRegexp(errors.ParsingError, "group command must terminate with a semicolon.*position 4",
                                 parse, '{ a}')
-        self.assertRaisesRegexp(errors.ParsingError, "group command list must terminate.*position 3",
+        self.assertRaisesRegexp(errors.ParsingError, "group command must terminate with a semicolon.*position 10",
                                 parse, '{ a      }')
 
         # no closing }
-        self.assertRaisesRegexp(errors.ParsingError, "expected '}' \\(got EOF\\).*position 4",
+        self.assertRaisesRegexp(errors.ParsingError, "group command must terminate with }.*position 4",
                                 parse, '{ a;')
 
     def test_group(self):
+        # reserved words are recognized only at the start of a simple command
+        s = 'echo {}'
+        self.assertASTEquals(parse(s),
+                          commandnode(s,
+                            wordnode('echo', 'echo'), wordnode('{}', '{}'))
+                          )
+
+        # reserved word at beginning isn't reserved if quoted
+        s = "'{' foo"
+        self.assertASTEquals(parse(s),
+                          commandnode(s,
+                            wordnode('{', "'{'"), wordnode('foo', 'foo'))
+                          )
+
         s = '{ a; }'
         self.assertASTEquals(parse(s),
                           compoundnode('{',

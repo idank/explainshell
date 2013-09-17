@@ -25,13 +25,13 @@ class shell_shlex(shlex.shlex):
         else:
             control = kwargs.pop('control')
             if control is True:
-                control = '{}();<>|&'
+                control = '();<>|&'
         # shlex on 2.x doesn't like being passed Unicode :-(
         if not PY3 and isinstance(instream, text_type):
             instream = instream.encode('utf-8')
         shlex.shlex.__init__(self, instream, **kwargs)
         self.control = control
-        self.wordchars += '+-./*?=$%:@\\'   # these chars allowed in params
+        self.wordchars += '+-./*?=$%:@~`^,[]{}\\'   # these chars allowed in params
         if self.control:
             self.pbchars = deque()
 

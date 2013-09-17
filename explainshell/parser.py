@@ -31,6 +31,11 @@ else:
     string_types = str,
     basestring = str
 
+class ReservedWordError(errors.ParsingError):
+    def __init__(self, node, message, s, position):
+        self.node = node
+        super(ReservedWordError, self).__init__(message, s, position)
+
 class Node(object):
     """
     This class represents a node in the AST built while parsing command lines.
@@ -122,6 +127,7 @@ class CommandLineParser(object):
     """
 
     permitted_tokens = ('&&', '||', '|&', '>>')
+    reserved_words = ('{', '}')
 
     def __init__(self, source, posix=None):
         self.source = source
@@ -184,6 +190,18 @@ class CommandLineParser(object):
         self.lexpos = endpos
         return r
 
+    def is_reserved(self, t):
+        '''limited support for reserved words'''
+        if t.type != 'word':
+            return False
+
+        # must be unquoted
+        if self.source[t.start] in self.lex.quotes:
+            return False
+
+        if t.t in self.reserved_words:
+            return t.t
+
     def get_valid_controls(self, t):
         if len(t) == 1:
             result = [t]
@@ -234,17 +252,20 @@ class CommandLineParser(object):
             self.consume(op)
             tt = self.peek_token()
             s, e = self.token.start, self.token.end
-            if tt in (')', '}') or (tt is None and op in (';', '&')):
-                parts.append(Node(kind='operator', op=op, pos=(s, e)))
+            parts.append(Node(kind='operator', op=op, pos=(s, e)))
+            if tt == ')' or self.is_reserved(self.peek) == '}' or (tt is None and op in (';', '&')):
                 break
             part = self.parse_pipeline()
-            parts.append(Node(kind='operator', op=op, pos=(s, e)))
             parts.append(part)
             op = self.peek_token()
         if len(parts) == 1:
             node = parts[0]
         else:
             node = Node(kind='list', parts=parts, pos=(parts[0].pos[0], parts[-1].pos[1]))
+
+            if self.is_reserved(self.peek):
+                raise ReservedWordError(node, 'syntax: unexpected reserved word %r' % self.peek.t,
+                                        self.source, self.peek.start)
             parse_logger.debug('returning %r', node)
         return node
 
@@ -270,26 +291,42 @@ class CommandLineParser(object):
             parse_logger.debug('returning %r', node)
         return node
 
-    def parse_command(self):
-        tt = self.peek_token()
-        if tt == '(':
-            self.consume(tt)
-            s = self.token.start
-            node = self.parse_list()
-            self.consume(')')
-        elif tt == '{':
-            self.consume(tt)
-            self.peek_token()
-            if self.peek.preceding != ' ':
-                raise errors.ParsingError('syntax: expected space after {', self.source, self.peek.start)
-            s = self.token.start
-            node = self.parse_list()
+    def parse_reserved_word(self):
+        rw = self.peek.t
+        if rw == '{':
+            self.consume('word')
+            try:
+                node = self.parse_list()
+            except ReservedWordError, e:
+                node = e.node
             if (node.kind != 'list' or node.parts[-1].kind != 'operator' or
                 node.parts[-1].op != ';'):
-                    raise errors.ParsingError('syntax: group command list must terminate with semicolon', self.source, node.pos[1])
-            self.consume('}')
+                    raise errors.ParsingError('syntax: group command must '
+                                              'terminate with a semicolon',
+                                              self.source, node.pos[1])
+
+            self.peek_token()
+            if self.is_reserved(self.peek) != '}':
+                raise errors.ParsingError('syntax: group command must terminate '
+                                          'with }', self.source, self.peek.start)
+            self.consume('word')
+            return '{', node
         else:
-            return self.parse_simple_command()
+            raise ReservedWordError(None, 'syntax: unexpected reserved word %r' % self.peek.t,
+                                    self.source, self.peek.start)
+    def parse_command(self):
+        tt = self.peek_token()
+        s = self.peek.start
+        if tt == '(':
+            self.consume(tt)
+            node = self.parse_list()
+            self.consume(')')
+        else:
+            rw = self.is_reserved(self.peek)
+            if rw:
+                tt, node = self.parse_reserved_word()
+            else:
+                return self.parse_simple_command()
 
         node = Node(kind='compound', group=tt, list=node, redirects=[], pos=(s, self.token.end))
         redirects, _ = self.parse_redirections(node)
@@ -385,7 +422,8 @@ def parse_command_line(source, posix=None, convertpos=False):
     """
     if posix is None:
         posix = os.name == 'posix'
-    ast = CommandLineParser(source, posix=posix).parse()
+    cmdparser = CommandLineParser(source, posix=posix)
+    ast = cmdparser.parse()
     if convertpos:
         class v(NodeVisitor):
             def visitnode(self, node):
