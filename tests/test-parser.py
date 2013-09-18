@@ -397,6 +397,10 @@ class test_parser(unittest.TestCase):
                     token('word', 'c', ' ', 8, 9)]
         self.assertTokensEquals(s, t, expected, ('a', "'b  '", 'c'))
 
+    def test_tokenize_unknown_char(self):
+        s = "a \x00bcd"
+        self.assertRaisesRegexp(errors.ParsingError, "Illegal character.*position 2", parse, s)
+
     def test_quote_state(self):
         s = "x \"\\'\"y z"
         t = tokenize(s)

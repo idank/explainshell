@@ -90,11 +90,14 @@ class shell_shlex(shlex.shlex):
                     self.token_type = self.state
                     self.state = 'a'
                 else:
-                    self.token = nextchar
-                    if self.token or (self.posix and quoted):
-                        break   # emit current token
-                    else:
-                        continue
+                    # don't return any tokens that consist of characters that
+                    # we don't know how to handle
+                    raise ValueError('Illegal character %r' % nextchar)
+                    # self.token = nextchar
+                    # if self.token or (self.posix and quoted):
+                    #     break   # emit current token
+                    # else:
+                    #     continue
             elif self.state in self.quotes:
                 quoted = True
                 if not nextchar:      # end of file
