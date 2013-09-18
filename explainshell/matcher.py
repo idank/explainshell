@@ -59,6 +59,10 @@ class matcher(parser.NodeVisitor):
         logger.debug('nothing to do with token %r', token)
         return matchresult(start, end, None, None)
 
+    def visitnegate(self, node):
+        helptext = helpconstants.NEGATE
+        self.groups[0].results.append(matchresult(node.pos[0], node.pos[1], helptext, None))
+
     def visitoperator(self, node, op):
         helptext = helpconstants.OPERATORS[op]
         self.groups[0].results.append(matchresult(node.pos[0], node.pos[1], helptext, None))

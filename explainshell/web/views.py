@@ -20,8 +20,11 @@ def explain():
         return redirect('/')
     command = request.args['cmd']
     s = store.store('explainshell', config.MONGO_URI)
-    matches, helptext = explaincommand(command, s)
-    return render_template('explain.html', matches=matches, helptext=helptext, getargs=command)
+    try:
+        matches, helptext = explaincommand(command, s)
+        return render_template('explain.html', matches=matches, helptext=helptext, getargs=command)
+    except errors.ParsingError, e:
+        return render_template('error.html', message='Parsing error: %s' % str(e))
 
 @app.route('/explain/<program>', defaults={'section' : None})
 @app.route('/explain/<section>/<program>')
@@ -85,7 +88,7 @@ def explaincommand(command, store):
             text = text.decode('utf-8')
             id_ = texttoid.setdefault(text, id_)
         else:
-            assert False
+            assert False, m.match
         idstartpos.setdefault(id_, m.start)
         d = {'match' : m.match, 'unknown' : m.unknown,
              'start' : m.start, 'end' : m.end,

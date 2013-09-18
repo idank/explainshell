@@ -72,3 +72,6 @@ SUBSHELL = textwrap.dedent('''       (<u>list</u>) <u>list</u> is executed in a 
               the command completes.  The return status is the exit status of <u>list</u>.''')
 
 COMPOUND = {'{' : GROUP, '(' : SUBSHELL}
+
+NEGATE = '''If the reserved word <b>!</b> precedes a pipeline, the exit status of that pipeline is the logical negation of the
+exit status as described above.'''
