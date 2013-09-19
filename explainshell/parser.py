@@ -391,8 +391,10 @@ class CommandLineParser(object):
                     pos=(self.peek.start, self.peek.end))
         if self.peek.type == 'word':
             self.consume('word')
-        else:
+        elif self.peek.type == 'number':
             self.consume('number')
+        else:
+            raise errors.ParsingError('syntax: expected word or number', self.source, self.peek.start)
         redirections, usednode = self.parse_redirections(node)
         if usednode:
             return redirections

@@ -104,6 +104,9 @@ class test_parser(unittest.TestCase):
                   redirectnode('>&1', 1, '>', ('&', 1)),
                   redirectnode('2>&1', 2, '>', ('&', 1))))
 
+        s = '; a'
+        self.assertRaisesRegexp(errors.ParsingError, "expected word or number.*position 0", parse, s)
+
     def test_redirection(self):
         trythese = [('', '1'), ('', '3'), ('', '&1'), ('', '&3'), ('', 'file'),
                     ('1', '&2'), ('1', 'file'), ('1', '   file'), ('2', '/dev/null')]
@@ -354,7 +357,7 @@ class test_parser(unittest.TestCase):
 
     def test_invalid_control(self):
         s = 'a &| b'
-        self.assertRaisesRegexp(errors.ParsingError, "expected 'number'.*position 3", parse, s)
+        self.assertRaisesRegexp(errors.ParsingError, "expected word or number.*position 3", parse, s)
 
     def test_invalid_redirect(self):
         s = 'a >|b'
