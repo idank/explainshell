@@ -44,8 +44,12 @@ function eslink(clazz, option, mid, color) {
         var rrmid = rr.left + rr.width / 2;
         this.goingleft = rrmid <= mid;
 
-        $(this.help).css("border-color", this.color)
-                    .css("background-color", "white");
+        $(this.help).css("border-color", this.color);
+
+        // if the current class ends with 0, then it's the first match of the
+        // current group which means it is the synopsis of the found program
+        if (clazz.indexOf('shell') != -1 || clazz.substr(-1) != "0")
+            $(this.help).css("background-color", "white");
     }
 }
 
