@@ -61,7 +61,11 @@ def explainprogram(program, store):
           'synopsis' : mp.synopsis,
           'options' : [o.text.decode('utf-8') for o in mp.options]}
 
-    suggestions = helpers.suggestions(mps)
+    suggestions = []
+    for othermp in mps:
+        d = {'text' : othermp.namesection,
+             'link' : '%s/%s' % (othermp.section, othermp.name)}
+        suggestions.append(d)
     logger.info('suggestions: %s', suggestions)
     return mp, suggestions
 

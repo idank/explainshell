@@ -1,5 +1,5 @@
-{% macro outputcommand(mp, others) -%}
-    {% if others|length == 0 %}
+{% macro outputcommand(mp, suggestions) -%}
+    {% if suggestions|length == 0 %}
     <a href="http://manpages.ubuntu.com/manpages/precise/en/man{{ mp.section }}/{{ mp.source }}.html">{{ mp.program|e }}</a>
     {% else %}
         <span class="dropdown">
@@ -8,8 +8,8 @@
             <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu">
               <li>other manpages</li>
               <li class="divider"></li>
-            {% for d in others %}
-              <li><a tabindex="-1" href="/explain/{{ d.link }}">{{ d.name }}</a></li>
+            {% for d in suggestions %}
+              <li><a tabindex="-1" href="/explain/{{ d.link }}">{{ d.text|e }}</a></li>
             {% endfor %}
             </ul>
         </span>
