@@ -23,6 +23,8 @@ def explain():
     try:
         matches, helptext = explaincommand(command, s)
         return render_template('explain.html', matches=matches, helptext=helptext, getargs=command)
+    except errors.ProgramDoesNotExist, e:
+        return render_template('missingmanpage.html', prog=e.args[0])
     except errors.ParsingError, e:
         return render_template('error.html', message='Parsing error: %s' % str(e))
 
