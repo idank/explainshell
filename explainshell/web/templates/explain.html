@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %} - {{ getargs|e }}{% endblock %}
 	{% block content %}
-            <div class="small-push"></div>
+            <div id="navigate" style="position: relative;" class="small-push"></div>
             <svg id="canvas">
             </svg>
             <div class="push"></div>
@@ -51,12 +51,12 @@
 
             // if we have more groups, show the prev/next buttons
             if (currentgroup.next) {
-                var prev = $('<li><i class="icon-arrow-left icon-2" style="cursor: pointer;"></i><span></span></li>');
+                var prev = $('<li><i class="icon-arrow-left icon-2"></i><span></span></li>');
                 prev.css({opacity: 0.5});
-                var next = $('<li><i class="icon-arrow-right icon-2" style="cursor: pointer;"></i><span></span></li>');
+                var next = $('<li><i class="icon-arrow-right icon-2"></i><span></span></li>');
                 var prevnext = $('<ul class="unstyled" id="prevnext"><li>showing <u>shell syntax</u>, navigate:</li></ul>');
                 prevnext.append(prev).append(next);
-                $("#command").before(prevnext);
+                $("#navigate").css('height', 'auto').append(prevnext);
 
                 var nextext = next.find("span"),
                     prevtext = prev.find("span"),

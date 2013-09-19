@@ -95,6 +95,11 @@ a {
 }
 
 #prevnext {
-    position: absolute;
-    right: 250px;
+    position: relative;
+    top: 15px;
+    left: 305px;
+}
+
+#prevnext li, #prevnext span {
+    cursor: pointer;
 }
