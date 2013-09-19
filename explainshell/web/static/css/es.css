@@ -1,3 +1,7 @@
+html {
+    overflow-y: scroll;
+}
+
 body {
     font-family: "Courier New", Courier, Monaco, Menlo, Consolas, monospace;
 }
