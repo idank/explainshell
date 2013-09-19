@@ -48,7 +48,6 @@
         <script type="text/javascript">
             adjustcommandfontsize();
             currentgroup = initialize();
-            drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
 
             // if we have more groups, show the prev/next buttons
             if (currentgroup.next) {
@@ -135,6 +134,7 @@
                 });
             }
 
+            drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
 
             $(window).resize(function(){
                 clear(currentgroup);
