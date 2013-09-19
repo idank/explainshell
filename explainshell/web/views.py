@@ -1,4 +1,4 @@
-import logging, itertools
+import logging, itertools, urllib
 from flask import render_template, request, redirect
 
 from explainshell import matcher, errors, util, store, config
@@ -39,8 +39,7 @@ def explainold(section, program):
         if 'args' in request.args:
             args = request.args['args']
             command = '%s %s' % (program, args)
-            matches, helptext = explaincommand(command, s)
-            return render_template('explain.html', matches=matches, helptext=helptext, getargs=args)
+            return redirect('/explain?cmd=%s' % urllib.quote_plus(command), 301)
         else:
             mp, suggestions = explainprogram(program, s)
             return render_template('options.html', mp=mp, suggestions=suggestions)
