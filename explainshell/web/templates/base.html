@@ -22,11 +22,13 @@
                 <div class="text-center">
                     <a href="/"><img src="/static/img/logo.png"></a>
                 </div>
-                <ul class="inline menu">
-                  <li><a href="/about">about</a></li>
-                  <li><a href="https://github.com/idank/explainshell"><i class="icon-github"></i></a></li>
-                  {% block menu %}<li><form action='/explain' method='get'><input id="top-search" name='cmd' type="text" autocapitalize="off" autocorrect="off" placeholder="explain..."></input></form></li>{% endblock %}
-                </ul>
+                <div style="position: relative;">
+                    <ul class="inline menu">
+                      <li><a href="/about">about</a></li>
+                      <li><a href="https://github.com/idank/explainshell"><i class="icon-github"></i></a></li>
+                      {% block menu %}<li><form action='/explain' method='get'><input id="top-search" name='cmd' type="text" autocapitalize="off" autocorrect="off" placeholder="explain..."></input></form></li>{% endblock %}
+                    </ul>
+                </div>
                 <div class="text-center">
                     {% block header %}{% endblock %}
                 </div>

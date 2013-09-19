@@ -68,7 +68,7 @@ a {
 
 .menu {
     width: auto;
-    position: relative;
+    position: absolute;
     top: -30px;
     left: 240px;
     font-family: 'Berkshire Swash', cursive;
