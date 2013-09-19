@@ -90,6 +90,21 @@ function reorder(lefteslinks) {
     }
 }
 
+// try to guesstimate how much help text we have and if we should display
+// it all without the next/prev buttons
+function singlegroup() {
+    // if we have only one command in there, show everything
+    if ($("#command span[class^=command1]").length == 0)
+        return true;
+
+    // pretty simple: do a line count
+    var text = $("#help pre").text(),
+        linecount = text.split('\n').length;
+
+    console.log('linecount is %d', linecount);
+    return linecount < 50;
+}
+
 // initialize the lines logic, deciding which group of elements should be displayed
 //
 // returns the name of the group (with 'all' meaning draw everything) and two
@@ -101,8 +116,7 @@ function initialize() {
     // if there are no 'shell' explanations, show the first (and only) command
     if (!s.length)
         currentgroup = 'command0';
-    // if we have only one command in there, show everything
-    else if ($("#command span[class^=command1]").length == 0)
+    else if (singlegroup())
         currentgroup = 'all';
 
     var commandselector, helpselector, head = {'name' : currentgroup};
