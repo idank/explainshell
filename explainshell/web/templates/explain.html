@@ -134,11 +134,13 @@
                 });
             }
 
-            drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
-
-            $(window).resize(function(){
-                clear(currentgroup);
+            $(document).ready(function() {
                 drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
+
+                $(window).resize(function(){
+                    clear(currentgroup);
+                    drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
+                });
             });
         </script>
 {%- endblock %}
