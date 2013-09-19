@@ -403,7 +403,8 @@ function drawgrouplines(commandselector, helpselector) {
     // add hover effects for the linkgroups, if we have at least one line that
     // isn't unknown
     if (linkslengthnounknown > 1) {
-        groups.each(function(linkgroup) {
+        var groupsnounknowns = groups.filter(function(g) { return !g.links[0].unknown; });
+        groupsnounknowns.each(function(linkgroup) {
             var othergroups = groups.filter(function(other) { return linkgroup != other; });
 
             var s = $(linkgroup.help).add(linkgroup.options);
