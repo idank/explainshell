@@ -60,6 +60,101 @@ REDIRECTION = textwrap.dedent('''       Before a command is executed, its input 
        environment.  The following redirection operators may precede or appear anywhere within a <u>simple</u>  <u>command</u>
        or may follow a <u>command</u>.  Redirections are processed in the order they appear, from left to right.''')
 
+REDIRECTING_INPUT = textwrap.dedent('''   <b>Redirecting</b> <b>Input</b>
+       Redirection  of  input  causes  the  file  whose name results from the expansion of <u>word</u> to be opened for
+       reading on file descriptor <u>n</u>, or the standard input (file descriptor 0) if <u>n</u> is not specified.
+
+       The general format for redirecting input is:
+
+              [<u>n</u>]<b>&lt;</b><u>word</u>''')
+
+REDIRECTING_OUTPUT = textwrap.dedent('''   <b>Redirecting</b> <b>Output</b>
+       Redirection of output causes the file whose name results from the expansion of  <u>word</u>  to  be  opened  for
+       writing  on  file descriptor <u>n</u>, or the standard output (file descriptor 1) if <u>n</u> is not specified.  If the
+       file does not exist it is created; if it does exist it is truncated to zero size.
+
+       The general format for redirecting output is:
+
+              [<u>n</u>]<b>&gt;</b><u>word</u>
+
+       If the redirection operator is <b>&gt;</b>, and the <b>noclobber</b> option to the  <b>set</b>  builtin  has  been  enabled,  the
+       redirection  will  fail if the file whose name results from the expansion of <u>word</u> exists and is a regular
+       file.  If the redirection operator is <b>&gt;|</b>, or the redirection operator is <b>&gt;</b> and the  <b>noclobber</b>  option  to
+       the  <b>set</b>  builtin  command  is  not  enabled, the redirection is attempted even if the file named by <u>word</u>
+       exists.''')
+
+APPENDING_REDIRECTED_OUTPUT = textwrap.dedent('''   <b>Appending</b> <b>Redirected</b> <b>Output</b>
+       Redirection of output in this fashion causes the file whose name results from the expansion of <u>word</u> to be
+       opened  for  appending  on  file  descriptor  <u>n</u>,  or  the standard output (file descriptor 1) if <u>n</u> is not
+       specified.  If the file does not exist it is created.
+
+       The general format for appending output is:
+
+              [<u>n</u>]<b>&gt;&gt;</b><u>word</u>''')
+
+REDIRECTING_OUTPUT_ERROR = textwrap.dedent('''   <b>Redirecting</b> <b>Standard</b> <b>Output</b> <b>and</b> <b>Standard</b> <b>Error</b>
+       This construct allows both the standard output (file descriptor 1) and the standard  error  output  (file
+       descriptor 2) to be redirected to the file whose name is the expansion of <u>word</u>.
+
+       There are two formats for redirecting standard output and standard error:
+
+              <b>&amp;&gt;</b><u>word</u>
+       and
+              <b>&gt;&amp;</b><u>word</u>
+
+       Of the two forms, the first is preferred.  This is semantically equivalent to
+
+              <b>&gt;</b><u>word</u> 2<b>&gt;&amp;</b>1''')
+
+APPENDING_OUTPUT_ERROR = textwrap.dedent('''   <b>Appending</b> <b>Standard</b> <b>Output</b> <b>and</b> <b>Standard</b> <b>Error</b>
+       This  construct  allows  both the standard output (file descriptor 1) and the standard error output (file
+       descriptor 2) to be appended to the file whose name is the expansion of <u>word</u>.
+
+       The format for appending standard output and standard error is:
+
+              <b>&amp;&gt;&gt;</b><u>word</u>
+
+       This is semantically equivalent to
+
+              <b>&gt;&gt;</b><u>word</u> 2<b>&gt;&amp;</b>1''')
+
+HERE_DOCUMENTS = textwrap.dedent('''   <b>Here</b> <b>Documents</b>
+       This type of redirection instructs the shell  to  read  input  from  the  current  source  until  a  line
+       containing  only <u>delimiter</u> (with no trailing blanks) is seen.  All of the lines read up to that point are
+       then used as the standard input for a command.
+
+       The format of here-documents is:
+
+              <b>&lt;&lt;</b>[<b>-</b>]<u>word</u>
+                      <u>here-document</u>
+              <u>delimiter</u>
+
+       No parameter expansion, command substitution, arithmetic expansion, or pathname expansion is performed on
+       <u>word</u>.   If  any  characters in <u>word</u> are quoted, the <u>delimiter</u> is the result of quote removal on <u>word</u>, and
+       the lines in the here-document are not expanded.  If <u>word</u> is unquoted, all lines of the here-document are
+       subjected  to  parameter  expansion, command substitution, and arithmetic expansion.  In the latter case,
+       the character sequence <b>\&lt;newline&gt;</b> is ignored, and <b>\</b> must be used to quote the characters <b>\</b>, <b>$</b>, and <b>`</b>.
+
+       If the redirection operator is <b>&lt;&lt;-</b>, then all leading tab characters are stripped from input lines and the
+       line  containing  <u>delimiter</u>.  This allows here-documents within shell scripts to be indented in a natural
+       fashion.
+
+   <b>Here</b> <b>Strings</b>
+       A variant of here documents, the format is:
+
+              <b>&lt;&lt;&lt;</b><u>word</u>
+
+       The <u>word</u> is expanded and supplied to the command on its standard input.''')
+
+REDIRECTION_KIND = {'<' : REDIRECTING_INPUT,
+                   '>' : REDIRECTING_OUTPUT,
+                   '>>' : APPENDING_REDIRECTED_OUTPUT,
+                   '&>' : REDIRECTING_OUTPUT_ERROR,
+                   '>&' : REDIRECTING_OUTPUT_ERROR,
+                   '&>>' : APPENDING_OUTPUT_ERROR,
+                   '<<' : HERE_DOCUMENTS,
+                   '<<<' : HERE_DOCUMENTS}
+
 GROUP = textwrap.dedent('''       { <u>list</u>; }
               <u>list</u> is simply executed in the current shell environment.  <u>list</u> must be terminated with a  newline
               or  semicolon.   This  is known as a <u>group</u> <u>command</u>.  The return status is the exit status of <u>list</u>.

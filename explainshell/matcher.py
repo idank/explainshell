@@ -72,8 +72,13 @@ class matcher(parser.NodeVisitor):
                 matchresult(node.pos[0], node.pos[1], helpconstants.PIPELINES, None))
 
     def visitredirect(self, node, input, type, output):
+        helptext = [helpconstants.REDIRECTION]
+
+        if type in helpconstants.REDIRECTION_KIND:
+            helptext.append(helpconstants.REDIRECTION_KIND[type])
+
         self.groups[0].results.append(
-                matchresult(node.pos[0], node.pos[1], helpconstants.REDIRECTION, None))
+                matchresult(node.pos[0], node.pos[1], '\n\n'.join(helptext), None))
 
     def visitcompound(self, node, group, list, redirects):
         helptext = helpconstants.COMPOUND[group]
