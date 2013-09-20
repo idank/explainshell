@@ -24,9 +24,9 @@ def explain():
         matches, helptext = explaincommand(command, s)
         return render_template('explain.html', matches=matches, helptext=helptext, getargs=command)
     except errors.ProgramDoesNotExist, e:
-        return render_template('missingmanpage.html', title='missing man page', e=e)
+        return render_template('errors/missingmanpage.html', title='missing man page', e=e)
     except errors.ParsingError, e:
-        return render_template('parsingerror.html', title='parsing error!', e=e)
+        return render_template('errors/parsingerror.html', title='parsing error!', e=e)
 
 @app.route('/explain/<program>', defaults={'section' : None})
 @app.route('/explain/<section>/<program>')
@@ -46,9 +46,9 @@ def explainold(section, program):
             mp, suggestions = explainprogram(program, s)
             return render_template('options.html', mp=mp, suggestions=suggestions)
     except errors.ProgramDoesNotExist, e:
-        return render_template('missingmanpage.html', title='missing man page', e=e)
+        return render_template('errors/missingmanpage.html', title='missing man page', e=e)
     except errors.ParsingError, e:
-        return render_template('parsingerror.html', message='Parsing error: %s' % str(e))
+        return render_template('errors/parsingerror.html', message='Parsing error: %s' % str(e))
 
 def explainprogram(program, store):
     mps = store.findmanpage(program)
