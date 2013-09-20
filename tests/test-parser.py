@@ -124,6 +124,30 @@ class test_parser(unittest.TestCase):
                         redirectnode(redirect, expected[0], redirecttype, expected[1]))
                 self.assertEquals(parse(s), node)
 
+    def test_redirections2(self):
+        s = 'a &>f'
+        self.assertASTEquals(parse(s),
+                commandnode(s,
+                  wordnode('a', 'a'),
+                  redirectnode('&>f', None, '&>', 'f')))
+
+        s = 'a 2&>f'
+        self.assertASTEquals(parse(s),
+                commandnode(s,
+                  wordnode('a', 'a'),
+                  wordnode('2', '2'),
+                  redirectnode('&>f', None, '&>', 'f')))
+
+        s = 'a &> f b'
+        self.assertASTEquals(parse(s),
+                commandnode(s,
+                  wordnode('a', 'a'),
+                  redirectnode('&> f', None, '&>', 'f'),
+                  wordnode('b', 'b')))
+
+        s = 'a &>&2'
+        self.assertRaisesRegexp(errors.ParsingError, "expecting filename after &>.*position 4", parse, s)
+
     def test_pipeline(self):
         s = 'a | b'
         self.assertASTEquals(parse(s),
