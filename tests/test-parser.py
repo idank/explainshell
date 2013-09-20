@@ -68,7 +68,7 @@ class test_parser(unittest.TestCase):
         self.assertPositions(s, expected)
 
         s = 'ab "cd" >&2 || ef\\"gh | ij >>> kl <mn \'|\' (o)'
-        expected = ['ab', '"cd"', '>', '&', '2', '||',
+        expected = ['ab', '"cd"', '>&', '2', '||',
                     'ef\\"gh', '|', 'ij', '>>', '>', 'kl',
                     '<', 'mn', "'|'", '(', 'o', ')']
         self.assertPositions(s, expected)
@@ -101,19 +101,18 @@ class test_parser(unittest.TestCase):
                 commandnode(s,
                   wordnode('a', 'a'),
                   wordnode('b', 'b'),
-                  redirectnode('>&1', 1, '>', ('&', 1)),
-                  redirectnode('2>&1', 2, '>', ('&', 1))))
+                  redirectnode('>&1', None, '>', '&1'),
+                  redirectnode('2>&1', 2, '>', '&1')))
 
         s = '; a'
         self.assertRaisesRegexp(errors.ParsingError, "expected word or number.*position 0", parse, s)
 
-    def test_redirection(self):
+    def test_redirections1(self):
         trythese = [('', '1'), ('', '3'), ('', '&1'), ('', '&3'), ('', 'file'),
                     ('1', '&2'), ('1', 'file'), ('1', '   file'), ('2', '/dev/null')]
 
-        results = [(1, '1'), (1, '3'), (1, ('&', 1)), (1, ('&', 3)),
-                   (1, 'file'), (1, ('&', 2)), (1, 'file'),
-                   (1, 'file'), (2, '/dev/null')]
+        results = [(None, '1'), (None, '3'), (None, '&1'), (None, '&3'),
+                   (None, 'file'), (1, '&2'), (1, 'file'), (1, 'file'), (2, '/dev/null')]
 
         for redirecttype in ('>', '>>'):
             for (src, dst), expected in zip(trythese, results):
@@ -122,7 +121,28 @@ class test_parser(unittest.TestCase):
                 node = commandnode(s,
                         wordnode('a', 'a'),
                         redirectnode(redirect, expected[0], redirecttype, expected[1]))
-                self.assertEquals(parse(s), node)
+                self.assertASTEquals(parse(s), node)
+
+        s = 'a b>&f'
+        self.assertASTEquals(parse(s),
+                commandnode(s,
+                  wordnode('a', 'a'),
+                  wordnode('b', 'b'),
+                  redirectnode('>&f', None, '>&', 'f')))
+
+    def test_redirection_edges(self):
+        s = 'a >&&'
+        self.assertRaisesRegexp(errors.ParsingError, ">& cannot redirect to fd.*position 4", parse, s)
+
+        for redirect_kind in ('>', '>>', '>&'):
+            s = 'a %s<' % redirect_kind
+            self.assertRaisesRegexp(errors.ParsingError, "expecting filename or fd", parse, s)
+
+        s = 'a 2>&foo'
+        self.assertRaisesRegexp(errors.ParsingError, "fd cannot precede >& redirection.*position 2", parse, s)
+
+        s = 'a >>&b'
+        self.assertRaisesRegexp(errors.ParsingError, "fd expected after &.*position 5", parse, s)
 
     def test_redirections2(self):
         s = 'a &>f'
@@ -329,7 +349,7 @@ class test_parser(unittest.TestCase):
                                 wordnode('b', 'b')),
                               '(b) > /dev/null',
                               redirects=[
-                                redirectnode('> /dev/null', 1, '>', '/dev/null')]),
+                                redirectnode('> /dev/null', None, '>', '/dev/null')]),
                           ))
 
         s = '(a && (b; c&)) || d'
@@ -363,7 +383,7 @@ class test_parser(unittest.TestCase):
                   commandnode('a',
                     wordnode('a', 'a')),
                   s,
-                  redirects=[redirectnode('> /dev/null', 1, '>', '/dev/null')]
+                  redirects=[redirectnode('> /dev/null', None, '>', '/dev/null')]
                 ))
 
     def test_compound_pipe(self):
@@ -385,13 +405,10 @@ class test_parser(unittest.TestCase):
 
     def test_invalid_redirect(self):
         s = 'a >|b'
-        self.assertRaisesRegexp(errors.ParsingError, "expecting filename or &.*position 3", parse, s)
-
-        s = 'a >&b'
-        self.assertRaisesRegexp(errors.ParsingError, "number expected after &.*position 4", parse, s)
+        self.assertRaisesRegexp(errors.ParsingError, "expecting filename or fd.*position 3", parse, s)
 
         s = 'a 2>'
-        self.assertRaisesRegexp(errors.ParsingError, "expecting filename or &.*position 4", parse, s)
+        self.assertRaisesRegexp(errors.ParsingError, "expecting filename or fd.*position 4", parse, s)
 
     def test_shlex_error(self):
         s = "a 'b"
