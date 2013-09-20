@@ -346,43 +346,52 @@ class CommandLineParser(object):
         parse_logger.debug('returning %r', node)
         return node
 
+    def parse_redirections1(self, node):
+        # handle >, >>
+        tt = self.peek_token()
+        num = 1     # default value
+        start = self.peek.start
+        if self.peek.preceding == '':
+            assert node.kind == 'word'
+            # > or >> seen without preceding whitespace. So see if the
+            # last token is a positive integer. If it is, assume it's
+            # an fd to redirect and pop it, else leave it in as part of
+            # the command line.
+            try:
+                try_num = int(node.word)
+                if try_num > 0:
+                    num = try_num
+                    start = node.pos[0]
+                    node = None
+            except ValueError:
+                pass
+        redirect_kind = tt
+        self.consume(tt)
+        tt = self.peek_token()
+        if tt not in ('word', 'number', '&'):
+            raise errors.ParsingError('syntax: expecting filename or &', self.source, self.peek.start)
+        if tt in ('word', 'number'):
+            redirect_target = self.peek.t
+            self.consume(tt)
+        else:
+            self.consume('&')
+            if self.peek_token() != 'number':
+                raise errors.ParsingError('syntax: number expected after &', self.source, self.peek.start)
+            n = int(self.peek.t)
+            redirect_target = ('&', n)
+            self.consume('number')
+
+        redirect = Node(kind='redirect', input=num, type=redirect_kind,
+                        output=redirect_target, pos=(start, self.token.end))
+        return redirect, node
+
     def parse_redirections(self, node):
         parts = []
         tt = self.peek_token()
         while tt in ('>', '>>'):
-            num = 1     # default value
-            start = self.peek.start
-            if self.peek.preceding == '':
-                assert node.kind == 'word'
-                # > or >> seen without preceding whitespace. So see if the
-                # last token is a positive integer. If it is, assume it's
-                # an fd to redirect and pop it, else leave it in as part of
-                # the command line.
-                try:
-                    try_num = int(node.word)
-                    if try_num > 0:
-                        num = try_num
-                        start = node.pos[0]
-                        node = None
-                except ValueError:
-                    pass
-            redirect_kind = tt
-            self.consume(tt)
-            tt = self.peek_token()
-            if tt not in ('word', 'number', '&'):
-                raise errors.ParsingError('syntax: expecting filename or &', self.source, self.peek.start)
-            if tt in ('word', 'number'):
-                redirect_target = self.peek.t
-                self.consume(tt)
-            else:
-                self.consume('&')
-                if self.peek_token() != 'number':
-                    raise errors.ParsingError('syntax: number expected after &', self.source, self.peek.start)
-                n = int(self.peek.t)
-                redirect_target = ('&', n)
-                self.consume('number')
-            parts.append(Node(kind='redirect', input=num, type=redirect_kind,
-                         output=redirect_target, pos=(start, self.token.end)))
+            if tt in ('>', '>>'):
+                part, node = self.parse_redirections1(node)
+                parts.append(part)
             tt = self.peek_token()
         return parts, node is None
 
