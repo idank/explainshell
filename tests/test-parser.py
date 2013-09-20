@@ -151,6 +151,12 @@ class test_parser(unittest.TestCase):
                   wordnode('a', 'a'),
                   redirectnode('&>f', None, '&>', 'f')))
 
+        s = 'a &>>f'
+        self.assertASTEquals(parse(s),
+                commandnode(s,
+                  wordnode('a', 'a'),
+                  redirectnode('&>>f', None, '&>>', 'f')))
+
         s = 'a 2&>f'
         self.assertASTEquals(parse(s),
                 commandnode(s,

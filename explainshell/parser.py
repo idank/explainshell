@@ -126,7 +126,7 @@ class CommandLineParser(object):
     shell command lines as used in sh, bash and dash.
     """
 
-    permitted_tokens = sorted(['&&', '||', '|&', '>>', '&>', '>&'],
+    permitted_tokens = sorted(['&&', '||', '|&', '>>', '&>', '>&', '&>>'],
                               key=lambda s: len(s), reverse=True)
     reserved_words = ('{', '}', '!')
 
@@ -406,14 +406,15 @@ class CommandLineParser(object):
         return redirect, node
 
     def parse_redirections2(self):
-        # handle &>
+        # handle &>, &>>
         tt = self.peek_token()
-        assert tt == '&>'
+        assert tt in ('&>', '&>>')
         redirect_kind = tt
         self.consume(tt)
         tt = self.peek_token()
         if tt not in ('word', 'number'):
-            raise errors.ParsingError('syntax: expecting filename after &>', self.source, self.peek.start)
+            raise errors.ParsingError('syntax: expecting filename after %s' % redirect_kind,
+                                      self.source, self.peek.start)
         start = self.token.start
         redirect_target = self.peek.t
         self.consume(tt)
@@ -424,11 +425,11 @@ class CommandLineParser(object):
     def parse_redirections(self, node):
         parts = []
         tt = self.peek_token()
-        while tt in ('>', '>>', '&>', '>&'):
+        while tt in ('>', '>>', '&>', '>&', '&>>'):
             if tt in ('>', '>>', '>&'):
                 part, node = self.parse_redirections1(node)
                 parts.append(part)
-            elif tt == '&>':
+            elif tt in ('&>', '&>>'):
                 parts.append(self.parse_redirections2())
             tt = self.peek_token()
         return parts, node is None
