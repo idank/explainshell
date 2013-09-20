@@ -1,0 +1,6 @@
+{% extends "error.html" %}
+{% block message -%}
+<div class="push">{{ e }}</div>
+<pre style="overflow: auto; white-space: pre; word-wrap: normal;">{{ e.s|e }}
+{{ ' '*e.position }}<b>^</b></pre>
+{%- endblock %}

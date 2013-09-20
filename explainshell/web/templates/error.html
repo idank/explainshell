@@ -3,9 +3,8 @@
             <div class="push"></div>
             <div class="row">
                 <div class="span8 offset2">
-                    <div class="alert alert-error">
-                        {% block message %}{{ message }}{% endblock %}
-                    </div>
+                    <h4 style='color: #b94a48; text-transform: uppercase;'>{{ title }}</h4>
+                    {% block message %}{{ message }}{% endblock %}
                 </div>
             </div>
             {%- endblock %}
