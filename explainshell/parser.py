@@ -126,7 +126,8 @@ class CommandLineParser(object):
     shell command lines as used in sh, bash and dash.
     """
 
-    permitted_tokens = ('&&', '||', '|&', '>>', '&>', '>&')
+    permitted_tokens = sorted(['&&', '||', '|&', '>>', '&>', '>&'],
+                              key=lambda s: len(s), reverse=True)
     reserved_words = ('{', '}', '!')
 
     def __init__(self, source, posix=None):
@@ -207,23 +208,23 @@ class CommandLineParser(object):
             result = [t]
         else:
             result = []
-            last = None
-            for c in t:
-                if last is not None:
-                    combined = last + c
-                    if combined in self.permitted_tokens:
-                        result.append(combined)
-                    else:
-                        result.append(last)
-                        result.append(c)
-                    last = None
-                elif c not in ('>', '&', '|'):
-                    result.append(c)
-                else:
-                    last = c
-            if last:
-                result.append(last)
-                #logger.debug('%s -> %s', t, result)
+            while t:
+                chopped = False
+
+                # permitted_tokens is sorted by length
+                for permitted in self.permitted_tokens:
+                    # try to chop off permitted from the start of t
+                    if t.startswith(permitted):
+                        result.append(permitted)
+                        t = t[len(permitted):]
+                        chopped = True
+                        break
+
+                # if t isn't empty and we haven't chopped anything, add the first
+                # char from t
+                if t and not chopped:
+                    result.append(t[0])
+                    t = t[1:]
         return result
 
     def peek_token(self):
