@@ -126,7 +126,7 @@ class CommandLineParser(object):
     shell command lines as used in sh, bash and dash.
     """
 
-    permitted_tokens = sorted(['&&', '||', '|&', '>>', '&>', '>&', '&>>'],
+    permitted_tokens = sorted(['<', '&&', '||', '|&', '>>', '&>', '>&', '&>>'],
                               key=lambda s: len(s), reverse=True)
     reserved_words = ('{', '}', '!')
 
@@ -422,11 +422,47 @@ class CommandLineParser(object):
                         output=redirect_target, pos=(start, self.token.end))
         return redirect
 
+    def parse_redirection_input(self, node):
+        tt = self.peek_token()
+        assert tt == '<'
+        input = None
+        start = self.peek.start
+        if self.peek.preceding == '':
+            assert node.kind == 'word'
+            # < seen without preceding whitespace. So see if the
+            # last token is a positive integer. If it is, assume it's
+            # an fd to redirect and pop it, else leave it in as part of
+            # the command line.
+            try:
+                try_num = int(node.word)
+                if try_num > 0:
+                    input = try_num
+            except ValueError:
+                pass
+        redirect_kind = tt
+        self.consume(tt)
+        tt = self.peek_token()
+        if tt not in ('word', 'number'):
+            raise errors.ParsingError('syntax: expecting filename after <',
+                                      self.source, self.peek.start)
+        self.consume(tt)
+
+        if input is not None:
+            start = node.pos[0]
+            node = None
+
+        redirect = Node(kind='redirect', input=input, type=redirect_kind,
+                        output=output, pos=(start, self.token.end))
+        return redirect, node
+
     def parse_redirections(self, node):
         parts = []
         tt = self.peek_token()
-        while tt in ('>', '>>', '&>', '>&', '&>>'):
+        while tt in ('<', '>', '>>', '&>', '>&', '&>>'):
             if tt in ('>', '>>', '>&'):
+                part, node = self.parse_redirections1(node)
+                parts.append(part)
+            elif tt == '<':
                 part, node = self.parse_redirections1(node)
                 parts.append(part)
             elif tt in ('&>', '&>>'):

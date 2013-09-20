@@ -107,6 +107,39 @@ class test_parser(unittest.TestCase):
         s = '; a'
         self.assertRaisesRegexp(errors.ParsingError, "expected word or number.*position 0", parse, s)
 
+    def test_redirection_input(self):
+        s = 'a <f'
+        self.assertASTEquals(parse(s),
+                commandnode(s,
+                  wordnode('a', 'a'),
+                  redirectnode('<f', None, '<', 'f')))
+
+        s = 'a <1'
+        self.assertASTEquals(parse(s),
+                commandnode(s,
+                  wordnode('a', 'a'),
+                  redirectnode('<1', None, '<', '1')))
+
+        s = 'a 1<f'
+        self.assertASTEquals(parse(s),
+                commandnode(s,
+                  wordnode('a', 'a'),
+                  redirectnode('1<f', 1, '<', 'f')))
+
+        s = 'a 1 <f'
+        self.assertASTEquals(parse(s),
+                commandnode(s,
+                  wordnode('a', 'a'),
+                  wordnode('1', '1'),
+                  redirectnode('<f', None, '<', 'f')))
+
+        s = 'a b<f'
+        self.assertASTEquals(parse(s),
+                commandnode(s,
+                  wordnode('a', 'a'),
+                  wordnode('b', 'b'),
+                  redirectnode('<f', None, '<', 'f')))
+
     def test_redirections1(self):
         trythese = [('', '1'), ('', '3'), ('', '&1'), ('', '&3'), ('', 'file'),
                     ('1', '&2'), ('1', 'file'), ('1', '   file'), ('2', '/dev/null')]
