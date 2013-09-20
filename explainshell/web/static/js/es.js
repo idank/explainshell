@@ -487,13 +487,13 @@ function adjustcommandfontsize() {
     var commandlength = $.trim($("#command span[class^=command]").add("#command span[class^=shell]").text()).length,
         commandfontsize;
 
-    if (commandlength > 115)
+    if (commandlength > 105)
         commandfontsize = '10px';
-    else if (commandlength > 105)
+    else if (commandlength > 95)
         commandfontsize = '12px';
-    else if (commandlength > 85)
-        commandfontsize = '14px';
     else if (commandlength > 70)
+        commandfontsize = '14px';
+    else if (commandlength > 60)
         commandfontsize = '16px';
 
     if (commandfontsize) {
