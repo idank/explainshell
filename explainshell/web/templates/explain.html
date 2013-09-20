@@ -52,9 +52,9 @@
             // if we have more groups, show the prev/next buttons
             if (currentgroup.next) {
                 var prev = $('<li><i class="icon-arrow-left icon-2"></i><span></span></li>');
-                prev.css({opacity: 0.5});
+                prev.css({display: 'none'});
                 var next = $('<li><i class="icon-arrow-right icon-2"></i><span></span></li>');
-                var prevnext = $('<ul class="unstyled" id="prevnext"><li>showing <u>shell syntax</u>, navigate:</li></ul>');
+                var prevnext = $('<ul class="inline" id="prevnext"><li>showing <u>shell syntax</u>, navigate:</li></ul>');
                 prevnext.append(prev).append(next);
                 $("#navigate").css('height', 'auto').append(prevnext);
 
@@ -79,7 +79,7 @@
 
                         if (!currentgroup.prev) {
                             console.log("new current group is the first group, disabling prev button");
-                            prev.css({opacity: 0.5});
+                            prev.css({'display': 'none'});
                             prevtext.text('');
                         }
                         else {
@@ -92,7 +92,7 @@
                         }
 
                         if (currentgroup.next) {
-                            next.css({opacity: 1});
+                            next.css({'display': ''});
                             nextext.text(" explain " + currentgroup.next.commandselector.first().text());
                             console.log("setting next button text to new current group next %s", currentgroup.next.name);
                         }
@@ -114,7 +114,7 @@
 
                         if (!currentgroup.next) {
                             console.log("new current group is the last group, disabling next button");
-                            next.css({opacity: 0.5});
+                            next.css({'display': 'none'});
                             nextext.text('');
                         }
                         else {
@@ -123,7 +123,7 @@
                         }
 
                         if (currentgroup.prev) {
-                            prev.css({opacity: 1});
+                            prev.css({'display': ''});
                             if (currentgroup.prev.name == 'shell')
                                 prevtext.text(" explain shell syntax");
                             else

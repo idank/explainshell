@@ -95,11 +95,10 @@ a {
 }
 
 #prevnext {
-    position: relative;
-    top: 15px;
-    left: 305px;
+    text-align: center;
+    padding-top: 10px;
 }
 
-#prevnext li, #prevnext span {
+#prevnext li:not(:first-child), #prevnext span:not(:first-child) {
     cursor: pointer;
 }
