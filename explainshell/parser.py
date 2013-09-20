@@ -432,6 +432,7 @@ def parse_command_line(source, posix=None, convertpos=False):
                 s, e = node.__dict__.pop('pos')
                 node.s = source[s:e]
         v().visit(ast)
+    logger.info('parsed %r as %r', source, ast)
     return ast
 
 def dump(node, indent='  '):
