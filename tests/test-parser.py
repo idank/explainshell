@@ -107,6 +107,26 @@ class test_parser(unittest.TestCase):
         s = '; a'
         self.assertRaisesRegexp(errors.ParsingError, "expected word or number.*position 0", parse, s)
 
+    def test_redirection_input_here(self):
+        for redirect_kind in ('<<', '<<<'):
+            s = 'a %sEOF | b' % redirect_kind
+            self.assertASTEquals(parse(s),
+                              pipelinenode(s,
+                                commandnode('a %sEOF' % redirect_kind,
+                                  wordnode('a', 'a'),
+                                  redirectnode('%sEOF' % redirect_kind, None, redirect_kind, 'EOF')),
+                                pipenode('|', '|'),
+                                commandnode('b', wordnode('b', 'b'))))
+
+        s = 'a <<-b'
+        self.assertASTEquals(parse(s),
+                commandnode(s,
+                  wordnode('a', 'a'),
+                  redirectnode('<<-b', None, '<<', '-b')))
+
+        s = 'a <<<<b'
+        self.assertRaisesRegexp(errors.ParsingError, "expecting word after <<<.*position 5", parse, s)
+
     def test_redirection_input(self):
         s = 'a <f'
         self.assertASTEquals(parse(s),

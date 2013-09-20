@@ -126,7 +126,7 @@ class CommandLineParser(object):
     shell command lines as used in sh, bash and dash.
     """
 
-    permitted_tokens = sorted(['<', '&&', '||', '|&', '>>', '&>', '>&', '&>>'],
+    permitted_tokens = sorted(['<', '&&', '||', '|&', '<<', '>>', '&>', '>&', '&>>', '<<<'],
                               key=lambda s: len(s), reverse=True)
     reserved_words = ('{', '}', '!')
 
@@ -455,10 +455,27 @@ class CommandLineParser(object):
                         output=output, pos=(start, self.token.end))
         return redirect, node
 
+    def parse_redirection_input_here(self):
+        # handle <<, <<<
+        tt = self.peek_token()
+        assert tt in ('<<', '<<<')
+        redirect_kind = tt
+        self.consume(tt)
+        tt = self.peek_token()
+        if tt not in ('word', 'number'):
+            raise errors.ParsingError('syntax: expecting word after %s' % redirect_kind,
+                                      self.source, self.peek.start)
+        start = self.token.start
+        redirect_target = self.peek.t
+        self.consume(tt)
+        redirect = Node(kind='redirect', input=None, type=redirect_kind,
+                        output=redirect_target, pos=(start, self.token.end))
+        return redirect
+
     def parse_redirections(self, node):
         parts = []
         tt = self.peek_token()
-        while tt in ('<', '>', '>>', '&>', '>&', '&>>'):
+        while tt in ('<', '>', '<<', '>>', '&>', '>&', '&>>', '<<<'):
             if tt in ('>', '>>', '>&'):
                 part, node = self.parse_redirections1(node)
                 parts.append(part)
@@ -467,6 +484,10 @@ class CommandLineParser(object):
                 parts.append(part)
             elif tt in ('&>', '&>>'):
                 parts.append(self.parse_redirections2())
+            elif tt in ('<<', '<<<'):
+                parts.append(self.parse_redirection_input_here())
+            else:
+                assert False, tt
             tt = self.peek_token()
         return parts, node is None
 
