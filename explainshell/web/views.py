@@ -93,7 +93,9 @@ def explaincommand(command, store):
             text = text.decode('utf-8')
             id_ = texttoid.setdefault(text, id_)
         else:
-            assert False, m.match
+            # unknowns in the shell group are possible when our parser left
+            # an unparsed remainder, see matcher._markunparsedunknown
+            id_ = '%s unknown' % shellgroup.name
         idstartpos.setdefault(id_, m.start)
         d = {'match' : m.match, 'unknown' : m.unknown,
              'start' : m.start, 'end' : m.end,
