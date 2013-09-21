@@ -101,7 +101,7 @@ def explaincommand(command, store):
             helpclass = ''
         if helpclass:
             idstartpos.setdefault(helpclass, m.start)
-        d = {'match' : m.match, 'unknown' : m.unknown,
+        d = {'match' : m.match,
              'start' : m.start, 'end' : m.end,
              'commandclass' : commandclass, 'helpclass' : helpclass}
         l.append(d)
@@ -121,7 +121,7 @@ def explaincommand(command, store):
                 helpclass = ''
             if helpclass:
                 idstartpos.setdefault(helpclass, m.start)
-            d = {'match' : m.match, 'unknown' : m.unknown,
+            d = {'match' : m.match,
                  'start' : m.start, 'end' : m.end,
                  'commandclass' : commandclass, 'helpclass' : helpclass}
             l.append(d)
