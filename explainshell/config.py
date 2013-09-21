@@ -26,13 +26,11 @@ LOGGING_DICT = {
             'formatter': 'standard',
         },
         'file': {
-            'class': 'logging.handlers.RotatingFileHandler',
+            'class': 'logging.FileHandler',
             'level': 'INFO',
             'formatter': 'standard',
-            'filename': 'explainshell.log',
+            'filename': 'application.log',
             'mode': 'a',
-            'maxBytes': 1024**3, # 10Mb
-            'backupCount': 5,
         },
     },
     'loggers': {
