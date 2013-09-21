@@ -11,7 +11,7 @@
                 {%- if m.name -%}
                     {{ macros.outputcommandexplain(m, getargs) }}
                 {%- else -%}
-                    <span class="{{ m.id }}">{{ m.match|e }}</span>
+                    <span class="{{ m.commandclass }}"{% if m.helpclass %} helpref="{{ m.helpclass }}"{% endif %}>{{ m.match|e }}</span>
                 {%- endif -%}{{ m.spaces|safe }}
             {%- endfor %}
             </div>
@@ -23,7 +23,7 @@
                         {% for text, id in helptext -%}
                         <tr>
                             <td>
-                                <pre class="help-{{ id }}">{{ text|safe }}</pre>
+                                <pre id="{{ id }}">{{ text|safe }}</pre>
                             </td>
                         </tr>
                         {%- endfor %}

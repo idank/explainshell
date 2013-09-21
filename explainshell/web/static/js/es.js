@@ -43,7 +43,7 @@ function eslink(clazz, option, mid, color) {
     // clazz isthe name of the current group (shell, command0, command1..)
     if (clazz) {
         // the matching <pre> in .help
-        this.help = $(".help-" + clazz)[0];
+        this.help = $("#" + clazz)[0];
 
         // each link can go either left or right, we decide where by
         // calculating its middle and comparing it to the middle of .command
@@ -55,6 +55,7 @@ function eslink(clazz, option, mid, color) {
 
         // if the current class ends with 0, then it's the first match of the
         // current group which means it is the synopsis of the found program
+        // XXX
         if (clazz.indexOf('shell') != -1 || clazz.substr(-1) != "0")
             $(this.help).css("background-color", "white");
     }
@@ -109,6 +110,13 @@ function reorder(lefteslinks) {
     }
 }
 
+// return the matching <pre> in .help for each item in commandselector
+function helpselector(commandselector) {
+    return commandselector.map(function(span) {
+        return $("#" + $(this).attr('helpref'))[0];
+    });
+}
+
 // initialize the lines logic, deciding which group of elements should be displayed
 //
 // returns the name of the group (with 'all' meaning draw everything) and two
@@ -124,7 +132,6 @@ function initialize() {
     var head = {'name' : currentgroup};
 
     head['commandselector'] = $("#command span[class^=" + currentgroup + "]");
-    head['helpselector'] = $("#help pre[class^=help-" + currentgroup + "]");
 
     // construct a doubly linked list of previous/next groups. this is used
     // by the navigation buttons to move between groups
@@ -133,8 +140,7 @@ function initialize() {
         var i = 0, g = "command" + i, s = $("#command span[class^=" + g + "]"),
             prev = head;
         while (s.length > 0) {
-            var curr = {'name' : g, 'commandselector' : s,
-                        'helpselector' : $("#help pre[class^=help-" + g + "]")}
+            var curr = {'name' : g, 'commandselector' : s}
 
             curr['prev'] = prev;
             prev['next'] = curr;
@@ -147,7 +153,6 @@ function initialize() {
 
         var all = {'name' : 'all',
                    'commandselector' : $("#command span[class]").filter(":not(.dropdown)"),
-                   'helpselector' : $("#help pre"),
                    'prev' : curr, 'next' : head}
 
         head['prev'] = all;
@@ -162,7 +167,7 @@ function initialize() {
 // <span> in the commandselector and its matching <pre> in helpselector.
 // for <span>'s that have no help text (such as unrecognized arguments), we attach
 // a small '?' to them and refer to them as unknowns
-function drawgrouplines(commandselector, helpselector) {
+function drawgrouplines(commandselector) {
     shuffledcolors = _.shuffle(colors);
 
     // define a couple of parameters that control the spacing/padding
@@ -176,8 +181,8 @@ function drawgrouplines(commandselector, helpselector) {
     // if the current group isn't 'all', hide the rest of the help <pre>'s, and show
     // the <pre>'s help of the current group
     if (currentgroup.name != 'all') {
-        $("#help pre").not(helpselector.selector).parent().parent().hide();
-        helpselector.parent().parent().show();
+        $("#help pre").not(helpselector(commandselector)).parent().parent().hide();
+        helpselector(commandselector).parent().parent().show();
 
         // the first item in a non-shell group is always the synopsis of the
         // command (unless it's unknown). we display it at the top without a
@@ -185,21 +190,18 @@ function drawgrouplines(commandselector, helpselector) {
         if (currentgroup.name != 'shell' && !$(commandselector[0]).hasClass('unknown')) {
             console.log('slicing command selector');
             commandselector = commandselector.slice(1);
-            helpselector = helpselector.slice(1);
         }
     }
     else {
         // 'all' group, show everything
-        helpselector.parent().parent().show();
+        helpselector(commandselector).parent().parent().show();
     }
 
-    if (helpselector.length > 0)
-        // the height of the canvas is determined by the bottom of the last <pre>
-        // in .help
-        //
-        // we 'reselect' the original selection because the order of the
-        // elements may have changed, and we really need the last element
-        $("#canvas").height($($(currentgroup.helpselector.selector)).last()[0].getBoundingClientRect().bottom - canvastop);
+    if (helpselector(commandselector).length > 0) {
+        // the height of the canvas is determined by the bottom of the last visible <pre>
+        // in #help
+        $("#canvas").height($("#help pre:visible").last()[0].getBoundingClientRect().bottom - canvastop);
+    }
 
     var commandrect = $("#command")[0].getBoundingClientRect(),
         mid = commandrect.left + commandrect.width / 2,
@@ -214,7 +216,7 @@ function drawgrouplines(commandselector, helpselector) {
     // select all spans in our commandselector, and group them by their class
     // attribute. different spans share the same class when they should be
     // linked to the same <pre> in .help
-    var groupedoptions = _.groupBy(commandselector.filter(":not(.unknown)"), function(span) { return $(span).attr('class'); });
+    var groupedoptions = _.groupBy(commandselector.filter(":not(.unknown)"), function(span) { return $(span).attr('helpref'); });
 
     // create an eslinkgroup for every group of <span>'s, these will be linked together to
     // the same <pre> in .help.
@@ -467,7 +469,7 @@ function drawgrouplines(commandselector, helpselector) {
 // previously set for oldgroup
 function clear(oldgroup) {
     $("#canvas").empty();
-    oldgroup.commandselector.add(oldgroup.helpselector).unbind('mouseenter mouseleave');
+    oldgroup.commandselector.add(helpselector(oldgroup.commandselector)).unbind('mouseenter mouseleave');
 }
 
 function commandlinetourl(s) {
@@ -533,7 +535,7 @@ function navigation() {
                 currentext.text(grouptext(currentgroup));
 
                 clear(oldgroup);
-                drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
+                drawgrouplines(currentgroup.commandselector);
 
                 if (!currentgroup.prev) {
                     console.log("new current group is the first group, disabling prev button");
@@ -562,7 +564,7 @@ function navigation() {
                 currentext.text(grouptext(currentgroup));
 
                 clear(oldgroup);
-                drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
+                drawgrouplines(currentgroup.commandselector);
 
                 if (!currentgroup.next) {
                     console.log("new current group is the last group, disabling next button");

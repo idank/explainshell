@@ -88,36 +88,42 @@ def explaincommand(command, store):
 
     l = []
     for m in shellgroup.results:
-        id_ = '%s-%d' % (shellgroup.name, len(l))
+        commandclass = shellgroup.name
+        helpclass = 'help-%d' % len(texttoid)
         text = m.text
         if text:
             text = text.decode('utf-8')
-            id_ = texttoid.setdefault(text, id_)
+            helpclass = texttoid.setdefault(text, helpclass)
         else:
             # unknowns in the shell group are possible when our parser left
             # an unparsed remainder, see matcher._markunparsedunknown
-            id_ = '%s unknown' % shellgroup.name
-        idstartpos.setdefault(id_, m.start)
+            commandclass += ' unknown'
+            helpclass = ''
+        if helpclass:
+            idstartpos.setdefault(helpclass, m.start)
         d = {'match' : m.match, 'unknown' : m.unknown,
              'start' : m.start, 'end' : m.end,
-             'id' : id_}
+             'commandclass' : commandclass, 'helpclass' : helpclass}
         l.append(d)
     matches.append(l)
 
     for commandgroup in commandgroups:
         l = []
         for m in commandgroup.results:
-            id_ = '%s-%d' % (commandgroup.name, len(l))
+            commandclass = commandgroup.name
+            helpclass = 'help-%d' % len(texttoid)
             text = m.text
             if text:
                 text = text.decode('utf-8')
-                id_ = texttoid.setdefault(text, id_)
+                helpclass = texttoid.setdefault(text, helpclass)
             else:
-                id_ = '%s unknown' % commandgroup.name
-            idstartpos.setdefault(id_, m.start)
+                commandclass += ' unknown'
+                helpclass = ''
+            if helpclass:
+                idstartpos.setdefault(helpclass, m.start)
             d = {'match' : m.match, 'unknown' : m.unknown,
                  'start' : m.start, 'end' : m.end,
-                 'id' : id_}
+                 'commandclass' : commandclass, 'helpclass' : helpclass}
             l.append(d)
 
         d = l[0]
