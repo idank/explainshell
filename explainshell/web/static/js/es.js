@@ -91,7 +91,15 @@ function swapNodes(a, b) {
 
 // reorder the help <pre>'s of all links that go left
 function reorder(lefteslinks) {
-    var help = _.pluck(lefteslinks, 'help');
+    var help = _.pluck(lefteslinks, 'help'),
+        visiblehelp = $("#help pre:visible");
+
+    // check the indices of the first and last help boxes. if the first is
+    // greater than the last, then it appears later in the DOM which means
+    // we've already reordered this set of boxes and they're in the correct
+    // order
+    if (visiblehelp.index($(help[0])) >= visiblehelp.index($(help[help.length - 1])))
+        return;
 
     for (var i = 0, j = help.length - 1; i < Math.floor(help.length / 2) && i != j; i++, j = help.length - 1 - i) {
         var h = help[i],
@@ -113,7 +121,7 @@ function singlegroup() {
         linecount = text.split('\n').length;
 
     console.log('linecount is %d', linecount);
-    return linecount < 50;
+    return linecount < 40;
 }
 
 // initialize the lines logic, deciding which group of elements should be displayed
