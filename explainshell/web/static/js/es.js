@@ -157,6 +157,12 @@ function initialize() {
         head = all;
     }
 
+    // check if we have just one group in there
+    if (head['next'] === head['prev']) {
+        delete head['next'];
+        delete head['prev'];
+    }
+
     return head;
 }
 
