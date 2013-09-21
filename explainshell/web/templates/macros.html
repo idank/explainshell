@@ -17,7 +17,7 @@
     {% if mp.synopsis %}- {{ mp.synopsis|e }}{% endif %}
 {%- endmacro %}
 
-{%- macro outputcommandexplain(d, getargs) -%}
+{%- macro outputcommandexplain(d) -%}
     {% if d.suggestions|length == 0 -%}
     <span class="{{ d.commandclass }}" style="word-spacing: 0px;"{% if d.helpclass %} helpref="{{ d.helpclass }}"{% endif %}><a href="/explain/{{ d.section }}/{{ d.source }}">{{ d.match|e }}</a></span>
     {%- else -%}

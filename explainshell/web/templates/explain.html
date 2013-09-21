@@ -9,7 +9,7 @@
             {% import 'macros.html' as macros -%}
             {% for m in matches -%}
                 {%- if m.name -%}
-                    {{ macros.outputcommandexplain(m, getargs) }}
+                    {{ macros.outputcommandexplain(m) }}
                 {%- else -%}
                     <span class="{{ m.commandclass }}"{% if m.helpclass %} helpref="{{ m.helpclass }}"{% endif %}>{{ m.match|e }}</span>
                 {%- endif -%}{{ m.spaces|safe }}
