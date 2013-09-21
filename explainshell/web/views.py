@@ -19,6 +19,7 @@ def explain():
     if 'cmd' not in request.args:
         return redirect('/')
     command = request.args['cmd']
+    command = command[:1000] # trim commands longer than 1000 characters
     s = store.store('explainshell', config.MONGO_URI)
     try:
         matches, helptext = explaincommand(command, s)
