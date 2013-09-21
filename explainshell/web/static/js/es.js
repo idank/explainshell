@@ -500,3 +500,86 @@ function adjustcommandfontsize() {
         $("#command").css('font-size', commandfontsize);
     }
 }
+
+function navigation() {
+    // if we have more groups, show the prev/next buttons
+    if (currentgroup.next) {
+        var prev = $('<li><i class="icon-arrow-left icon-2"></i><span></span></li>');
+        var next = $('<li><i class="icon-arrow-right icon-2"></i><span></span></li>');
+        var prevnext = $('<ul class="inline" id="prevnext"><li>showing <u>all</u>, navigate:</li></ul>');
+        prevnext.append(prev).append(next);
+        $("#navigate").css('height', 'auto').append(prevnext);
+
+        var nextext = next.find("span"),
+            prevtext = prev.find("span"),
+            currentext = prevnext.find("u");
+
+        function grouptext(group) {
+            if (group.name == 'shell')
+                return 'shell syntax';
+            else if (group.name != 'all')
+                return group.commandselector.first().text();
+            return 'all';
+        }
+
+        nextext.text(" explain " + grouptext(currentgroup.next));
+        prevtext.text(" explain " + grouptext(currentgroup.prev));
+
+        prev.click(function() {
+            if (currentgroup.prev) {
+                console.log('moving to the previous group (%s), current group is %s', currentgroup.prev.name, currentgroup.name);
+                var oldgroup = currentgroup;
+                currentgroup = currentgroup.prev
+                currentext.text(grouptext(currentgroup));
+
+                clear(oldgroup);
+                drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
+
+                if (!currentgroup.prev) {
+                    console.log("new current group is the first group, disabling prev button");
+                    prev.css({'display': 'none'});
+                    prevtext.text('');
+                }
+                else {
+                    console.log("setting prev button text to new current group prev %s", currentgroup.prev.name);
+
+                    prevtext.text(" explain " + grouptext(currentgroup.prev));
+                }
+
+                if (currentgroup.next) {
+                    next.css({'display': ''});
+                    nextext.text(" explain " + grouptext(currentgroup.next));
+                    console.log("setting next button text to new current group next %s", currentgroup.next.name);
+                }
+            }
+        });
+
+        next.click(function() {
+            if (currentgroup.next) {
+                console.log('moving to the next group (%s), current group is %s', currentgroup.next.name, currentgroup.name);
+                var oldgroup = currentgroup;
+                currentgroup = currentgroup.next
+                currentext.text(grouptext(currentgroup));
+
+                clear(oldgroup);
+                drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
+
+                if (!currentgroup.next) {
+                    console.log("new current group is the last group, disabling next button");
+                    next.css({'display': 'none'});
+                    nextext.text('');
+                }
+                else {
+                    console.log("setting next button text to new current group next %s", currentgroup.next.name);
+                    nextext.text(" explain " + grouptext(currentgroup.next));
+                }
+
+                if (currentgroup.prev) {
+                    prev.css({'display': ''});
+                    prevtext.text(" explain " + grouptext(currentgroup.prev));
+                    console.log("setting prev button text to new current group prev %s", currentgroup.prev.name);
+                }
+            }
+        });
+    }
+}
