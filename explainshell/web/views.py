@@ -35,21 +35,19 @@ def explainold(section, program):
     logger.info('/explain section=%r program=%r', section, program)
 
     s = store.store('explainshell', config.MONGO_URI)
-    try:
-        if section is not None:
-            program = '%s.%s' % (program, section)
+    if section is not None:
+        program = '%s.%s' % (program, section)
 
-        if 'args' in request.args:
-            args = request.args['args']
-            command = '%s %s' % (program, args)
-            return redirect('/explain?cmd=%s' % urllib.quote_plus(command), 301)
-        else:
+    if 'args' in request.args:
+        args = request.args['args']
+        command = '%s %s' % (program, args)
+        return redirect('/explain?cmd=%s' % urllib.quote_plus(command), 301)
+    else:
+        try:
             mp, suggestions = explainprogram(program, s)
             return render_template('options.html', mp=mp, suggestions=suggestions)
-    except errors.ProgramDoesNotExist, e:
-        return render_template('errors/missingmanpage.html', title='missing man page', e=e)
-    except errors.ParsingError, e:
-        return render_template('errors/parsingerror.html', message='Parsing error: %s' % str(e))
+        except errors.ProgramDoesNotExist, e:
+            return render_template('errors/missingmanpage.html', title='missing man page', e=e)
 
 def explainprogram(program, store):
     mps = store.findmanpage(program)
