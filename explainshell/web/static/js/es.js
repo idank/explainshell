@@ -196,7 +196,10 @@ function drawgrouplines(commandselector, helpselector) {
     if (helpselector.length > 0)
         // the height of the canvas is determined by the bottom of the last <pre>
         // in .help
-        $("#canvas").height(helpselector.last()[0].getBoundingClientRect().bottom - canvastop);
+        //
+        // we 'reselect' the original selection because the order of the
+        // elements may have changed, and we really need the last element
+        $("#canvas").height($($(currentgroup.helpselector.selector)).last()[0].getBoundingClientRect().bottom - canvastop);
 
     var commandrect = $("#command")[0].getBoundingClientRect(),
         mid = commandrect.left + commandrect.width / 2,
