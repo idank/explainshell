@@ -137,21 +137,23 @@ function initialize() {
         while (s.length > 0) {
             var curr = {'name' : g, 'commandselector' : s}
 
-            curr['prev'] = prev;
-            prev['next'] = curr;
-            prev = curr;
+            if (s.filter(':not(.unknown)').length > 0) {
+                curr['prev'] = prev;
+                prev['next'] = curr;
+                prev = curr;
+            }
+
             i++;
             g = "command" + i;
             s = $("#command span[class^=" + g + "]")
         }
 
-
         var all = {'name' : 'all',
                    'commandselector' : $("#command span[class]").filter(":not(.dropdown)"),
-                   'prev' : curr, 'next' : head}
+                   'prev' : prev, 'next' : head}
 
         head['prev'] = all;
-        curr['next'] = all;
+        prev['next'] = all;
         head = all;
     }
 
