@@ -52,12 +52,7 @@ function eslink(clazz, option, mid, color) {
         this.goingleft = rrmid <= mid;
 
         $(this.help).css("border-color", this.color);
-
-        // if the current class ends with 0, then it's the first match of the
-        // current group which means it is the synopsis of the found program
-        // XXX
-        if (clazz.indexOf('shell') != -1 || clazz.substr(-1) != "0")
-            $(this.help).css("background-color", "white");
+        $(this.help).css("background-color", "white");
     }
 }
 
@@ -186,11 +181,13 @@ function drawgrouplines(commandselector) {
 
         // the first item in a non-shell group is always the synopsis of the
         // command (unless it's unknown). we display it at the top without a
-        // connecting line, so remove it from the selectors
-        if (currentgroup.name != 'shell' && !$(commandselector[0]).hasClass('unknown')) {
-            console.log('slicing command selector');
-            commandselector = commandselector.slice(1);
-        }
+        // connecting line, so remove it from the selectors (unless it's the
+        // only one)
+        //if (currentgroup.name != 'shell' && !$(commandselector[0]).hasClass('unknown') &&
+        //    commandselector.filter(':not(.unknown)').length > 1) {
+        //    console.log('slicing command selector');
+        //    commandselector = commandselector.slice(1);
+        //}
     }
     else {
         // 'all' group, show everything
