@@ -109,21 +109,6 @@ function reorder(lefteslinks) {
     }
 }
 
-// try to guesstimate how much help text we have and if we should display
-// it all without the next/prev buttons
-function singlegroup() {
-    // if we have only one command in there, show everything
-    if ($("#command span[class^=command1]").length == 0)
-        return true;
-
-    // pretty simple: do a line count
-    var text = $("#help pre").text(),
-        linecount = text.split('\n').length;
-
-    console.log('linecount is %d', linecount);
-    return linecount < 40;
-}
-
 // initialize the lines logic, deciding which group of elements should be displayed
 //
 // returns the name of the group (with 'all' meaning draw everything) and two
@@ -135,41 +120,40 @@ function initialize() {
     // if there are no 'shell' explanations, show the first (and only) command
     if (!s.length)
         currentgroup = 'command0';
-    else if (singlegroup())
-        currentgroup = 'all';
 
-    var commandselector, helpselector, head = {'name' : currentgroup};
+    var head = {'name' : currentgroup};
 
-    if (currentgroup == 'all') {
-        commandselector = $("#command span[class]").filter(":not(.dropdown)");
-        helpselector = $("#help pre");
-    }
-    else {
-        commandselector = $("#command span[class^=" + currentgroup + "]");
-        helpselector = $("#help pre[class^=help-" + currentgroup + "]");
+    head['commandselector'] = $("#command span[class^=" + currentgroup + "]");
+    head['helpselector'] = $("#help pre[class^=help-" + currentgroup + "]");
 
-        // construct a doubly linked list of previous/next groups. this is used
-        // by the navigation buttons to move between groups
-        if (currentgroup == 'shell')
-        {
-            var i = 0, g = "command" + i, s = $("#command span[class^=" + g + "]"),
-                prev = head;
-            while (s.length > 0) {
-                var curr = {'name' : g, 'commandselector' : s,
-                         'helpselector' : $("#help pre[class^=help-" + g + "]")}
+    // construct a doubly linked list of previous/next groups. this is used
+    // by the navigation buttons to move between groups
+    if (currentgroup != 'command0')
+    {
+        var i = 0, g = "command" + i, s = $("#command span[class^=" + g + "]"),
+            prev = head;
+        while (s.length > 0) {
+            var curr = {'name' : g, 'commandselector' : s,
+                        'helpselector' : $("#help pre[class^=help-" + g + "]")}
 
-                curr['prev'] = prev
-                prev['next'] = curr;
-                prev = curr;
-                i++;
-                g = "command" + i;
-                s = $("#command span[class^=" + g + "]")
-            }
+            curr['prev'] = prev;
+            prev['next'] = curr;
+            prev = curr;
+            i++;
+            g = "command" + i;
+            s = $("#command span[class^=" + g + "]")
         }
-    }
 
-    head['commandselector'] = commandselector;
-    head['helpselector'] = helpselector;
+
+        var all = {'name' : 'all',
+                   'commandselector' : $("#command span[class]").filter(":not(.dropdown)"),
+                   'helpselector' : $("#help pre"),
+                   'prev' : curr, 'next' : head}
+
+        head['prev'] = all;
+        curr['next'] = all;
+        head = all;
+    }
 
     return head;
 }
@@ -203,6 +187,10 @@ function drawgrouplines(commandselector, helpselector) {
             commandselector = commandselector.slice(1);
             helpselector = helpselector.slice(1);
         }
+    }
+    else {
+        // 'all' group, show everything
+        helpselector.parent().parent().show();
     }
 
     if (helpselector.length > 0)

@@ -52,9 +52,8 @@
             // if we have more groups, show the prev/next buttons
             if (currentgroup.next) {
                 var prev = $('<li><i class="icon-arrow-left icon-2"></i><span></span></li>');
-                prev.css({display: 'none'});
                 var next = $('<li><i class="icon-arrow-right icon-2"></i><span></span></li>');
-                var prevnext = $('<ul class="inline" id="prevnext"><li>showing <u>shell syntax</u>, navigate:</li></ul>');
+                var prevnext = $('<ul class="inline" id="prevnext"><li>showing <u>all</u>, navigate:</li></ul>');
                 prevnext.append(prev).append(next);
                 $("#navigate").css('height', 'auto').append(prevnext);
 
@@ -62,17 +61,23 @@
                     prevtext = prev.find("span"),
                     currentext = prevnext.find("u");
 
-                nextext.text(" explain " + currentgroup.next.commandselector.first().text());
+                function grouptext(group) {
+                    if (group.name == 'shell')
+                        return 'shell syntax';
+                    else if (group.name != 'all')
+                        return group.commandselector.first().text();
+                    return 'all';
+                }
+
+                nextext.text(" explain " + grouptext(currentgroup.next));
+                prevtext.text(" explain " + grouptext(currentgroup.prev));
 
                 prev.click(function() {
                     if (currentgroup.prev) {
                         console.log('moving to the previous group (%s), current group is %s', currentgroup.prev.name, currentgroup.name);
                         var oldgroup = currentgroup;
                         currentgroup = currentgroup.prev
-                        if (currentgroup.name == 'shell')
-                            currentext.text('shell syntax');
-                        else
-                            currentext.text(currentgroup.commandselector.first().text());
+                        currentext.text(grouptext(currentgroup));
 
                         clear(oldgroup);
                         drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
@@ -85,15 +90,12 @@
                         else {
                             console.log("setting prev button text to new current group prev %s", currentgroup.prev.name);
 
-                            if (currentgroup.prev.name == 'shell')
-                                prevtext.text(" explain shell syntax");
-                            else
-                                prevtext.text(" explain " + currentgroup.prev.commandselector.first().text());
+                            prevtext.text(" explain " + grouptext(currentgroup.prev));
                         }
 
                         if (currentgroup.next) {
                             next.css({'display': ''});
-                            nextext.text(" explain " + currentgroup.next.commandselector.first().text());
+                            nextext.text(" explain " + grouptext(currentgroup.next));
                             console.log("setting next button text to new current group next %s", currentgroup.next.name);
                         }
                     }
@@ -104,10 +106,7 @@
                         console.log('moving to the next group (%s), current group is %s', currentgroup.next.name, currentgroup.name);
                         var oldgroup = currentgroup;
                         currentgroup = currentgroup.next
-                        if (currentgroup.name == 'shell')
-                            currentext.text('shell syntax');
-                        else
-                            currentext.text(currentgroup.commandselector.first().text());
+                        currentext.text(grouptext(currentgroup));
 
                         clear(oldgroup);
                         drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
@@ -119,15 +118,12 @@
                         }
                         else {
                             console.log("setting next button text to new current group next %s", currentgroup.next.name);
-                            nextext.text(" explain " + currentgroup.next.commandselector.first().text());
+                            nextext.text(" explain " + grouptext(currentgroup.next));
                         }
 
                         if (currentgroup.prev) {
                             prev.css({'display': ''});
-                            if (currentgroup.prev.name == 'shell')
-                                prevtext.text(" explain shell syntax");
-                            else
-                                prevtext.text(" explain " + currentgroup.prev.commandselector.first().text());
+                            prevtext.text(" explain " + grouptext(currentgroup.prev));
                             console.log("setting prev button text to new current group prev %s", currentgroup.prev.name);
                         }
                     }
