@@ -163,7 +163,22 @@ function initialize() {
         delete head['prev'];
     }
 
+    commandunknowns();
+
     return head;
+}
+
+// handle unknowns in #command
+function commandunknowns() {
+    $("#command span.unknown").each(function(span) {
+        $this = $(this);
+
+        // add tooltips
+        if ($this.hasClass('simplecommandstart'))
+            this.title = "This man page seems to be missing...";
+        else
+            this.title = "No matching help text found for this argument";
+    });
 }
 
 // this is where the magic happens!  we create a connecting line between each
@@ -406,10 +421,6 @@ function drawgrouplines(commandselector) {
                 .attr("y", ".35em")
                 .attr("font-family", "Arial")
                 .text(link.text);
-        }
-
-        if (link.unknown) {
-            link.option.title = "No matching help text found for this argument";
         }
     });
 

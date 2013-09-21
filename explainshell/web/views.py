@@ -127,6 +127,7 @@ def explaincommand(command, store):
             l.append(d)
 
         d = l[0]
+        d['commandclass'] += ' simplecommandstart'
         if commandgroup.manpage:
             d['name'] = commandgroup.manpage.name
             d['section'] = commandgroup.manpage.section
