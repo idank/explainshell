@@ -228,6 +228,9 @@ function drawgrouplines(commandselector) {
         // the height of the canvas is determined by the bottom of the last visible <pre>
         // in #help
         $("#canvas").height($("#help pre:visible").last()[0].getBoundingClientRect().bottom - canvastop);
+
+        // need to recompute the top of the canvas after height change
+        canvastop = $("#canvas")[0].getBoundingClientRect().top;
     }
 
     var commandrect = $("#command")[0].getBoundingClientRect(),
