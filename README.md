@@ -12,12 +12,20 @@ explainshell is built from the following components:
    it as contains options or not (algo/classifier.py)
 3. an options extractor that scans classified paragraphs and looks for options (options.py)
 4. a storage backend that saves processed man pages to mongodb (store.py)
+5. a (recursive) parser that supports a subset of shell syntax, such as
+   redirections, pipelines, lists, compound commands (notably missing is
+   support for command substitutions) (parser.py)
 
 When querying explainshell, it:
 
-1. tokenzies the query (options.py)
-2. does a look up in the store to see if we know how to explain the given program
-3. goes through the rest of the tokens, trying to match each one to the list of extracted options
+1. parses the query into an AST
+2. visits interesting nodes in the AST, such as:
+    - command nodes - these nodes represent a simple command
+    - shell related nodes - these nodes represent something the shell
+      interprets such as '|', '&&'
+3. for every command node we check if we know how to explain the current program,
+   and then go through the rest of the tokens, trying to match each one to the
+   list of known options
 4. returns a list of matches that are rendered with Flask
 
 ## [TODO](https://raw.github.com/idank/explainshell/master/TODO) file
