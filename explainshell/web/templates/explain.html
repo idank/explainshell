@@ -11,7 +11,7 @@
                 {%- if m.name -%}
                     {{ macros.outputcommandexplain(m) }}
                 {%- else -%}
-                    <span class="{{ m.commandclass }}"{% if m.helpclass %} helpref="{{ m.helpclass }}"{% endif %}>{{ m.match|e }}</span>
+                    <span {{ macros.spanclasses(m) }}>{{ m.match|e }}</span>
                 {%- endif -%}{{ m.spaces|safe }}
             {%- endfor %}
             </div>
