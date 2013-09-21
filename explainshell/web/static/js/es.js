@@ -174,8 +174,15 @@ function commandunknowns() {
         $this = $(this);
 
         // add tooltips
-        if ($this.hasClass('simplecommandstart'))
+        if ($this.hasClass('simplecommandstart')) {
             this.title = "This man page seems to be missing...";
+
+            // add a github's issue for missing man pages
+            // issue and possibly send a link
+            var link = $("<a/>").text($this.text())
+                                .attr('href', 'https://github.com/idank/explainshell/issues/1');
+            $this.html(link);
+        }
         else
             this.title = "No matching help text found for this argument";
     });
