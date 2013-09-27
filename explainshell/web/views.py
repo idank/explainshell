@@ -29,6 +29,9 @@ def explain():
     except errors.ParsingError, e:
         logger.warn('%r parsing error: %s', command, e.message)
         return render_template('errors/parsingerror.html', title='parsing error!', e=e)
+    except:
+        logger.error('uncaught exception trying to explain %r', command)
+        raise
 
 @app.route('/explain/<program>', defaults={'section' : None})
 @app.route('/explain/<section>/<program>')
