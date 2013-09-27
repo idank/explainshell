@@ -179,7 +179,11 @@ class manpage(object):
                 pp = option.from_store(pd)
             paragraphs.append(pp)
 
-        return manpage(d['source'], d['name'], d['synopsis'], paragraphs,
+        synopsis = d['synopsis']
+        if synopsis:
+            synopsis = synopsis.encode('utf8')
+
+        return manpage(d['source'], d['name'], synopsis, paragraphs,
                        [tuple(x) for x in d['aliases']], d['partialmatch'],
                        d['multicommand'], d['updated'])
 

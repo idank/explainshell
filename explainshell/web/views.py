@@ -61,7 +61,7 @@ def explainprogram(program, store):
     mp = {'source' : mp.source[:-3],
           'section' : mp.section,
           'program' : program,
-          'synopsis' : mp.synopsis,
+          'synopsis' : mp.synopsis.decode('utf-8'),
           'options' : [o.text.decode('utf-8') for o in mp.options]}
 
     suggestions = []
