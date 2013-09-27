@@ -16,7 +16,7 @@ def about():
 
 @app.route('/explain')
 def explain():
-    if 'cmd' not in request.args:
+    if 'cmd' not in request.args or not request.args['cmd'].strip():
         return redirect('/')
     command = request.args['cmd']
     command = command[:1000] # trim commands longer than 1000 characters
