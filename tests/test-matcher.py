@@ -279,3 +279,22 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(groups[0].results, matchedresult[0])
         self.assertEquals(groups[1].results, matchedresult[1])
         self.assertEquals(groups[2].results, matchedresult[2])
+
+    def test_redirect_first_word_of_command(self):
+        cmd = '2>&1'
+        matchedresult = [(0, 4, helpconstants.REDIRECTION + '\n\n' +
+                                helpconstants.REDIRECTION_KIND['>'], '2>&1')]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(len(groups), 1)
+        self.assertEquals(groups[0].results, matchedresult)
+
+        cmd = '2>&1 bar'
+        matchedresult = [[(0, 4, helpconstants.REDIRECTION + '\n\n' +
+                                 helpconstants.REDIRECTION_KIND['>'], '2>&1')],
+                         [(5, 8, 'bar synopsis', 'bar')]]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(len(groups), 2)
+        self.assertEquals(groups[0].results, matchedresult[0])
+        self.assertEquals(groups[1].results, matchedresult[1])

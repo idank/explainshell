@@ -88,9 +88,18 @@ class matcher(parser.NodeVisitor):
 
     def visitcommand(self, node, parts):
         assert parts
+
+        # look for the first WordNode, which might not be at parts[0]
+        idxwordnode = parser.findfirstkind(parts, 'word')
+        if idxwordnode == -1:
+            logger.info('no words found in command (probably contains only redirects)')
+            return
+
+        # we're mutating the parts of node, causing the visitor to skip the nodes
+        # we're popping
+        wordnode = parts.pop(idxwordnode)
         name = 'command%d' % len([g for g in self.groups if g.name.startswith('command')])
-        wordnode = parts.pop(0)
-        endpos = wordnode.pos[1]
+        startpos, endpos = wordnode.pos
 
         try:
             mps = self.findmanpages(wordnode.word)
@@ -103,25 +112,20 @@ class matcher(parser.NodeVisitor):
             mg.suggestions = None
             self.groups.append(mg)
 
-            self.matches.append(matchresult(node.pos[0], endpos, None, None))
+            self.matches.append(matchresult(startpos, endpos, None, None))
             return
 
         manpage = mps[0]
-        nextwordnode = parser.findfirstkind(parts, 'word')
+        idxnextwordnode = parser.findfirstkind(parts, 'word')
 
-        if manpage.multicommand and nextwordnode:
+        if manpage.multicommand and idxnextwordnode != -1:
+            nextwordnode = parts[idxnextwordnode]
             try:
                 multi = '%s %s' % (wordnode.word, nextwordnode.word)
                 logger.info('%r is a multicommand, trying to get another token and look up %r', manpage, multi)
                 mps = self.findmanpages(multi)
                 manpage = mps[0]
-                idx = 0 # parts.index(nextwordnode)
-                for p in parts:
-                    if p is nextwordnode:
-                        break
-                    idx += 1
-                assert idx < len(parts)
-                parts.pop(idx)
+                parts.pop(idxnextwordnode)
                 endpos = nextwordnode.pos[1]
             except errors.ProgramDoesNotExist:
                 logger.info('no manpage %r for multicommand %r', multi, manpage)
@@ -132,7 +136,7 @@ class matcher(parser.NodeVisitor):
         mg.suggestions = mps[1:]
         self.groups.append(mg)
 
-        self.matches.append(matchresult(node.pos[0], endpos, manpage.synopsis, None))
+        self.matches.append(matchresult(startpos, endpos, manpage.synopsis, None))
 
     def visitword(self, node, word):
         def attemptfuzzy(chars):

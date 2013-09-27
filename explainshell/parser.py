@@ -574,6 +574,7 @@ def dump(node, indent='  '):
     return _format(node)
 
 def findfirstkind(parts, kind):
-    for node in parts:
+    for i, node in enumerate(parts):
         if node.kind == kind:
-            return node
+            return i
+    return -1
