@@ -79,6 +79,14 @@ class test_matcher(unittest.TestCase):
 
         self.assertMatchSingle(cmd, s.findmanpage('baz')[0], matchedresult)
 
+        cmd = 'baz -ab12'
+        matchedresult = [
+            (0, 3, 'baz synopsis', 'baz'),
+            (4, 6, '-a desc', '-a'),
+            (6, 9, '-b <arg> desc', 'b12')]
+
+        self.assertMatchSingle(cmd, s.findmanpage('baz')[0], matchedresult)
+
     def test_arg_with_expected_value(self):
         cmd = 'bar -b arg --b arg'
         matchedresult = [

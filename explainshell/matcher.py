@@ -145,7 +145,8 @@ class matcher(parser.NodeVisitor):
                 considerarg = False
 
             pos = node.pos[0]
-            for t in tokens:
+            prevoption = None
+            for i, t in enumerate(tokens):
                 op = t if t[0] == '-' else '-' + t
                 option = self.find_option(op)
                 if option:
@@ -155,9 +156,19 @@ class matcher(parser.NodeVisitor):
 
                     mr = matchresult(pos, pos+len(t), option.text, None)
                     m.append(mr)
+                # if the previous option expected an argument and we couldn't
+                # match the current token, take the rest as its argument, this
+                # covers a series of short options where the last one has an argument
+                # with no space between it, such as 'xargs -r0n1'
+                elif considerarg and prevoption and prevoption.expectsarg:
+                    pmr = m[-1]
+                    mr = matchresult(pmr.start, pmr.end+(len(tokens)-i), pmr.text, None)
+                    m[-1] = mr
+                    break
                 else:
                     m.append(self.unknown(t, pos, pos+len(t)))
                 pos += len(t)
+                prevoption = option
             return m
 
         if not self.manpage:
