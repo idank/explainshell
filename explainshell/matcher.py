@@ -156,6 +156,10 @@ class matcher(parser.NodeVisitor):
                 if option:
                     if considerarg and not m and option.expectsarg:
                         logger.info('option %r expected an arg, taking the rest too', option)
+                        # reset the current option if we already took an argument,
+                        # this prevents the next word node to also consider itself
+                        # as an argument
+                        self._currentoption = None
                         return [matchresult(pos, pos+len(chars), option.text, None)]
 
                     mr = matchresult(pos, pos+len(t), option.text, None)
@@ -168,6 +172,10 @@ class matcher(parser.NodeVisitor):
                     pmr = m[-1]
                     mr = matchresult(pmr.start, pmr.end+(len(tokens)-i), pmr.text, None)
                     m[-1] = mr
+                    # reset the current option if we already took an argument,
+                    # this prevents the next word node to also consider itself
+                    # as an argument
+                    self._currentoption = None
                     break
                 else:
                     m.append(self.unknown(t, pos, pos+len(t)))

@@ -87,6 +87,33 @@ class test_matcher(unittest.TestCase):
 
         self.assertMatchSingle(cmd, s.findmanpage('baz')[0], matchedresult)
 
+    def test_reset_current_option_if_argument_taken(self):
+        cmd = 'withargs -ab12 arg'
+        matchedresult = [
+            (0, 8, 'withargs synopsis', 'withargs'),
+            (9, 11, '-a desc', '-a'),
+            (11, 14, '-b <arg> desc', 'b12'),
+            (15, 18, 'FILE argument', 'arg')]
+
+        self.assertMatchSingle(cmd, s.findmanpage('withargs')[0], matchedresult)
+
+        cmd = 'withargs -b12 arg'
+        matchedresult = [
+            (0, 8, 'withargs synopsis', 'withargs'),
+            (9, 13, '-b <arg> desc', '-b12'),
+            (14, 17, 'FILE argument', 'arg')]
+
+        self.assertMatchSingle(cmd, s.findmanpage('withargs')[0], matchedresult)
+
+        # here we reset it implicitly by looking up '12'
+        cmd = 'withargs -b 12 arg'
+        matchedresult = [
+            (0, 8, 'withargs synopsis', 'withargs'),
+            (9, 14, '-b <arg> desc', '-b 12'),
+            (15, 18, 'FILE argument', 'arg')]
+
+        self.assertMatchSingle(cmd, s.findmanpage('withargs')[0], matchedresult)
+
     def test_arg_with_expected_value(self):
         cmd = 'bar -b arg --b arg'
         matchedresult = [
