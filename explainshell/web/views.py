@@ -27,6 +27,7 @@ def explain():
     except errors.ProgramDoesNotExist, e:
         return render_template('errors/missingmanpage.html', title='missing man page', e=e)
     except errors.ParsingError, e:
+        logger.warn('%r parsing error: %s', command, e.message)
         return render_template('errors/parsingerror.html', title='parsing error!', e=e)
 
 @app.route('/explain/<program>', defaults={'section' : None})
