@@ -158,7 +158,7 @@ class CommandLineParser(object):
             elif tt == 'a':
                 endpos += len(t)
                 if endpos < len(self.source) and self.source[self.lexpos] in self.lex.quotes:
-                    endpos += 1
+                    endpos += 2
                 try:
                     int(t)
                     tt = 'number'

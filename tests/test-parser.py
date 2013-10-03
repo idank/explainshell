@@ -67,7 +67,7 @@ class test_parser(unittest.TestCase):
         expected = ['ab', 'cd']
         self.assertPositions(s, expected)
 
-        s = 'ab "cd" >&2 || ef\\"gh | ij >>> kl <mn \'|\' (o)'
+        s = 'ab "cd">&2 || ef\\"gh | ij >>> kl <mn \'|\' (o)'
         expected = ['ab', '"cd"', '>&', '2', '||',
                     'ef\\"gh', '|', 'ij', '>>', '>', 'kl',
                     '<', 'mn', "'|'", '(', 'o', ')']
