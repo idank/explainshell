@@ -529,6 +529,8 @@ function adjustcommandfontsize() {
     }
 }
 
+var ignorekeydown = false;
+
 function navigation() {
     // if we have more groups, show the prev/next buttons
     if (currentgroup.next) {
@@ -608,6 +610,32 @@ function navigation() {
                     console.log("setting prev button text to new current group prev %s", currentgroup.prev.name);
                 }
             }
+        });
+
+		// disable key navigation when the user focuses on the search box
+		$("#top-search").focus(function() {
+			ignorekeydown = true;
+		});
+
+		$("#top-search").blur(function() {
+			ignorekeydown = false;
+		});
+
+        // bind left/right arrows as well
+        $(document).keydown(function(e) {
+			if (!ignorekeydown) {
+				switch(e.which) {
+					case 37: // left
+						prev.click()
+						break;
+					case 39: // right
+						next.click();
+						break;
+					default: return;
+				}
+
+				e.preventDefault();
+			}
         });
     }
 }
