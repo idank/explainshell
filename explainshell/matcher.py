@@ -271,29 +271,32 @@ class matcher(parser.NodeVisitor):
                     self.matches[-1] = mr
                 else:
                     self.matches.append(self.unknown(word, node.pos[0], node.pos[1]))
-            elif self.manpage.partialmatch:
-                logger.info('attemping to do a partial match')
+            else:
+                if self.manpage.partialmatch:
+                    logger.info('attemping to do a partial match')
 
-                m = attemptfuzzy(word)
-                if any(mm.unknown for mm in m):
-                    logger.info('one of %r was unknown', word)
-                    self.matches.append(self.unknown(word, node.pos[0], node.pos[1]))
-                else:
-                    self.matches.extend(m)
-            elif self.manpage.arguments:
-                if self.manpage.nestedcommand:
-                    logger.info('manpage %r can nest commands', self.manpage)
-                    if self.startcommand([node], self.manpage.nestedcommand, addunknown=False):
-                        self._currentoption = None
+                    m = attemptfuzzy(word)
+                    if not any(mm.unknown for mm in m):
+                        logger.info('found a match for everything, taking it')
+                        self.matches.extend(m)
                         return
 
-                d = self.manpage.arguments
-                k = list(d.keys())[0]
-                logger.info('got arguments, using %r', k)
-                text = d[k]
-                mr = matchresult(node.pos[0], node.pos[1], text, None)
-                self.matches.append(mr)
-            else:
+                if self.manpage.arguments:
+                    if self.manpage.nestedcommand:
+                        logger.info('manpage %r can nest commands', self.manpage)
+                        if self.startcommand([node], self.manpage.nestedcommand, addunknown=False):
+                            self._currentoption = None
+                            return
+
+                    d = self.manpage.arguments
+                    k = list(d.keys())[0]
+                    logger.info('got arguments, using %r', k)
+                    text = d[k]
+                    mr = matchresult(node.pos[0], node.pos[1], text, None)
+                    self.matches.append(mr)
+                    return
+
+                # if all of that failed, we can't explain it so mark it unknown
                 self.matches.append(self.unknown(word, node.pos[0], node.pos[1]))
 
     def match(self):

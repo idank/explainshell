@@ -30,7 +30,7 @@ class mockstore(object):
         opts.append(so(p4, [], [], False, 'FILE'))
         opts.append(so(p5, ['-exec'], [], True, nestedcommand=['EOF', ';']))
         self.manpages['withargs'] = sm('withargs.1.gz', 'withargs', 'withargs synopsis',
-                                       opts, [], partialmatch=False, nestedcommand=True)
+                                       opts, [], partialmatch=True, nestedcommand=True)
 
     def findmanpage(self, x, section=None):
         try:
@@ -88,6 +88,14 @@ class test_matcher(unittest.TestCase):
             (6, 9, '-b <arg> desc', 'b12')]
 
         self.assertMatchSingle(cmd, s.findmanpage('baz')[0], matchedresult)
+
+    def test_partialmatch_with_arguments(self):
+        cmd = 'withargs arg'
+        matchedresult = [
+            (0, 8, 'withargs synopsis', 'withargs'),
+            (9, 12, 'FILE argument', 'arg')]
+
+        self.assertMatchSingle(cmd, s.findmanpage('withargs')[0], matchedresult)
 
     def test_reset_current_option_if_argument_taken(self):
         cmd = 'withargs -ab12 arg'
