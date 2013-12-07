@@ -22,6 +22,7 @@
                                 <input type='text' placeholder="long" class='input-small' {% if p.is_option and p.long %}value="{{ p.long|join(', ') }}"{% endif %}/>
                                 <input type='text' placeholder="expectsarg" class='input-small' {% if p.is_option and p.expectsarg %}value="{{ p.expectsarg }}"{% endif %}/>
                                 <input type='text' placeholder="argument" class='input-small' {% if p.is_option and p.argument %}value="{{ p.argument }}"{% endif %}/>
+                                <input type='text' placeholder="nested" class='input-small' {% if p.is_option and p.nestedcommand %}value="{{ p.nestedcommand }}"{% endif %}/>
                             </span>
                             </td>
                         </tr>
@@ -30,7 +31,10 @@
                 </table>
                 <form id='tagsform' method='post'>
                     <input name='paragraphs' type='hidden' id='paragraphs'/>
-                    <div><input type='submit' class='btn'/></div>
+                    <div>
+                        nestedcommand: <input type='checkbox' name='nestedcommand' value='true' {% if m.nestedcommand %}checked{% endif %}/>
+                        <input type='submit' class='btn'/>
+                    </div>
                 </form>
             </div>
 {% endblock %}
@@ -146,6 +150,9 @@
                         if (d["expectsarg"].indexOf(",") != -1)
                             d["expectsarg"] = d["expectsarg"].split(",");
                         d["argument"] = inputs[3].value;
+                        d["nestedcommand"] = inputs[4].value;
+                        if (d["nestedcommand"].indexOf(",") != -1)
+                            d["nestedcommand"] = d["nestedcommand"].split(",");
                         p.push(d)
                     });
 
