@@ -31,10 +31,17 @@ class matcher(parser.NodeVisitor):
         self._prevoption = self._currentoption = None
         self.groups = [matchgroup('shell')]
 
+        # a stack to manage nested command groups: whenever a new simple command
+        # is started, we push it to the stack and when it ends we pop it. the second
+        # item in the tuple is used to end the top-most command when it is equal
+        # to the current word. this is used when a flag starts a new command, e.g.
+        # find -exec.
+        self.groupstack = [(self.groups[-1], None)]
+
     @property
     def matches(self):
         '''return the list of results from the most recently created group'''
-        return self.groups[-1].results
+        return self.groupstack[-1][0].results
 
     @property
     def allmatches(self):
@@ -42,7 +49,7 @@ class matcher(parser.NodeVisitor):
 
     @property
     def manpage(self):
-        return self.groups[-1].manpage
+        return self.groupstack[-1][0].manpage
 
     def find_option(self, opt):
         self._currentoption = self.manpage.find_option(opt)
@@ -96,9 +103,20 @@ class matcher(parser.NodeVisitor):
             return
 
         self.startcommand(parts, None)
+        return len(self.groupstack)
+
+    def visitcommandend(self, node, parts, prevstackdepth):
+        # it's possible for visitcommand/end to be called without a command group
+        # being pushed if it contains only redirect nodes
+        if len(self.groupstack) > 1:
+            if prevstackdepth != len(self.groupstack):
+                logger.info('group %s is a result of a nested command', self.groupstack[-1])
+                self.endcommand()
+            self.endcommand()
 
     def startcommand(self, parts, endword, addunknown=True):
-        logger.info('startcommand parts=%r, endword=%r', parts, endword)
+        logger.info('startcommand parts=%r, endword=%r, addunknown=%s',
+                    parts, endword, addunknown)
         idxwordnode = parser.findfirstkind(parts, 'word')
         assert idxwordnode != -1
 
@@ -117,6 +135,7 @@ class matcher(parser.NodeVisitor):
                 mg.manpage = None
                 mg.suggestions = None
                 self.groups.append(mg)
+                self.groupstack.append((mg, endword))
 
                 self.matches.append(matchresult(startpos, endpos, None, None))
 
@@ -142,12 +161,17 @@ class matcher(parser.NodeVisitor):
         mg.manpage = manpage
         mg.suggestions = mps[1:]
         self.groups.append(mg)
+        self.groupstack.append((mg, endword))
 
         self.matches.append(matchresult(startpos, endpos, manpage.synopsis, None))
         return True
 
     def endcommand(self):
-        pass
+        '''end the most recently created command group by popping it from the
+        group stack. groups are created by visitcommand or a nested command'''
+        assert len(self.groupstack) >= 2, 'groupstack must contain shell and command groups'
+        g = self.groupstack.pop()
+        logger.info('ending group %s', g)
 
     def visitword(self, node, word):
         def attemptfuzzy(chars):
@@ -211,7 +235,14 @@ class matcher(parser.NodeVisitor):
             self.matches.append(mr)
         else:
             word = node.word
-            if word != '-' and word.startswith('-') and not word.startswith('--'):
+
+            # check if we're inside a nested command and this word marks the end
+            if isinstance(self.groupstack[-1][1], list) and word in self.groupstack[-1][1]:
+                logger.info('token %r ends current nested command', word)
+                self.endcommand()
+                mr = matchresult(node.pos[0], node.pos[1], self.matches[-1].text, None)
+                self.matches.append(mr)
+            elif word != '-' and word.startswith('-') and not word.startswith('--'):
                 logger.debug('looks like a short option')
                 if len(word) > 2:
                     logger.info("trying to split it up")
@@ -231,7 +262,7 @@ class matcher(parser.NodeVisitor):
                 if take:
                     if self._prevoption.nestedcommand:
                         logger.info('option %r can nest commands', self._prevoption)
-                        if self.startcommand([node], None, False):
+                        if self.startcommand([node], self._prevoption.nestedcommand, addunknown=False):
                             self._currentoption = None
                             return
 
@@ -252,7 +283,7 @@ class matcher(parser.NodeVisitor):
             elif self.manpage.arguments:
                 if self.manpage.nestedcommand:
                     logger.info('manpage %r can nest commands', self.manpage)
-                    if self.startcommand([node], None, False):
+                    if self.startcommand([node], self.manpage.nestedcommand, addunknown=False):
                         self._currentoption = None
                         return
 
@@ -269,6 +300,7 @@ class matcher(parser.NodeVisitor):
         logger.info('matching string %r', self.s)
         self.ast = parser.parse_command_line(self.s)
         self.visit(self.ast)
+        assert len(self.groupstack) == 1, 'groupstack should contain only shell group after matching'
 
         # if we only have one command in there and no shell results, reraise
         # the original exception

@@ -28,7 +28,7 @@ class mockstore(object):
 
         opts = list(opts)
         opts.append(so(p4, [], [], False, 'FILE'))
-        opts.append(so(p5, ['-exec'], [], True, nestedcommand=True))
+        opts.append(so(p5, ['-exec'], [], True, nestedcommand=['EOF', ';']))
         self.manpages['withargs'] = sm('withargs.1.gz', 'withargs', 'withargs synopsis',
                                        opts, [], partialmatch=False, nestedcommand=True)
 
@@ -257,12 +257,13 @@ class test_matcher(unittest.TestCase):
         self.assertMatchSingle(cmd, s.findmanpage('bar')[0], matchedresult)
 
     def test_nested_command(self):
-        cmd = 'withargs -b arg bar -a'
+        cmd = 'withargs -b arg bar -a unknown'
 
         matchedresult = [[(0, 8, 'withargs synopsis', 'withargs'),
                           (9, 15, '-b <arg> desc', '-b arg')],
                          [(16, 19, 'bar synopsis', 'bar'),
-                          (20, 22, '-a desc', '-a')]]
+                          (20, 22, '-a desc', '-a'),
+                          (23, 30, None, 'unknown')]]
 
         groups = matcher.matcher(cmd, s).match()
         self.assertEquals(len(groups), 3)
@@ -270,14 +271,62 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(groups[1].results, matchedresult[0])
         self.assertEquals(groups[2].results, matchedresult[1])
 
-        # nesting happens because of option
-        cmd = 'withargs -b arg -exec bar -a'
+    def test_nested_option(self):
+        cmd = 'withargs -b arg -exec bar -a EOF -b arg'
 
         matchedresult = [[(0, 8, 'withargs synopsis', 'withargs'),
                           (9, 15, '-b <arg> desc', '-b arg'),
-                          (16, 21, '-exec nest', '-exec')],
+                          (16, 21, '-exec nest', '-exec'),
+                          (29, 32, '-exec nest', 'EOF'),
+                          (33, 39, '-b <arg> desc', '-b arg')],
                          [(22, 25, 'bar synopsis', 'bar'),
                           (26, 28, '-a desc', '-a')]]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(len(groups), 3)
+        self.assertEquals(groups[0].results, [])
+        self.assertEquals(groups[1].results, matchedresult[0])
+        self.assertEquals(groups[2].results, matchedresult[1])
+
+        cmd = "withargs -b arg -exec bar -a ';' -a"
+
+        matchedresult = [[(0, 8, 'withargs synopsis', 'withargs'),
+                          (9, 15, '-b <arg> desc', '-b arg'),
+                          (16, 21, '-exec nest', '-exec'),
+                          (29, 32, '-exec nest', "';'"),
+                          (33, 35, '-a desc', '-a')],
+                         [(22, 25, 'bar synopsis', 'bar'),
+                          (26, 28, '-a desc', '-a')]]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(len(groups), 3)
+        self.assertEquals(groups[0].results, [])
+        self.assertEquals(groups[1].results, matchedresult[0])
+        self.assertEquals(groups[2].results, matchedresult[1])
+
+        cmd = "withargs -b arg -exec bar -a \\; -a"
+
+        matchedresult = [[(0, 8, 'withargs synopsis', 'withargs'),
+                          (9, 15, '-b <arg> desc', '-b arg'),
+                          (16, 21, '-exec nest', '-exec'),
+                          (29, 31, '-exec nest', "\\;"),
+                          (32, 34, '-a desc', '-a')],
+                         [(22, 25, 'bar synopsis', 'bar'),
+                          (26, 28, '-a desc', '-a')]]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(len(groups), 3)
+        self.assertEquals(groups[0].results, [])
+        self.assertEquals(groups[1].results, matchedresult[0])
+        self.assertEquals(groups[2].results, matchedresult[1])
+
+        cmd = 'withargs -exec bar -a -u'
+
+        matchedresult = [[(0, 8, 'withargs synopsis', 'withargs'),
+                          (9, 14, '-exec nest', '-exec')],
+                         [(15, 18, 'bar synopsis', 'bar'),
+                          (19, 21, '-a desc', '-a'),
+                          (22, 24, None, '-u')]]
 
         groups = matcher.matcher(cmd, s).match()
         self.assertEquals(len(groups), 3)
