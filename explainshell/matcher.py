@@ -253,7 +253,7 @@ class matcher(parser.NodeVisitor):
             raise self.groups[1].error
 
         def debugmatch():
-            s = '\n'.join(['%d) %r = %r' % (i, self.s[m.start:m.end], m.text) for i, m in enumerate(self.matches)])
+            s = '\n'.join(['%d) %r = %r' % (i, self.s[m.start:m.end], m.text) for i, m in enumerate(self.allmatches)])
             return s
 
         logger.debug('%r matches:\n%s', self.s, debugmatch())
