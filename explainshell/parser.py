@@ -64,7 +64,7 @@ class NodeVisitor(object):
     def _visitnode(self, node, *args, **kwargs):
         k = node.kind
         self.visitnode(node)
-        getattr(self, 'visit%s' % k)(node, *args, **kwargs)
+        return getattr(self, 'visit%s' % k)(node, *args, **kwargs)
 
     def visit(self, node):
         k = node.kind
@@ -88,9 +88,10 @@ class NodeVisitor(object):
             for child in node.redirects:
                 self.visit(child)
         elif k == 'command':
-            self._visitnode(node, node.parts)
+            r = self._visitnode(node, node.parts)
             for child in node.parts:
                 self.visit(child)
+            self.visitcommandend(node, node.parts, r)
         elif k == 'redirect':
             self._visitnode(node, node.input, node.type, node.output)
         elif k == 'word':
@@ -112,6 +113,9 @@ class NodeVisitor(object):
     def visitcompound(self, node, group, list, redirects):
         pass
     def visitcommand(self, node, parts):
+        pass
+    def visitcommandend(self, node, parts, r):
+        # r is the return value of the corresponding call to visitcommand
         pass
     def visitword(self, node, word):
         pass
