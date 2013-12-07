@@ -53,18 +53,22 @@ class paragraph(object):
 class option(paragraph):
     '''a paragraph that contains extracted options
 
-    short is a list of short options (-a, -b, ..)
-    long is a list of long options (--a, --b)
-    expectsarg specifies if one of the short/long options expects an additional argument
-    argument specifies if to consider this as positional arguments
+    short - a list of short options (-a, -b, ..)
+    long - a list of long options (--a, --b)
+    expectsarg - specifies if one of the short/long options expects an additional argument
+    argument - specifies if to consider this as positional arguments
+    nestedcommand - specifies if the arguments to this option can start a nested command
     '''
-    def __init__(self, p, short, long, expectsarg, argument=None):
+    def __init__(self, p, short, long, expectsarg, argument=None, nestedcommand=False):
         paragraph.__init__(self, p.idx, p.text, p.section, p.is_option)
         self.short = short
         self.long = long
         self._opts = self.short + self.long
         self.argument = argument
         self.expectsarg = expectsarg
+        self.nestedcommand = nestedcommand
+        if nestedcommand:
+            assert expectsarg, 'an option that can nest commands must expect an argument'
 
     @property
     def opts(self):
@@ -74,7 +78,8 @@ class option(paragraph):
     def from_store(cls, d):
         p = paragraph.from_store(d)
 
-        return cls(p, d['short'], d['long'], d['expectsarg'], d['argument'])
+        return cls(p, d['short'], d['long'], d['expectsarg'], d['argument'],
+                   d.get('nestedcommand'))
 
     def to_store(self):
         d = paragraph.to_store(self)
@@ -83,6 +88,7 @@ class option(paragraph):
         d['long'] = self.long
         d['expectsarg'] = self.expectsarg
         d['argument'] = self.argument
+        d['nestedcommand'] = self.nestedcommand
         return d
 
     def __str__(self):
@@ -104,9 +110,12 @@ class manpage(object):
     multicommand - consider sub commands when explaining a command with this man page,
         e.g. git -> git commit
     updated - whether this man page was manually updated
+    nestedcommand - specifies if positional arguments to this program can start a nested command,
+        e.g. sudo, xargs
     '''
     def __init__(self, source, name, synopsis, paragraphs, aliases,
-                 partialmatch=False, multicommand=False, updated=False):
+                 partialmatch=False, multicommand=False, updated=False,
+                 nestedcommand=False):
         self.source = source
         self.name = name
         self.synopsis = synopsis
@@ -115,6 +124,7 @@ class manpage(object):
         self.partialmatch = partialmatch
         self.multicommand = multicommand
         self.updated = updated
+        self.nestedcommand = nestedcommand
 
     def removeoption(self, idx):
         for i, p in self.paragraphs:
@@ -168,7 +178,8 @@ class manpage(object):
         return {'source' : self.source, 'name' : self.name, 'synopsis' : self.synopsis,
                 'paragraphs' : [p.to_store() for p in self.paragraphs],
                 'aliases' : self.aliases, 'partialmatch' : self.partialmatch,
-                'multicommand' : self.multicommand, 'updated' : self.updated}
+                'multicommand' : self.multicommand, 'updated' : self.updated,
+                'nestedcommand' : self.nestedcommand}
 
     @staticmethod
     def from_store(d):
@@ -185,7 +196,7 @@ class manpage(object):
 
         return manpage(d['source'], d['name'], synopsis, paragraphs,
                        [tuple(x) for x in d['aliases']], d['partialmatch'],
-                       d['multicommand'], d['updated'])
+                       d['multicommand'], d['updated'], d.get('nestedcommand'))
 
     @staticmethod
     def from_store_name_only(name, source):
