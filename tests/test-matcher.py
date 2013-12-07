@@ -13,6 +13,7 @@ class mockstore(object):
         p2 = sp(2, '-? help text', '', True)
         p3 = sp(3, '-c=one,two\ndesc', '', True)
         p4 = sp(4, 'FILE argument', '', True)
+        p5 = sp(5, '-exec nest', '', True)
         opts = [so(p0, ['-a'], ['--a'], False),
                 so(p1, ['-b'], ['--b'], '<arg>'),
                 so(p2, ['-?'], [], False),
@@ -27,6 +28,7 @@ class mockstore(object):
 
         opts = list(opts)
         opts.append(so(p4, [], [], False, 'FILE'))
+        opts.append(so(p5, ['-exec'], [], True, nestedcommand=True))
         self.manpages['withargs'] = sm('withargs.1.gz', 'withargs', 'withargs synopsis',
                                        opts, [], partialmatch=False, nestedcommand=True)
 
@@ -261,6 +263,21 @@ class test_matcher(unittest.TestCase):
                           (9, 15, '-b <arg> desc', '-b arg')],
                          [(16, 19, 'bar synopsis', 'bar'),
                           (20, 22, '-a desc', '-a')]]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(len(groups), 3)
+        self.assertEquals(groups[0].results, [])
+        self.assertEquals(groups[1].results, matchedresult[0])
+        self.assertEquals(groups[2].results, matchedresult[1])
+
+        # nesting happens because of option
+        cmd = 'withargs -b arg -exec bar -a'
+
+        matchedresult = [[(0, 8, 'withargs synopsis', 'withargs'),
+                          (9, 15, '-b <arg> desc', '-b arg'),
+                          (16, 21, '-exec nest', '-exec')],
+                         [(22, 25, 'bar synopsis', 'bar'),
+                          (26, 28, '-a desc', '-a')]]
 
         groups = matcher.matcher(cmd, s).match()
         self.assertEquals(len(groups), 3)

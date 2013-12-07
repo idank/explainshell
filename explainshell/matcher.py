@@ -229,6 +229,12 @@ class matcher(parser.NodeVisitor):
                     logger.info('token %r not in list of possible args %r for %r',
                                 word, possibleargs, self._prevoption)
                 if take:
+                    if self._prevoption.nestedcommand:
+                        logger.info('option %r can nest commands', self._prevoption)
+                        if self.startcommand([node], None, False):
+                            self._currentoption = None
+                            return
+
                     pmr = self.matches[-1]
                     mr = matchresult(pmr.start, node.pos[1], pmr.text, None)
                     self.matches[-1] = mr
