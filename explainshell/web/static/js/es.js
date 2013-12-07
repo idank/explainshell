@@ -118,49 +118,52 @@ function helpselector(commandselector) {
 // selectors: one selects which spans in .command and the other selects their
 // matching help text in .help
 function initialize() {
-    var currentgroup = 'shell';
-    var s = $("#command span[class^=shell]");
-    // if there are no 'shell' explanations, show the first (and only) command
-    if (!s.length)
-        currentgroup = 'command0';
+    var head = {'name' : 'all'},
+        prev = head,
+        groupcount = 0,
+        s = $("#command span[class^=shell]");
 
-    var head = {'name' : currentgroup};
-
-    head['commandselector'] = $("#command span[class^=" + currentgroup + "]");
+    if (s.length) {
+        var shell = {'name' : 'shell', 'commandselector' : s, 'prev' : head};
+        head['next'] = shell;
+        prev = shell;
+        groupcount += 1;
+    }
 
     // construct a doubly linked list of previous/next groups. this is used
     // by the navigation buttons to move between groups
-    if (currentgroup != 'command0')
-    {
-        var i = 0, g = "command" + i, s = $("#command span[class^=" + g + "]"),
-            prev = head;
-        while (s.length > 0) {
-            var curr = {'name' : g, 'commandselector' : s}
+    var i = 0,
+        g = "command" + i,
+        s = $("#command span[class^=" + g + "]");
 
-            if (s.filter(':not(.unknown)').length > 0) {
-                curr['prev'] = prev;
-                prev['next'] = curr;
-                prev = curr;
-            }
+    while (s.length > 0) {
+        var curr = {'name' : g, 'commandselector' : s}
 
-            i++;
-            g = "command" + i;
-            s = $("#command span[class^=" + g + "]")
+        if (s.filter(':not(.unknown)').length > 0) {
+            curr['prev'] = prev;
+            prev['next'] = curr;
+            prev = curr;
+            groupcount += 1;
         }
 
-        var all = {'name' : 'all',
-                   'commandselector' : $("#command span[class]").filter(":not(.dropdown)"),
-                   'prev' : prev, 'next' : head}
-
-        head['prev'] = all;
-        prev['next'] = all;
-        head = all;
+        i++;
+        g = "command" + i;
+        s = $("#command span[class^=" + g + "]")
     }
 
-    // check if we have just one group in there
-    if (head['next'] === head['prev']) {
+    if (groupcount == 1) {
+        // if we have a single group, get rid of 'all' and remove the prev/next
+        // links
+        head = head['next'];
+
         delete head['next'];
         delete head['prev'];
+    }
+    else {
+        // fix the prev/next links of the head/tail
+        head['commandselector'] = $("#command span[class]").filter(":not(.dropdown)");
+        head['prev'] = prev;
+        prev['next'] = head;
     }
 
     commandunknowns();
