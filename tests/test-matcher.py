@@ -19,8 +19,8 @@ class mockstore(object):
                 so(p3, ['-c'], [], ['one', 'two'])]
         self.manpages = {
                 'bar' : sm('bar.1.gz', 'bar', 'bar synopsis', opts, [], multicommand=True),
-                'baz' : sm('baz.1.gz', 'baz', 'baz synopsis', opts, [], True),
-                'bar foo' : sm('bar-foo.1.gz', 'bar-foo', 'bar foo synopsis', opts, [], True)}
+                'baz' : sm('baz.1.gz', 'baz', 'baz synopsis', opts, [], partialmatch=True),
+                'bar foo' : sm('bar-foo.1.gz', 'bar-foo', 'bar foo synopsis', opts, [], partialmatch=True)}
 
         self.dup = [sm('dup.1.gz', 'dup', 'dup1 synopsis', opts, []),
                     sm('dup.2.gz', 'dup', 'dup2 synopsis', opts, [])]
@@ -28,7 +28,7 @@ class mockstore(object):
         opts = list(opts)
         opts.append(so(p4, [], [], False, 'FILE'))
         self.manpages['withargs'] = sm('withargs.1.gz', 'withargs', 'withargs synopsis',
-                                       opts, [], False)
+                                       opts, [], partialmatch=False, nestedcommand=True)
 
     def findmanpage(self, x, section=None):
         try:
@@ -253,6 +253,32 @@ class test_matcher(unittest.TestCase):
             (12, 13, None, '-')]
 
         self.assertMatchSingle(cmd, s.findmanpage('bar')[0], matchedresult)
+
+    def test_nested_command(self):
+        cmd = 'withargs -b arg bar -a'
+
+        matchedresult = [[(0, 8, 'withargs synopsis', 'withargs'),
+                          (9, 15, '-b <arg> desc', '-b arg')],
+                         [(16, 19, 'bar synopsis', 'bar'),
+                          (20, 22, '-a desc', '-a')]]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(len(groups), 3)
+        self.assertEquals(groups[0].results, [])
+        self.assertEquals(groups[1].results, matchedresult[0])
+        self.assertEquals(groups[2].results, matchedresult[1])
+
+    def test_nested_command_is_unknown(self):
+        cmd = 'withargs -b arg unknown'
+
+        matchedresult = [(0, 8, 'withargs synopsis', 'withargs'),
+                          (9, 15, '-b <arg> desc', '-b arg'),
+                          (16, 23, 'FILE argument', 'unknown')]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(len(groups), 2)
+        self.assertEquals(groups[0].results, [])
+        self.assertEquals(groups[1].results, matchedresult)
 
     def test_unparsed(self):
         cmd = '(bar; bar) c'

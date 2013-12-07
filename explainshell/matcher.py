@@ -95,8 +95,13 @@ class matcher(parser.NodeVisitor):
             logger.info('no words found in command (probably contains only redirects)')
             return
 
-        # we're mutating the parts of node, causing the visitor to skip the nodes
-        # we're popping
+        self.startcommand(parts, None)
+
+    def startcommand(self, parts, endword, addunknown=True):
+        logger.info('startcommand parts=%r, endword=%r', parts, endword)
+        idxwordnode = parser.findfirstkind(parts, 'word')
+        assert idxwordnode != -1
+
         wordnode = parts.pop(idxwordnode)
         name = 'command%d' % len([g for g in self.groups if g.name.startswith('command')])
         startpos, endpos = wordnode.pos
@@ -104,16 +109,18 @@ class matcher(parser.NodeVisitor):
         try:
             mps = self.findmanpages(wordnode.word)
         except errors.ProgramDoesNotExist, e:
-            logger.info('no manpage found for %r', wordnode.word)
+            if addunknown:
+                logger.info('no manpage found for %r, marking it unknown', wordnode.word)
 
-            mg = matchgroup(name)
-            mg.error = e
-            mg.manpage = None
-            mg.suggestions = None
-            self.groups.append(mg)
+                mg = matchgroup(name)
+                mg.error = e
+                mg.manpage = None
+                mg.suggestions = None
+                self.groups.append(mg)
 
-            self.matches.append(matchresult(startpos, endpos, None, None))
-            return
+                self.matches.append(matchresult(startpos, endpos, None, None))
+
+            return False
 
         manpage = mps[0]
         idxnextwordnode = parser.findfirstkind(parts, 'word')
@@ -137,6 +144,10 @@ class matcher(parser.NodeVisitor):
         self.groups.append(mg)
 
         self.matches.append(matchresult(startpos, endpos, manpage.synopsis, None))
+        return True
+
+    def endcommand(self):
+        pass
 
     def visitword(self, node, word):
         def attemptfuzzy(chars):
@@ -233,6 +244,12 @@ class matcher(parser.NodeVisitor):
                 else:
                     self.matches.extend(m)
             elif self.manpage.arguments:
+                if self.manpage.nestedcommand:
+                    logger.info('manpage %r can nest commands', self.manpage)
+                    if self.startcommand([node], None, False):
+                        self._currentoption = None
+                        return
+
                 d = self.manpage.arguments
                 k = list(d.keys())[0]
                 logger.info('got arguments, using %r', k)
