@@ -18,7 +18,7 @@ def about():
 def explain():
     if 'cmd' not in request.args or not request.args['cmd'].strip():
         return redirect('/')
-    command = request.args['cmd']
+    command = request.args['cmd'].strip()
     command = command[:1000] # trim commands longer than 1000 characters
     s = store.store('explainshell', config.MONGO_URI)
     try:
