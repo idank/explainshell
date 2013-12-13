@@ -57,6 +57,7 @@ class matcher(parser.NodeVisitor):
         return self._currentoption
 
     def findmanpages(self, prog):
+        prog = prog.decode('latin1')
         logger.info('looking up %r in store', prog)
         manpages = self.store.findmanpage(prog)
         logger.info('found %r in store, got: %r, using %r', prog, manpages, manpages[0])
