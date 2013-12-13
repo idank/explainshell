@@ -234,6 +234,12 @@ class matcher(parser.NodeVisitor):
             logger.info('found an exact match for %r: %r', word, option)
             mr = matchresult(node.pos[0], node.pos[1], option.text, None)
             self.matches.append(mr)
+
+            # check if we splitted the word just above, if we did then reset
+            # the current option so the next word doesn't consider itself
+            # an argument
+            if word != node.word:
+                self._currentoption = None
         else:
             word = node.word
 

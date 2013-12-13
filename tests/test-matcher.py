@@ -199,10 +199,11 @@ class test_matcher(unittest.TestCase):
         self.assertMatchSingle('bar -ax', s.findmanpage('bar')[0], matchedresult)
 
     def test_long(self):
-        cmd = 'bar --b=b'
+        cmd = 'bar --b=b foo'
         matchedresult = [
             (0, 3, 'bar synopsis', 'bar'),
-            (4, 9, '-b <arg> desc', '--b=b')]
+            (4, 9, '-b <arg> desc', '--b=b'),
+            (10, 13, None, 'foo')]
 
         self.assertMatchSingle(cmd, s.findmanpage('bar')[0], matchedresult)
 
