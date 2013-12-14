@@ -176,7 +176,7 @@ class manpage(object):
         self._text = None
 
     def read(self):
-        cmd = [config.MAN2HTML, urllib.urlencode({'local' : self.path})]
+        cmd = [config.MAN2HTML, urllib.urlencode({'local' : os.path.abspath(self.path)})]
         logger.info('executing %r', ' '.join(cmd))
         self._text = subprocess.check_output(cmd, stderr=devnull, env=ENV)
         try:

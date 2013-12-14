@@ -158,7 +158,7 @@ class manager(object):
 
         return mappingstoadd, multicommands
 
-def main(progs, manpagedir, dbname, dbhost, limit, skip, overwrite, drop, verify):
+def main(files, dbname, dbhost, overwrite, drop, verify):
     if verify:
         s = store.store(dbname, dbhost)
         ok = s.verify()
@@ -170,39 +170,31 @@ def main(progs, manpagedir, dbname, dbhost, limit, skip, overwrite, drop, verify
         else:
             overwrite = True # if we drop, no need to take overwrite into account
 
-    gzs = sorted(glob.glob(os.path.join(manpagedir, '*', '*.gz')))
-    if limit <= 0:
-        limit = len(gzs)
-    else:
-        limit += skip
+    gzs = set()
 
-    if progs:
-        progs = set(progs)
-        gzs = [gz for gz in gzs if manpage.extractname(gz) in progs][skip:limit]
-    else:
-        gzs = gzs[skip:limit]
+    for path in files:
+        if os.path.isdir(path):
+            gzs.update([os.path.abspath(f) for f in glob.glob(os.path.join(path, '*.gz'))])
+        else:
+            gzs.add(os.path.abspath(path))
 
     m = manager(dbhost, dbname, gzs, overwrite, drop)
     added, exists = m.run()
     for mp in added:
-        print 'successfully added %s' % mp.name
+        print 'successfully added %s' % mp.source
     if exists:
-        print 'these manpages already existed and werent overwritten: %s' % ', '.join([m.name for m in exists])
+        print 'these manpages already existed and werent overwritten: \n\n%s' % '\n'.join([m.path for m in exists])
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='process man pages and save them in the store')
     parser.add_argument('--log', type=str, default='ERROR', help='use log as the logger log level')
-    parser.add_argument('-l', '--limit', type=int, default=-1, help='stop processing after reaching this limit')
-    parser.add_argument('--skip', type=int, default=0, help='skip the first N man pages')
     parser.add_argument('--overwrite', action='store_true', default=False, help='overwrite man pages that already exist in the store')
     parser.add_argument('--drop', action='store_true', default=False, help='delete all existing man pages')
     parser.add_argument('--db', default='explainshell', help='mongo db name')
     parser.add_argument('--host', default=config.MONGO_URI, help='mongo host')
     parser.add_argument('--verify', action='store_true', default=False, help='verify db integrity')
-    parser.add_argument('-m', '--manpage-dir', default=config.MANPAGEDIR, help='path to manpage dir')
-    parser.add_argument('progs', nargs='*')
+    parser.add_argument('files', nargs='*')
 
     args = parser.parse_args()
     logging.basicConfig(level=getattr(logging, args.log.upper()))
-    sys.exit(main(args.progs, args.manpage_dir, args.db, args.host, args.limit, args.skip, args.overwrite,
-                  args.drop, args.verify))
+    sys.exit(main(args.files, args.db, args.host, args.overwrite, args.drop, args.verify))

@@ -55,7 +55,7 @@ To setup a working environment that lets you run the web interface locally, you'
 
 Use the manager to parse and save a gzipped man page in raw format:
 
-    $ python explainshell/manager.py --log info echo
+    $ python explainshell/manager.py --log info manpages/1/echo.1.gz
     INFO:explainshell.store:creating store, db = 'explainshell_tests', host = 'mongodb://localhost'
     INFO:explainshell.algo.classifier:train on 994 instances
     INFO:explainshell.manager:handling manpage echo (from /tmp/es/manpages/1/echo.1.gz)
