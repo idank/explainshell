@@ -32,6 +32,7 @@ function eslink(clazz, option, mid, color) {
     this.lines = new Array();   // a list of d3 lines to draw for this link
     this.circle = null;         // circle data to draw, if any (used by unknowns)
     this.text = null;           // the text to draw in the circle (always '?')
+    this.group = null;          // the group this link is a part of
 
     // unknown links have no corresponding <pre> in .help, they simply show up
     // with a '?' connected to them
@@ -54,6 +55,24 @@ function eslink(clazz, option, mid, color) {
         $(this.help).css("border-color", this.color);
         $(this.help).css("background-color", "white");
     }
+}
+
+eslink.prototype.leftmost = function() {
+    for (var i = 0; i < this.group.links.length; i++) {
+        if (this.group.links[i].goingleft)
+            return this.group.links[i];
+    }
+
+    return null;
+}
+
+eslink.prototype.rightmost = function() {
+    for (var i = this.group.links.length-1; i >= 0; i--) {
+        if (!this.group.links[i].goingleft)
+            return this.group.links[i];
+    }
+
+    return null;
 }
 
 // return true if this eslink is 'close' to other by looking at their bounding
@@ -254,7 +273,12 @@ function drawgrouplines(commandselector) {
     // create an eslinkgroup for every group of <span>'s, these will be linked together to
     // the same <pre> in .help.
     var linkgroups = _.map(groupedoptions, function(spans, clazz) {
-            return new eslinkgroup(clazz, spans, mid);
+            var esg = new eslinkgroup(clazz, spans, mid);
+            _.each(esg.links, function(l) {
+                l.group = esg;
+            });
+
+            return esg;
     });
 
     // an array of all the links we need to make, ungrouped
@@ -280,8 +304,16 @@ function drawgrouplines(commandselector) {
 
     // we keep track of how many have gone right/left to calculate
     // the spacing distance between the lines
-    var goingleft = l.length, goingright = links.length - goingleft,
-        goneleft = 0, goneright = 0;
+    var goingleft = 0, goingright = 0, goneleft = 0, goneright = 0;
+
+    _.each(linkgroups, function(esg) {
+        // multiple links in a group count as one in the goingleft/right
+        if (_.some(esg.links, function(l) { return l.goingleft; }))
+            goingleft++;
+
+        if (_.some(esg.links, function(l) { return !l.goingleft; }))
+            goingright++;
+    });
 
     links = l.concat(r);
 
@@ -311,28 +343,56 @@ function drawgrouplines(commandselector) {
         path.addpoint(rr.left + rr.width / 2, 6); // 3
 
         if (link.goingleft) {
-            var topskip = topheight / goingleft;
-            var y = topskip * goneleft + topskip;
-            path.addpoint(left - ((goingleft - goneleft) * sidespace), y); // 4
-            var helprect = link.help.getBoundingClientRect();
-            y = helprect.top - commandrect.bottom + helprect.height / 2;
-            path.addpoint(left, y);
+            var leftmost = link.leftmost();
 
-            link.circle = {x: left+3, y: y, r: 4};
+            // check if this is the leftmost link of the current group; for
+            // those we add a line from the option to the help box. the rest of
+            // the left going links in this group will connect to the top of
+            // this line
+            if (link == leftmost) {
+                var topskip = topheight / goingleft;
+                var y = topskip * goneleft + topskip;
+                path.addpoint(left - ((goingleft - goneleft) * sidespace), y); // 4
+                var helprect = link.help.getBoundingClientRect();
+                y = helprect.top - commandrect.bottom + helprect.height / 2;
+                path.addpoint(left, y);
 
-            goneleft++;
+                link.circle = {x: left+3, y: y, r: 4};
+
+                goneleft++;
+            }
+            else {
+                var leftmostpath = leftmost.paths[leftmost.paths.length-1];
+
+                var p = leftmostpath.points[0],
+                    pp = leftmostpath.points[1];
+
+                path.addpoint(p["x"], pp["y"]);
+            }
         }
         else {
-            var topskip = topheight / goingright;
-            var y = topskip * goneright + topskip;
-            path.addpoint(right + ((goingright - goneright) * sidespace), y); // 4
-            var helprect = link.help.getBoundingClientRect();
-            y = helprect.top - commandrect.bottom + helprect.height / 2;
-            path.addpoint(right, y);
+            // handle right going links, similiarly to left
+            var rightmost = link.rightmost();
 
-            link.circle = {x: right-3, y: y, r: 4};
+            if (link == rightmost) {
+                var topskip = topheight / goingright;
+                var y = topskip * goneright + topskip;
+                path.addpoint(right + ((goingright - goneright) * sidespace), y); // 4
+                var helprect = link.help.getBoundingClientRect();
+                y = helprect.top - commandrect.bottom + helprect.height / 2;
+                path.addpoint(right, y);
 
-            goneright++;
+                link.circle = {x: right-3, y: y, r: 4};
+
+                goneright++;
+            }
+            else {
+                var rightmostpath = rightmost.paths[rightmost.paths.length-1];
+                var p = rightmostpath.points[0],
+                    pp = rightmostpath.points[1];
+
+                path.addpoint(p["x"], pp["y"]);
+            }
         }
 
         link.paths.push(path);
@@ -420,20 +480,22 @@ function drawgrouplines(commandselector) {
             .attr("stroke-width", strokewidth)
             .attr("fill", "none");
 
-        var gg = g.append('g')
-            .attr("transform", "translate(" + link.circle.x + ", " + link.circle.y + ")");
+        if (link.circle) {
+            var gg = g.append('g')
+                .attr("transform", "translate(" + link.circle.x + ", " + link.circle.y + ")");
 
-        gg.append('circle')
-            .attr("r", link.circle.r)
-            .attr("fill", link.color);
+            gg.append('circle')
+                .attr("r", link.circle.r)
+                .attr("fill", link.color);
 
-        if (link.text) {
-            gg.append("text")
-                .attr("fill", 'white')
-                .attr("text-anchor", "middle")
-                .attr("y", ".35em")
-                .attr("font-family", "Arial")
-                .text(link.text);
+            if (link.text) {
+                gg.append("text")
+                    .attr("fill", 'white')
+                    .attr("text-anchor", "middle")
+                    .attr("y", ".35em")
+                    .attr("font-family", "Arial")
+                    .text(link.text);
+            }
         }
     });
 
