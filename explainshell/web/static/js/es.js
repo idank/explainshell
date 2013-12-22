@@ -10,14 +10,14 @@ if (!debug) {
 // a list of colors to use for the lines
 var colors = ['#3182bd', '#6baed6', '#9ecae1', '#c6dbef', '#e6550d', '#fd8d3c', '#fdae6b', '#fdd0a2', '#31a354', '#74c476', '#a1d99b', '#c7e9c0', '#756bb1', '#9e9ac8', '#bcbddc', '#dadaeb', '#636363', '#969696', '#bdbdbd', '#d9d9d9'];
 
-var shuffledcolors;
+var assignedcolors = {};
 
 var vtimeout,
     changewait = 250;
 
 // a class that represents a group of eslink
 function eslinkgroup(clazz, options, mid) {
-    var color = shuffledcolors.shift();
+    var color = assignedcolors[clazz];
     this.links = options.map(function(option) { return new eslink(clazz, option, mid, color); });
     this.options = _.pluck(this.links, 'option');
     this.help = _.pluck(this.links, 'help');
@@ -186,8 +186,19 @@ function initialize() {
     }
 
     commandunknowns();
+    assigncolors();
 
     return head;
+}
+
+function assigncolors() {
+    var shuffledcolors = _.shuffle(colors);
+
+    $("#help pre").each(function() {
+        assignedcolors[$(this).attr('id')] = shuffledcolors.shift();
+    });
+
+    assignedcolors[null] = shuffledcolors.shift();
 }
 
 // handle unknowns in #command
@@ -215,8 +226,6 @@ function commandunknowns() {
 // for <span>'s that have no help text (such as unrecognized arguments), we attach
 // a small '?' to them and refer to them as unknowns
 function drawgrouplines(commandselector) {
-    shuffledcolors = _.shuffle(colors);
-
     // define a couple of parameters that control the spacing/padding
     // of various areas in the links
     var sidespace = 20, toppadding = 25, sidepadding = 15, edgedistance = 5,
