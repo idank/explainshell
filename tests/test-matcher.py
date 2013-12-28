@@ -343,6 +343,21 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(groups[1].results, matchedresult[0])
         self.assertEquals(groups[2].results, matchedresult[1])
 
+    def test_multiple_nests(self):
+        cmd = 'withargs withargs -b arg bar'
+
+        matchedresult = [[(0, 8, 'withargs synopsis', 'withargs')],
+                         [(9, 17, 'withargs synopsis', 'withargs'),
+                          (18, 24, '-b <arg> desc', '-b arg')],
+                         [(25, 28, 'bar synopsis', 'bar')]]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(len(groups), 4)
+        self.assertEquals(groups[0].results, [])
+        self.assertEquals(groups[1].results, matchedresult[0])
+        self.assertEquals(groups[2].results, matchedresult[1])
+        self.assertEquals(groups[3].results, matchedresult[2])
+
     def test_nested_command_is_unknown(self):
         cmd = 'withargs -b arg unknown'
 

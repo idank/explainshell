@@ -110,9 +110,12 @@ class matcher(parser.NodeVisitor):
         # it's possible for visitcommand/end to be called without a command group
         # being pushed if it contains only redirect nodes
         if len(self.groupstack) > 1:
-            if prevstackdepth != len(self.groupstack):
-                logger.info('group %s is a result of a nested command', self.groupstack[-1])
-                self.endcommand()
+            logger.info('visitcommandend %r, prevstackdepth %d, groups %d', self.groupstack[prevstackdepth-1], prevstackdepth, len(self.groupstack))
+
+            if len(self.groupstack) > prevstackdepth:
+                logger.info('popping groups that are a result of nested commands')
+                for i in range(len(self.groupstack) - prevstackdepth):
+                    self.endcommand()
             self.endcommand()
 
     def startcommand(self, parts, endword, addunknown=True):
