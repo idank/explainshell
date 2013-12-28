@@ -20,10 +20,26 @@ a {
 	text-align: center;
 }
 
+#command-wrapper {
+    z-index: 3;
+}
+
+#command-wrapper.affix {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 20px;
+    background-color: white;
+    padding-top: 10px;
+    padding-bottom: 70px;
+    box-shadow: 0 0 15px 5px #ffffff;
+}
+
 #about {
 	text-align: justify;
     width: 700px;
-    margin:0 auto;
+    margin: 0 auto;
 }
 
 .btn, #explain {
@@ -31,10 +47,14 @@ a {
 }
 
 #canvas {
-    position:absolute;
-    z-index:-1;
+    position: absolute;
+    z-index: 1;
     width: 100%;
     left: 0;
+}
+
+#help {
+    z-index: 2;
 }
 
 .small-push {

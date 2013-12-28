@@ -233,6 +233,10 @@ function commandunknowns() {
     });
 }
 
+function affixon() {
+    return $("#command-wrapper").hasClass("affix");
+}
+
 // this is where the magic happens!  we create a connecting line between each
 // <span> in the commandselector and its matching <pre> in helpselector.
 // for <span>'s that have no help text (such as unrecognized arguments), we attach
@@ -671,12 +675,16 @@ function navigation() {
         prevtext.text(" explain " + grouptext(currentgroup.prev));
 
         prev.click(function() {
+            if (affixon())
+                return;
             if (currentgroup.prev) {
                 console.log('moving to the previous group (%s), current group is %s', currentgroup.prev.name, currentgroup.name);
                 var oldgroup = currentgroup;
                 currentgroup = currentgroup.prev
                 currentext.text(grouptext(currentgroup));
 
+                // no need to potentically call drawvisible() here since for now
+                // we don't allow clicking when scrolling
                 drawgrouplines(currentgroup.commandselector);
 
                 if (!currentgroup.prev) {
@@ -699,12 +707,16 @@ function navigation() {
         });
 
         next.click(function() {
+            if (affixon())
+                return;
             if (currentgroup.next) {
                 console.log('moving to the next group (%s), current group is %s', currentgroup.next.name, currentgroup.name);
                 var oldgroup = currentgroup;
                 currentgroup = currentgroup.next
                 currentext.text(grouptext(currentgroup));
 
+                // no need to potentically call drawvisible() here since for now
+                // we don't allow clicking when scrolling
                 drawgrouplines(currentgroup.commandselector);
 
                 if (!currentgroup.next) {
@@ -750,5 +762,83 @@ function navigation() {
 				e.preventDefault();
 			}
         });
+    }
+}
+
+function inview(viewtop, viewbottom, $el) {
+    var elemtop = $el.offset().top,
+        elembottom = elemtop + $el.height(),
+        elemmiddle = elemtop + ($el.height() / 2),
+        elemarea = $el.width() * $el.height(),
+        overlaparea = 0;
+
+    // is the element completely outside the viewport?
+    if (elembottom < viewtop || elemtop > viewbottom) {
+        overlaparea = 0;
+    }
+    else {
+        var w = $el.width(),
+            h;
+
+        // check for complete overlap
+        if ((elembottom >= viewtop) && (elemtop <= viewbottom)
+            && (elembottom <= viewbottom) && (elemtop >= viewtop)) {
+            h = $el.height();
+        }
+        // check if the viewport is entirely within the element
+        else if (viewtop > elemtop && viewbottom < elembottom) {
+            // is the middle of the element visible?
+            return (viewtop < elemmiddle && viewbottom > elemmiddle);
+        }
+        // check if the bottom of the element is below the viewport bottom
+        else if (elembottom > viewbottom) {
+            h = viewbottom - elemtop;
+        }
+        // the top of the element is above the viewport top
+        else {
+            h = elembottom - viewtop;
+        }
+
+        overlaparea = w * h;
+    }
+
+    var ratio = overlaparea / elemarea;
+
+    //$("#coords").html("top=" + viewtop + " bottom="+viewbottom);
+    //console.log($el, "top="+elemtop+" bottom="+elembottom+" area="+elemarea+" overlap="+overlaparea+" ratio="+ratio+" i="+i);
+    //$("#coords").html(i+" top="+elemtop+" bottom="+elembottom+" area="+elemarea+" overlap="+overlaparea+" ratio="+ratio.toFixed(2));
+
+    return (ratio >= 0.5)
+}
+
+function drawvisible() {
+    var viewtop = $window.scrollTop(),
+        viewbottom = viewtop + $window.height(),
+        topspace = 80;
+
+    viewtop += topspace;
+
+    var visible = $("#help pre:visible").filter(function() {
+        return (inview(viewtop, viewbottom, $(this)));
+    });
+
+    if (visible.length > 0) {
+        //var ids = visible.map(function() { return $(this).attr('id'); });
+        //$('#scroller').html(ids.toArray().join(','));
+
+        var commandselector = optionsselector(visible);
+        drawgrouplines(commandselector, {topheight: 50, hidepres: false});
+    }
+    else {
+        //$('#scroller').html("nothing visible");
+        clear();
+    }
+}
+
+function draw() {
+    if (affixon())
+        drawvisible();
+    else {
+        drawgrouplines(currentgroup.commandselector);
     }
 }

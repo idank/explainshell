@@ -2,21 +2,26 @@
 {% block title %} - {{ getargs|e }}{% endblock %}
 	{% block content %}
             <div id="navigate" style="position: relative;" class="small-push"></div>
-            <svg id="canvas">
-            </svg>
+            <!--<span style="background-color:white;position: fixed; bottom:0; right:0;" id="coords"></span>-->
             <div class="push"></div>
-            <div id="command">
-            {% import 'macros.html' as macros -%}
-            {% for m in matches -%}
-                {%- if m.name -%}
-                    {{ macros.outputcommandexplain(m) }}
-                {%- else -%}
-                    <span {{ macros.spanclasses(m) }}>{{ m.match|e }}</span>
-                {%- endif -%}{{ m.spaces|safe }}
-            {%- endfor %}
+            <div id="bump-fixer">
+                <div id="command-wrapper">
+                    <svg id="canvas">
+                    </svg>
+                    <div id="command">
+                    {% import 'macros.html' as macros -%}
+                    {% for m in matches -%}
+                        {%- if m.name -%}
+                            {{ macros.outputcommandexplain(m) }}
+                        {%- else -%}
+                            <span {{ macros.spanclasses(m) }}>{{ m.match|e }}</span>
+                        {%- endif -%}{{ m.spaces|safe }}
+                    {%- endfor %}
+                    </div>
+                    <div style="height: 5px;"></div>
+                    <div style="height: 100px;"></div>
+                </div>
             </div>
-            <div style="height: 5px;"></div>
-            <div style="height: 100px;"></div>
             <div>
                 <table id="help" width="100%">
                     <tbody>
@@ -46,16 +51,31 @@
         <script src="//cdnjs.cloudflare.com/ajax/libs/d3/3.1.6/d3.min.js"></script>
 {%- endif %}
         <script type="text/javascript">
+            var $window = $(window),
+                helppres = $('#help pre');
+
             adjustcommandfontsize();
             currentgroup = initialize();
             navigation();
 
             $(document).ready(function() {
+                // when #command-wrapper position is changed to fixed, it'll be removed
+                // from the normal flow, and everything below it will up. we use this div
+                // to prevent that.
+                $('#bump-fixer').height($("#command-wrapper").height());
+
+                $('#command-wrapper').affix({
+                    offset: { top: $('#command-wrapper').offset().top-10 }
+                });
+
                 drawgrouplines(currentgroup.commandselector);
 
-                $(window).resize(function(){
-                    drawgrouplines(currentgroup.commandselector);
-                });
+                var throttled = _.throttle(function() {
+                    draw()
+                }, 10);
+
+                $window.scroll(throttled);
+                $window.resize(throttled);
             });
         </script>
 {%- endblock %}
