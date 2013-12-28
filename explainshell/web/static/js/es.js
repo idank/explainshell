@@ -323,7 +323,7 @@ function drawgrouplines(commandselector) {
     // cross each other. swapping the first and last <pre>'s will prevent that
     // (note that links can still cross each other since multiple <span>'s can
     // be linked to the same <pre>).
-    reorder(l);
+    //reorder(l);
 
     // handle all links that are not unknowns (have a <pre> in .help)
     //
