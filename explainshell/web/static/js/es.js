@@ -772,6 +772,11 @@ function inview(viewtop, viewbottom, $el) {
         elemarea = $el.width() * $el.height(),
         overlaparea = 0;
 
+    // we consider the element to be in view when its middle is
+    // within the viewport
+    return (viewtop < elemmiddle && viewbottom > elemmiddle);
+
+    /*
     // is the element completely outside the viewport?
     if (elembottom < viewtop || elemtop > viewbottom) {
         overlaparea = 0;
@@ -808,7 +813,7 @@ function inview(viewtop, viewbottom, $el) {
     //console.log($el, "top="+elemtop+" bottom="+elembottom+" area="+elemarea+" overlap="+overlaparea+" ratio="+ratio+" i="+i);
     //$("#coords").html(i+" top="+elemtop+" bottom="+elembottom+" area="+elemarea+" overlap="+overlaparea+" ratio="+ratio.toFixed(2));
 
-    return (ratio >= 0.5)
+    return (ratio >= 0.5)*/
 }
 
 function drawvisible() {
