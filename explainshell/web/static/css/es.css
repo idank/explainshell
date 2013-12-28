@@ -123,3 +123,7 @@ a {
 #prevnext li:not(:first-child), #prevnext span:not(:first-child) {
     cursor: pointer;
 }
+
+.help-box {
+    background-color: white;
+}

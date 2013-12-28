@@ -28,7 +28,7 @@
                         {% for text, id in helptext -%}
                         <tr>
                             <td>
-                                <pre id="{{ id }}">{{ text|safe }}</pre>
+                                <pre class="help-box" id="{{ id }}">{{ text|safe }}</pre>
                             </td>
                         </tr>
                         {%- endfor %}

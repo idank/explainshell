@@ -53,7 +53,6 @@ function eslink(clazz, option, mid, color) {
         this.goingleft = rrmid <= mid;
 
         $(this.help).css("border-color", this.color);
-        $(this.help).css("background-color", "white");
     }
 }
 
