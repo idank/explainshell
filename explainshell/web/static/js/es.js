@@ -226,6 +226,10 @@ function commandunknowns() {
 // for <span>'s that have no help text (such as unrecognized arguments), we attach
 // a small '?' to them and refer to them as unknowns
 function drawgrouplines(commandselector) {
+    if (prevselector != null) {
+        clear();
+    }
+
     // define a couple of parameters that control the spacing/padding
     // of various areas in the links
     var sidespace = 20, toppadding = 25, sidepadding = 15, edgedistance = 5,
@@ -563,13 +567,21 @@ function drawgrouplines(commandselector) {
             );
         });
     }
+
+    prevselector = commandselector;
 }
+
+var prevselector = null;
 
 // clear the canvas of all lines and unbind any hover events
 // previously set for oldgroup
-function clear(oldgroup) {
+function clear() {
     $("#canvas").empty();
-    oldgroup.commandselector.add(helpselector(oldgroup.commandselector)).unbind('mouseenter mouseleave');
+
+    if (prevselector) {
+        prevselector.add(helpselector(prevselector)).unbind('mouseenter mouseleave');
+        prevselector = null;
+    }
 }
 
 function commandlinetourl(s) {
@@ -636,7 +648,6 @@ function navigation() {
                 currentgroup = currentgroup.prev
                 currentext.text(grouptext(currentgroup));
 
-                clear(oldgroup);
                 drawgrouplines(currentgroup.commandselector);
 
                 if (!currentgroup.prev) {
@@ -665,7 +676,6 @@ function navigation() {
                 currentgroup = currentgroup.next
                 currentext.text(grouptext(currentgroup));
 
-                clear(oldgroup);
                 drawgrouplines(currentgroup.commandselector);
 
                 if (!currentgroup.next) {

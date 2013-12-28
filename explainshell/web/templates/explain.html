@@ -51,11 +51,10 @@
             navigation();
 
             $(document).ready(function() {
-                drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
+                drawgrouplines(currentgroup.commandselector);
 
                 $(window).resize(function(){
-                    clear(currentgroup);
-                    drawgrouplines(currentgroup.commandselector, currentgroup.helpselector);
+                    drawgrouplines(currentgroup.commandselector);
                 });
             });
         </script>
