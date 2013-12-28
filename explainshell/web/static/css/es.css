@@ -51,6 +51,7 @@ a {
     z-index: 1;
     width: 100%;
     left: 0;
+    pointer-events: none;
 }
 
 #help {
