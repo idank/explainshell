@@ -211,7 +211,7 @@ function initialize() {
 // connected to a .simplecommandstart <span>
 function handlesynopsis() {
     helppres.each(function() {
-        spans = optionsselector($(this));
+        spans = optionsselector($(this)).not(".unknown");
 
         if (spans.is(".simplecommandstart")) {
             $(this).addClass("help-synopsis");
