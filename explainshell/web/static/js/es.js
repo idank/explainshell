@@ -131,6 +131,18 @@ function helpselector(commandselector) {
     });
 }
 
+// return the <span>'s in #command that are linked to each <pre> in pres
+function optionsselector(pres) {
+    var ids = pres.map(function() {
+        return $(this).attr('id');
+    });
+
+    var s = $("#command span.unknown");
+    var r = _.reduce(ids, function(s, id) { return s.add("#command span[helpref^=" + id + "]"); }, s);
+
+    return (r.filter(currentgroup.commandselector));
+}
+
 // initialize the lines logic, deciding which group of elements should be displayed
 //
 // returns the name of the group (with 'all' meaning draw everything) and two
