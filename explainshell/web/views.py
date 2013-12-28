@@ -58,10 +58,14 @@ def explainprogram(program, store):
     mp = mps.pop(0)
     program = mp.namesection
 
+    synopsis = mp.synopsis
+    if synopsis:
+        synopsis = synopsis.decode('utf-8')
+
     mp = {'source' : mp.source[:-3],
           'section' : mp.section,
           'program' : program,
-          'synopsis' : mp.synopsis.decode('utf-8'),
+          'synopsis' : synopsis,
           'options' : [o.text.decode('utf-8') for o in mp.options]}
 
     suggestions = []
