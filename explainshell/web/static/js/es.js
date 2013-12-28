@@ -131,7 +131,7 @@ function helpselector(commandselector) {
 }
 
 // return the <span>'s in #command that are linked to each <pre> in pres
-function optionsselector(pres) {
+function optionsselector(pres, spans) {
     var ids = pres.map(function() {
         return $(this).attr('id');
     });
@@ -139,7 +139,11 @@ function optionsselector(pres) {
     var s = $("#command span.unknown");
     var r = _.reduce(ids, function(s, id) { return s.add("#command span[helpref^=" + id + "]"); }, s);
 
-    return (r.filter(currentgroup.commandselector));
+    if (typeof spans == 'object') {
+        return (r.filter(spans));
+    } else {
+        return r;
+    }
 }
 
 // initialize the lines logic, deciding which group of elements should be displayed
@@ -830,7 +834,7 @@ function drawvisible() {
         //var ids = visible.map(function() { return $(this).attr('id'); });
         //$('#scroller').html(ids.toArray().join(','));
 
-        var commandselector = optionsselector(visible);
+        var commandselector = optionsselector(visible, currentgroup.commandselector);
         drawgrouplines(commandselector, {topheight: 50, hidepres: false});
     }
     else {
