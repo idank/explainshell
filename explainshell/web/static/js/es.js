@@ -225,9 +225,20 @@ function commandunknowns() {
 // <span> in the commandselector and its matching <pre> in helpselector.
 // for <span>'s that have no help text (such as unrecognized arguments), we attach
 // a small '?' to them and refer to them as unknowns
-function drawgrouplines(commandselector) {
+function drawgrouplines(commandselector, options) {
     if (prevselector != null) {
         clear();
+    }
+
+    var defaults = {
+        topheight: -1,
+        hidepres: true
+    };
+
+    if (typeof options == 'object') {
+        options = $.extend(defaults, options);
+    } else {
+        options = defaults;
     }
 
     // define a couple of parameters that control the spacing/padding
@@ -240,23 +251,25 @@ function drawgrouplines(commandselector) {
 
     // if the current group isn't 'all', hide the rest of the help <pre>'s, and show
     // the <pre>'s help of the current group
-    if (currentgroup.name != 'all') {
-        $("#help pre").not(helpselector(commandselector)).parent().parent().hide();
-        helpselector(commandselector).parent().parent().show();
+    if (options.hidepres) {
+        if (currentgroup.name != 'all') {
+            $("#help pre").not(helpselector(commandselector)).parent().parent().hide();
+            helpselector(commandselector).parent().parent().show();
 
-        // the first item in a non-shell group is always the synopsis of the
-        // command (unless it's unknown). we display it at the top without a
-        // connecting line, so remove it from the selectors (unless it's the
-        // only one)
-        //if (currentgroup.name != 'shell' && !$(commandselector[0]).hasClass('unknown') &&
-        //    commandselector.filter(':not(.unknown)').length > 1) {
-        //    console.log('slicing command selector');
-        //    commandselector = commandselector.slice(1);
-        //}
-    }
-    else {
-        // 'all' group, show everything
-        helpselector(commandselector).parent().parent().show();
+            // the first item in a non-shell group is always the synopsis of the
+            // command (unless it's unknown). we display it at the top without a
+            // connecting line, so remove it from the selectors (unless it's the
+            // only one)
+            //if (currentgroup.name != 'shell' && !$(commandselector[0]).hasClass('unknown') &&
+            //    commandselector.filter(':not(.unknown)').length > 1) {
+            //    console.log('slicing command selector');
+            //    commandselector = commandselector.slice(1);
+            //}
+        }
+        else {
+            // 'all' group, show everything
+            helpselector(commandselector).parent().parent().show();
+        }
     }
 
     if (helpselector(commandselector).length > 0) {
@@ -276,7 +289,11 @@ function drawgrouplines(commandselector) {
     var top = helprect.top - toppadding,
         left = helprect.left - sidepadding,
         right = helprect.right + sidepadding,
+        topheight = options.topheight;
+
+    if (topheight == -1) {
         topheight = Math.abs(commandrect.bottom - top);
+    }
 
     // select all spans in our commandselector, and group them by their class
     // attribute. different spans share the same class when they should be
