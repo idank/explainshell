@@ -202,8 +202,21 @@ function initialize() {
 
     commandunknowns();
     assigncolors();
+    handlesynopsis();
 
     return head;
+}
+
+// add the help-synopsis class to all <pre>'s that are
+// connected to a .simplecommandstart <span>
+function handlesynopsis() {
+    helppres.each(function() {
+        spans = optionsselector($(this));
+
+        if (spans.is(".simplecommandstart")) {
+            $(this).addClass("help-synopsis");
+        }
+    });
 }
 
 function assigncolors() {
