@@ -477,22 +477,22 @@ function drawgrouplines(commandselector, options) {
 
         // if there's a close link nearby to this one and it's going down, we
         // draw the this link facing up
-        if ((prevlink && prevlink.directiondown && link.nearby(prevlink)) || (nextlink && nextlink.directiondown && link.nearby(nextlink))) {
-            link.directiondown = false;
+        //if ((prevlink && prevlink.directiondown && link.nearby(prevlink)) || (nextlink && nextlink.directiondown && link.nearby(nextlink))) {
+        //    link.directiondown = false;
 
-            link.paths.push(new espath().addpoint(rr.left, startytop).addpoint(rrright, startytop-5));
-            link.paths.push(new espath().addpoint(rrright, startytop-5).addpoint(rrright, startytop));
-            var rrmid = d3.round(rr.left + rr.width / 2);
-            link.lines.push({x1: rrmid, y1: startytop-6, x2: rrmid, y2: startytop-5-unknownlinelength});
-            link.circle = {x: rrmid, y: startytop-5-unknownlinelength-3, r: 8};
-        }
-        else {
+        //    link.paths.push(new espath().addpoint(rr.left, startytop).addpoint(rrright, startytop-5));
+        //    link.paths.push(new espath().addpoint(rrright, startytop-5).addpoint(rrright, startytop));
+        //    var rrmid = d3.round(rr.left + rr.width / 2);
+        //    link.lines.push({x1: rrmid, y1: startytop-6, x2: rrmid, y2: startytop-5-unknownlinelength});
+        //    link.circle = {x: rrmid, y: startytop-5-unknownlinelength-3, r: 8};
+        //}
+        //else {
             link.paths.push(new espath().addpoint(rr.left, 0).addpoint(rrright, 5));
             link.paths.push(new espath().addpoint(rrright, 5).addpoint(rrright, 0));
             var rrmid = d3.round(rr.left + rr.width / 2);
             link.lines.push({x1: rrmid, y1: 6, x2: rrmid, y2: 5+unknownlinelength});
             link.circle = {x: rrmid, y: 5+unknownlinelength+3, r: 8};
-        }
+        //}
 
         links.push(link);
     });
