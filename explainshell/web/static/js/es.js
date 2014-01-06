@@ -402,7 +402,7 @@ function drawgrouplines(commandselector, options) {
 
         link.paths.push(new espath().addpoint(rr.left, 0).addpoint(rrright, 5));
         link.paths.push(new espath().addpoint(rrright, 5).addpoint(rrright, 0));
-        path.addpoint(rr.left + rr.width / 2, 6); // 3
+        path.addpoint(rr.left + rr.width / 2, 5); // 3
 
         if (link.goingleft) {
             var leftmost = link.leftmost();
