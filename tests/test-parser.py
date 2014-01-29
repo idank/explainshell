@@ -160,6 +160,12 @@ class test_parser(unittest.TestCase):
                   wordnode('b', 'b'),
                   redirectnode('<f', None, '<', 'f')))
 
+        s = 'a 0<&3'
+        self.assertASTEquals(parse(s),
+                commandnode(s,
+                  wordnode('a', 'a'),
+                  redirectnode('0<&3', 0, '<', '&3')))
+
     def test_redirections1(self):
         trythese = [('', '1'), ('', '3'), ('', '&1'), ('', '&3'), ('', 'file'),
                     ('1', '&2'), ('1', 'file'), ('1', '   file'), ('2', '/dev/null')]
@@ -184,8 +190,9 @@ class test_parser(unittest.TestCase):
                   redirectnode('>&f', None, '>&', 'f')))
 
     def test_redirection_edges(self):
-        s = 'a >&&'
-        self.assertRaisesRegexp(errors.ParsingError, ">& cannot redirect to fd.*position 4", parse, s)
+        for redirect_kind in ('>&', '<&'):
+            s = 'a %s&' % redirect_kind
+            self.assertRaisesRegexp(errors.ParsingError, "%s cannot redirect to fd.*position 4" % redirect_kind, parse, s)
 
         for redirect_kind in ('>', '>>', '>&'):
             s = 'a %s<' % redirect_kind

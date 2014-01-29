@@ -130,7 +130,7 @@ class CommandLineParser(object):
     shell command lines as used in sh, bash and dash.
     """
 
-    permitted_tokens = sorted(['<', '&&', '||', '|&', '<<', '>>', '&>', '>&', '&>>', '<<<'],
+    permitted_tokens = sorted(['<', '&&', '||', '|&', '<<', '>>', '&>', '>&', '<&', '&>>', '<<<'],
                               key=len, reverse=True)
     reserved_words = ('{', '}', '!')
 
@@ -352,19 +352,19 @@ class CommandLineParser(object):
         return node
 
     def parse_redirections1(self, prevnode):
-        # handle >, >>, >&
+        # handle >, >>, >&, <&
         tt = self.peek_token()
         input = None
         start = self.peek.start
         if self.peek.preceding == '':
             assert prevnode.kind == 'word'
-            # > or >> or >& seen without preceding whitespace. So see if the
+            # >, >>, >& or <& seen without preceding whitespace. So see if the
             # last token is a positive integer. If it is, assume it's
             # an fd to redirect and pop it, else leave it in as part of
             # the command line.
             try:
                 try_num = int(prevnode.word)
-                if try_num > 0:
+                if try_num >= 0:
                     input = try_num
             except ValueError:
                 pass
@@ -372,16 +372,16 @@ class CommandLineParser(object):
         self.consume(tt)
         tt = self.peek_token()
 
-        # >& followed with &
-        if tt == '&' and redirect_kind == '>&':
-            raise errors.ParsingError('syntax: >& cannot redirect to fd', self.source, self.peek.start)
+        # >&/<& followed with &
+        if tt == '&' and redirect_kind in ('>&', '<&'):
+            raise errors.ParsingError('syntax: %s cannot redirect to fd' % redirect_kind, self.source, self.peek.start)
 
-        # need word/number/& after >/>>/>&
+        # need word/number/& after >/>>/>&/<&
         if tt not in ('word', 'number', '&'):
             raise errors.ParsingError('syntax: expecting filename or fd', self.source, self.peek.start)
 
         # don't accept 2>&filename
-        if redirect_kind == '>&' and tt != 'number' and input is not None:
+        if redirect_kind in ('>&', '<&') and tt != 'number' and input is not None:
             raise errors.ParsingError('syntax: fd cannot precede >& redirection',
                                       self.source, prevnode.pos[0])
 
@@ -393,9 +393,9 @@ class CommandLineParser(object):
             if tt != 'number':
                 raise errors.ParsingError('syntax: fd expected after &', self.source, self.peek.start)
             output += '&'
-        elif redirect_kind == '>&' and tt == 'number':
-            # >&n, change redirect kind to '>'
-            redirect_kind = '>'
+        elif redirect_kind in ('>&', '<&') and tt == 'number':
+            # >&n/<&n, change redirect kind to '>' or '<'
+            redirect_kind = redirect_kind[0]
             output += '&'
 
         output += self.peek.t
@@ -446,11 +446,8 @@ class CommandLineParser(object):
     def parse_redirections(self, prevnode):
         parts = []
         tt = self.peek_token()
-        while tt in ('<', '>', '<<', '>>', '&>', '>&', '&>>', '<<<'):
-            if tt in ('>', '>>', '>&'):
-                part, prevnode = self.parse_redirections1(prevnode)
-                parts.append(part)
-            elif tt == '<':
+        while tt in ('<', '>', '<<', '>>', '&>', '>&', '<&', '&>>', '<<<'):
+            if tt in ('<', '>', '>>', '>&', '<&'):
                 part, prevnode = self.parse_redirections1(prevnode)
                 parts.append(part)
             elif tt in ('&>', '&>>'):
