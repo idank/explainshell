@@ -131,7 +131,7 @@ class CommandLineParser(object):
     """
 
     permitted_tokens = sorted(['<', '&&', '||', '|&', '<<', '>>', '&>', '>&', '&>>', '<<<'],
-                              key=lambda s: len(s), reverse=True)
+                              key=len, reverse=True)
     reserved_words = ('{', '}', '!')
 
     def __init__(self, source, posix=None):
