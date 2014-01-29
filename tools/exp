@@ -48,6 +48,7 @@ open(my $output, "-|:encoding(UTF-8)", "curl -s http://explainshell.com/explain?
 close($output);
 
 sub striptags { $_[0] =~ s/<[^>]*>//g; $_[0]; }
+sub decodechars { $_[0] =~ s/\&#(\d+);/chr($1)/eg; $_[0]; }
 
 sub parsetag {
     my ($t,$a) = (@_);
@@ -69,8 +70,8 @@ do {
     @t = parsetag("span","help-$i");
     @d = parsetag("pre","help-$i");
     if(@t){
-        my $title = striptags $t[1] if @t;
-        my $desc = striptags $d[1] if @d;
+        my $title = decodechars(striptags $t[1]) if @t;
+        my $desc = decodechars(striptags $d[1]) if @d;
         if($color){
             print "\n", $title, color($color), " ---[", color("reset")
                     , " $desc ", color($color), "]", color("reset"), "\n\n";
