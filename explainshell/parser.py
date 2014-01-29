@@ -351,19 +351,19 @@ class CommandLineParser(object):
         parse_logger.debug('returning %r', node)
         return node
 
-    def parse_redirections1(self, node):
+    def parse_redirections1(self, prevnode):
         # handle >, >>, >&
         tt = self.peek_token()
         input = None
         start = self.peek.start
         if self.peek.preceding == '':
-            assert node.kind == 'word'
+            assert prevnode.kind == 'word'
             # > or >> or >& seen without preceding whitespace. So see if the
             # last token is a positive integer. If it is, assume it's
             # an fd to redirect and pop it, else leave it in as part of
             # the command line.
             try:
-                try_num = int(node.word)
+                try_num = int(prevnode.word)
                 if try_num > 0:
                     input = try_num
             except ValueError:
@@ -383,7 +383,7 @@ class CommandLineParser(object):
         # don't accept 2>&filename
         if redirect_kind == '>&' and tt != 'number' and input is not None:
             raise errors.ParsingError('syntax: fd cannot precede >& redirection',
-                                      self.source, node.pos[0])
+                                      self.source, prevnode.pos[0])
 
         output = ''
         if tt == '&':
@@ -402,12 +402,12 @@ class CommandLineParser(object):
         self.consume(tt)
 
         if input is not None:
-            start = node.pos[0]
-            node = None
+            start = prevnode.pos[0]
+            prevnode = None
 
         redirect = Node(kind='redirect', input=input, type=redirect_kind,
                         output=output, pos=(start, self.token.end))
-        return redirect, node
+        return redirect, prevnode
 
     def parse_redirections2(self):
         # handle &>, &>>
@@ -476,15 +476,15 @@ class CommandLineParser(object):
                         output=redirect_target, pos=(start, self.token.end))
         return redirect
 
-    def parse_redirections(self, node):
+    def parse_redirections(self, prevnode):
         parts = []
         tt = self.peek_token()
         while tt in ('<', '>', '<<', '>>', '&>', '>&', '&>>', '<<<'):
             if tt in ('>', '>>', '>&'):
-                part, node = self.parse_redirections1(node)
+                part, prevnode = self.parse_redirections1(prevnode)
                 parts.append(part)
             elif tt == '<':
-                part, node = self.parse_redirections1(node)
+                part, prevnode = self.parse_redirections1(prevnode)
                 parts.append(part)
             elif tt in ('&>', '&>>'):
                 parts.append(self.parse_redirections2())
@@ -493,7 +493,7 @@ class CommandLineParser(object):
             else:
                 assert False, tt
             tt = self.peek_token()
-        return parts, node is None
+        return parts, prevnode is None
 
     def parse_command_part(self):
         node = Node(kind='word', word=self.peek.t,
