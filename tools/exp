@@ -48,7 +48,15 @@ open(my $output, "-|:encoding(UTF-8)", "curl -s http://explainshell.com/explain?
 close($output);
 
 sub striptags { $_[0] =~ s/<[^>]*>//g; $_[0]; }
-sub decodechars { $_[0] =~ s/\&#(\d+);/chr($1)/eg; $_[0]; }
+sub decodechars { 
+    $_[0] =~ s/\&#(\d+);/chr($1)/eg;
+    $_[0] =~ s/\&amp;/\&/eg;
+    $_[0] =~ s/\&lt;/</eg;
+    $_[0] =~ s/\&gt;/>/eg;
+    $_[0] =~ s/\&quot;/"/eg;
+    $_[0] =~ s/\&nbsp;/ /eg;
+    return $_[0]; 
+}
 
 sub parsetag {
     my ($t,$a) = (@_);
