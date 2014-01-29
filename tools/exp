@@ -50,11 +50,11 @@ close($output);
 sub striptags { $_[0] =~ s/<[^>]*>//g; $_[0]; }
 sub decodechars { 
     $_[0] =~ s/\&#(\d+);/chr($1)/eg;
-    $_[0] =~ s/\&amp;/\&/eg;
-    $_[0] =~ s/\&lt;/</eg;
-    $_[0] =~ s/\&gt;/>/eg;
-    $_[0] =~ s/\&quot;/"/eg;
-    $_[0] =~ s/\&nbsp;/ /eg;
+    $_[0] =~ s/\&amp;/\&/g;
+    $_[0] =~ s/\&lt;/</g;
+    $_[0] =~ s/\&gt;/>/g;
+    $_[0] =~ s/\&quot;/"/g;
+    $_[0] =~ s/\&nbsp;/ /g;
     return $_[0]; 
 }
 
