@@ -426,39 +426,6 @@ class CommandLineParser(object):
                         output=redirect_target, pos=(start, self.token.end))
         return redirect
 
-    def parse_redirection_input(self, node):
-        tt = self.peek_token()
-        assert tt == '<'
-        input = None
-        start = self.peek.start
-        if self.peek.preceding == '':
-            assert node.kind == 'word'
-            # < seen without preceding whitespace. So see if the
-            # last token is a positive integer. If it is, assume it's
-            # an fd to redirect and pop it, else leave it in as part of
-            # the command line.
-            try:
-                try_num = int(node.word)
-                if try_num > 0:
-                    input = try_num
-            except ValueError:
-                pass
-        redirect_kind = tt
-        self.consume(tt)
-        tt = self.peek_token()
-        if tt not in ('word', 'number'):
-            raise errors.ParsingError('syntax: expecting filename after <',
-                                      self.source, self.peek.start)
-        self.consume(tt)
-
-        if input is not None:
-            start = node.pos[0]
-            node = None
-
-        redirect = Node(kind='redirect', input=input, type=redirect_kind,
-                        output=output, pos=(start, self.token.end))
-        return redirect, node
-
     def parse_redirection_input_here(self):
         # handle <<, <<<
         tt = self.peek_token()
