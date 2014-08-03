@@ -356,7 +356,7 @@ class CommandLineParser(object):
         tt = self.peek_token()
         input = None
         start = self.peek.start
-        if self.peek.preceding == '':
+        if self.peek.preceding == '' and prevnode:
             assert prevnode.kind == 'word'
             # >, >>, >& or <& seen without preceding whitespace. So see if the
             # last token is a positive integer. If it is, assume it's
@@ -446,6 +446,12 @@ class CommandLineParser(object):
     def parse_redirections(self, prevnode):
         parts = []
         tt = self.peek_token()
+
+        # remember whether we consumed prevnode as part of parsing the first
+        # redirection, e.g. '.. 2>&1', prevnode will be '2' and will be
+        # considered part of the redirection (the input source)
+        consumed = None
+
         while tt in ('<', '>', '<<', '>>', '&>', '>&', '<&', '&>>', '<<<'):
             if tt in ('<', '>', '>>', '>&', '<&'):
                 part, prevnode = self.parse_redirections1(prevnode)
@@ -456,8 +462,14 @@ class CommandLineParser(object):
                 parts.append(self.parse_redirection_input_here())
             else:
                 assert False, tt
+
+            # enters this if on the first pass of this loop only
+            if consumed is None:
+                consumed = prevnode is None
+            prevnode = None
+
             tt = self.peek_token()
-        return parts, prevnode is None
+        return parts, consumed
 
     def parse_command_part(self):
         node = Node(kind='word', word=self.peek.t,

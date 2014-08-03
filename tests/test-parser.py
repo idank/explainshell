@@ -476,6 +476,9 @@ class test_parser(unittest.TestCase):
         s = 'a 2>'
         self.assertRaisesRegexp(errors.ParsingError, "expecting filename or fd.*position 4", parse, s)
 
+        s = 'ssh -p 2222 <user>@<host>'
+        self.assertRaisesRegexp(errors.ParsingError, "expecting filename or fd.*position %d" % len(s), parse, s)
+
     def test_shlex_error(self):
         s = "a 'b"
         self.assertRaisesRegexp(errors.ParsingError, "No closing quotation.*position 2", parse, s)
