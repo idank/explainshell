@@ -372,17 +372,18 @@ class matcher(bashlex.ast.nodevisitor):
         '''the parser may leave a remainder at the end of the string if it doesn't
         match any of the rules, mark them as unknowns'''
         parsed = [False]*len(self.s)
+
+        # go over all existing matches to see if we've covered the
+        # current position
+        for start, end, _, _ in self.allmatches:
+            for i in range(start, end):
+                parsed[i] = True
+
         for i in range(len(parsed)):
             # whitespace is always 'unparsed'
             if self.s[i].isspace():
                 parsed[i] = True
-            else:
-                # go over all existing matches to see if we've covered the
-                # current position
-                for start, end, _, _ in self.allmatches:
-                    if start <= i < end:
-                        parsed[i] = True
-                        break
+
             if not parsed[i]:
                 # add unparsed results to the 'shell' group
                 self.groups[0].results.append(self.unknown(self.s[i], i, i+1))
