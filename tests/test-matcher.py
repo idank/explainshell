@@ -1,5 +1,7 @@
 import unittest
 
+import bashlex.errors
+
 from explainshell import matcher, store, errors, options, helpconstants
 
 class mockstore(object):
@@ -372,17 +374,9 @@ class test_matcher(unittest.TestCase):
 
     def test_unparsed(self):
         cmd = '(bar; bar) c'
-        matchedresult = [[(0, 1, helpconstants.SUBSHELL, '('),
-                          (4, 5, helpconstants.OPERATORS[';'], ';'),
-                          (9, 10, helpconstants.SUBSHELL, ')'),
-                          (11, 12, None, 'c')],
-                         [(1, 4, 'bar synopsis', 'bar')],
-                         [(6, 9, 'bar synopsis', 'bar')]]
+        self.assertRaises(bashlex.errors.ParsingError,
+                          matcher.matcher(cmd, s).match)
 
-        groups = matcher.matcher(cmd, s).match()
-        self.assertEquals(groups[0].results, matchedresult[0])
-        self.assertEquals(groups[1].results, matchedresult[1])
-        self.assertEquals(groups[2].results, matchedresult[2])
 
     def test_known_and_unknown_program(self):
         cmd = 'bar; foo arg >f; baz'
@@ -411,10 +405,10 @@ class test_matcher(unittest.TestCase):
 
     def test_subshells(self):
         cmd = '((bar); bar)'
-        matchedresult = [[(0, 2, helpconstants.SUBSHELL, '(('),
-                          (5, 6, helpconstants.SUBSHELL, ')'),
+        matchedresult = [[(0, 2, helpconstants._subshell, '(('),
+                          (5, 6, helpconstants._subshell, ')'),
                           (6, 7, helpconstants.OPERATORS[';'], ';'),
-                          (11, 12, helpconstants.SUBSHELL, ')')],
+                          (11, 12, helpconstants._subshell, ')')],
                          [(2, 5, 'bar synopsis', 'bar')],
                          [(8, 11, 'bar synopsis', 'bar')]]
 

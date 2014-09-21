@@ -2,3 +2,4 @@ Flask
 nltk
 nose
 pymongo
+bashlex

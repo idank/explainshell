@@ -155,18 +155,24 @@ REDIRECTION_KIND = {'<' : REDIRECTING_INPUT,
                    '<<' : HERE_DOCUMENTS,
                    '<<<' : HERE_DOCUMENTS}
 
-GROUP = textwrap.dedent('''       { <u>list</u>; }
+_group = textwrap.dedent('''       { <u>list</u>; }
               <u>list</u> is simply executed in the current shell environment.  <u>list</u> must be terminated with a  newline
               or  semicolon.   This  is known as a <u>group</u> <u>command</u>.  The return status is the exit status of <u>list</u>.
               Note that unlike the metacharacters <b>(</b> and <b>)</b>, <b>{</b> and <b>}</b> are <u>reserved</u> <u>words</u> and  must  occur  where  a
               reserved  word  is permitted to be recognized.  Since they do not cause a word break, they must be
               separated from <u>list</u> by whitespace or another shell metacharacter.''')
 
-SUBSHELL = textwrap.dedent('''       (<u>list</u>) <u>list</u> is executed in a subshell environment (see <b>COMMAND</b> <b>EXECUTION</b>  <b>ENVIRONMENT</b>  below).   Variable
+_subshell = textwrap.dedent('''       (<u>list</u>) <u>list</u> is executed in a subshell environment (see <b>COMMAND</b> <b>EXECUTION</b>  <b>ENVIRONMENT</b>  below).   Variable
               assignments and builtin commands that affect the shell's environment do not remain in effect after
               the command completes.  The return status is the exit status of <u>list</u>.''')
 
-COMPOUND = {'{' : GROUP, '(' : SUBSHELL}
-
-NEGATE = '''If the reserved word <b>!</b> precedes a pipeline, the exit status of that pipeline is the logical negation of the
+_negate = '''If the reserved word <b>!</b> precedes a pipeline, the exit status of that pipeline is the logical negation of the
 exit status as described above.'''
+
+RESERVEDWORDS = {
+    '!' : _negate,
+    '{' : _group,
+    '}' : _group,
+    '(' : _subshell,
+    ')' : _subshell,
+}
