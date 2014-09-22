@@ -2,47 +2,10 @@ import unittest
 
 import bashlex.errors
 
-from explainshell import matcher, store, errors, options, helpconstants
+from explainshell import matcher, errors, helpconstants
+from tests import helpers
 
-class mockstore(object):
-    def __init__(self):
-        sp = store.paragraph
-        so = store.option
-        sm = store.manpage
-
-        p0 = sp(0, '-a desc', '', True)
-        p1 = sp(1, '-b <arg> desc', '', True)
-        p2 = sp(2, '-? help text', '', True)
-        p3 = sp(3, '-c=one,two\ndesc', '', True)
-        p4 = sp(4, 'FILE argument', '', True)
-        p5 = sp(5, '-exec nest', '', True)
-        opts = [so(p0, ['-a'], ['--a'], False),
-                so(p1, ['-b'], ['--b'], '<arg>'),
-                so(p2, ['-?'], [], False),
-                so(p3, ['-c'], [], ['one', 'two'])]
-        self.manpages = {
-                'bar' : sm('bar.1.gz', 'bar', 'bar synopsis', opts, [], multicommand=True),
-                'baz' : sm('baz.1.gz', 'baz', 'baz synopsis', opts, [], partialmatch=True),
-                'bar foo' : sm('bar-foo.1.gz', 'bar-foo', 'bar foo synopsis', opts, [], partialmatch=True)}
-
-        self.dup = [sm('dup.1.gz', 'dup', 'dup1 synopsis', opts, []),
-                    sm('dup.2.gz', 'dup', 'dup2 synopsis', opts, [])]
-
-        opts = list(opts)
-        opts.append(so(p4, [], [], False, 'FILE'))
-        opts.append(so(p5, ['-exec'], [], True, nestedcommand=['EOF', ';']))
-        self.manpages['withargs'] = sm('withargs.1.gz', 'withargs', 'withargs synopsis',
-                                       opts, [], partialmatch=True, nestedcommand=True)
-
-    def findmanpage(self, x, section=None):
-        try:
-            if x == 'dup':
-                return self.dup
-            return [self.manpages[x]]
-        except KeyError:
-            raise errors.ProgramDoesNotExist(x)
-
-s = mockstore()
+s = helpers.mockstore()
 
 class test_matcher(unittest.TestCase):
     def assertMatchSingle(self, what, expectedmanpage, expectedresults):
@@ -435,3 +398,52 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(len(groups), 2)
         self.assertEquals(groups[0].results, matchedresult[0])
         self.assertEquals(groups[1].results, matchedresult[1])
+
+    def test_comsub(self):
+        cmd = 'bar $(a) -b "b $(c) `c`" \'$(d)\' >$(e) `f`'
+
+        matchedresult = [(0, 3, 'bar synopsis', 'bar'),
+                         (4, 8, None, '$(a)'),
+                         (9, 24, '-b <arg> desc', '-b "b $(c) `c`"'),
+                         (25, 31, None, "'$(d)'"),
+                         (38, 41, None, '`f`')]
+        shellresult = [(32, 37, helpconstants.REDIRECTION + '\n\n' +
+                                helpconstants.REDIRECTION_KIND['>'], '>$(e)')]
+
+        m = matcher.matcher(cmd, s)
+        groups = m.match()
+        self.assertEquals(groups[0].results, shellresult)
+        self.assertEquals(groups[1].results, matchedresult)
+
+        # check expansions
+        self.assertEquals(m.expansions, [(6, 7, None),
+                                         (17, 18, None),
+                                         (21, 22, None),
+                                         (35, 36, None),
+                                         (39, 40, None)])
+
+    def test_comsub_as_arg(self):
+        cmd = 'withargs $(a)'
+
+        matchedresult = [(0, 8, 'withargs synopsis', 'withargs'),
+                         (9, 13, 'FILE argument', '$(a)')]
+
+        m = matcher.matcher(cmd, s)
+        groups = m.match()
+        self.assertEquals(groups[0].results, [])
+        self.assertEquals(groups[1].results, matchedresult)
+
+        # check expansions
+        self.assertEquals(m.expansions, [(11, 12, None)])
+
+    def test_comsub_as_first_word(self):
+        cmd = '$(a) b'
+
+        m = matcher.matcher(cmd, s)
+        groups = m.match()
+        self.assertEquals(len(groups), 2)
+        self.assertEquals(groups[0].results, [])
+        self.assertEquals(groups[1].results, [(0, 6, None, '$(a) b')])
+
+        # check expansions
+        self.assertEquals(m.expansions, [(2, 3, None)])

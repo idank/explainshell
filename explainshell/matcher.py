@@ -34,6 +34,9 @@ class matcher(bashlex.ast.nodevisitor):
         self._prevoption = self._currentoption = None
         self.groups = [matchgroup('shell')]
 
+        # a list of (start, end, text) tuples where expansions happened
+        self.expansions = []
+
         # a stack to manage nested command groups: whenever a new simple
         # command is started, we push a tuple with:
         # - the node that started this group. this is used to find it when
@@ -58,7 +61,12 @@ class matcher(bashlex.ast.nodevisitor):
 
     @property
     def manpage(self):
-        return self.groupstack[-1][1].manpage
+        group = self.groupstack[-1][1]
+        # we do not have a manpage if the top of the stack is the shell group.
+        # this can happen if the first argument is a command substitution
+        # and we're not treating it as a "man page not found"
+        if group.name != 'shell':
+            return group.manpage
 
     def find_option(self, opt):
         self._currentoption = self.manpage.find_option(opt)
@@ -100,7 +108,13 @@ class matcher(bashlex.ast.nodevisitor):
         self.groups[0].results.append(
                 matchresult(node.pos[0], node.pos[1], '\n\n'.join(helptext), None))
 
-        # don't visit expansions
+        # the output might contain a wordnode, visiting it will confuse the
+        # matcher who'll think it's an argument, instead visit the expansions
+        # directly, if we have any
+        if isinstance(output, bashlex.ast.node):
+            for part in output.parts:
+                self.visit(part)
+
         return False
 
     def visitcommand(self, node, parts):
@@ -126,9 +140,9 @@ class matcher(bashlex.ast.nodevisitor):
                     self.endcommand()
                 self.endcommand()
 
-    def startcommand(self, commandnode, parts, endword, addunknown=True):
-        logger.info('startcommand commandnode=%r parts=%r, endword=%r, addunknown=%s',
-                    commandnode, parts, endword, addunknown)
+    def startcommand(self, commandnode, parts, endword, addgroup=True):
+        logger.info('startcommand commandnode=%r parts=%r, endword=%r, addgroup=%s',
+                    commandnode, parts, endword, addgroup)
         idxwordnode = bashlex.ast.findfirstkind(parts, 'word')
         assert idxwordnode != -1
 
@@ -136,6 +150,14 @@ class matcher(bashlex.ast.nodevisitor):
         if wordnode.parts:
             logger.info('node %r has parts (it was expanded), no point in looking'
                         ' up a manpage for it', wordnode)
+
+            if addgroup:
+                mg = matchgroup(self._generatecommandgroupname())
+                mg.manpage = None
+                mg.suggestions = None
+                self.groups.append(mg)
+                self.groupstack.append((commandnode, mg, endword))
+
             return False
 
         startpos, endpos = wordnode.pos
@@ -146,7 +168,7 @@ class matcher(bashlex.ast.nodevisitor):
             # don't visit it again as an argument
             parts.pop(idxwordnode)
         except errors.ProgramDoesNotExist, e:
-            if addunknown:
+            if addgroup:
                 # add a group for this command, we'll mark it as unknown
                 # when visitword is called
                 logger.info('no manpage found for %r, adding a group for it',
@@ -198,6 +220,18 @@ class matcher(bashlex.ast.nodevisitor):
         assert len(self.groupstack) >= 2, 'groupstack must contain shell and command groups'
         g = self.groupstack.pop()
         logger.info('ending group %s', g)
+
+    def visitcommandsubstitution(self, node, command):
+        kind = self.s[node.pos[0]]
+        substart = 2 if kind == '$' else 1
+
+        helptext = None
+        # start the expansion after the $( or `
+        self.expansions.append((node.pos[0] + substart,
+                                node.pos[1] - 1, helptext))
+
+        # do not try to match the child nodes
+        return False
 
     def visitword(self, node, word):
         def attemptfuzzy(chars):
@@ -295,7 +329,7 @@ class matcher(bashlex.ast.nodevisitor):
                     if take:
                         if self._prevoption.nestedcommand:
                             logger.info('option %r can nest commands', self._prevoption)
-                            if self.startcommand(None, [node], self._prevoption.nestedcommand, addunknown=False):
+                            if self.startcommand(None, [node], self._prevoption.nestedcommand, addgroup=False):
                                 self._currentoption = None
                                 return
 
@@ -317,7 +351,7 @@ class matcher(bashlex.ast.nodevisitor):
                     if self.manpage.arguments:
                         if self.manpage.nestedcommand:
                             logger.info('manpage %r can nest commands', self.manpage)
-                            if self.startcommand(None, [node], self.manpage.nestedcommand, addunknown=False):
+                            if self.startcommand(None, [node], self.manpage.nestedcommand, addgroup=False):
                                 self._currentoption = None
                                 return
 
@@ -334,18 +368,16 @@ class matcher(bashlex.ast.nodevisitor):
 
         _visitword(node, word)
 
-        # don't visit expansions
-        return False
-
     def match(self):
         logger.info('matching string %r', self.s)
         self.ast = bashlex.parser.parsesingle(self.s)
         self.visit(self.ast)
         assert len(self.groupstack) == 1, 'groupstack should contain only shell group after matching'
 
-        # if we only have one command in there and no shell results, reraise
-        # the original exception
-        if len(self.groups) == 2 and not self.groups[0].results and self.groups[1].manpage is None:
+        # if we only have one command in there and no shell results/expansions,
+        # reraise the original exception
+        if (len(self.groups) == 2 and not self.groups[0].results and
+            self.groups[1].manpage is None and not self.expansions):
             raise self.groups[1].error
 
         def debugmatch():
@@ -367,6 +399,9 @@ class matcher(bashlex.ast.nodevisitor):
 
                     portion = self.s[m.start:m.end].decode('latin1')
                     group.results[i] = matchresult(m.start, m.end, m.text, portion)
+
+        # not strictly needed, but doesn't hurt
+        self.expansions.sort()
 
         return self.groups
 

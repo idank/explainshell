@@ -1,4 +1,3 @@
-- add support for command substitutions
 - handle options of the form '-a|b' and 'a or b' (gspl-padd.1.gz)
 - check parsing of sshfs
 - print stats after processing a manpage such as: read x paragraphs, classified y out x, options found in z out of y
@@ -15,6 +14,7 @@ ongoing
 - check xargs example explain
 
 done
+- add support for command substitutions
 - add JSON api
 - add support for pipes, redirections and other shell syntax
 - fix es.js '?' font (should be the default, not courier)
