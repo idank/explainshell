@@ -24,6 +24,10 @@ def explain():
         return redirect('/')
     command = request.args['cmd'].strip()
     command = command[:1000] # trim commands longer than 1000 characters
+    if '\n' in command:
+        return render_template('errors/error.html', title='parsing error!',
+                               message='no newlines please')
+
     s = store.store('explainshell', config.MONGO_URI)
     try:
         matches, helptext = explaincommand(command, s)
