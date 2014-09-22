@@ -3,6 +3,8 @@ import markupsafe
 
 from flask import render_template, request, redirect
 
+import bashlex.errors
+
 from explainshell import matcher, errors, util, store, config
 from explainshell.web import app, helpers
 
@@ -32,12 +34,14 @@ def explain():
 
     except errors.ProgramDoesNotExist, e:
         return render_template('errors/missingmanpage.html', title='missing man page', e=e)
-    except errors.ParsingError, e:
+    except bashlex.errors.ParsingError, e:
         logger.warn('%r parsing error: %s', command, e.message)
         return render_template('errors/parsingerror.html', title='parsing error!', e=e)
     except:
-        logger.error('uncaught exception trying to explain %r', command)
-        raise
+        logger.error('uncaught exception trying to explain %r', command, exc_info=True)
+        return render_template('errors/error.html', title='error!',
+                               message='command either contains unsupported syntax '
+                               'or we had an internal error')
 
 @app.route('/explain/<program>', defaults={'section' : None})
 @app.route('/explain/<section>/<program>')

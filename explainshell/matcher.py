@@ -3,7 +3,7 @@ import collections, logging, itertools
 import bashlex.parser
 import bashlex.ast
 
-from explainshell import errors, util, parser, helpconstants
+from explainshell import errors, util, helpconstants
 
 class matchgroup(object):
     '''a class to group matchresults together
