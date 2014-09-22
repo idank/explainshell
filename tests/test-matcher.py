@@ -447,3 +447,19 @@ class test_matcher(unittest.TestCase):
 
         # check expansions
         self.assertEquals(m.expansions, [(2, 3, None)])
+
+    def test_procsub(self):
+        cmd = 'withargs -b <(a) >(b)'
+
+        matchedresult = [(0, 8, 'withargs synopsis', 'withargs'),
+                         (9, 16, '-b <arg> desc', '-b <(a)'),
+                         (17, 21, 'FILE argument', '>(b)')]
+
+        m = matcher.matcher(cmd, s)
+        groups = m.match()
+        self.assertEquals(groups[0].results, [])
+        self.assertEquals(groups[1].results, matchedresult)
+
+        # check expansions
+        self.assertEquals(m.expansions, [(14, 15, None),
+                                         (19, 20, None)])

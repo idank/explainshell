@@ -233,6 +233,14 @@ class matcher(bashlex.ast.nodevisitor):
         # do not try to match the child nodes
         return False
 
+    def visitprocesssubstitution(self, node, command):
+        # don't include opening <( and closing )
+        self.expansions.append((node.pos[0] + 2,
+                                node.pos[1] - 1, None))
+
+        # do not try to match the child nodes
+        return False
+
     def visitword(self, node, word):
         def attemptfuzzy(chars):
             m = []
