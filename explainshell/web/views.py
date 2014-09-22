@@ -146,8 +146,6 @@ def explaincommand(command, store):
     matches = list(itertools.chain.from_iterable(matches))
     helpers.suggestions(matches, command)
     matches.sort(key=lambda d: d['start'])
-    for d in matches:
-        d['match'] = d['match'].decode('latin1')
 
     it = util.peekable(iter(matches))
     while it.hasnext():

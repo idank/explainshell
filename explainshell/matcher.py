@@ -364,7 +364,9 @@ class matcher(bashlex.ast.nodevisitor):
                 # add matchresult.match to existing matches
                 for i, m in enumerate(group.results):
                     assert m.end <= len(self.s), '%d %d' % (m.end, len(self.s))
-                    group.results[i] = matchresult(m.start, m.end, m.text, self.s[m.start:m.end])
+
+                    portion = self.s[m.start:m.end].decode('latin1')
+                    group.results[i] = matchresult(m.start, m.end, m.text, portion)
 
         return self.groups
 
