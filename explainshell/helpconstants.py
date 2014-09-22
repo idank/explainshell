@@ -169,10 +169,55 @@ _subshell = textwrap.dedent('''       (<u>list</u>) <u>list</u> is executed in a
 _negate = '''If the reserved word <b>!</b> precedes a pipeline, the exit status of that pipeline is the logical negation of the
 exit status as described above.'''
 
+_if = textwrap.dedent('''       <b>if</b> <u>list</u>; <b>then</b> <u>list;</u> [ <b>elif</b> <u>list</u>; <b>then</b> <u>list</u>; ] ... [ <b>else</b> <u>list</u>; ] <b>fi</b>
+              The  <b>if</b> <u>list</u> is executed.  If its exit status is zero, the <b>then</b> <u>list</u> is executed.  Otherwise, each
+              <b>elif</b> <u>list</u> is executed in turn, and if its exit status is zero,  the  corresponding  <b>then</b>  <u>list</u>  is
+              executed  and  the command completes.  Otherwise, the <b>else</b> <u>list</u> is executed, if present.  The exit
+              status is the exit status of the last command executed, or zero if no condition tested true.''')
+
+_for = textwrap.dedent('''       <b>for</b> <u>name</u> [ [ <b>in</b> [ <u>word</u> <u>...</u> ] ] ; ] <b>do</b> <u>list</u> ; <b>done</b>
+              The  list of words following <b>in</b> is expanded, generating a list of items.  The variable <u>name</u> is set
+              to each element of this list in turn, and <u>list</u> is executed each time.  If the <b>in</b> <u>word</u> is  omitted,
+              the  <b>for</b>  command  executes  <u>list</u>  once  for each positional parameter that is set (see <b>PARAMETERS</b>
+              below).  The return status is the exit status of the last command that executes.  If the expansion
+              of  the  items  following  <b>in</b>  results  in an empty list, no commands are executed, and the return
+              status is 0.''')
+
+_whileuntil = textwrap.dedent('''       <b>while</b> <u>list-1</u>; <b>do</b> <u>list-2</u>; <b>done</b>
+       <b>until</b> <u>list-1</u>; <b>do</b> <u>list-2</u>; <b>done</b>
+              The <b>while</b> command continuously executes the list <u>list-2</u> as long as the last command  in  the  list
+              <u>list-1</u>  returns  an  exit  status  of  zero.  The <b>until</b> command is identical to the <b>while</b> command,
+              except that the test is negated; <u>list-2</u> is executed as long as the last command in <u>list-1</u>  returns
+              a non-zero exit status.  The exit status of the <b>while</b> and <b>until</b> commands is the exit status of the
+              last command executed in <u>list-2</u>, or zero if none was executed.''')
+
+_select = textwrap.dedent('''       <b>select</b> <u>name</u> [ <b>in</b> <u>word</u> ] ; <b>do</b> <u>list</u> ; <b>done</b>
+              The list of words following <b>in</b> is expanded, generating a list of items.  The set of expanded words
+              is printed on the standard error, each preceded by a number.  If  the  <b>in</b>  <u>word</u>  is  omitted,  the
+              positional  parameters are printed (see <b>PARAMETERS</b> below).  The <b>PS3</b> prompt is then displayed and a
+              line read from the standard input.  If the line consists of a number corresponding to one  of  the
+              displayed  words, then the value of <u>name</u> is set to that word.  If the line is empty, the words and
+              prompt are displayed again.  If EOF is read, the command completes.  Any other value  read  causes
+              <u>name</u> to be set to null.  The line read is saved in the variable <b>REPLY</b>.  The <u>list</u> is executed after
+              each selection until a <b>break</b> command is executed.  The exit status of <b>select</b> is the exit status of
+              the last command executed in <u>list</u>, or zero if no commands were executed.''')
+
 RESERVEDWORDS = {
     '!' : _negate,
     '{' : _group,
     '}' : _group,
     '(' : _subshell,
     ')' : _subshell,
+    ';' : OPSEMICOLON,
 }
+
+def _addwords(key, text, *words):
+    for word in words:
+        COMPOUNDRESERVEDWORDS.setdefault(key, {})[word] = text
+
+COMPOUNDRESERVEDWORDS = {}
+_addwords('if', _if, 'if', 'then', 'elif', 'else', 'fi', ';')
+_addwords('for', _for, 'for', 'in', 'do', 'done', ';')
+_addwords('while', _whileuntil, 'while', 'do', 'done')
+_addwords('until', _whileuntil, 'until', 'do', 'done')
+_addwords('select', _select, 'select', 'in', 'do', 'done')

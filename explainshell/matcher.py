@@ -46,6 +46,11 @@ class matcher(bashlex.ast.nodevisitor):
         #   starts a new command, e.g.  find -exec.
         self.groupstack = [(None, self.groups[-1], None)]
 
+        # keep a stack of the currently visited compound command (if/for..)
+        # to provide context when matching reserved words, since for example
+        # the keyword 'done' can appear in a for, while..
+        self.compoundstack = []
+
     def _generatecommandgroupname(self):
         existing = len([g for g in self.groups if g.name.startswith('command')])
         return 'command%d' % existing
@@ -85,11 +90,27 @@ class matcher(bashlex.ast.nodevisitor):
         return matchresult(start, end, None, None)
 
     def visitreservedword(self, node, word):
-        helptext = helpconstants.RESERVEDWORDS[word]
+        # first try the compound reserved words
+        helptext = None
+        if self.compoundstack:
+            currentcompound = self.compoundstack[-1]
+            helptext = helpconstants.COMPOUNDRESERVEDWORDS.get(currentcompound, {}).get(word)
+
+        # try these if we don't have anything specific
+        if not helptext:
+            helptext = helpconstants.RESERVEDWORDS[word]
+
         self.groups[0].results.append(matchresult(node.pos[0], node.pos[1], helptext, None))
 
     def visitoperator(self, node, op):
-        helptext = helpconstants.OPERATORS[op]
+        helptext = None
+        if self.compoundstack:
+            currentcompound = self.compoundstack[-1]
+            helptext = helpconstants.COMPOUNDRESERVEDWORDS.get(currentcompound, {}).get(op)
+
+        if not helptext:
+            helptext = helpconstants.OPERATORS[op]
+
         self.groups[0].results.append(matchresult(node.pos[0], node.pos[1], helptext, None))
 
     def visitpipe(self, node, pipe):
@@ -128,6 +149,25 @@ class matcher(bashlex.ast.nodevisitor):
 
         self.startcommand(node, parts, None)
 
+    def visitif(self, *args):
+        self.compoundstack.append('if')
+    def visitfor(self, node, parts):
+        self.compoundstack.append('for')
+
+        for part in parts:
+            if part.kind == 'word':
+                mr = matchresult(part.pos[0], part.pos[1], helpconstants._for, None)
+                self.groups[0].results.append(mr)
+            else:
+                self.visit(part)
+
+        return False
+
+    def visitwhile(self, *args):
+        self.compoundstack.append('while')
+    def visituntil(self, *args):
+        self.compoundstack.append('until')
+
     def visitnodeend(self, node):
         if node.kind == 'command':
             # it's possible for visitcommand/end to be called without a command
@@ -139,6 +179,9 @@ class matcher(bashlex.ast.nodevisitor):
                     logger.info('popping groups that are a result of nested commands')
                     self.endcommand()
                 self.endcommand()
+        elif node.kind in ('if', 'for', 'while', 'until'):
+            kind = self.compoundstack.pop()
+            assert kind == node.kind
 
     def startcommand(self, commandnode, parts, endword, addgroup=True):
         logger.info('startcommand commandnode=%r parts=%r, endword=%r, addgroup=%s',

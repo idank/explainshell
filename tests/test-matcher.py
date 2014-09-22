@@ -463,3 +463,37 @@ class test_matcher(unittest.TestCase):
         # check expansions
         self.assertEquals(m.expansions, [(14, 15, None),
                                          (19, 20, None)])
+
+    def test_if(self):
+        cmd = 'if bar -a; then b; fi'
+        shellresults = [(0, 2, helpconstants._if, 'if'),
+                        (9, 15, helpconstants._if, '; then'),
+                        (17, 21, helpconstants._if, '; fi')]
+
+        matchresults = [[(3, 6, 'bar synopsis', 'bar'), (7, 9, '-a desc', '-a')],
+                        [(16, 17, None, 'b')]]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(len(groups), 3)
+        self.assertEquals(groups[0].results, shellresults)
+        self.assertEquals(groups[1].results, matchresults[0])
+        self.assertEquals(groups[2].results, matchresults[1])
+
+    def test_nested_controlflows(self):
+        cmd = 'for a; do while bar; do baz; done; done'
+        shellresults = [(0, 9, helpconstants._for, 'for a; do'),
+                        (10, 15, helpconstants._whileuntil, 'while'),
+                        (19, 20, helpconstants.OPSEMICOLON, ';'),
+                        (21, 23, helpconstants._whileuntil, 'do'),
+                        (27, 28, helpconstants.OPSEMICOLON, ';'),
+                        (29, 33, helpconstants._whileuntil, 'done'),
+                        (33, 39, helpconstants._for, '; done')]
+
+        matchresults = [[(16, 19, 'bar synopsis', 'bar')],
+                        [(24, 27, 'baz synopsis', 'baz')]]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(len(groups), 3)
+        self.assertEquals(groups[0].results, shellresults)
+        self.assertEquals(groups[1].results, matchresults[0])
+        self.assertEquals(groups[2].results, matchresults[1])
