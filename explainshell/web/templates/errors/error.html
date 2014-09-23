@@ -4,7 +4,7 @@
             <div class="row">
                 <div class="span8 offset2">
                     <h4 style='color: #b94a48; text-transform: uppercase;'>{{ title }}</h4>
-                    {% block message %}{{ message }}{% endblock %}
+                    {% block message %}{{ message|safe }}{% endblock %}
                 </div>
             </div>
             {%- endblock %}

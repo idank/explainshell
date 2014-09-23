@@ -41,11 +41,17 @@ def explain():
     except bashlex.errors.ParsingError, e:
         logger.warn('%r parsing error: %s', command, e.message)
         return render_template('errors/parsingerror.html', title='parsing error!', e=e)
+    except NotImplementedError:
+        logger.error('uncaught exception trying to explain %r', command, exc_info=True)
+        msg = ("the parser doesn't support the command you tried. you may "
+               "<a href='https://github.com/idank/explainshell/issues'>report a "
+               "bug</a> to have this added, if one doesn't already exist.")
+
+        return render_template('errors/error.html', title='error!', message=msg)
     except:
         logger.error('uncaught exception trying to explain %r', command, exc_info=True)
-        return render_template('errors/error.html', title='error!',
-                               message='command either contains unsupported syntax '
-                               'or we had an internal error')
+        msg = 'something went wrong... this was logged and will be checked'
+        return render_template('errors/error.html', title='error!', message=msg)
 
 @app.route('/explain/<program>', defaults={'section' : None})
 @app.route('/explain/<section>/<program>')
