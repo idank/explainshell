@@ -155,6 +155,18 @@ REDIRECTION_KIND = {'<' : REDIRECTING_INPUT,
                    '<<' : HERE_DOCUMENTS,
                    '<<<' : HERE_DOCUMENTS}
 
+ASSIGNMENT = textwrap.dedent('''       A <u>variable</u> may be assigned to by a statement of the form
+
+              <u>name</u>=[<u>value</u>]
+
+       If <u>value</u> is not given, the variable is assigned the null string.  All  <u>values</u>  undergo  tilde  expansion,
+       parameter  and  variable  expansion,  command  substitution, arithmetic expansion, and quote removal (see
+       <b>EXPANSION</b> below).  If the variable has  its  <b>integer</b>  attribute  set,  then  <u>value</u>  is  evaluated  as  an
+       arithmetic  expression even if the $((...)) expansion is not used (see <b>Arithmetic</b> <b>Expansion</b> below).  Word
+       splitting is not performed, with the exception of <b>"$@"</b>  as  explained  below  under  <b>Special</b>  <b>Parameters</b>.
+       Pathname  expansion  is  not performed.  Assignment statements may also appear as arguments to the <b>alias</b>,
+       <b>declare</b>, <b>typeset</b>, <b>export</b>, <b>readonly</b>, and <b>local</b> builtin commands.''')
+
 _group = textwrap.dedent('''       { <u>list</u>; }
               <u>list</u> is simply executed in the current shell environment.  <u>list</u> must be terminated with a  newline
               or  semicolon.   This  is known as a <u>group</u> <u>command</u>.  The return status is the exit status of <u>list</u>.

@@ -497,3 +497,25 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(groups[0].results, shellresults)
         self.assertEquals(groups[1].results, matchresults[0])
         self.assertEquals(groups[2].results, matchresults[1])
+
+    def test_assignment_with_expansion(self):
+        cmd = 'a="$1" bar'
+
+        shellresults = [(0, 6, helpconstants.ASSIGNMENT, 'a="$1"')]
+        matchresults = [[(7, 10, 'bar synopsis', 'bar')]]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(len(groups), 2)
+        self.assertEquals(groups[0].results, shellresults)
+        self.assertEquals(groups[1].results, matchresults[0])
+
+    def test_assignment_as_first_word(self):
+        cmd = 'a=b bar'
+
+        shellresults = [(0, 3, helpconstants.ASSIGNMENT, 'a=b')]
+        matchresults = [[(4, 7, 'bar synopsis', 'bar')]]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(len(groups), 2)
+        self.assertEquals(groups[0].results, shellresults)
+        self.assertEquals(groups[1].results, matchresults[0])

@@ -284,6 +284,10 @@ class matcher(bashlex.ast.nodevisitor):
         # do not try to match the child nodes
         return False
 
+    def visitassignment(self, node, word):
+        helptext = helpconstants.ASSIGNMENT
+        self.groups[0].results.append(matchresult(node.pos[0], node.pos[1], helptext, None))
+
     def visitword(self, node, word):
         def attemptfuzzy(chars):
             m = []
