@@ -170,14 +170,20 @@ function initialize() {
         g = "command" + i,
         s = $("#command span[class^=" + g + "]");
 
+    var unknownsselector = $();
+
     while (s.length > 0) {
         var curr = {'name' : g, 'commandselector' : s}
 
+        // add this group to the linked list only if it's not full of unknowns
         if (s.filter(':not(.unknown)').length > 0) {
             curr['prev'] = prev;
             prev['next'] = curr;
             prev = curr;
             groupcount += 1;
+        }
+        else {
+            unknownsselector = unknownsselector.add(s);
         }
 
         i++;
@@ -192,6 +198,13 @@ function initialize() {
 
         delete head['next'];
         delete head['prev'];
+
+        // if we have 1 group and it's the shell, all other commands in there
+        // are unknowns, add them to the selector so they show up as unknowns
+        // in the UI
+        if (head['name'] == 'shell') {
+            head['commandselector'] = head['commandselector'].add(unknownsselector);
+        }
     }
     else {
         // fix the prev/next links of the head/tail

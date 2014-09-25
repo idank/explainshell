@@ -230,6 +230,6 @@ def _addwords(key, text, *words):
 COMPOUNDRESERVEDWORDS = {}
 _addwords('if', _if, 'if', 'then', 'elif', 'else', 'fi', ';')
 _addwords('for', _for, 'for', 'in', 'do', 'done', ';')
-_addwords('while', _whileuntil, 'while', 'do', 'done')
+_addwords('while', _whileuntil, 'while', 'do', 'done', ';')
 _addwords('until', _whileuntil, 'until', 'do', 'done')
 _addwords('select', _select, 'select', 'in', 'do', 'done')
