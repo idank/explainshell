@@ -41,11 +41,11 @@ def explain():
     except bashlex.errors.ParsingError, e:
         logger.warn('%r parsing error: %s', command, e.message)
         return render_template('errors/parsingerror.html', title='parsing error!', e=e)
-    except NotImplementedError:
-        logger.error('uncaught exception trying to explain %r', command, exc_info=True)
-        msg = ("the parser doesn't support the command you tried. you may "
+    except NotImplementedError, e:
+        logger.warn('not implemented error trying to explain %r', command)
+        msg = ("the parser doesn't support %r constructs in the command you tried. you may "
                "<a href='https://github.com/idank/explainshell/issues'>report a "
-               "bug</a> to have this added, if one doesn't already exist.")
+               "bug</a> to have this added, if one doesn't already exist.") % e.args[0]
 
         return render_template('errors/error.html', title='error!', message=msg)
     except:
