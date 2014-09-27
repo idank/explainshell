@@ -207,8 +207,13 @@ function initialize() {
         }
     }
     else {
+        // add a group for all spans at the start
+        // select spans that start with command or shell to filter out
+        // the dropdown for a command start and expansions in words
+        head['commandselector'] = $("#command span[class^=command]").add
+                                   ("#command span[class^=shell]");
+
         // fix the prev/next links of the head/tail
-        head['commandselector'] = $("#command span[class]").filter(":not(.dropdown)");
         head['prev'] = prev;
         prev['next'] = head;
     }
@@ -597,6 +602,9 @@ function drawgrouplines(commandselector, options) {
 
                     // highlight all the <span>'s of the current group
                     $(linkgroup.options).css({'font-weight':'bold'});
+                    // and disable highlighting for expansions that might
+                    // be in there
+                    $("span[class^=expansion]", linkgroup.options).css({'font-weight':'normal'});
                     // and disable transparency
                     $(linkgroup.help).add(linkgroup.options).css({opacity: 1.0});
 

@@ -225,8 +225,12 @@ def formatmatch(d, m, expansions):
             i = relativestart + 1
         if m.start <= start and end <= m.end:
             s = m.match[relativestart:relativeend]
-            link = markupsafe.Markup('<a href="/explain?cmd={0}" '
-                    'title="Zoom in to nested command">{0}</a>').format(s)
+            link = markupsafe.Markup(
+                    '<span class="expansion-substitution">'
+                      '<a href="/explain?cmd={0}" '
+                       'title="Zoom in to nested command">{0}'
+                      '</a>'
+                    '</span>').format(s)
 
             linkedmatch += link
             i = relativeend
