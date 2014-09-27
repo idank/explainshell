@@ -21,16 +21,18 @@
                 </div>
             </div>
             <div class="row">
-                <div class="offset1 span8" id="examples">
+                <div class="offset1 span10" id="examples">
                     <h3>examples</h3>
+                    <div style="padding-bottom: 10px;">(new! command substitution and control flows support)</div>
                     <ul>
+                        <li><a href='/explain?cmd=for user in $(cut -f1 -d: /etc/passwd); do crontab -u $user -l 2>/dev/null; done'>for user in $(cut -f1 -d: /etc/passwd); do crontab -u $user -l 2>/dev/null; done</a></li>
+                        <li><a href='/explain?cmd=file=$(echo `basename "$file"`)'>file=$(echo `basename "$file"`)</a></li>
                         <li><a href='/explain?cmd=true+%26%26+%7B+echo+success%3B+%7D+%7C%7C+%7B+echo+failed%3B+%7D'>true && { echo success; } || { echo failed; }</a></li>
                         <li><a href="/explain?cmd=cut -d ' ' -f 1 /var/log/apache2/access_logs | uniq -c | sort -n">cut -d ' ' -f 1 /var/log/apache2/access_logs | uniq -c | sort -n</a></li>
                         <li><a href='/explain?cmd=tar zcf - some-dir | ssh some-server "cd /; tar xvzf -"'>tar zcf - some-dir | ssh some-server "cd /; tar xvzf -"</a></li>
                         <li><a href="/explain?cmd=tar xzvf archive.tar.gz">tar xzvf archive.tar.gz</a></li>
                         <li><a href="/explain?cmd=find . -type f -print0">find . -type f -print0</a></li>
                         <li><a href="/explain?cmd=ssh -i keyfile -f -N -L 1234:www.google.com:80 host">ssh -i keyfile -f -N -L 1234:www.google.com:80 host</a></li>
-                        <li><a href="/explain?cmd=iptables -A INPUT -i eth0 -s ip-to-block -j DROP">iptables -A INPUT -i eth0 -s ip-to-block -j DROP</a></li>
                         <li><a href="/explain?cmd=git log --graph --abbrev-commit --pretty=oneline origin..mybranch">git log --graph --abbrev-commit --pretty=oneline origin..mybranch</a></li>
                     </ul>
                 </div>
