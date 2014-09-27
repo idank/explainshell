@@ -155,9 +155,15 @@ class matcher(bashlex.ast.nodevisitor):
         self.compoundstack.append('for')
 
         for part in parts:
+            # don't visit words since they're not part of the current command,
+            # instead consider them part of the for construct
             if part.kind == 'word':
                 mr = matchresult(part.pos[0], part.pos[1], helpconstants._for, None)
                 self.groups[0].results.append(mr)
+
+                # but we do want to visit expanions
+                for ppart in part.parts:
+                    self.visit(ppart)
             else:
                 self.visit(part)
 
@@ -441,8 +447,6 @@ class matcher(bashlex.ast.nodevisitor):
             s = '\n'.join(['%d) %r = %r' % (i, self.s[m.start:m.end], m.text) for i, m in enumerate(self.allmatches)])
             return s
 
-        logger.debug('%r matches:\n%s', self.s, debugmatch())
-
         self._markunparsedunknown()
 
         # fix each matchgroup seperately
@@ -456,6 +460,8 @@ class matcher(bashlex.ast.nodevisitor):
 
                     portion = self.s[m.start:m.end].decode('latin1')
                     group.results[i] = matchresult(m.start, m.end, m.text, portion)
+
+        logger.debug('%r matches:\n%s', self.s, debugmatch())
 
         # not strictly needed, but doesn't hurt
         self.expansions.sort()

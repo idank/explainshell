@@ -496,6 +496,22 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(groups[1].results, matchresults[0])
         self.assertEquals(groups[2].results, matchresults[1])
 
+    def test_for_expansion(self):
+        cmd = 'for a in $(bar); do baz; done'
+        shellresults = [(0, 19, helpconstants._for, 'for a in $(bar); do'),
+                        (23, 29, helpconstants._for, '; done')]
+
+        matchresults = [(20, 23, 'baz synopsis', 'baz')]
+
+        m = matcher.matcher(cmd, s)
+        groups = m.match()
+        self.assertEquals(len(groups), 2)
+        self.assertEquals(groups[0].results, shellresults)
+        self.assertEquals(groups[1].results, matchresults)
+
+        self.assertEquals(m.expansions, [(11, 14, None)])
+
+
     def test_assignment_with_expansion(self):
         cmd = 'a="$1" bar'
 
