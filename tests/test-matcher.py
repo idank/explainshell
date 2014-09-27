@@ -1,6 +1,6 @@
 import unittest
 
-import bashlex.errors
+import bashlex.errors, bashlex.ast
 
 from explainshell import matcher, errors, helpconstants
 from tests import helpers
@@ -511,9 +511,30 @@ class test_matcher(unittest.TestCase):
         cmd = 'a=b bar'
 
         shellresults = [(0, 3, helpconstants.ASSIGNMENT, 'a=b')]
-        matchresults = [[(4, 7, 'bar synopsis', 'bar')]]
+        matchresults = [(4, 7, 'bar synopsis', 'bar')]
 
         groups = matcher.matcher(cmd, s).match()
         self.assertEquals(len(groups), 2)
         self.assertEquals(groups[0].results, shellresults)
-        self.assertEquals(groups[1].results, matchresults[0])
+        self.assertEquals(groups[1].results, matchresults)
+
+    def test_expansion_limit(self):
+        cmd = 'a $(b $(c))'
+        m = matcher.matcher(cmd, s)
+        m.match()
+
+        class depthchecker(bashlex.ast.nodevisitor):
+            def __init__(self):
+                self.depth = 0
+                self.maxdepth = 0
+            def visitnode(self, node):
+                if 'substitution' in node.kind:
+                    self.depth += 1
+                    self.maxdepth = max(self.maxdepth, self.depth)
+            def visitendnode(self, node):
+                if 'substitution' in node.kind:
+                    self.depth -= 1
+
+        v = depthchecker()
+        v.visit(m.ast)
+        self.assertEquals(v.maxdepth, 1)

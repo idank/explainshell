@@ -425,7 +425,9 @@ class matcher(bashlex.ast.nodevisitor):
 
     def match(self):
         logger.info('matching string %r', self.s)
-        self.ast = bashlex.parser.parsesingle(self.s)
+
+        # limit recursive parsing to a depth of 1
+        self.ast = bashlex.parser.parsesingle(self.s, expansionlimit=1)
         self.visit(self.ast)
         assert len(self.groupstack) == 1, 'groupstack should contain only shell group after matching'
 
