@@ -483,10 +483,8 @@ class test_matcher(unittest.TestCase):
         cmd = 'for a; do while bar; do baz; done; done'
         shellresults = [(0, 9, helpconstants._for, 'for a; do'),
                         (10, 15, helpconstants._whileuntil, 'while'),
-                        (19, 20, helpconstants.OPSEMICOLON, ';'),
-                        (21, 23, helpconstants._whileuntil, 'do'),
-                        (27, 28, helpconstants.OPSEMICOLON, ';'),
-                        (29, 33, helpconstants._whileuntil, 'done'),
+                        (19, 23, helpconstants._whileuntil, '; do'),
+                        (27, 33, helpconstants._whileuntil, '; done'),
                         (33, 39, helpconstants._for, '; done')]
 
         matchresults = [[(16, 19, 'bar synopsis', 'bar')],
