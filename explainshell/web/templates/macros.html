@@ -40,3 +40,7 @@
 {%- macro spanclasses(d) -%}
 class="{{ d.commandclass }}"{% if d.helpclass %} helpref="{{ d.helpclass }}"{% endif %}
 {%- endmacro %}
+
+{%- macro examplebullet(cmd) -%}
+<li><a href='/explain?cmd={{ cmd|urlencode }}'>{{ cmd|e }}</a></li>
+{%- endmacro %}
