@@ -516,14 +516,17 @@ class matcher(bashlex.ast.nodevisitor):
 
         # limit recursive parsing to a depth of 1
         self.ast = bashlex.parser.parsesingle(self.s, expansionlimit=1)
-        self.visit(self.ast)
-        assert len(self.groupstack) == 1, 'groupstack should contain only shell group after matching'
+        if self.ast:
+            self.visit(self.ast)
+            assert len(self.groupstack) == 1, 'groupstack should contain only shell group after matching'
 
-        # if we only have one command in there and no shell results/expansions,
-        # reraise the original exception
-        if (len(self.groups) == 2 and not self.groups[0].results and
-            self.groups[1].manpage is None and not self.expansions):
-            raise self.groups[1].error
+            # if we only have one command in there and no shell results/expansions,
+            # reraise the original exception
+            if (len(self.groups) == 2 and not self.groups[0].results and
+                self.groups[1].manpage is None and not self.expansions):
+                raise self.groups[1].error
+        else:
+            logger.warn('no AST generated for %r', self.s)
 
         def debugmatch():
             s = '\n'.join(['%d) %r = %r' % (i, self.s[m.start:m.end], m.text) for i, m in enumerate(self.allmatches)])
@@ -570,7 +573,7 @@ class matcher(bashlex.ast.nodevisitor):
             # the parser ignores comments but we can use a trick to see if this
             # starts a comment and is beyond the ending index of the parsed
             # portion of the inpnut
-            if i > self.ast.pos[1] and c == '#':
+            if (not self.ast or i > self.ast.pos[1]) and c == '#':
                 comment = matchresult(i, len(parsed), helpconstants.COMMENT, None)
                 self.groups[0].results.append(comment)
                 break

@@ -616,3 +616,12 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(len(groups), 2)
         self.assertEquals(groups[0].results, shellresults)
         self.assertEquals(groups[1].results, matchresults)
+
+        cmd = '# just a comment'
+
+        shellresults = [(0, 16, helpconstants.COMMENT, '# just a comment')]
+
+        m = matcher.matcher(cmd, s)
+        groups = m.match()
+        self.assertEquals(len(groups), 1)
+        self.assertEquals(groups[0].results, shellresults)
