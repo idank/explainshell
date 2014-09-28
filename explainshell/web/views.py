@@ -197,7 +197,7 @@ def formatmatch(d, m, expansions):
     # the current match?
     hassubsinmatch = False
 
-    for start, end, _ in expansions:
+    for start, end, kind in expansions:
         if m.start <= start and end <= m.end:
             hassubsinmatch = True
             break
@@ -214,7 +214,9 @@ def formatmatch(d, m, expansions):
     # untouched
     linkedmatch = ''
     i = 0
-    for start, end, _ in expansions:
+    for start, end, kind in expansions:
+        if kind != 'substitution':
+            continue
         if start >= m.end:
             break
         relativestart = start - m.start

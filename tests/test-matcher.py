@@ -416,11 +416,11 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(groups[1].results, matchedresult)
 
         # check expansions
-        self.assertEquals(m.expansions, [(6, 7, None),
-                                         (17, 18, None),
-                                         (21, 22, None),
-                                         (35, 36, None),
-                                         (39, 40, None)])
+        self.assertEquals(m.expansions, [(6, 7, 'substitution'),
+                                         (17, 18, 'substitution'),
+                                         (21, 22, 'substitution'),
+                                         (35, 36, 'substitution'),
+                                         (39, 40, 'substitution')])
 
     def test_comsub_as_arg(self):
         cmd = 'withargs $(a)'
@@ -434,7 +434,7 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(groups[1].results, matchedresult)
 
         # check expansions
-        self.assertEquals(m.expansions, [(11, 12, None)])
+        self.assertEquals(m.expansions, [(11, 12, 'substitution')])
 
     def test_comsub_as_first_word(self):
         cmd = '$(a) b'
@@ -446,7 +446,7 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(groups[1].results, [(0, 6, None, '$(a) b')])
 
         # check expansions
-        self.assertEquals(m.expansions, [(2, 3, None)])
+        self.assertEquals(m.expansions, [(2, 3, 'substitution')])
 
     def test_procsub(self):
         cmd = 'withargs -b <(a) >(b)'
@@ -461,8 +461,8 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(groups[1].results, matchedresult)
 
         # check expansions
-        self.assertEquals(m.expansions, [(14, 15, None),
-                                         (19, 20, None)])
+        self.assertEquals(m.expansions, [(14, 15, 'substitution'),
+                                         (19, 20, 'substitution')])
 
     def test_if(self):
         cmd = 'if bar -a; then b; fi'
@@ -509,7 +509,7 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(groups[0].results, shellresults)
         self.assertEquals(groups[1].results, matchresults)
 
-        self.assertEquals(m.expansions, [(11, 14, None)])
+        self.assertEquals(m.expansions, [(11, 14, 'substitution')])
 
 
     def test_assignment_with_expansion(self):
@@ -582,7 +582,7 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(len(groups), 2)
         self.assertEquals(groups[0].results, shellresults)
         self.assertEquals(groups[1].results, matchresults)
-        self.assertEquals(m.expansions, [(22, 23, None)])
+        self.assertEquals(m.expansions, [(22, 23, 'substitution')])
 
     def test_function_reference(self):
         cmd = 'function a() { bar; a b; }; a'

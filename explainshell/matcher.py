@@ -22,6 +22,9 @@ class matchresult(collections.namedtuple('matchresult', 'start end text match'))
     def unknown(self):
         return self.text is None
 
+matchwordexpansion = collections.namedtuple('matchwordexpansion',
+                                            'start end kind')
+
 logger = logging.getLogger(__name__)
 
 class matcher(bashlex.ast.nodevisitor):
@@ -34,7 +37,8 @@ class matcher(bashlex.ast.nodevisitor):
         self._prevoption = self._currentoption = None
         self.groups = [matchgroup('shell')]
 
-        # a list of (start, end, text) tuples where expansions happened
+        # a list of matchwordexpansions where expansions happened during word
+        # expansion
         self.expansions = []
 
         # a stack to manage nested command groups: whenever a new simple
@@ -315,18 +319,19 @@ class matcher(bashlex.ast.nodevisitor):
         kind = self.s[node.pos[0]]
         substart = 2 if kind == '$' else 1
 
-        helptext = None
         # start the expansion after the $( or `
-        self.expansions.append((node.pos[0] + substart,
-                                node.pos[1] - 1, helptext))
+        self.expansions.append(matchwordexpansion(node.pos[0] + substart,
+                                                  node.pos[1] - 1,
+                                                  'substitution'))
 
         # do not try to match the child nodes
         return False
 
     def visitprocesssubstitution(self, node, command):
         # don't include opening <( and closing )
-        self.expansions.append((node.pos[0] + 2,
-                                node.pos[1] - 1, None))
+        self.expansions.append(matchwordexpansion(node.pos[0] + 2,
+                                                  node.pos[1] - 1,
+                                                  'substitution'))
 
         # do not try to match the child nodes
         return False
