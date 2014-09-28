@@ -28,8 +28,8 @@ function eslinkgroup(clazz, options, mid) {
 function eslink(clazz, option, mid, color) {
     this.option = option;       // a span from .command
     this.color = color;         // the color chosen for this link
-    this.paths = new Array();   // a list of d3 paths to draw for this link
-    this.lines = new Array();   // a list of d3 lines to draw for this link
+    this.paths = [];            // a list of d3 paths to draw for this link
+    this.lines = [];            // a list of d3 lines to draw for this link
     this.circle = null;         // circle data to draw, if any (used by unknowns)
     this.text = null;           // the text to draw in the circle (always '?')
     this.group = null;          // the group this link is a part of
@@ -63,7 +63,7 @@ eslink.prototype.leftmost = function() {
     }
 
     return null;
-}
+};
 
 eslink.prototype.rightmost = function() {
     for (var i = this.group.links.length-1; i >= 0; i--) {
@@ -72,7 +72,7 @@ eslink.prototype.rightmost = function() {
     }
 
     return null;
-}
+};
 
 // return true if this eslink is 'close' to other by looking at their bounding
 // rects
@@ -83,17 +83,17 @@ eslink.prototype.nearby = function(other) {
         r = this.option.getBoundingClientRect(), rr = other.option.getBoundingClientRect();
 
     return Math.abs(r.right - rr.left) <= closeness || Math.abs(r.left - rr.right) <= closeness;
-}
+};
 
 // a conveninent wrapper around an array of points that allows to chain appends
 function espath() {
-    this.points = new Array();
+    this.points = [];
 }
 
 espath.prototype.addpoint = function(x, y) {
     this.points.push({"x": d3.round(x), "y": d3.round(y)});
     return this;
-}
+};
 
 // swap the position of two nodes in the DOM
 function swapNodes(a, b) {
@@ -159,7 +159,7 @@ function initialize() {
 
     if (s.length) {
         var shell = {'name' : 'shell', 'commandselector' : s, 'prev' : head};
-        head['next'] = shell;
+        head.next = shell;
         prev = shell;
         groupcount += 1;
     }
@@ -167,18 +167,19 @@ function initialize() {
     // construct a doubly linked list of previous/next groups. this is used
     // by the navigation buttons to move between groups
     var i = 0,
-        g = "command" + i,
-        s = $("#command span[class^=" + g + "]");
+        g = "command" + i;
+
+    s = $("#command span[class^=" + g + "]");
 
     var unknownsselector = $();
 
     while (s.length > 0) {
-        var curr = {'name' : g, 'commandselector' : s}
+        var curr = {'name' : g, 'commandselector' : s};
 
         // add this group to the linked list only if it's not full of unknowns
         if (s.filter(':not(.unknown)').length > 0) {
-            curr['prev'] = prev;
-            prev['next'] = curr;
+            curr.prev = prev;
+            prev.next = curr;
             prev = curr;
             groupcount += 1;
         }
@@ -188,34 +189,34 @@ function initialize() {
 
         i++;
         g = "command" + i;
-        s = $("#command span[class^=" + g + "]")
+        s = $("#command span[class^=" + g + "]");
     }
 
     if (groupcount == 1) {
         // if we have a single group, get rid of 'all' and remove the prev/next
         // links
-        head = head['next'];
+        head = head.next;
 
-        delete head['next'];
-        delete head['prev'];
+        delete head.next;
+        delete head.prev;
 
         // if we have 1 group and it's the shell, all other commands in there
         // are unknowns, add them to the selector so they show up as unknowns
         // in the UI
-        if (head['name'] == 'shell') {
-            head['commandselector'] = head['commandselector'].add(unknownsselector);
+        if (head.name == 'shell') {
+            head.commandselector = head.commandselector.add(unknownsselector);
         }
     }
     else {
         // add a group for all spans at the start
         // select spans that start with command or shell to filter out
         // the dropdown for a command start and expansions in words
-        head['commandselector'] = $("#command span[class^=command]").add
-                                   ("#command span[class^=shell]");
+        head.commandselector = $("#command span[class^=command]")
+                            .add("#command span[class^=shell]");
 
         // fix the prev/next links of the head/tail
-        head['prev'] = prev;
-        prev['next'] = head;
+        head.prev = prev;
+        prev.next = head;
     }
 
     commandunknowns();
@@ -279,7 +280,7 @@ function affixon() {
 // for <span>'s that have no help text (such as unrecognized arguments), we attach
 // a small '?' to them and refer to them as unknowns
 function drawgrouplines(commandselector, options) {
-    if (prevselector != null) {
+    if (prevselector !== null) {
         clear();
     }
 
@@ -378,7 +379,7 @@ function drawgrouplines(commandselector, options) {
     // cheat a little: if all our links happen to go left, take half of them
     // to the right (this can happen if the last link happens to strech from
     // before the cutting point all the way to the end)
-    if (r.length == 0) {
+    if (r.length === 0) {
         var midarr = d3.round(l.length / 2);
         r = l.slice(midarr).reverse();
         l = l.slice(0, midarr);
@@ -425,6 +426,9 @@ function drawgrouplines(commandselector, options) {
         link.paths.push(new espath().addpoint(rrright, 5).addpoint(rrright, 0));
         path.addpoint(rr.left + rr.width / 2, 5); // 3
 
+        var topskip, y, p, pp;
+
+
         if (link.goingleft) {
             var leftmost = link.leftmost();
 
@@ -433,10 +437,10 @@ function drawgrouplines(commandselector, options) {
             // the left going links in this group will connect to the top of
             // this line
             if (link == leftmost) {
-                var topskip = topheight / goingleft;
-                var y = topskip * goneleft + topskip;
+                topskip = topheight / goingleft;
+                y = topskip * goneleft + topskip;
                 path.addpoint(left - ((goingleft - goneleft) * sidespace), y); // 4
-                var helprect = link.help.getBoundingClientRect();
+                helprect = link.help.getBoundingClientRect();
                 y = helprect.top - commandrect.bottom + helprect.height / 2;
                 path.addpoint(left, y);
 
@@ -447,10 +451,10 @@ function drawgrouplines(commandselector, options) {
             else {
                 var leftmostpath = leftmost.paths[leftmost.paths.length-1];
 
-                var p = leftmostpath.points[0],
-                    pp = leftmostpath.points[1];
+                p = leftmostpath.points[0];
+                pp = leftmostpath.points[1];
 
-                path.addpoint(p["x"], pp["y"]);
+                path.addpoint(p.x, pp.y);
             }
         }
         else {
@@ -458,10 +462,10 @@ function drawgrouplines(commandselector, options) {
             var rightmost = link.rightmost();
 
             if (link == rightmost) {
-                var topskip = topheight / goingright;
-                var y = topskip * goneright + topskip;
+                topskip = topheight / goingright;
+                y = topskip * goneright + topskip;
                 path.addpoint(right + ((goingright - goneright) * sidespace), y); // 4
-                var helprect = link.help.getBoundingClientRect();
+                helprect = link.help.getBoundingClientRect();
                 y = helprect.top - commandrect.bottom + helprect.height / 2;
                 path.addpoint(right, y);
 
@@ -471,10 +475,11 @@ function drawgrouplines(commandselector, options) {
             }
             else {
                 var rightmostpath = rightmost.paths[rightmost.paths.length-1];
-                var p = rightmostpath.points[0],
-                    pp = rightmostpath.points[1];
 
-                path.addpoint(p["x"], pp["y"]);
+                p = rightmostpath.points[0];
+                pp = rightmostpath.points[1];
+
+                path.addpoint(p.x, pp.y);
             }
         }
 
@@ -489,7 +494,7 @@ function drawgrouplines(commandselector, options) {
         var rr = link.option.getBoundingClientRect(),
             rrright = rr.right - strokewidth,
             nextspan = $(link.option).next()[0],
-            nextlink = _.find(links, function(l) { return l.option == nextspan; });
+            nextlink = _.find(links, function(l) { return l.option == nextspan; }),
             prevspan = $(link.option).prev()[0],
             prevlink = _.find(links, function(l) { return l.option == prevspan; });
 
@@ -610,7 +615,7 @@ function drawgrouplines(commandselector, options) {
 
                     // hide the lines of all other groups
                     groups.attr('visibility', function(other) {
-                        return linkgroup != other ? 'hidden' : null; })
+                        return linkgroup != other ? 'hidden' : null; });
 
                     // and make their <span> and <pre>'s slightly transparent
                     othergroups.each(function(other) {
@@ -628,7 +633,7 @@ function drawgrouplines(commandselector, options) {
                         $(linkgroup.options).css({'font-weight':'normal'});
 
                         groups.attr('visibility', function(other) {
-                            return linkgroup != other ? 'visible' : null; })
+                            return linkgroup != other ? 'visible' : null; });
 
                         othergroups.each(function(other) {
                             $(other.help).add(other.options).css({opacity: 1});
@@ -703,13 +708,13 @@ function navigation() {
             prevtext = prev.find("span"),
             currentext = prevnext.find("u");
 
-        function grouptext(group) {
+        var grouptext = function(group) {
             if (group.name == 'shell')
                 return 'shell syntax';
             else if (group.name != 'all')
                 return group.commandselector.first().text();
             return 'all';
-        }
+        };
 
         nextext.text(" explain " + grouptext(currentgroup.next));
         prevtext.text(" explain " + grouptext(currentgroup.prev));
@@ -720,7 +725,7 @@ function navigation() {
             if (currentgroup.prev) {
                 console.log('moving to the previous group (%s), current group is %s', currentgroup.prev.name, currentgroup.name);
                 var oldgroup = currentgroup;
-                currentgroup = currentgroup.prev
+                currentgroup = currentgroup.prev;
                 currentext.text(grouptext(currentgroup));
 
                 // no need to potentically call drawvisible() here since for now
@@ -752,7 +757,7 @@ function navigation() {
             if (currentgroup.next) {
                 console.log('moving to the next group (%s), current group is %s', currentgroup.next.name, currentgroup.name);
                 var oldgroup = currentgroup;
-                currentgroup = currentgroup.next
+                currentgroup = currentgroup.next;
                 currentext.text(grouptext(currentgroup));
 
                 // no need to potentically call drawvisible() here since for now
@@ -791,7 +796,7 @@ function navigation() {
 			if (!ignorekeydown) {
 				switch(e.which) {
 					case 37: // left
-						prev.click()
+						prev.click();
 						break;
 					case 39: // right
 						next.click();
