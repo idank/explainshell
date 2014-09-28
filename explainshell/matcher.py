@@ -51,6 +51,11 @@ class matcher(bashlex.ast.nodevisitor):
         # the keyword 'done' can appear in a for, while..
         self.compoundstack = []
 
+        # a set of functions defined in the current input, we will try to match
+        # commands against them so if one refers to defined function, it won't
+        # show up as unknown or be taken from the db
+        self.functions = set()
+
     def _generatecommandgroupname(self):
         existing = len([g for g in self.groups if g.name.startswith('command')])
         return 'command%d' % existing
@@ -146,6 +151,42 @@ class matcher(bashlex.ast.nodevisitor):
         if idxwordnode == -1:
             logger.info('no words found in command (probably contains only redirects)')
             return
+
+        wordnode = parts[idxwordnode]
+
+        # check if this refers to a previously defined function
+        if wordnode.word in self.functions:
+            logger.info('word %r is a function, not trying to match it or its '
+                        'arguments', wordnode)
+
+            # first, add a matchresult for the function call
+            mr = matchresult(wordnode.pos[0], wordnode.pos[1],
+                             helpconstants._functioncall % wordnode.word, None)
+            self.matches.append(mr)
+
+            # this is a bit nasty: if we were to visit the command like we
+            # normally do it would try to match it against a manpage. but
+            # we don't have one here, we just want to take all the words and
+            # consider them part of the function call
+            for part in parts:
+                # maybe it's a redirect...
+                if part.kind != 'word':
+                    self.visit(part)
+                else:
+                    # this is an argument to the function
+                    if part is not wordnode:
+                        mr = matchresult(part.pos[0], part.pos[1],
+                                         helpconstants._functionarg % wordnode.word,
+                                         None)
+                        self.matches.append(mr)
+
+                        # visit any expansions in there
+                        for ppart in part.parts:
+                            self.visit(ppart)
+
+            # we're done with this commandnode, don't visit its children
+            return False
+
 
         self.startcommand(node, parts, None)
 
@@ -430,6 +471,8 @@ class matcher(bashlex.ast.nodevisitor):
         _visitword(node, word)
 
     def visitfunction(self, node, name, body, parts):
+        self.functions.add(name.word)
+
         def _iscompoundopenclosecurly(compound):
             first, last = compound.list[0], compound.list[-1]
             if (first.kind == 'reservedword' and last.kind == 'reservedword' and

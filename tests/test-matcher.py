@@ -583,3 +583,24 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(groups[0].results, shellresults)
         self.assertEquals(groups[1].results, matchresults)
         self.assertEquals(m.expansions, [(22, 23, None)])
+
+    def test_function_reference(self):
+        cmd = 'function a() { bar; a b; }; a'
+        shellresults = [(0, 14, helpconstants._function, 'function a() {'),
+                        (18, 19, helpconstants.OPSEMICOLON, ';'),
+                        (20, 21, helpconstants._functioncall % 'a', 'a'),
+                        (22, 23, helpconstants._functionarg % 'a', 'b'),
+                        (23, 24, helpconstants.OPSEMICOLON, ';'),
+                        (25, 26, helpconstants._function, '}'),
+                        (26, 27, helpconstants.OPSEMICOLON, ';'),
+                        (28, 29, helpconstants._functioncall % 'a', 'a'),]
+
+        matchresults = [(15, 18, 'bar synopsis', 'bar')]
+
+        m = matcher.matcher(cmd, s)
+        groups = m.match()
+        self.assertEquals(len(groups), 2)
+        self.assertEquals(groups[0].results, shellresults)
+        self.assertEquals(groups[1].results, matchresults)
+
+        self.assertEquals(m.functions, set(['a']))
