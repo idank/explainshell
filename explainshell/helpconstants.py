@@ -165,7 +165,16 @@ ASSIGNMENT = textwrap.dedent('''       A <u>variable</u> may be assigned to by a
        arithmetic  expression even if the $((...)) expansion is not used (see <b>Arithmetic</b> <b>Expansion</b> below).  Word
        splitting is not performed, with the exception of <b>"$@"</b>  as  explained  below  under  <b>Special</b>  <b>Parameters</b>.
        Pathname  expansion  is  not performed.  Assignment statements may also appear as arguments to the <b>alias</b>,
-       <b>declare</b>, <b>typeset</b>, <b>export</b>, <b>readonly</b>, and <b>local</b> builtin commands.''')
+       <b>declare</b>, <b>typeset</b>, <b>export</b>, <b>readonly</b>, and <b>local</b> builtin commands.
+
+       In the context where an assignment statement is assigning a value to a shell variable or array index, the
+       +=  operator  can  be used to append to or add to the variable's previous value.  When += is applied to a
+       variable for which the <u>integer</u> attribute has been set, <u>value</u> is evaluated as an arithmetic expression and
+       added  to the variable's current value, which is also evaluated.  When += is applied to an array variable
+       using compound assignment (see <b>Arrays</b> below), the variable's value is not unset (as it is when using  =),
+       and  new  values  are  appended to the array beginning at one greater than the array's maximum index (for
+       indexed arrays) or added as additional key-value pairs in  an  associative  array.   When  applied  to  a
+       string-valued variable, <u>value</u> is expanded and appended to the variable's value.''')
 
 _group = textwrap.dedent('''       { <u>list</u>; }
               <u>list</u> is simply executed in the current shell environment.  <u>list</u> must be terminated with a  newline
