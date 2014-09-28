@@ -258,5 +258,5 @@ _function = textwrap.dedent('''       A shell function is an object that is call
               occurs or a readonly function with the same name already exists.  When executed, the  exit  status
               of a function is the exit status of the last command executed in the body.  (See <b>FUNCTIONS</b> below.)''')
 
-_functioncall = 'call to function %r'
-_functionarg = 'argument to function %r'
+_functioncall = 'call shell function %r'
+_functionarg = 'argument for shell function %r'
