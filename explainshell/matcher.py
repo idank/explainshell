@@ -430,16 +430,41 @@ class matcher(bashlex.ast.nodevisitor):
         _visitword(node, word)
 
     def visitfunction(self, node, name, body, parts):
-        beforebody = bashlex.ast.findfirstkind(parts, 'compound') - 1
-        assert beforebody > 0
-        beforebody = parts[beforebody]
+        def _iscompoundopenclosecurly(compound):
+            first, last = compound.list[0], compound.list[-1]
+            if (first.kind == 'reservedword' and last.kind == 'reservedword' and
+                first.word == '{' and last.word == '}'):
+                return True
 
-        # create a matchresult ending at the node before body
-        mr = matchresult(node.pos[0], beforebody.pos[1],
-                         helpconstants._function, None)
-        self.groups[0].results.append(mr)
+        # if the compound command we have there is { }, let's include the
+        # {} as part of the function declaration. normally it would be
+        # treated as a group command, but that seems less informative in this
+        # context
+        if _iscompoundopenclosecurly(body):
+            # create a matchresult until after the first {
+            mr = matchresult(node.pos[0], body.list[0].pos[1],
+                             helpconstants._function, None)
+            self.groups[0].results.append(mr)
 
-        self.visit(body)
+            # create a matchresult for the closing }
+            mr = matchresult(body.list[-1].pos[0], body.list[-1].pos[1],
+                             helpconstants._function, None)
+            self.groups[0].results.append(mr)
+
+            # visit anything in between the { }
+            for part in body.list[1:-1]:
+                self.visit(part)
+        else:
+            beforebody = bashlex.ast.findfirstkind(parts, 'compound') - 1
+            assert beforebody > 0
+            beforebody = parts[beforebody]
+
+            # create a matchresult ending at the node before body
+            mr = matchresult(node.pos[0], beforebody.pos[1],
+                             helpconstants._function, None)
+            self.groups[0].results.append(mr)
+
+            self.visit(body)
 
         return False
 

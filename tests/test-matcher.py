@@ -557,10 +557,9 @@ class test_matcher(unittest.TestCase):
 
     def test_functions(self):
         cmd = 'function a() { bar; }'
-        shellresults = [(0, 12, helpconstants._function, 'function a()'),
-                        (13, 14, helpconstants._group, '{'),
+        shellresults = [(0, 14, helpconstants._function, 'function a() {'),
                         (18, 19, helpconstants.OPSEMICOLON, ';'),
-                        (20, 21, helpconstants._group, '}'),]
+                        (20, 21, helpconstants._function, '}'),]
 
         matchresults = [(15, 18, 'bar synopsis', 'bar')]
 
@@ -568,3 +567,19 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(len(groups), 2)
         self.assertEquals(groups[0].results, shellresults)
         self.assertEquals(groups[1].results, matchresults)
+
+        cmd = 'function a() { bar "$(a)"; }'
+        shellresults = [(0, 14, helpconstants._function, 'function a() {'),
+                        (25, 26, helpconstants.OPSEMICOLON, ';'),
+                        (27, 28, helpconstants._function, '}'),]
+
+        matchresults = [(15, 18, 'bar synopsis', 'bar'),
+                        (19, 25, None, '"$(a)"')]
+
+        m = matcher.matcher(cmd, s)
+        groups = m.match()
+
+        self.assertEquals(len(groups), 2)
+        self.assertEquals(groups[0].results, shellresults)
+        self.assertEquals(groups[1].results, matchresults)
+        self.assertEquals(m.expansions, [(22, 23, None)])
