@@ -260,3 +260,10 @@ _function = textwrap.dedent('''       A shell function is an object that is call
 
 _functioncall = 'call shell function %r'
 _functionarg = 'argument for shell function %r'
+
+COMMENT = textwrap.dedent('''<b>COMMENTS</b>
+      In a non-interactive shell, or an interactive shell in which the <b>interactive_comments</b> option to the <b>shopt</b>
+      builtin is enabled (see <b>SHELL</b> <b>BUILTIN</b> <b>COMMANDS</b> below), a word beginning with <b>#</b> causes that word  and  all
+      remaining  characters  on that line to be ignored.  An interactive shell without the <b>interactive_comments</b>
+      option enabled does not allow comments.  The <b>interactive_comments</b> option is on by default in  interactive
+      shells.''')

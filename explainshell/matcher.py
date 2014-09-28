@@ -562,13 +562,22 @@ class matcher(bashlex.ast.nodevisitor):
                 parsed[i] = True
 
         for i in range(len(parsed)):
+            c = self.s[i]
             # whitespace is always 'unparsed'
-            if self.s[i].isspace():
+            if c.isspace():
                 parsed[i] = True
+
+            # the parser ignores comments but we can use a trick to see if this
+            # starts a comment and is beyond the ending index of the parsed
+            # portion of the inpnut
+            if i > self.ast.pos[1] and c == '#':
+                comment = matchresult(i, len(parsed), helpconstants.COMMENT, None)
+                self.groups[0].results.append(comment)
+                break
 
             if not parsed[i]:
                 # add unparsed results to the 'shell' group
-                self.groups[0].results.append(self.unknown(self.s[i], i, i+1))
+                self.groups[0].results.append(self.unknown(c, i, i+1))
 
         # there are no overlaps, so sorting by the start is enough
         self.groups[0].results.sort(key=lambda mr: mr.start)

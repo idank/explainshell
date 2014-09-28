@@ -604,3 +604,15 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(groups[1].results, matchresults)
 
         self.assertEquals(m.functions, set(['a']))
+
+    def test_comment(self):
+        cmd = 'bar # a comment'
+
+        shellresults = [(4, 15, helpconstants.COMMENT, '# a comment')]
+        matchresults = [(0, 3, 'bar synopsis', 'bar')]
+
+        m = matcher.matcher(cmd, s)
+        groups = m.match()
+        self.assertEquals(len(groups), 2)
+        self.assertEquals(groups[0].results, shellresults)
+        self.assertEquals(groups[1].results, matchresults)
