@@ -554,3 +554,17 @@ class test_matcher(unittest.TestCase):
         v = depthchecker()
         v.visit(m.ast)
         self.assertEquals(v.maxdepth, 1)
+
+    def test_functions(self):
+        cmd = 'function a() { bar; }'
+        shellresults = [(0, 12, helpconstants._function, 'function a()'),
+                        (13, 14, helpconstants._group, '{'),
+                        (18, 19, helpconstants.OPSEMICOLON, ';'),
+                        (20, 21, helpconstants._group, '}'),]
+
+        matchresults = [(15, 18, 'bar synopsis', 'bar')]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(len(groups), 2)
+        self.assertEquals(groups[0].results, shellresults)
+        self.assertEquals(groups[1].results, matchresults)

@@ -429,6 +429,20 @@ class matcher(bashlex.ast.nodevisitor):
 
         _visitword(node, word)
 
+    def visitfunction(self, node, name, body, parts):
+        beforebody = bashlex.ast.findfirstkind(parts, 'compound') - 1
+        assert beforebody > 0
+        beforebody = parts[beforebody]
+
+        # create a matchresult ending at the node before body
+        mr = matchresult(node.pos[0], beforebody.pos[1],
+                         helpconstants._function, None)
+        self.groups[0].results.append(mr)
+
+        self.visit(body)
+
+        return False
+
     def match(self):
         logger.info('matching string %r', self.s)
 

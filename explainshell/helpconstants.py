@@ -242,3 +242,18 @@ _addwords('for', _for, 'for', 'in', 'do', 'done', ';')
 _addwords('while', _whileuntil, 'while', 'do', 'done', ';')
 _addwords('until', _whileuntil, 'until', 'do', 'done')
 _addwords('select', _select, 'select', 'in', 'do', 'done')
+
+_function = textwrap.dedent('''       A shell function is an object that is called like a simple command and executes a compound command with a
+       new set of positional parameters.  Shell functions are declared as follows:
+
+       <u>name</u> () <u>compound-command</u> [<u>redirection</u>]
+       <b>function</b> <u>name</u> [()] <u>compound-command</u> [<u>redirection</u>]
+              This  defines  a  function  named  <u>name</u>.  The reserved word <b>function</b> is optional.  If the <b>function</b>
+              reserved word is supplied, the parentheses are optional.  The <u>body</u> of the function is the compound
+              command  <u>compound-command</u>  (see  <b>Compound</b>  <b>Commands</b>  above).   That  command  is usually a <u>list</u> of
+              commands between {  and  },  but  may  be  any  command  listed  under  <b>Compound</b>  <b>Commands</b>  above.
+              <u>compound-command</u>  is  executed  whenever  <u>name</u>  is specified as the name of a simple command.  Any
+              redirections (see <b>REDIRECTION</b> below) specified when a function is defined are performed  when  the
+              function  is  executed.   The  exit  status of a function definition is zero unless a syntax error
+              occurs or a readonly function with the same name already exists.  When executed, the  exit  status
+              of a function is the exit status of the last command executed in the body.  (See <b>FUNCTIONS</b> below.)''')
