@@ -5,7 +5,7 @@ from explainshell import config, store, errors
 devnull = open(os.devnull, 'w')
 SPLITSYNOP = re.compile(r'([^ ]+) - (.*)$')
 
-ENV = os.environ
+ENV = dict(os.environ)
 ENV["W3MMAN_MAN"] = "man --no-hyphenation"
 ENV["MAN_KEEP_FORMATTING"] = "1"
 ENV["MANWIDTH"] = "115"
