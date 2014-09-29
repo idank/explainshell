@@ -344,8 +344,8 @@ class test_matcher(unittest.TestCase):
     def test_known_and_unknown_program(self):
         cmd = 'bar; foo arg >f; baz'
         matchedresult = [[(3, 4, helpconstants.OPERATORS[';'], ';'),
-                          (13, 15,helpconstants.REDIRECTION + '\n\n' +
-                                  helpconstants.REDIRECTION_KIND['>'], '>f'),
+                          (13, 15, helpconstants.REDIRECTION + '\n\n' +
+                                   helpconstants.REDIRECTION_KIND['>'], '>f'),
                           (15, 16, helpconstants.OPERATORS[';'], ';')],
                          [(0, 3, 'bar synopsis', 'bar')],
                          [(5, 12, None, 'foo arg')],
@@ -625,3 +625,16 @@ class test_matcher(unittest.TestCase):
         groups = m.match()
         self.assertEquals(len(groups), 1)
         self.assertEquals(groups[0].results, shellresults)
+
+    def test_heredoc_at_eof(self):
+        cmd = 'bar <<EOF'
+
+        shellresults = [(4, 9, helpconstants.REDIRECTION + '\n\n' +
+                               helpconstants.REDIRECTION_KIND['<<'], '<<EOF')]
+
+        matchresults = [(0, 3, 'bar synopsis', 'bar')]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(len(groups), 2)
+        self.assertEquals(groups[0].results, shellresults)
+        self.assertEquals(groups[1].results, matchresults)
