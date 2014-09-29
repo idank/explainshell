@@ -221,7 +221,11 @@ def formatmatch(d, m, expansions):
         relativeend = end - m.start
 
         if i < relativestart:
-            expandedmatch += markupsafe.escape(m.match[i:relativestart])
+            for j in range(i, relativestart):
+                if m.match[j].isspace():
+                    expandedmatch += markupsafe.Markup('&nbsp;')
+                else:
+                    expandedmatch += markupsafe.escape(m.match[j])
             i = relativestart + 1
         if m.start <= start and end <= m.end:
             s = m.match[relativestart:relativeend]
