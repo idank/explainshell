@@ -212,36 +212,36 @@ def formatmatch(d, m, expansions):
 
     # go over the expansions, wrapping them with a link; leave everything else
     # untouched
-    linkedmatch = ''
+    expandedmatch = ''
     i = 0
     for start, end, kind in expansions:
-        if kind != 'substitution':
-            continue
         if start >= m.end:
             break
         relativestart = start - m.start
         relativeend = end - m.start
 
         if i < relativestart:
-            linkedmatch += markupsafe.escape(m.match[i:relativestart])
+            expandedmatch += markupsafe.escape(m.match[i:relativestart])
             i = relativestart + 1
         if m.start <= start and end <= m.end:
             s = m.match[relativestart:relativeend]
-            link = markupsafe.Markup(
-                    '<span class="expansion-substitution">'
-                      '<a href="/explain?cmd={0}" '
-                       'title="Zoom in to nested command">{0}'
-                      '</a>'
-                    '</span>').format(s)
 
-            linkedmatch += link
+            if kind == 'substitution':
+                content = markupsafe.Markup('<a href="/explain?cmd={0}" '
+                                            'title="Zoom in to nested command">{0}'
+                                            '</a>').format(s)
+            else:
+                content = s
+
+            expandedmatch += markupsafe.Markup(
+                    '<span class="expansion-{0}">{1}</span>').format(kind, content)
             i = relativeend
 
     if i < len(m.match):
-        linkedmatch += markupsafe.escape(m.match[i:])
+        expandedmatch += markupsafe.escape(m.match[i:])
 
-    assert linkedmatch
-    d['match'] = linkedmatch
+    assert expandedmatch
+    d['match'] = expandedmatch
 
 def _checkoverlaps(s, matches):
     explained = [None]*len(s)

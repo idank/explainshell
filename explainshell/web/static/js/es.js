@@ -15,6 +15,121 @@ var assignedcolors = {};
 var vtimeout,
     changewait = 250;
 
+function specialparam(text) {
+    return {
+        title: "Special Parameters",
+        content:
+            '<p>The shell treats several parameters specially. These parameters ' +
+            'may only be referenced; assignment to them is not allowed.</p>' +
+            text
+    };
+}
+var expansions = {
+    tilde: {
+        title: "Tilde Expansion",
+        content:
+            'If a word begins with an unquoted tilde character ' +
+            '(’<b>~</b>’), all of the characters preceding ' +
+            'the first unquoted slash (or all characters, if there is no ' +
+            'unquoted slash) are considered a <i>tilde-prefix</i>. If ' +
+            'none of the characters in the tilde-prefix are quoted, the ' +
+            'characters in the tilde-prefix following the tilde are ' +
+            'treated as a possible <i>login name</i>. If this login name ' +
+            'is the null string, the tilde is replaced with the value of ' +
+            'the shell parameter ' +
+            '<b><small>HOME</small></b><small>.</small> If ' +
+            '<b><small>HOME</small></b> is unset, the home directory of ' +
+            'the user executing the shell is substituted instead. ' +
+            'Otherwise, the tilde-prefix is replaced with the home ' +
+            'directory associated with the specified login name.'
+    },
+    "parameter-param": {
+        title: "Parameter Expansion",
+        content:
+            'The ’<b>$</b>’ character introduces parameter expansion, command ' +
+            'substitution, or arithmetic expansion.  The parameter name or ' +
+            'symbol to be expanded may be enclosed in braces, which are optional ' +
+            'but serve to protect the variable to be expanded from characters ' +
+            'immediately following it which could be interpreted as part of the ' +
+            'name.'
+    },
+    "parameter-digits": {
+        title: "Positional Parameters",
+        content:
+            'A <i>positional parameter</i> is a parameter denoted by one or more ' +
+            'digits, other than the single digit 0. Positional parameters are ' +
+            'assigned from the shell’s arguments when it is invoked, and may be ' +
+            'reassigned using the <b>set</b> builtin command. Positional ' +
+            'parameters may not be assigned to with assignment statements. The ' +
+            'positional parameters are temporarily replaced when a shell ' +
+            'function is executed (see <b><small>FUNCTIONS</small></b> below). '
+    },
+    "parameter-star": specialparam(
+            'Expands to the positional parameters, starting from one. When the ' +
+            'expansion occurs within double quotes, it expands to a single word ' +
+            'with the value of each parameter separated by the first character ' +
+            'of the <b><small>IFS</small></b> special variable. That is, ' +
+            '"<b>$*</b>" is equivalent to ' +
+            '"<b>$1</b><i>c</i><b>$2</b><i>c</i><b>...</b>", where <i>c</i> is ' +
+            'the first character of the value of the <b><small>IFS</small></b> ' +
+            'variable. If <b><small>IFS</small></b> is unset, the parameters are ' +
+            'separated by spaces. If <b><small>IFS</small></b> is null, the ' +
+            'parameters are joined without intervening separators.'
+    ),
+    "parameter-at": specialparam(
+            'Expands to the positional parameters, starting from one. ' +
+            'When the expansion occurs within double quotes, each ' +
+            'parameter expands to a separate word. That is, ' +
+            '"<b>$@</b>" is equivalent to "<b>$1</b>" ' +
+            '"<b>$2</b>" ... If the double-quoted expansion ' +
+            'occurs within a word, the expansion of the first parameter ' +
+            'is joined with the beginning part of the original word, and ' +
+            'the expansion of the last parameter is joined with the last ' +
+            'part of the original word. When there are no positional ' +
+            'parameters, "<b>$@</b>" and <b>$@</b> expand to ' +
+            'nothing (i.e., they are removed).'
+    ),
+    "parameter-pound": specialparam(
+            'Expands to the number of positional parameters in'
+    ),
+    "parameter-question": specialparam(
+            'Expands to the exit status of the most recently executed ' +
+            'foreground pipeline.'
+    ),
+    "parameter-hyphen": specialparam(
+            'Expands to the current option flags as specified upon invocation, ' +
+            'by the <b>set</b> builtin command, or those set by the shell ' +
+            'itself (such as the <b>−i</b> option).'
+    ),
+    "parameter-dollar": specialparam(
+            'Expands to the process ID of the shell. In a () subshell, it '+
+            'expands to the process ID of the current shell, not the ' +
+            'subshell.'
+    ),
+    "parameter-exclamation": specialparam(
+            'Expands to the process ID of the most recently executed background ' +
+            '(asynchronous) command.'
+    ),
+    "parameter-zero": specialparam(
+            'Expands to the name of the shell or shell script. This is set at ' +
+            'shell initialization. If <b>bash</b> is invoked with a file of ' +
+            'commands, <b>$0</b> is set to the name of that file. If <b>bash</b> ' +
+            'is started with the <b>−c</b> option, then <b>$0</b> is set to the ' +
+            'first argument after the string to be executed, if one is present. ' +
+            'Otherwise, it is set to the file name used to invoke <b>bash</b>, ' +
+            'as given by argument zero.'
+    ),
+    "parameter-underscore": specialparam(
+            'At shell startup, set to the absolute pathname used to invoke the ' +
+            'shell or shell script being executed as passed in the environment ' +
+            'or argument list. Subsequently, expands to the last argument to the ' +
+            'previous command, after expansion.  Also set to the full pathname ' +
+            'used to invoke each command executed and placed in the environment ' +
+            'exported to that command. When checking mail, this parameter holds ' +
+            'the name of the mail file currently being checked.'
+    ),
+};
+
 // a class that represents a group of eslink
 function eslinkgroup(clazz, options, mid) {
     var color = assignedcolors[clazz];
@@ -155,7 +270,8 @@ function initialize() {
     var head = {'name' : 'all'},
         prev = head,
         groupcount = 0,
-        s = $("#command span[class^=shell]");
+        s = $("#command span[class^=shell]"),
+        curr;
 
     if (s.length) {
         var shell = {'name' : 'shell', 'commandselector' : s, 'prev' : head};
@@ -174,7 +290,7 @@ function initialize() {
     var unknownsselector = $();
 
     while (s.length > 0) {
-        var curr = {'name' : g, 'commandselector' : s};
+        curr = {'name' : g, 'commandselector' : s};
 
         // add this group to the linked list only if it's not full of unknowns
         if (s.filter(':not(.unknown)').length > 0) {
@@ -217,6 +333,39 @@ function initialize() {
         // fix the prev/next links of the head/tail
         head.prev = prev;
         prev.next = head;
+    }
+
+    curr = head;
+
+    // look for expansions in the groups we've created, for each one create
+    // a popover with the help text
+    while (curr) {
+        if (curr.name != 'all') {
+            $("span[class^=expansion]", curr.commandselector).each(function() {
+                var kind = $(this).attr("class").slice(10);
+
+                if (_.has(expansions, kind)) {
+                    console.log("adding", kind, "popover to", $(this));
+
+                    var expansion = expansions[kind];
+
+                    $(this).popover({
+                        html: true,
+                        placement: 'bottom',
+                        trigger: 'hover',
+                        title: expansion.title,
+                        content: expansion.content
+                    });
+                }
+                else {
+                    console.log("kind", kind, "has no help text!");
+                }
+            }).css('color', 'red');
+        }
+
+        curr = curr.next;
+        if (curr === head)
+            break;
     }
 
     commandunknowns();
@@ -607,9 +756,10 @@ function drawgrouplines(commandselector, options) {
 
                     // highlight all the <span>'s of the current group
                     $(linkgroup.options).css({'font-weight':'bold'});
-                    // and disable highlighting for expansions that might
+
+                    // and disable highlighting for substitutions that might
                     // be in there
-                    $("span[class^=expansion]", linkgroup.options).css({'font-weight':'normal'});
+                    $("span[class$=substitution]", linkgroup.options).css({'font-weight':'normal'});
                     // and disable transparency
                     $(linkgroup.help).add(linkgroup.options).css({opacity: 1.0});
 

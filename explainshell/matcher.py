@@ -516,6 +516,20 @@ class matcher(bashlex.ast.nodevisitor):
 
         return False
 
+    def visittilde(self, node, value):
+        self.expansions.append(matchwordexpansion(node.pos[0], node.pos[1],
+                                                  'tilde'))
+
+    def visitparameter(self, node, value):
+        try:
+            if int(value):
+                kind = 'digits'
+        except ValueError:
+            kind = helpconstants.parameters.get(value, 'param')
+
+        self.expansions.append(matchwordexpansion(node.pos[0], node.pos[1],
+                                                  'parameter-%s' % kind))
+
     def match(self):
         logger.info('matching string %r', self.s)
 

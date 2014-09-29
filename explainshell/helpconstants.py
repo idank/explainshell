@@ -267,3 +267,15 @@ COMMENT = textwrap.dedent('''<b>COMMENTS</b>
       remaining  characters  on that line to be ignored.  An interactive shell without the <b>interactive_comments</b>
       option enabled does not allow comments.  The <b>interactive_comments</b> option is on by default in  interactive
       shells.''')
+
+parameters = {
+        '*' : 'star',
+        '@' : 'at',
+        '#' : 'pound',
+        '?' : 'question',
+        '-' : 'hyphen',
+        '$' : 'dollar',
+        '!' : 'exclamation',
+        '0' : 'zero',
+        '_' : 'underscore',
+}
