@@ -522,8 +522,8 @@ class matcher(bashlex.ast.nodevisitor):
 
     def visitparameter(self, node, value):
         try:
-            if int(value):
-                kind = 'digits'
+            int(value)
+            kind = 'digits'
         except ValueError:
             kind = helpconstants.parameters.get(value, 'param')
 

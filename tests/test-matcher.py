@@ -423,10 +423,10 @@ class test_matcher(unittest.TestCase):
                                          (39, 40, 'substitution')])
 
     def test_comsub_as_arg(self):
-        cmd = 'withargs $(a)'
+        cmd = 'withargs $(a) $0'
 
         matchedresult = [(0, 8, 'withargs synopsis', 'withargs'),
-                         (9, 13, 'FILE argument', '$(a)')]
+                         (9, 16, 'FILE argument', '$(a) $0')]
 
         m = matcher.matcher(cmd, s)
         groups = m.match()
@@ -434,7 +434,8 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(groups[1].results, matchedresult)
 
         # check expansions
-        self.assertEquals(m.expansions, [(11, 12, 'substitution')])
+        self.assertEquals(m.expansions, [(11, 12, 'substitution'),
+                                         (14, 16, 'parameter-digits')])
 
     def test_comsub_as_first_word(self):
         cmd = '$(a) b'
