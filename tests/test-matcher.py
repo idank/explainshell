@@ -639,3 +639,14 @@ class test_matcher(unittest.TestCase):
         self.assertEquals(len(groups), 2)
         self.assertEquals(groups[0].results, shellresults)
         self.assertEquals(groups[1].results, matchresults)
+
+    def test_no_synopsis(self):
+        cmd = 'nosynopsis a'
+
+        matchresults = [(0, 10, helpconstants.NOSYNOPSIS, 'nosynopsis'),
+                        (11, 12, None, 'a')]
+
+        groups = matcher.matcher(cmd, s).match()
+        self.assertEquals(len(groups), 2)
+        self.assertEquals(groups[0].results, [])
+        self.assertEquals(groups[1].results, matchresults)

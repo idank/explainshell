@@ -19,7 +19,8 @@ class mockstore(object):
         self.manpages = {
                 'bar' : sm('bar.1.gz', 'bar', 'bar synopsis', opts, [], multicommand=True),
                 'baz' : sm('baz.1.gz', 'baz', 'baz synopsis', opts, [], partialmatch=True),
-                'bar foo' : sm('bar-foo.1.gz', 'bar-foo', 'bar foo synopsis', opts, [], partialmatch=True)}
+                'bar foo' : sm('bar-foo.1.gz', 'bar-foo', 'bar foo synopsis', opts, [], partialmatch=True),
+                'nosynopsis' : sm('bar.1.gz', 'bar', None, opts, [])}
 
         self.dup = [sm('dup.1.gz', 'dup', 'dup1 synopsis', opts, []),
                     sm('dup.2.gz', 'dup', 'dup2 synopsis', opts, [])]

@@ -305,7 +305,8 @@ class matcher(bashlex.ast.nodevisitor):
         self.groups.append(mg)
         self.groupstack.append((commandnode, mg, endword))
 
-        self.matches.append(matchresult(startpos, endpos, manpage.synopsis, None))
+        self.matches.append(matchresult(startpos, endpos,
+                            manpage.synopsis or helpconstants.NOSYNOPSIS, None))
         return True
 
     def endcommand(self):
@@ -557,6 +558,11 @@ class matcher(bashlex.ast.nodevisitor):
         # fix each matchgroup seperately
         for group in self.groups:
             if group.results:
+                if getattr(group, 'manpage', None):
+                    # ensure that the program part isn't unknown (i.e. it has
+                    # something as its synopsis)
+                    assert not group.results[0].unknown
+
                 group.results = self._mergeadjacent(group.results)
 
                 # add matchresult.match to existing matches

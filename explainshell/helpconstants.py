@@ -2,6 +2,8 @@
 
 import textwrap
 
+NOSYNOPSIS = 'no synopsis found'
+
 PIPELINES = textwrap.dedent('''   <b>Pipelines</b>
        A  <u>pipeline</u> is a sequence of one or more commands separated by one of the control operators <b>|</b> or <b>|&amp;</b>.  The
        format for a pipeline is:

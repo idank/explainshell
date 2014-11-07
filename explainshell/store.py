@@ -1,7 +1,7 @@
 '''data objects to save processed man pages to mongodb'''
 import pymongo, collections, re, logging
 
-from explainshell import errors, util
+from explainshell import errors, util, helpconstants
 
 logger = logging.getLogger(__name__)
 
@@ -193,6 +193,8 @@ class manpage(object):
         synopsis = d['synopsis']
         if synopsis:
             synopsis = synopsis.encode('utf8')
+        else:
+            synopsis = helpconstants.NOSYNOPSIS
 
         return manpage(d['source'], d['name'], synopsis, paragraphs,
                        [tuple(x) for x in d['aliases']], d['partialmatch'],
