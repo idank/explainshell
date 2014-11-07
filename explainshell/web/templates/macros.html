@@ -19,12 +19,12 @@
 
 {%- macro outputcommandexplain(d) -%}
     {% if d.suggestions|length == 0 -%}
-    <span {{ spanclasses(d) }} style="word-spacing: 0px;"><a href="/explain/{{ d.section }}/{{ d.source }}">{{ d.match|e }}</a></span>
+    <span {{ spanclasses(d) }} style="word-spacing: 0px;"><a href="/explain/{{ d.section }}/{{ d.source }}">{{ d.match|safe }}</a></span>
     {%- else -%}
                 <span class="dropdown">
                     <span style="word-spacing: 0px;">
                     <b class="caret" data-toggle="dropdown"></b>
-                    <span {{ spanclasses(d) }}><a href="/explain/{{ d.section }}/{{ d.source }}">{{ d.match|e }}</a></span>
+                    <span {{ spanclasses(d) }}><a href="/explain/{{ d.section }}/{{ d.source }}">{{ d.match|safe }}</a></span>
                     <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu">
                       <li>other manpages</li>
                       <li class="divider"></li>
