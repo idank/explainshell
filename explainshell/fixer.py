@@ -3,6 +3,10 @@ import textwrap, logging
 from explainshell import util
 
 class basefixer(object):
+    '''The base fixer class which other fixers inherit from.
+
+    Subclasses override the base methods in order to fix manpage content during
+    different parts of the parsing/classifying/saving process.'''
     runbefore = []
     runlast = False
 
@@ -36,6 +40,7 @@ fixerscls = []
 fixerspriority = {}
 
 class runner(object):
+    '''The runner coordinates the fixers.'''
     def __init__(self, mctx):
         self.mctx = mctx
         self.fixers = [f(mctx) for f in fixerscls]
