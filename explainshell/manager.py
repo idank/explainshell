@@ -102,12 +102,13 @@ class manager(object):
                         assert len(mps) == 1
                         mp = mps[0]
                         if not self.overwrite or mp.updated:
-                            logger.info('manpage %r already in store, not overwriting it', m.name)
+                            logger.info('manpage %r already in the data store, not overwriting it', m.name)
                             exists.append(m)
                             continue
                 except errors.ProgramDoesNotExist:
                     pass
 
+                # the manpage is not in the data store; process and add it
                 ctx = self.ctx(m)
                 m = self.process(ctx)
                 if m:

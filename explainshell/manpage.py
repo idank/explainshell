@@ -122,6 +122,7 @@ def _parsetext(lines):
         l = re.sub(_href, r'<a href="http://manpages.ubuntu.com/manpages/precise/en/man\2/\1.\2.html">', l)
         for lookfor, replacewith in _replacements:
             l = re.sub(lookfor, replacewith, l)
+        # confirm the line is valid utf8
         lreplaced = l.decode('utf8', 'ignore').encode('utf8')
         if lreplaced != l:
             logger.error('line %r contains invalid utf8', l)
@@ -176,6 +177,8 @@ class manpage(object):
         self._text = None
 
     def read(self):
+        '''Read the content from a local manpage file and store it in usable formats
+        on the class instance.'''
         cmd = [config.MAN2HTML, urllib.urlencode({'local' : os.path.abspath(self.path)})]
         logger.info('executing %r', ' '.join(cmd))
         self._text = subprocess.check_output(cmd, stderr=devnull, env=ENV)
