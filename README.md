@@ -40,9 +40,10 @@ and I'll add it.
 
 To setup a working environment that lets you run the web interface locally, you'll need to:
 
+    # Install python dependencies.
     $ pip install -r requirements.txt
 
-    # load classifier data, needs a mongodb
+    # Load classifier data. Needs a mongodb instance running.
     $ mongorestore dump/explainshell && mongorestore -d explainshell_tests dump/explainshell
     $ make tests
     .....................................................
@@ -53,7 +54,12 @@ To setup a working environment that lets you run the web interface locally, you'
 
 ### Processing a man page
 
-Use the manager to parse and save a gzipped man page in raw format:
+Manpages are processed from gzipped source into a useful format in the MongoDB before
+they can be served by the explainshell front-end.
+
+A few manpage gzipped sources are included in [manpages/1/](manpages/1/) and [manpages/8/](manpages/8/).
+
+Use the manager process one:
 
     $ python explainshell/manager.py --log info manpages/1/echo.1.gz
     INFO:explainshell.store:creating store, db = 'explainshell_tests', host = 'mongodb://localhost'
@@ -68,6 +74,8 @@ Use the manager to parse and save a gzipped man page in raw format:
     INFO:explainshell.algo.classifier:classified <paragraph 7, DESCRIPTION: '--version'> (0.999993) as an option paragraph
     INFO:explainshell.store:inserting mapping (alias) echo -> echo (52207a1fa9b52e42fb59df36) with score 10
     successfully added echo
+
+Download all manpages with [extractgzlist](tools/extractgzlist) and [dlgzlist](tools/dlgzlist).
 
 ### Start up a local web server:
 
