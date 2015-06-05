@@ -2,3 +2,6 @@
 *.swp
 .coverage
 .vagrant
+
+# added by GitSavvy
+/application.log

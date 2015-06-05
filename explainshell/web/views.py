@@ -29,6 +29,8 @@ def formatted_response(fmt, status, **kwargs):
     if fmt == 'html':
         return render_template(STATUS_TYPE_TEMPLATES[status], **kwargs)
     else:
+        if 'e' in kwargs:
+            kwargs['e'] = repr(kwargs['e'])
         return jsonify(status=status, **kwargs)
 
 def generic_explain(fmt):
@@ -49,21 +51,21 @@ def generic_explain(fmt):
                                   getargs=command)
 
     except errors.ProgramDoesNotExist, e:
-        return formatted_response('missingmanpage', title='missing man page', e=e)
+        return formatted_response(fmt, 'missingmanpage', title='missing man page', e=e)
     except bashlex.errors.ParsingError, e:
         logger.warn('%r parsing error: %s', command, e.message)
-        return formatted_response('parsingerror', title='parsing error!', e=e)
+        return formatted_response(fmt, 'parsingerror', title='parsing error!', e=e)
     except NotImplementedError, e:
         logger.warn('not implemented error trying to explain %r', command)
         msg = ("the parser doesn't support %r constructs in the command you tried. you may "
                "<a href='https://github.com/idank/explainshell/issues'>report a "
                "bug</a> to have this added, if one doesn't already exist.") % e.args[0]
 
-        return formatted_response('error', title='error!', message=msg)
+        return formatted_response(fmt, 'error', title='error!', message=msg)
     except:
         logger.error('uncaught exception trying to explain %r', command, exc_info=True)
         msg = 'something went wrong... this was logged and will be checked'
-        return formatted_response('error', title='error!', message=msg)
+        return formatted_response(fmt, 'error', title='error!', message=msg)
 
 
 @app.route('/api/explain')
