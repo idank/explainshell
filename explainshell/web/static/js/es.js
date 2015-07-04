@@ -409,11 +409,11 @@ function commandunknowns() {
             // only add the link to the missing man page issue if we haven't
             // had any expansions in this group (since those might already contain
             // links)
-            if (!$this.hasClass('hasexpansion')) {
-                var link = $("<a/>").text($this.text())
-                                    .attr('href', 'https://github.com/idank/explainshell/issues/1');
-                $this.html(link);
-            }
+            // if (!$this.hasClass('hasexpansion')) {
+            //     var link = $("<a/>").text($this.text())
+            //                         .attr('href', 'https://github.com/idank/explainshell/issues/1');
+            //     $this.html(link);
+            // }
         }
         else
             this.title = "No matching help text found for this argument";
