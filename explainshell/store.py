@@ -263,13 +263,16 @@ class store(object):
             logger.info('returning %s', m)
             return [m]
 
+        section = None
         origname = name
-        splitted = name.rsplit('.', 1)
-        name = splitted[0]
-        if len(splitted) > 1:
-            section = splitted[1]
-        else:
-            section = None
+
+        # don't try to look for a section if it's . (source)
+        if name != '.':
+            splitted = name.rsplit('.', 1)
+            name = splitted[0]
+            if len(splitted) > 1:
+                section = splitted[1]
+
         logger.info('looking up manpage in mapping with src %r', name)
         cursor = self.mapping.find({'src' : name})
         count = cursor.count()
