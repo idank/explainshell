@@ -62,6 +62,7 @@ def explainold(section, program):
     if section is not None:
         program = '%s.%s' % (program, section)
 
+    # keep links to old urls alive
     if 'args' in request.args:
         args = request.args['args']
         command = '%s %s' % (program, args)
