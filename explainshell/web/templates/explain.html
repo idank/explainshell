@@ -59,6 +59,13 @@
             navigation();
 
             $(document).ready(function() {
+                // set the query in the top search box from the url. assumes we
+                // take a single parameter.
+                if (window.location.search.split("&").length == 1) {
+                    var cmdquery = window.location.search.substr("?cmd=".length);
+                    $("#top-search").val(decodeURIComponent(cmdquery));
+                }
+
                 // when #command-wrapper position is changed to fixed, it'll be removed
                 // from the normal flow, and everything below it will up. we use this div
                 // to prevent that.
