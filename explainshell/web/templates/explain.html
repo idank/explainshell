@@ -63,7 +63,7 @@
                 // take a single parameter.
                 if (window.location.search.split("&").length == 1) {
                     var cmdquery = window.location.search.substr("?cmd=".length);
-                    $("#top-search").val(decodeURIComponent(cmdquery).replace(/\+/g, ' '));
+                    $("#top-search").val(decodeURIComponent(cmdquery.replace(/\+/g, ' ')));
                 }
 
                 // when #command-wrapper position is changed to fixed, it'll be removed
