@@ -12,9 +12,8 @@ explainshell is built from the following components:
    it as contains options or not (algo/classifier.py)
 3. an options extractor that scans classified paragraphs and looks for options (options.py)
 4. a storage backend that saves processed man pages to mongodb (store.py)
-5. a (recursive) parser that supports a subset of shell syntax, such as
-   redirections, pipelines, lists, compound commands (notably missing is
-   support for command substitutions) (parser.py)
+5. a matcher that walks the command's AST (parsed by [bashlex](https://github.com/idank/bashlex)) and contextually matches each node
+   to the relevant help text (matcher.py)
 
 When querying explainshell, it:
 
