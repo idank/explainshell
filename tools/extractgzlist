@@ -4,7 +4,7 @@ release="precise"
 section="8"
 man1list="http://manpages.ubuntu.com/manpages/$release/en/man$section/"
 gzroot="http://manpages.ubuntu.com/manpages.gz/$release/man$section/"
-filename="index$secion.html"
+filename="index$section.html"
 
 if ! [ -f $filename ]; then
 	curl -o $filename "$man1list"
