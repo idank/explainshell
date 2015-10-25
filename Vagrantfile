@@ -49,6 +49,22 @@ Vagrant.configure("2") do |config|
   # View the documentation for the provider you're using for more
   # information on available options.
 
+  # Enable provisioning with a shell script. Additional provisioners such as
+  # Puppet, Chef, Ansible, Salt, and Docker are also available. Please see the
+  # documentation for more information about their specific syntax and use.
+  config.vm.provision "shell", inline: <<-SHELL
+    # http://redsymbol.net/articles/unofficial-bash-strict-mode/
+    set -euo pipefail
+
+    sudo apt-get update
+    sudo apt-get install -y python-pip mongodb make
+
+    cd /vagrant
+    sudo apt-get install -y build-essential python-dev # so pip doesn't complain
+    sudo pip install -r requirements.txt
+    mongorestore dump/explainshell && mongorestore -d explainshell_tests dump/explainshell
+  SHELL
+
   # Enable provisioning with Puppet stand alone.  Puppet manifests
   # are contained in a directory path relative to this Vagrantfile.
   # You will need to create the manifests directory and a manifest in
