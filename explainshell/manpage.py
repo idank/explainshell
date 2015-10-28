@@ -9,6 +9,7 @@ ENV = dict(os.environ)
 ENV["W3MMAN_MAN"] = "man --no-hyphenation"
 ENV["MAN_KEEP_FORMATTING"] = "1"
 ENV["MANWIDTH"] = "115"
+ENV["LC_ALL"] = "en_US.UTF-8"
 
 logger = logging.getLogger(__name__)
 
