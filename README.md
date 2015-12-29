@@ -39,63 +39,71 @@ and I'll add it.
 
 To setup a working environment that lets you run the web interface locally, you'll need to:
 
-    $ pip install -r requirements.txt
+```ShellSession
+$ pip install -r requirements.txt
 
-    # load classifier data, needs a mongodb
-    $ mongorestore dump/explainshell && mongorestore -d explainshell_tests dump/explainshell
-    $ make tests
-    .....................................................
-    ----------------------------------------------------------------------
-    Ran 53 tests in 2.847s
+# load classifier data, needs a mongodb
+$ mongorestore dump/explainshell && mongorestore -d explainshell_tests dump/explainshell
+$ make tests
+.....................................................
+----------------------------------------------------------------------
+Ran 53 tests in 2.847s
 
-    OK
+OK
+```
 
 ### Processing a man page
 
 Use the manager to parse and save a gzipped man page in raw format:
 
-    $ PYTHONPATH=. python explainshell/manager.py --log info manpages/1/echo.1.gz
-    INFO:explainshell.store:creating store, db = 'explainshell_tests', host = 'mongodb://localhost'
-    INFO:explainshell.algo.classifier:train on 994 instances
-    INFO:explainshell.manager:handling manpage echo (from /tmp/es/manpages/1/echo.1.gz)
-    INFO:explainshell.store:looking up manpage in mapping with src 'echo'
-    INFO:explainshell.manpage:executing '/tmp/es/tools/w3mman2html.cgi local=%2Ftmp%2Fes%2Fmanpages%2F1%2Fecho.1.gz'
-    INFO:explainshell.algo.classifier:classified <paragraph 3, DESCRIPTION: '-n     do not output the trailing newlin'> (0.991381) as an option paragraph
-    INFO:explainshell.algo.classifier:classified <paragraph 4, DESCRIPTION: '-e     enable interpretation of backslash escape'> (0.996904) as an option paragraph
-    INFO:explainshell.algo.classifier:classified <paragraph 5, DESCRIPTION: '-E     disable interpretation of backslash escapes (default'> (0.998640) as an option paragraph
-    INFO:explainshell.algo.classifier:classified <paragraph 6, DESCRIPTION: '--help display this help and exi'> (0.999215) as an option paragraph
-    INFO:explainshell.algo.classifier:classified <paragraph 7, DESCRIPTION: '--version'> (0.999993) as an option paragraph
-    INFO:explainshell.store:inserting mapping (alias) echo -> echo (52207a1fa9b52e42fb59df36) with score 10
-    successfully added echo
+```ShellSession
+$ PYTHONPATH=. python explainshell/manager.py --log info manpages/1/echo.1.gz
+INFO:explainshell.store:creating store, db = 'explainshell_tests', host = 'mongodb://localhost'
+INFO:explainshell.algo.classifier:train on 994 instances
+INFO:explainshell.manager:handling manpage echo (from /tmp/es/manpages/1/echo.1.gz)
+INFO:explainshell.store:looking up manpage in mapping with src 'echo'
+INFO:explainshell.manpage:executing '/tmp/es/tools/w3mman2html.cgi local=%2Ftmp%2Fes%2Fmanpages%2F1%2Fecho.1.gz'
+INFO:explainshell.algo.classifier:classified <paragraph 3, DESCRIPTION: '-n     do not output the trailing newlin'> (0.991381) as an option paragraph
+INFO:explainshell.algo.classifier:classified <paragraph 4, DESCRIPTION: '-e     enable interpretation of backslash escape'> (0.996904) as an option paragraph
+INFO:explainshell.algo.classifier:classified <paragraph 5, DESCRIPTION: '-E     disable interpretation of backslash escapes (default'> (0.998640) as an option paragraph
+INFO:explainshell.algo.classifier:classified <paragraph 6, DESCRIPTION: '--help display this help and exi'> (0.999215) as an option paragraph
+INFO:explainshell.algo.classifier:classified <paragraph 7, DESCRIPTION: '--version'> (0.999993) as an option paragraph
+INFO:explainshell.store:inserting mapping (alias) echo -> echo (52207a1fa9b52e42fb59df36) with score 10
+successfully added echo
+```
 
 ### Start up a local web server:
 
-    $ make serve
-    python runserver.py
-     * Running on http://127.0.0.1:5000/
-     * Restarting with reloader
+```ShellSession
+$ make serve
+python runserver.py
+ * Running on http://127.0.0.1:5000/
+ * Restarting with reloader
+```
 
 ### Start up a local web server with docker
 
-    Build docker web and db containers
-    $ docker-compose build
-    $ docker-compose up
+```ShellSession
+Build docker web and db containers
+$ docker-compose build
+$ docker-compose up
 
-    Copy dump over to container for than to import it.
-    $ docker cp dump/ explainshell_db_1:/tmp/dump
+Copy dump over to container for than to import it.
+$ docker cp dump/ explainshell_db_1:/tmp/dump
 
-    Import classifiers
-    $ docker exec explainshell_db_1 mongorestore /tmp/dump
+Import classifiers
+$ docker exec explainshell_db_1 mongorestore /tmp/dump
 
-    Import a man page
-    $ docker exec explainshell_web_1 PYTHONPATH=. python explainshell/manager.py --log info /usr/share/man/man1/rsync.1.gz
+Import a man page
+$ docker exec explainshell_web_1 PYTHONPATH=. python explainshell/manager.py --log info /usr/share/man/man1/rsync.1.gz
 
-    Open browser at port 5000
-    $ open http://localhost:5000
+Open browser at port 5000
+$ open http://localhost:5000
 
-    ## Run tests
-    Restore test db to run tests
-    $ docker exec explainshell_db_1 mongorestore -d explainshell_tests /tmp/dump/explainshell
+## Run tests
+Restore test db to run tests
+$ docker exec explainshell_db_1 mongorestore -d explainshell_tests /tmp/dump/explainshell
 
-    Run test
-    $ docker exec explainshell_web_1 make tests
+Run test
+$ docker exec explainshell_web_1 make tests
+```
