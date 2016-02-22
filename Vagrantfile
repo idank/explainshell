@@ -16,7 +16,7 @@ Vagrant.configure("2") do |config|
   # Create a forwarded port mapping which allows access to a specific port
   # within the machine from a port on the host machine. In the example below,
   # accessing "localhost:8080" will access port 80 on the guest machine.
-  config.vm.network :forwarded_port, guest: 80, host: 8080
+  config.vm.network :forwarded_port, guest: 5000, host: 8080
   config.vm.network :forwarded_port, guest: 27017, host: 27027
 
   # Create a private network, which allows host-only access to the machine
@@ -63,7 +63,16 @@ Vagrant.configure("2") do |config|
     sudo apt-get install -y build-essential python-dev # so pip doesn't complain
     sudo pip install -r requirements.txt
     mongorestore dump/explainshell && mongorestore -d explainshell_tests dump/explainshell
+
+    echo 'importing grep man page'
+    PYTHONPATH=. python explainshell/manager.py --log info /usr/share/man/man1/grep.1.gz
   SHELL
+
+  config.vm.provision 'shell', run: 'always', inline: <<-RUN
+    cd /vagrant
+    export HOST_IP="0.0.0.0"
+    make serve &
+  RUN
 
   # Enable provisioning with Puppet stand alone.  Puppet manifests
   # are contained in a directory path relative to this Vagrantfile.
