@@ -5,4 +5,4 @@ import logging.config
 logging.config.dictConfig(config.LOGGING_DICT)
 
 if __name__ == '__main__':
-    app.run(debug=config.DEBUG)
+    app.run(debug=config.DEBUG,host='0.0.0.0')
