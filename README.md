@@ -45,9 +45,9 @@ $ pip install -r requirements.txt
 # load classifier data, needs a mongodb
 $ mongorestore dump/explainshell && mongorestore -d explainshell_tests dump/explainshell
 $ make tests
-.....................................................
+..............................................................................
 ----------------------------------------------------------------------
-Ran 53 tests in 2.847s
+Ran 79 tests in 3.847s
 
 OK
 ```
@@ -84,26 +84,31 @@ python runserver.py
 ### Start up a local web server with docker
 
 ```ShellSession
-Build docker web and db containers
+# Build docker web and db containers
 $ docker-compose build
 $ docker-compose up
 
-Copy dump over to container for than to import it.
+# Copy dump over to container for than to import it.
 $ docker cp dump/ explainshell_db_1:/tmp/dump
 
-Import classifiers
+# Import classifiers
 $ docker exec explainshell_db_1 mongorestore /tmp/dump
 
-Import a man page
-$ docker exec explainshell_web_1 PYTHONPATH=. python explainshell/manager.py --log info /usr/share/man/man1/rsync.1.gz
+# Import a man page
+$ docker exec explainshell_web_1 bash -c "PYTHONPATH=. python explainshell/manager.py --log info /usr/share/man/man1/grep.1.gz"
+...
+successfully added grep.1.gz
 
-Open browser at port 5000
+# Open browser at port 5000
 $ open http://localhost:5000
 
-## Run tests
-Restore test db to run tests
+# Restore test db to run tests
 $ docker exec explainshell_db_1 mongorestore -d explainshell_tests /tmp/dump/explainshell
 
-Run test
 $ docker exec explainshell_web_1 make tests
+..............................................................................
+----------------------------------------------------------------------
+Ran 79 tests in 3.847s
+
+OK
 ```
