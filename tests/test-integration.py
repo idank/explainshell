@@ -1,10 +1,10 @@
 import unittest, subprocess, pymongo, os
 
-from explainshell import manager, matcher
+from explainshell import manager, config, matcher
 
 class test_integration(unittest.TestCase):
     def test(self):
-        mngr = manager.manager('localhost', 'explainshell_tests', [os.path.join(os.path.dirname(__file__), 'echo.1.gz')], drop=True)
+        mngr = manager.manager(config.MONGO_URI, 'explainshell_tests', [os.path.join(os.path.dirname(__file__), 'echo.1.gz')], drop=True)
         mngr.run()
 
         cmd = 'echo -en foobar --version'

@@ -8,7 +8,8 @@ TOOLSDIR = os.path.join(_currdir, 'tools')
 
 MAN2HTML = os.path.join(TOOLSDIR, 'w3mman2html.cgi')
 
-MONGO_URI = 'mongodb://localhost'
+HOST_IP = False
+MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost')
 DEBUG = True
 
 LOGGING_DICT = {
@@ -41,3 +42,7 @@ LOGGING_DICT = {
         }
     }
 }
+
+# load additional config from an out-of-tree file
+if os.getenv('ADDITIONAL_CONFIG'):
+    execfile(os.getenv('ADDITIONAL_CONFIG'))

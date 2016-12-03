@@ -11,7 +11,7 @@ class test_manager(unittest.TestCase):
         for n in names:
             l.append(os.path.join(config.MANPAGEDIR, '1', n))
 
-        m = manager.manager('localhost', 'explainshell_tests', l, **kwargs)
+        m = manager.manager(config.MONGO_URI, 'explainshell_tests', l, **kwargs)
         return m
 
     def test(self):
@@ -87,7 +87,7 @@ class test_manager(unittest.TestCase):
         self.assertEquals(m.store.mapping.count(), 1)
         self.assertEquals(len(list(m.store)), 1)
 
-        m = manager.manager('localhost', 'explainshell_tests', [os.path.join(config.MANPAGEDIR, '1', 'tar.1.gz')], overwrite=True)
+        m = manager.manager(config.MONGO_URI, 'explainshell_tests', [os.path.join(config.MANPAGEDIR, '1', 'tar.1.gz')], overwrite=True)
         a, e = m.run()
         self.assertTrue(a)
         self.assertFalse(e)
@@ -125,7 +125,7 @@ class test_manager(unittest.TestCase):
 
     def test_samename(self):
         pages = [os.path.join(config.MANPAGEDIR, '1', 'node.1.gz'), os.path.join(config.MANPAGEDIR, '8', 'node.8.gz')]
-        m = manager.manager('localhost', 'explainshell_tests', pages)
+        m = manager.manager(config.MONGO_URI, 'explainshell_tests', pages)
         a, e = m.run()
         self.assertEquals(len(a), 2)
         self.assertEquals(len(m.store.findmanpage('node')), 2)
