@@ -8,7 +8,9 @@ TOOLSDIR = os.path.join(_currdir, 'tools')
 
 MAN2HTML = os.path.join(TOOLSDIR, 'w3mman2html.cgi')
 
-MONGO_URI = 'mongodb://localhost'
+# host to pass into Flask's app.run.
+HOST_IP = os.getenv('HOST_IP', False)
+MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost')
 DEBUG = True
 
 LOGGING_DICT = {

@@ -1,7 +1,7 @@
 '''data objects to save processed man pages to mongodb'''
 import pymongo, collections, re, logging
 
-from explainshell import errors, util, helpconstants
+from explainshell import errors, util, helpconstants, config
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +215,7 @@ class store(object):
     2) manpage - contains a processed man page
     3) mapping - contains (name, manpageid, score) tuples
     '''
-    def __init__(self, db='explainshell', host='localhost'):
+    def __init__(self, db='explainshell', host=config.MONGO_URI):
         logger.info('creating store, db = %r, host = %r', db, host)
         self.connection = pymongo.MongoClient(host)
         self.db = self.connection[db]
