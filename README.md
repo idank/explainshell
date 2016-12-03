@@ -74,3 +74,29 @@ Use the manager to parse and save a gzipped man page in raw format:
     python runserver.py
      * Running on http://127.0.0.1:5000/
      * Restarting with reloader
+
+### Start up a local web server with docker
+
+    Build docker web and db containers
+    $ docker-compose build
+    $ docker-compose up
+
+    Copy dump over to container for than to import it.
+    $ docker cp dump/ explainshell_db_1:/tmp/dump
+
+    Import classifiers
+    $ docker exec explainshell_db_1 mongorestore /tmp/dump
+
+    Import a man page
+    $ docker exec explainshell_web_1 PYTHONPATH=. python explainshell/manager.py --log info /usr/share/man/man1/rsync.1.gz
+
+    Open browser at port 5000
+    $ open http://localhost:5000
+
+    ## Run tests
+    Restore test db to run tests
+    $ docker exec explainshell_db_1 mongorestore -d explainshell_tests /tmp/dump/explainshell
+
+    Run test
+    $ docker exec explainshell_web_1 make tests
+

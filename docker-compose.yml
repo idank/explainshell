@@ -1,0 +1,17 @@
+version: '2'
+services:
+  db:
+    image: mongo
+  web:
+    build: .
+    command: make serve
+    environment:
+      - MONGO_URI=mongodb://db
+      - HOST_IP=0.0.0.0
+      - ADDITIONAL_CONFIG=explainshell/config_docker.py
+    volumes:
+      - .:/opt/webapp
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
