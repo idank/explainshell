@@ -232,9 +232,14 @@ def formatmatch(d, m, expansions):
             s = m.match[relativestart:relativeend]
 
             if kind == 'substitution':
-                content = markupsafe.Markup('<a href="/explain?cmd={0}" '
-                                            'title="Zoom in to nested command">{0}'
-                                            '</a>').format(s)
+                content = markupsafe.Markup('<a href="/explain?{query}" '
+                                            'title="Zoom in to nested command">{cmd}'
+                                            '</a>').format({
+                                                'cmd': s,
+                                                'query': urllib.urlencode({
+                                                    'cmd': s,
+                                                }),
+                                            })
             else:
                 content = s
 
