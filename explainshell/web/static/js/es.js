@@ -391,7 +391,10 @@ function assigncolors() {
     var shuffledcolors = _.shuffle(colors);
 
     $("#help pre").each(function() {
-        assignedcolors[$(this).attr('id')] = shuffledcolors.shift();
+        color = shuffledcolors.shift();
+        shuffledcolors.push(color);
+
+        assignedcolors[$(this).attr('id')] = color;
     });
 
     assignedcolors[null] = shuffledcolors.shift();
