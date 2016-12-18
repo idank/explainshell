@@ -10,6 +10,26 @@ a {
     color: #5795f3;
 }
 
+.logo a {
+    font-family: 'Berkshire Swash', cursive;
+    font-size: 66px;
+    color: black;
+    text-decoration: none;
+    background-image:url(/static/img/logo.png);
+    height: 132px;
+    display: inline-block;
+    background-repeat: no-repeat;
+    background-position: 276px 21px;
+    margin-bottom: -41px;
+    margin-top: 21px;
+}
+.logo a .shell {
+    color: #5795f3;
+}
+.logo a .dotcom {
+    font-size:smaller;
+}
+
 .program-text {
     font-weight: bold;
 }
