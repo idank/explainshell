@@ -232,14 +232,7 @@ def formatmatch(d, m, expansions):
             s = m.match[relativestart:relativeend]
 
             if kind == 'substitution':
-                content = markupsafe.Markup('<a href="/explain?{query}" '
-                                            'title="Zoom in to nested command">{cmd}'
-                                            '</a>').format({
-                                                'cmd': s,
-                                                'query': urllib.urlencode({
-                                                    'cmd': s,
-                                                }),
-                                            })
+                content = markupsafe.Markup(_substitutionmarkup(s))
             else:
                 content = s
 
@@ -252,6 +245,17 @@ def formatmatch(d, m, expansions):
 
     assert expandedmatch
     d['match'] = expandedmatch
+
+def _substitutionmarkup(cmd):
+    '''
+    >>> _substitutionmarkup('foo')
+    '<a href="/explain?cmd=foo" title="Zoom in to nested command">foo</a>'
+    >>> _substitutionmarkup('cat <&3')
+    '<a href="/explain?cmd=cat+%3C%263" title="Zoom in to nested command">cat <&3</a>'
+    '''
+    encoded = urllib.urlencode({'cmd': cmd})
+    return ('<a href="/explain?{query}" title="Zoom in to nested command">{cmd}'
+            '</a>').format(cmd=cmd, query=encoded)
 
 def _checkoverlaps(s, matches):
     explained = [None]*len(s)
