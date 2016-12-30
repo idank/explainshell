@@ -156,7 +156,7 @@ function eslink(clazz, option, mid, color) {
     // unknown links can go either down or up
     this.directiondown = true;
 
-    // clazz isthe name of the current group (shell, command0, command1..)
+    // clazz is the name of the current group (shell, command0, command1..)
     if (clazz) {
         // the matching <pre> in .help
         this.help = $("#" + clazz)[0];
@@ -453,7 +453,7 @@ function drawgrouplines(commandselector, options) {
         unknownlinelength = 15, strokewidth = 1;
 
     var canvas = d3.select("#canvas"),
-        canvastop = $("#canvas")[0].getBoundingClientRect().top;
+        canvasTop = $("#canvas")[0].getBoundingClientRect().top;
 
     // if the current group isn't 'all', hide the rest of the help <pre>'s, and show
     // the <pre>'s help of the current group
@@ -481,10 +481,10 @@ function drawgrouplines(commandselector, options) {
     if (helpselector(commandselector).length > 0) {
         // the height of the canvas is determined by the bottom of the last visible <pre>
         // in #help
-        $("#canvas").height($("#help pre:visible").last()[0].getBoundingClientRect().bottom - canvastop);
+        $("#canvas").height($("#help pre:visible").last()[0].getBoundingClientRect().bottom - canvasTop);
 
         // need to recompute the top of the canvas after height change
-        canvastop = $("#canvas")[0].getBoundingClientRect().top;
+        canvasTop = $("#canvas")[0].getBoundingClientRect().top;
     }
 
     var commandrect = $("#command")[0].getBoundingClientRect(),
@@ -520,8 +520,8 @@ function drawgrouplines(commandselector, options) {
     // an array of all the links we need to make, ungrouped
     var links = _.flatten(_.pluck(linkgroups, 'links'), true),
         // the upper bounds of our drawing area
-        starty = commandrect.bottom - canvastop,
-        startytop = commandrect.top - canvastop;
+        starty = commandrect.bottom - canvasTop,
+        startytop = commandrect.top - canvasTop;
 
     // links that are going left and right, in the order we'd like to process
     // them. we reverse right going links so we handle them right-to-left.
@@ -610,7 +610,7 @@ function drawgrouplines(commandselector, options) {
             }
         }
         else {
-            // handle right going links, similiarly to left
+            // handle right going links, similarly to left
             var rightmost = link.rightmost();
 
             if (link == rightmost) {
