@@ -645,9 +645,9 @@ function drawgrouplines(commandselector, options) {
     $.each(unknowngroup.links, function(i, link) {
         var rr = link.option.getBoundingClientRect(),
             rrright = rr.right - strokewidth,
-            nextspan = $(link.option).next()[0],
+            nextspan = link.option.nextElementSibling,
             nextlink = _.find(links, function(l) { return l.option == nextspan; }),
-            prevspan = $(link.option).prev()[0],
+            prevspan = link.option.previousElementSibling,
             prevlink = _.find(links, function(l) { return l.option == prevspan; });
 
         link.unknown = true;
