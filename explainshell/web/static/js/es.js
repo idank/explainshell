@@ -156,7 +156,7 @@ function eslink(clazz, option, mid, color) {
     // unknown links can go either down or up
     this.directiondown = true;
 
-    // clazz isthe name of the current group (shell, command0, command1..)
+    // clazz is the name of the current group (shell, command0, command1..)
     if (clazz) {
         // the matching <pre> in .help
         this.help = $("#" + clazz)[0];
@@ -610,7 +610,7 @@ function drawgrouplines(commandselector, options) {
             }
         }
         else {
-            // handle right going links, similiarly to left
+            // handle right going links, similarly to left
             var rightmost = link.rightmost();
 
             if (link == rightmost) {
