@@ -520,7 +520,7 @@ function drawgrouplines(commandselector, options) {
     // an array of all the links we need to make, ungrouped
     var links = _.flatten(_.pluck(linkgroups, 'links'), true),
         // the upper bounds of our drawing area
-        starty = commandWrapperRect.bottom - canvasTop,
+        marginBetweenCommandAndCanvas = commandWrapperRect.bottom - canvasTop,
         startytop = commandWrapperRect.top - canvasTop;
 
     // links that are going left and right, in the order we'd like to process
@@ -571,6 +571,8 @@ function drawgrouplines(commandselector, options) {
         var commandRect = link.option.getBoundingClientRect(),
             spanmid = commandRect.left + commandRect.width / 2,
             commandRight = commandRect.right - strokewidth;
+
+        link.starty = commandRect.bottom - commandWrapperRect.top + 1;
 
         // points for marker under command
         link.paths.push(new espath().addpoint(commandRect.left, 0).addpoint(commandRight, 5));
@@ -650,6 +652,7 @@ function drawgrouplines(commandselector, options) {
             prevspan = link.option.previousElementSibling,
             prevlink = _.find(links, function(l) { return l.option == prevspan; });
 
+        link.starty = link.option.getBoundingClientRect().bottom - link.option.parentElement.getBoundingClientRect().top + 1;
         link.unknown = true;
         link.text = "?";
 
@@ -699,7 +702,7 @@ function drawgrouplines(commandselector, options) {
         var g = d3.select(this);
 
         if (link.directiondown)
-            g.attr('transform', 'translate(0, ' + starty + ')');
+            g.attr('transform', 'translate(0, ' + link.starty + ')');
 
         var paths = g.selectAll('path')
             .data(link.paths)
