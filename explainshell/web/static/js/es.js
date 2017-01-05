@@ -568,15 +568,15 @@ function drawgrouplines(commandselector, options) {
         var link = links[i];
 
         console.log('handling', $(link.option).text());
-        var rr = link.option.getBoundingClientRect(),
-            spanmid = rr.left + rr.width / 2,
-            rrright = rr.right - strokewidth;
+        var commandRect = link.option.getBoundingClientRect(),
+            spanmid = commandRect.left + commandRect.width / 2,
+            commandRight = commandRect.right - strokewidth;
 
+        // points for marker under command
+        link.paths.push(new espath().addpoint(commandRect.left, 0).addpoint(commandRight, 5));
+        link.paths.push(new espath().addpoint(commandRight, 5).addpoint(commandRight, 0));
         var path = new espath();
-
-        link.paths.push(new espath().addpoint(rr.left, 0).addpoint(rrright, 5));
-        link.paths.push(new espath().addpoint(rrright, 5).addpoint(rrright, 0));
-        path.addpoint(rr.left + rr.width / 2, 5); // 3
+        path.addpoint(spanmid, 5); // 3
 
         var topskip, y, p, pp;
 
