@@ -573,10 +573,16 @@ function drawgrouplines(commandselector, options) {
             commandRight = commandRect.right - strokewidth;
 
         link.starty = commandRect.bottom - commandWrapperRect.top + 1;
+        var commandOffsetToCanvas = marginBetweenCommandAndCanvas - link.starty
 
         // points for marker under command
-        link.paths.push(new espath().addpoint(commandRect.left, 0).addpoint(commandRight, 5));
-        link.paths.push(new espath().addpoint(commandRight, 5).addpoint(commandRight, 0));
+        link.paths.push(new espath()
+          .addpoint(commandRect.left, 0)
+          .addpoint(commandRect.left, 5)
+          .addpoint(commandRight, 5)
+          .addpoint(commandRight, 0)
+        );
+
         var path = new espath();
         path.addpoint(spanmid, 5); // 3
 
@@ -592,10 +598,10 @@ function drawgrouplines(commandselector, options) {
             // this line
             if (link == leftmost) {
                 topskip = topheight / goingleft;
-                y = topskip * goneleft + topskip;
+                y = topskip * goneleft + topskip + commandOffsetToCanvas;
                 path.addpoint(left - ((goingleft - goneleft) * sidespace), y); // 4
                 helprect = link.help.getBoundingClientRect();
-                y = helprect.top - commandWrapperRect.bottom + helprect.height / 2;
+                y = (helprect.top - commandWrapperRect.bottom + helprect.height / 2) + commandOffsetToCanvas;
                 path.addpoint(left, y);
 
                 link.circle = {x: left+3, y: y, r: 4};
@@ -617,10 +623,10 @@ function drawgrouplines(commandselector, options) {
 
             if (link == rightmost) {
                 topskip = topheight / goingright;
-                y = topskip * goneright + topskip;
+                y = topskip * goneright + topskip + commandOffsetToCanvas;
                 path.addpoint(right + ((goingright - goneright) * sidespace), y); // 4
                 helprect = link.help.getBoundingClientRect();
-                y = helprect.top - commandWrapperRect.bottom + helprect.height / 2;
+                y = (helprect.top - commandWrapperRect.bottom + helprect.height / 2) + commandOffsetToCanvas;
                 path.addpoint(right, y);
 
                 link.circle = {x: right-3, y: y, r: 4};
@@ -653,6 +659,7 @@ function drawgrouplines(commandselector, options) {
             prevlink = _.find(links, function(l) { return l.option == prevspan; });
 
         link.starty = link.option.getBoundingClientRect().bottom - link.option.parentElement.getBoundingClientRect().top + 1;
+        var commandOffsetToCanvas = marginBetweenCommandAndCanvas - link.starty
         link.unknown = true;
         link.text = "?";
 
@@ -668,11 +675,18 @@ function drawgrouplines(commandselector, options) {
         //    link.circle = {x: rrmid, y: startytop-5-unknownlinelength-3, r: 8};
         //}
         //else {
-            link.paths.push(new espath().addpoint(rr.left, 0).addpoint(rrright, 5));
-            link.paths.push(new espath().addpoint(rrright, 5).addpoint(rrright, 0));
+            link.paths.push(new espath()
+                .addpoint(rr.left, 0)
+                .addpoint(rr.left, 5)
+                .addpoint(rrright, 5)
+                .addpoint(rrright, 0)
+            );
             var rrmid = d3.round(rr.left + rr.width / 2);
-            link.lines.push({x1: rrmid, y1: 6, x2: rrmid, y2: 5+unknownlinelength});
-            link.circle = {x: rrmid, y: 5+unknownlinelength+3, r: 8};
+            link.paths.push(new espath()
+                .addpoint(rrmid, 5 + strokewidth)
+                .addpoint(rrmid, 5 + strokewidth + unknownlinelength + commandOffsetToCanvas)
+            );
+            link.circle = {x: rrmid, y: 5+unknownlinelength+3+commandOffsetToCanvas, r: 8};
         //}
 
         links.push(link);
