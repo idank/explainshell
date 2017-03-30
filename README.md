@@ -1,4 +1,4 @@
-#[explainshell.com](http://www.explainshell.com) - match command-line arguments to their help text
+## [explainshell.com](http://www.explainshell.com) - match command-line arguments to their help text
 
 explainshell is a tool (with a web interface) capable of parsing man pages, extracting options and
 explain a given command-line by matching each argument to the relevant help text in the man page.
