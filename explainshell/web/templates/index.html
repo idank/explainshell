@@ -23,7 +23,6 @@
             <div class="row">
                 <div class="offset1 span10" id="examples">
                     <h3>examples</h3>
-                    <div style="padding-bottom: 10px;">(new! command substitution and control flows support)</div>
                     <ul>
                         {{ macros.examplebullet(":(){ :|:& };:") }}
                         {{ macros.examplebullet("for user in $(cut -f1 -d: /etc/passwd); do crontab -u $user -l 2>/dev/null; done") }}
