@@ -1,0 +1,24 @@
+/home/idan/logs/uwsgi.log {
+  copytruncate
+  daily
+  rotate 30
+  size 10M
+  compress
+  delaycompress
+  missingok
+  notifempty
+}
+
+/home/idan/logs/nginx_*.log {
+  daily
+  compress
+  delaycompress
+  rotate 30
+  size 10M
+  missingok
+  nocreate
+  sharedscripts
+  postrotate
+    test ! -f /var/run/nginx.pid || kill -USR1 `cat /var/run/nginx.pid`
+  endscript
+}
