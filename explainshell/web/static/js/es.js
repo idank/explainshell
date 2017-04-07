@@ -614,7 +614,9 @@ function drawgrouplines(commandselector, options) {
                 p = leftmostpath.points[0];
                 pp = leftmostpath.points[1];
 
-                path.addpoint(p.x, pp.y);
+                // zero or minus to alight with the same flag
+                startyDifferace = leftmost.starty - link.starty
+                path.addpoint(p.x, pp.y + startyDifferace);
             }
         }
         else {
@@ -639,7 +641,9 @@ function drawgrouplines(commandselector, options) {
                 p = rightmostpath.points[0];
                 pp = rightmostpath.points[1];
 
-                path.addpoint(p.x, pp.y);
+                // zero or minus to alight with the same flag
+                startyDifferace = leftmost.starty - link.starty
+                path.addpoint(p.x, pp.y + startyDifferace);
             }
         }
 
