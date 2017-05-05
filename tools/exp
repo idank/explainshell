@@ -1,0 +1,90 @@
+#!/usr/bin/env perl
+#
+# explainshell.com command line utility
+# written in perl as you can see down below
+# 2014(c) Dmitry Geurkov (d.geurkov@gmail.com)
+#
+
+use warnings;
+use strict;
+use Encode;
+use Term::ANSIColor;
+
+# color used for brackets
+my $color = "bright_blue";
+# since bright_blue support was added in Perl v5.13.3
+# we need to use blue if we are running on an older version
+if ($] < 5.013003) { 
+    $color = "blue";
+}
+
+binmode STDOUT, ":utf8";
+
+if(@ARGV == 0 || $ARGV[0] eq "--help"){
+    print "exp - explainshell.com command line utility\n";
+    print "usage: exp [flags] [command]\n";
+    print "       --help     display help message\n";
+    print "       --nocolor  disable color output\n";
+    exit(0);
+}
+
+if($ARGV[0] eq "--nocolor"){
+    $ARGV[0] = "";
+    $color = 0;
+}
+
+my $cmd = join(" ",@ARGV);
+$cmd =~ s/(.)/"%".unpack("H*", $1)/eg;
+$cmd = decode("UTF-8", $cmd);
+
+my $content;
+
+open(my $output, "-|:encoding(UTF-8)", "curl -s http://explainshell.com/explain?cmd=".$cmd)
+    or die "can't get data from http://explainshell.com $!";
+{
+    local $/;
+    $content = <$output>;
+}
+close($output);
+
+sub striptags { $_[0] =~ s/<[^>]*>//g; $_[0]; }
+sub decodechars { 
+    $_[0] =~ s/\&#(\d+);/chr($1)/eg;
+    $_[0] =~ s/\&amp;/\&/g;
+    $_[0] =~ s/\&lt;/</g;
+    $_[0] =~ s/\&gt;/>/g;
+    $_[0] =~ s/\&quot;/"/g;
+    $_[0] =~ s/\&nbsp;/ /g;
+    return $_[0]; 
+}
+
+sub parsetag {
+    my ($t,$a) = (@_);
+    if($content =~ /<$t[^>]*$a[^>]*>/i){
+        my $tag = $&;
+        my $vi = $+[0];
+        my $ve = index($content,"</$t>", $vi);
+        my $tagvalue = substr $content, $vi, $ve-$vi;
+        return ($tag, $tagvalue, $vi);
+    }
+    return ();
+}
+
+my $i = -1;
+my @t;
+my @d;
+do {
+    $i++;
+    @t = parsetag("span","help-$i");
+    @d = parsetag("pre","help-$i");
+    if(@t){
+        my $title = decodechars(striptags $t[1]) if @t;
+        my $desc = decodechars(striptags $d[1]) if @d;
+        if($color){
+            print "\n", $title, color($color), " ---[", color("reset")
+                    , " $desc ", color($color), "]", color("reset"), "\n\n";
+        }else{
+            print "\n$title ---[ $desc ]\n\n";
+        }
+    }
+} while(@t);
