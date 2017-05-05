@@ -56,6 +56,9 @@ Vagrant.configure("2") do |config|
     # http://redsymbol.net/articles/unofficial-bash-strict-mode/
     set -euo pipefail
 
+    # http://perlgeek.de/en/article/set-up-a-clean-utf8-environment
+    echo "export LC_ALL=en_US.UTF-8" >> ~vagrant/.bashrc
+
     sudo apt-get update
     sudo apt-get install -y python-pip mongodb make
 
