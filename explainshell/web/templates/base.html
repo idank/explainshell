@@ -5,10 +5,10 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <!-- Bootstrap -->
 {%- if config.DEBUG %}
-        <link href="/static/css/bootstrap.min.css" rel="stylesheet" media="screen">
+        <link href="/static/css/bootstrap.min.css" rel="stylesheet" media="screen" id="bootstrapCSS">
         <link href="/static/css/font-awesome.min.css" rel="stylesheet" media="screen">
 {% else %}
-        <link href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/css/bootstrap.min.css" rel="stylesheet" media="screen">
+        <link href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/css/bootstrap.min.css" rel="stylesheet" media="screen" id="bootstrapCSS">
         <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/3.2.1/css/font-awesome.min.css" rel="stylesheet">
 {%- endif %}
         <link href="/static/css/es.css" rel="stylesheet" media="screen">
@@ -18,6 +18,13 @@
     <body>
         <div class="container">
             <div class="small-push"></div>
+            <div id="themeContainer">
+                Theme:
+                <select id="themeSelector">
+                    <option value="default">Default</option>
+                    <option value="dark">Dark</option>
+                </select>
+            </div>
             <div class="header">
                 <div class="text-center logo">
                     <a href="/">

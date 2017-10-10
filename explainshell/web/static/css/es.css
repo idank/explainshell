@@ -161,3 +161,34 @@ a {
     font-weight: normal;
     max-width: 450px;
 }
+
+#themeContainer {
+    text-align: right;
+    height: 1em;
+}
+
+#themeSelector {
+    width: 6em;
+}
+
+body[data-theme='dark'] {
+    color: white;
+}
+
+[data-theme='dark'] a:not(:hover) {
+    color: #92b9f3;
+}
+
+[data-theme='dark'] .logo a {
+    color: white;
+}
+
+[data-theme='dark'] #command-wrapper.affix {
+    background-color: #16181b;
+    box-shadow: 0 0 15px 5px #16181b;
+}
+
+[data-theme='dark'] .help-box {
+    background-color: transparent;
+    color: white;
+}

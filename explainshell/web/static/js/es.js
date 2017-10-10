@@ -10,6 +10,18 @@ if (!debug) {
 // a list of colors to use for the lines
 var colors = ['#3182bd', '#6baed6', '#9ecae1', '#c6dbef', '#e6550d', '#fd8d3c', '#fdae6b', '#fdd0a2', '#31a354', '#74c476', '#a1d99b', '#c7e9c0', '#756bb1', '#9e9ac8', '#bcbddc', '#dadaeb', '#636363', '#969696', '#bdbdbd', '#d9d9d9'];
 
+// the urls of the themes
+var themes = {
+    default: '//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/css/bootstrap.min.css',
+    dark: '//maxcdn.bootstrapcdn.com/bootswatch/2.3.1/cyborg/bootstrap.min.css'
+};
+if (debug){
+    themes = {
+        default: '/static/css/bootstrap.min.css',
+        dark: '/static/css/bootstrap-cyborg.min.css'
+    };
+}
+
 var assignedcolors = {};
 
 var vtimeout,
@@ -1066,3 +1078,24 @@ function draw() {
         drawgrouplines(currentgroup.commandselector);
     }
 }
+
+// Theme-related stuff
+$(document).ready(function() {
+    var selectedTheme = localStorage.getItem('theme') || 'default';
+
+    function setTheme(theme) {
+        console.log('setting theme to', theme);
+
+        $("#bootstrapCSS").attr('href', themes[theme]);
+        $(document.body).attr('data-theme', theme);
+        localStorage.setItem('theme', theme);
+        selectedTheme = theme;
+    }
+
+    $("#themeSelector").val(selectedTheme);
+    setTheme(selectedTheme); // to set the correct css file and data-theme
+
+    $("#themeSelector").change(function() {
+        setTheme($(this).val());
+    });
+});
