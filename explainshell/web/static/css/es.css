@@ -192,3 +192,8 @@ body[data-theme='dark'] {
     background-color: transparent;
     color: white;
 }
+
+[data-theme='dark'] pre {
+    background-color: #222;
+    color: white;
+}
