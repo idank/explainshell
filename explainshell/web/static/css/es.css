@@ -112,7 +112,7 @@ a {
 }
 
 .menu {
-    width: auto;
+    width: 460px; /* necessary for right:0 to work at #themeSelector */
     position: absolute;
     top: -30px;
     left: 240px;
@@ -126,7 +126,7 @@ a {
    -moz-transition: all .5s ease;
    transition: all .5s ease;
    position: relative;
-   top: -3px; // looks a bit unaligned without this in chrome
+   top: -3px; /* looks a bit unaligned without this in chrome */
    left: 0;
 }
 
@@ -160,4 +160,46 @@ a {
 .popover {
     font-weight: normal;
     max-width: 450px;
+}
+
+#themeContainer {
+    /* using a fixed margin-left doesn't work both
+       with and without the search bar in the menu */
+    position: absolute;
+    right: 0;
+    margin-top: 5px;
+    font-family: "Courier New",Courier,Monaco,Menlo,Consolas,monospace;
+    font-size: 20px;
+}
+
+body[data-theme='dark'] {
+    color: white;
+}
+
+[data-theme='dark'] a:not(:hover) {
+    color: #92b9f3;
+}
+
+[data-theme='dark'] .logo a {
+    color: white;
+}
+
+[data-theme='dark'] #command-wrapper.affix {
+    background-color: #16181b;
+    box-shadow: 0 0 15px 5px #16181b;
+}
+
+[data-theme='dark'] .help-box {
+    background-color: transparent;
+    color: white;
+}
+
+[data-theme='dark'] pre {
+    background-color: #222;
+    color: white;
+}
+
+[data-theme='dark'] .caret {
+    /* this is probably a problem with the bootstrap theme */
+    border-top: 4px solid #fff;
 }
