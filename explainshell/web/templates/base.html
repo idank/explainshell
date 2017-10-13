@@ -18,13 +18,6 @@
     <body>
         <div class="container">
             <div class="small-push"></div>
-            <div id="themeContainer">
-                Theme:
-                <select id="themeSelector">
-                    <option value="default">Default</option>
-                    <option value="dark">Dark</option>
-                </select>
-            </div>
             <div class="header">
                 <div class="text-center logo">
                     <a href="/">
@@ -36,6 +29,14 @@
                       <li><a href="/about">about</a></li>
                       <li><a href="https://github.com/idank/explainshell"><i class="icon-github"></i></a></li>
                       {% block menu %}<li><form action='/explain' method='get'><input id="top-search" name='cmd' type="text" autocapitalize="off" autocorrect="off" placeholder="explain..."></input></form></li>{% endblock %}
+                      <li id="themeContainer" class="dropdown">
+                        <span data-toggle="dropdown">theme</span>
+                        <b class="caret" data-toggle="dropdown"></b>
+                        <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu">
+                            <li><a tabindex="-1" href="#" data-theme-name="default">Default</a></li>
+                            <li><a tabindex="-1" href="#" data-theme-name="dark">Dark</a></li>
+                        </ul>
+                      </li>
                     </ul>
                 </div>
                 <div class="small-push"></div>

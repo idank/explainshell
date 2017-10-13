@@ -1092,10 +1092,9 @@ $(document).ready(function() {
         selectedTheme = theme;
     }
 
-    $("#themeSelector").val(selectedTheme);
     setTheme(selectedTheme); // to set the correct css file and data-theme
 
-    $("#themeSelector").change(function() {
-        setTheme($(this).val());
+    $("#themeContainer .dropdown-menu a").click(function() {
+        setTheme($(this).attr('data-theme-name'));
     });
 });

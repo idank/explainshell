@@ -163,12 +163,9 @@ a {
 }
 
 #themeContainer {
-    text-align: right;
-    height: 1em;
-}
-
-#themeSelector {
-    width: 6em;
+    margin-left: 80px;
+    font-family: "Courier New",Courier,Monaco,Menlo,Consolas,monospace;
+    font-size: 20px;
 }
 
 body[data-theme='dark'] {
@@ -196,4 +193,9 @@ body[data-theme='dark'] {
 [data-theme='dark'] pre {
     background-color: #222;
     color: white;
+}
+
+[data-theme='dark'] .caret {
+    /* this is probably a problem with the bootstrap theme */
+    border-top: 4px solid #fff;
 }
