@@ -112,7 +112,7 @@ a {
 }
 
 .menu {
-    width: auto;
+    width: 460px; /* necessary for right:0 to work at #themeSelector */
     position: absolute;
     top: -30px;
     left: 240px;
@@ -126,7 +126,7 @@ a {
    -moz-transition: all .5s ease;
    transition: all .5s ease;
    position: relative;
-   top: -3px; // looks a bit unaligned without this in chrome
+   top: -3px; /* looks a bit unaligned without this in chrome */
    left: 0;
 }
 
@@ -163,7 +163,11 @@ a {
 }
 
 #themeContainer {
-    margin-left: 80px;
+    /* using a fixed margin-left doesn't work both
+       with and without the search bar in the menu */
+    position: absolute;
+    right: 0;
+    margin-top: 5px;
     font-family: "Courier New",Courier,Monaco,Menlo,Consolas,monospace;
     font-size: 20px;
 }
