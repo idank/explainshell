@@ -220,7 +220,7 @@ sub is_command {
   local($p);
 
   (! -d && -x) || return 0;
-  if (! defined(%PATH)) {
+  if (! (%PATH)) {
     for $p (split(":", $ENV{'PATH'})) {
       $p =~ s@/+$@@;
       $PATH{$p} = 1;
