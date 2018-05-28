@@ -48,33 +48,32 @@ class FlaskrTestCase(unittest.TestCase):
         self.assertEqual(rv.status_code, 200)
         data = json.loads(rv.data)
         self.assertEqual(data, {
-            'getargs': 'bar -a --a -?',
-            'helptext': [['bar synopsis', 'help-0'],
-                         ['-a desc', 'help-1'],
-                         ['-? help text', 'help-2']],
-            'matches': [{'commandclass': 'command0 simplecommandstart',
-                         'end': 3,
-                         'helpclass': 'help-0',
-                         'match': 'bar(1)',
-                         'name': 'bar',
-                         'section': '1',
-                         'source': 'bar',
-                         'spaces': ' ',
-                         'start': 0,
-                         'suggestions': []},
-                        {'commandclass': 'command0',
-                         'end': 10,
-                         'helpclass': 'help-1',
-                         'match': '-a --a',
-                         'spaces': ' ',
-                         'start': 4},
-                        {'commandclass': 'command0',
-                         'end': 13,
-                         'helpclass': 'help-2',
-                         'match': '-?',
-                         'spaces': '',
-                         'start': 11}],
-            'status': 'success'})
+            'matches': [{
+                'end': 3,
+                'name': 'bar',
+                'source': 'bar',
+                'section': '1',
+                'suggestions': [],
+                'commandclass': 'command0 simplecommandstart',
+                'start': 0,
+                'helpHTML': 'bar synopsis',
+                'spaces': ' ',
+                'match': 'bar(1)'
+            }, {
+                'end': 10,
+                'commandclass': 'command0',
+                'start': 4,
+                'helpHTML': '-a desc',
+                'spaces': ' ',
+                'match': '-a --a'
+            }, {
+                'end': 13,
+                'commandclass': 'command0',
+                'start': 11,
+                'helpHTML': '-? help text',
+                'spaces': '',
+                'match': '-?'
+            }]})
 
 if __name__ == '__main__':
     unittest.main()
