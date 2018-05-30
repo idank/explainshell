@@ -18,14 +18,21 @@ def index():
 def about():
     return render_template('about.html')
 
+STATUS_TYPE_TEMPLATES = {
+    'success': 'explain.html',
+    'error': 'errors/error.html',
+    'missingmanpage': 'errors/missingmanpage.html',
+    'parsingerror': 'errors/parsingerror.html',
+}
+
 def merge_lists(l1, l2, key):
     merged = {}
-    for item in l1+l2:
+    for item in itertools.chain(l1, l2):
         if item[key] in merged:
             merged[item[key]].update(item)
         else:
             merged[item[key]] = item
-    return [val for (_, val) in merged.items()]
+    return merged.values()
 
 def explain():
     if 'cmd' not in request.args or not request.args['cmd'].strip():
@@ -75,8 +82,11 @@ def explain_json():
             result['e'] = repr(result['e'])
         return jsonify(result)
     else:
-        helpItemsDicts = [{ 'helpHTML': helpItem[0], 'helpclass': helpItem[1] } for helpItem in result['helptext']]
-        matches = merge_lists(result['matches'], helpItemsDicts, "helpclass")
+        help_items_dicts = [{
+            'helpHTML': help_content,
+            'helpclass': help_class
+        } for help_content, help_class in result['helptext']]
+        matches = merge_lists(result['matches'], help_items_dicts, "helpclass")
         for d in matches:
             del d['helpclass']
         return jsonify({ 'matches': matches })
@@ -84,16 +94,10 @@ def explain_json():
 @app.route('/explain')
 def explain_html():
     result = explain()
-    if result['status'] is 'success':
-        return render_template('explain.html', **result)
-    elif result['status'] is 'error':
-        return render_template('errors/error.html', **result)
-    elif result['status'] is 'missingmanpage':
-        return render_template('errors/missingmanpage.html', **result)
-    elif result['status'] is 'parsingerror':
-        return render_template('errors/parsingerror.html', **result)
-    elif result['status'] is 'nocommand':
+    if result['status'] not in STATUS_TYPE_TEMPLATES:
+        # TODO: log a warning somewhere ...
         return redirect('/')
+    return render_template(STATUS_TYPE_TEMPLATES[result['status']], **result)
 
 @app.route('/explain/<program>', defaults={'section' : None})
 @app.route('/explain/<section>/<program>')
