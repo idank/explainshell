@@ -2,3 +2,4 @@
 *.swp
 .coverage
 .vagrant
+application.log
