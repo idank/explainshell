@@ -1081,7 +1081,10 @@ function draw() {
 
 // Theme-related stuff
 $(document).ready(function() {
-    var selectedTheme = localStorage.getItem('theme') || 'default';
+    // use theme from local storage or auto-detect otherwise
+    var selectedTheme = localStorage.getItem('theme')
+        || (window.matchMedia("(prefers-color-scheme: dark)").matches ? 'dark' : 'default')
+        || 'default';
 
     function setTheme(theme) {
         console.log('setting theme to', theme);
