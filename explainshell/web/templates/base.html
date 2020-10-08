@@ -13,14 +13,14 @@
         <link href="/static/css/font-awesome.min.css" rel="stylesheet" media="screen">
 {% else %}
     {% if request.cookies.get('theme', 'default') == 'default' %}
-        <link href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/css/bootstrap.min.css" rel="stylesheet" media="screen" id="bootstrapCSS">
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/css/bootstrap.min.css" rel="stylesheet" media="screen" id="bootstrapCSS" integrity="sha384-UrjvgnkZ7pA22X4E5je6fq9/1z2zldOBfbMraQL/zAKfpyIIyfL9eGnIgIXpD4bF" crossorigin="anonymous">
     {% else %}
-        <link href="//maxcdn.bootstrapcdn.com/bootswatch/2.3.1/cyborg/bootstrap.min.css" rel="stylesheet" media="screen" id="bootstrapCSS">
+        <link href="https://maxcdn.bootstrapcdn.com/bootswatch/2.3.1/cyborg/bootstrap.min.css" rel="stylesheet" media="screen" id="bootstrapCSS" integrity="sha384-y+mV9jYsxXvBpDLndO9uihtzDJh7QQzhnF2nx7Ssx6OP6xUtKmkIa5DhmoVTVCcX" crossorigin="anonymous">
     {% endif %}
-        <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/3.2.1/css/font-awesome.min.css" rel="stylesheet">
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/3.2.1/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-5WSMKsEjlK1hO/E+0ERtEmsujy8NFgEb15UOB5phg+1xk2zTO0Dd71qJ+7yD1QFN" crossorigin="anonymous">
 {%- endif %}
         <link href="/static/css/es.css" rel="stylesheet" media="screen">
-        <link href='//fonts.googleapis.com/css?family=Berkshire+Swash' rel='stylesheet' type='text/css'>
+        <link href="https://fonts.googleapis.com/css?family=Berkshire+Swash" rel='stylesheet' type='text/css'>
         {% block head %}{% endblock %}
     </head>
     <body data-theme={{ request.cookies.get('theme', 'default')}}>
@@ -60,9 +60,11 @@
         <script src="/static/js/underscore.js"></script>
         <script src="/static/js/bootstrap.min.js"></script>
 {% else %}
-        <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
-        <script src="//cdnjs.cloudflare.com/ajax/libs/underscore.js/1.4.4/underscore-min.js"></script>
-        <script src="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/js/bootstrap.min.js"></script>
+
+
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/1.9.1/jquery.min.js" integrity="sha384-EaUkI/FiMJtEXWAl0dCczvbFvjfzsIF1UNKGJvu9p5JIG71Kih7/kQJvYbBL7HOn" crossorigin="anonymous"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.4.4/underscore-min.js" integrity="sha384-dUBywiUuX4dPOAQyWEyB4SZGdQt4X73zYyUywoVqBN1NlZvdbJBq7Oed5/0ETLa0" crossorigin="anonymous"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/js/bootstrap.min.js" integrity="sha384-9MLF5zdTAIDmpP/hCVmvqyFya4sY/C2V7iP3EK+NmmUxu1E+H34EnBisZoPZcVTH" crossorigin="anonymous"></script>
 {%- endif %}
         <script src="/static/js/es.js"></script>
         {% if not config.DEBUG -%}
