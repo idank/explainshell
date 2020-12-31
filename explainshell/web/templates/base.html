@@ -5,17 +5,25 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <!-- Bootstrap -->
 {%- if config.DEBUG %}
+    {% if request.cookies.get('theme', 'default') == 'default' %}
         <link href="/static/css/bootstrap.min.css" rel="stylesheet" media="screen" id="bootstrapCSS">
+    {% else %}
+        <link href="/static/css/bootstrap-cyborg.min.css" rel="stylesheet" media="screen" id="bootstrapCSS">
+    {% endif %}
         <link href="/static/css/font-awesome.min.css" rel="stylesheet" media="screen">
 {% else %}
+    {% if request.cookies.get('theme', 'default') == 'default' %}
         <link href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/css/bootstrap.min.css" rel="stylesheet" media="screen" id="bootstrapCSS">
+    {% else %}
+        <link href="//maxcdn.bootstrapcdn.com/bootswatch/2.3.1/cyborg/bootstrap.min.css" rel="stylesheet" media="screen" id="bootstrapCSS">
+    {% endif %}
         <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/3.2.1/css/font-awesome.min.css" rel="stylesheet">
 {%- endif %}
         <link href="/static/css/es.css" rel="stylesheet" media="screen">
         <link href='//fonts.googleapis.com/css?family=Berkshire+Swash' rel='stylesheet' type='text/css'>
         {% block head %}{% endblock %}
     </head>
-    <body>
+    <body data-theme={{ request.cookies.get('theme', 'default')}}>
         <div class="container">
             <div class="small-push"></div>
             <div class="header">
@@ -33,7 +41,7 @@
                         <span data-toggle="dropdown">theme</span>
                         <b class="caret" data-toggle="dropdown"></b>
                         <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu">
-                            <li><a tabindex="-1" href="#" data-theme-name="default">Default</a></li>
+                            <li><a tabindex="-1" href="#" data-theme-name="default">Light</a></li>
                             <li><a tabindex="-1" href="#" data-theme-name="dark">Dark</a></li>
                         </ul>
                       </li>
@@ -59,14 +67,24 @@
         <script src="/static/js/es.js"></script>
         {% if not config.DEBUG -%}
         <script>
-          (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-          (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-          m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-          })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+            if (window.doNotTrack !== '1') {
+                (function (i, s, o, g, r, a, m) {
+                    i['GoogleAnalyticsObject'] = r;
+                    i[r] = i[r] || function () {
+                        (i[r].q = i[r].q || []).push(arguments)
+                    }, i[r].l = 1 * new Date();
+                    a = s.createElement(o),
+                        m = s.getElementsByTagName(o)[0];
+                    a.async = 1;
+                    a.src = g;
+                    m.parentNode.insertBefore(a, m)
+                })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
 
-          ga('create', 'UA-43455040-1', 'explainshell.com');
-          ga('send', 'pageview');
-
+                ga('create', 'UA-43455040-1', 'explainshell.com');
+                ga('send', 'pageview');
+            } else {
+                function ga() {}
+            }
         </script>
         {%- endif %}
         {%- block js %}{% endblock %}
