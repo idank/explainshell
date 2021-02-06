@@ -32,7 +32,10 @@ class matcher(bashlex.ast.nodevisitor):
     each token.
     '''
     def __init__(self, s, store):
-        self.s = s.encode('latin1', 'replace')
+        # "sanitize" the string since bashlex doesn't seem to like non English
+        # text. This replaces anything that can't encode to latin1 with '?',
+        # and decodes back to an str.
+        self.s = s.encode('latin1', 'replace').decode('latin1')
         self.store = store
         self._prevoption = self._currentoption = None
         self.groups = [matchgroup('shell')]
@@ -88,7 +91,6 @@ class matcher(bashlex.ast.nodevisitor):
         return self._currentoption
 
     def findmanpages(self, prog):
-        prog = prog.decode('latin1')
         logger.info('looking up %r in store', prog)
         manpages = self.store.findmanpage(prog)
         logger.info('found %r in store, got: %r, using %r', prog, manpages, manpages[0])
@@ -569,7 +571,7 @@ class matcher(bashlex.ast.nodevisitor):
                 for i, m in enumerate(group.results):
                     assert m.end <= len(self.s), '%d %d' % (m.end, len(self.s))
 
-                    portion = self.s[m.start:m.end].decode('latin1')
+                    portion = self.s[m.start:m.end]
                     group.results[i] = matchresult(m.start, m.end, m.text, portion)
 
         logger.debug('%r matches:\n%s', self.s, debugmatch())

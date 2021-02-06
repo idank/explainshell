@@ -125,7 +125,6 @@ def explaincommand(command, store):
         helpclass = 'help-%d' % len(texttoid)
         text = m.text
         if text:
-            text = text.decode('utf-8')
             helpclass = texttoid.setdefault(text, helpclass)
         else:
             # unknowns in the shell group are possible when our parser left
