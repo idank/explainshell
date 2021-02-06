@@ -73,5 +73,5 @@ if __name__ == '__main__':
     logging.config.dictConfig(config.LOGGING_DICT)
 
     s = store.store('explainshell', config.MONGO_URI)
-    for m in BUILTINS.itervalues():
+    for m in BUILTINS.values():
         s.addmanpage(m)

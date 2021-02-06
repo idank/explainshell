@@ -159,7 +159,7 @@ class manpage(object):
                 groups.setdefault(opt.argument, []).append(opt)
 
         # merge all the paragraphs under the same argument to a single string
-        for k, l in groups.iteritems():
+        for k, l in groups.items():
             groups[k] = '\n\n'.join([p.text for p in l])
 
         return groups
@@ -289,7 +289,7 @@ class store(object):
         logger.info('got %s', results)
         if section is not None:
             if len(results) > 1:
-                results.sort(key=lambda (oid, m): m.section == section, reverse=True)
+                results.sort(key=lambda oid_m: oid_m[1].section == section, reverse=True)
                 logger.info(r'sorting %r so %s is first', results, section)
             if not results[0][1].section == section:
                 raise errors.ProgramDoesNotExist(origname)

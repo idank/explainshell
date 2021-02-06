@@ -22,7 +22,7 @@ def consecutive(l, fn):
     ll = []
     try:
         while True:
-            x = it.next()
+            x = next(it)
             if fn(x):
                 ll.append(x)
             else:
@@ -43,8 +43,8 @@ def groupcontinuous(l, key=None):
     '''
     if key is None:
         key = lambda x: x
-    for k, g in itertools.groupby(enumerate(l), lambda (i, x): i-key(x)):
-        yield map(itemgetter(1), g)
+    for k, g in itertools.groupby(enumerate(l), lambda i_x: i_x[0]-key(i_x[1])):
+        yield list(map(itemgetter(1), g))
 
 def toposorted(graph, parents):
     """
@@ -73,7 +73,7 @@ def toposorted(graph, parents):
 def pairwise(iterable):
     a, b = itertools.tee(iterable)
     next(b, None)
-    return itertools.izip(a, b)
+    return zip(a, b)
 
 class peekable(object):
     '''
@@ -100,12 +100,12 @@ class peekable(object):
         self._idx = 0
     def __iter__(self):
         return self
-    def next(self):
+    def __next__(self):
         if self._peeked:
             self._peeked = False
             self._idx += 1
             return self._peekvalue
-        n = self.it.next()
+        n = next(self.it)
         self._idx += 1
         return n
     def hasnext(self):
@@ -118,7 +118,7 @@ class peekable(object):
         if self._peeked:
             return self._peekvalue
         else:
-            self._peekvalue = self.it.next()
+            self._peekvalue = next(self.it)
             self._peeked = True
             return self._peekvalue
     @property

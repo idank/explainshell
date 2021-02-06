@@ -86,12 +86,12 @@ class classifier(object):
             #if label != observed:
             #    print 'label:', label, 'observed:', observed, feats
 
-        print 'pos precision:', nltk.metrics.precision(refsets[True], testsets[True])
-        print 'pos recall:', nltk.metrics.recall(refsets[True], testsets[True])
-        print 'neg precision:', nltk.metrics.precision(refsets[False], testsets[False])
-        print 'neg recall:', nltk.metrics.recall(refsets[False], testsets[False])
+        print('pos precision:', nltk.metrics.precision(refsets[True], testsets[True]))
+        print('pos recall:', nltk.metrics.recall(refsets[True], testsets[True]))
+        print('neg precision:', nltk.metrics.precision(refsets[False], testsets[False]))
+        print('neg recall:', nltk.metrics.recall(refsets[False], testsets[False]))
 
-        print self.classifier.show_most_informative_features(10)
+        print(self.classifier.show_most_informative_features(10))
 
     def classify(self, manpage):
         self.train()

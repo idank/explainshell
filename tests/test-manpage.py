@@ -6,7 +6,7 @@ class test_manpage(unittest.TestCase):
     def test_first_paragraph_no_section(self):
         m = 'foo\nbar'
         l = list(manpage._parsetext(m.splitlines()))
-        self.assertEquals(l, [store.paragraph(0, 'foo\nbar', None, False)])
+        self.assertEqual(l, [store.paragraph(0, 'foo\nbar', None, False)])
 
     def test_sections(self):
         m = '''<b>SECTION</b>
@@ -29,7 +29,7 @@ tNOTASECTION'''
 
         parsed = list(manpage._parsetext(m.splitlines()))
         self.assertTrue(len(parsed) == 5)
-        self.assertEquals(parsed, [store.paragraph(0, 'a\nb', 'SECTION', False),
+        self.assertEqual(parsed, [store.paragraph(0, 'a\nb', 'SECTION', False),
                                    store.paragraph(1, 'c', 'SECTION', False),
                                    store.paragraph(2, 'a', 'SECTION2', False),
                                    store.paragraph(3, 'a', 'WITH SPACES', False),
@@ -38,4 +38,4 @@ tNOTASECTION'''
         m = manpage.manpage('foo')
         m._text = 'a b c d e f g h i j k l'.replace(' ', '\n')
         m.parse()
-        self.assertEquals(m.aliases, [('foo', 10)])
+        self.assertEqual(m.aliases, [('foo', 10)])

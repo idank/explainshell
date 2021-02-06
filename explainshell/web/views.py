@@ -1,4 +1,4 @@
-import logging, itertools, urllib
+import logging, itertools, urllib.request, urllib.parse, urllib.error
 import markupsafe
 
 from flask import render_template, request, redirect
@@ -36,12 +36,12 @@ def explain():
                                helptext=helptext,
                                getargs=command)
 
-    except errors.ProgramDoesNotExist, e:
+    except errors.ProgramDoesNotExist as e:
         return render_template('errors/missingmanpage.html', title='missing man page', e=e)
-    except bashlex.errors.ParsingError, e:
+    except bashlex.errors.ParsingError as e:
         logger.warn('%r parsing error: %s', command, e.message)
         return render_template('errors/parsingerror.html', title='parsing error!', e=e)
-    except NotImplementedError, e:
+    except NotImplementedError as e:
         logger.warn('not implemented error trying to explain %r', command)
         msg = ("the parser doesn't support %r constructs in the command you tried. you may "
                "<a href='https://github.com/idank/explainshell/issues'>report a "
@@ -66,12 +66,12 @@ def explainold(section, program):
     if 'args' in request.args:
         args = request.args['args']
         command = '%s %s' % (program, args)
-        return redirect('/explain?cmd=%s' % urllib.quote_plus(command), 301)
+        return redirect('/explain?cmd=%s' % urllib.parse.quote_plus(command), 301)
     else:
         try:
             mp, suggestions = explainprogram(program, s)
             return render_template('options.html', mp=mp, suggestions=suggestions)
-        except errors.ProgramDoesNotExist, e:
+        except errors.ProgramDoesNotExist as e:
             return render_template('errors/missingmanpage.html', title='missing man page', e=e)
 
 def explainprogram(program, store):
@@ -180,13 +180,13 @@ def explaincommand(command, store):
 
     it = util.peekable(iter(matches))
     while it.hasnext():
-        m = it.next()
+        m = next(it)
         spaces = 0
         if it.hasnext():
             spaces = it.peek()['start'] - m['end']
         m['spaces'] = ' ' * spaces
 
-    helptext = sorted(texttoid.iteritems(), key=lambda (k, v): idstartpos[v])
+    helptext = sorted(iter(texttoid.items()), key=lambda k_v: idstartpos[k_v[1]])
 
     return matches, helptext
 
@@ -253,7 +253,7 @@ def _substitutionmarkup(cmd):
     >>> _substitutionmarkup('cat <&3')
     '<a href="/explain?cmd=cat+%3C%263" title="Zoom in to nested command">cat <&3</a>'
     '''
-    encoded = urllib.urlencode({'cmd': cmd})
+    encoded = urllib.parse.urlencode({'cmd': cmd})
     return ('<a href="/explain?{query}" title="Zoom in to nested command">{cmd}'
             '</a>').format(cmd=cmd, query=encoded)
 

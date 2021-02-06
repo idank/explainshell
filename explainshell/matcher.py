@@ -261,7 +261,7 @@ class matcher(bashlex.ast.nodevisitor):
             # we consume this node here, pop it from parts so we
             # don't visit it again as an argument
             parts.pop(idxwordnode)
-        except errors.ProgramDoesNotExist, e:
+        except errors.ProgramDoesNotExist as e:
             if addgroup:
                 # add a group for this command, we'll mark it as unknown
                 # when visitword is called

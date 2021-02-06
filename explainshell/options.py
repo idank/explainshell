@@ -75,19 +75,19 @@ def _option(s, pos=0):
     False
     >>> bool(_option('--a-b-'))
     False
-    >>> sorted(_option('-a').groupdict().iteritems())
+    >>> sorted(_option('-a').groupdict().items())
     [('arg', None), ('argoptional', None), ('argoptionalc', None), ('ending', ''), ('opt', '-a')]
-    >>> sorted(_option('--a').groupdict().iteritems())
+    >>> sorted(_option('--a').groupdict().items())
     [('arg', None), ('argoptional', None), ('argoptionalc', None), ('ending', ''), ('opt', '--a')]
-    >>> sorted(_option('-a<b>').groupdict().iteritems())
+    >>> sorted(_option('-a<b>').groupdict().items())
     [('arg', 'b'), ('argoptional', '<'), ('argoptionalc', '>'), ('ending', ''), ('opt', '-a')]
-    >>> sorted(_option('-a=[foo]').groupdict().iteritems())
+    >>> sorted(_option('-a=[foo]').groupdict().items())
     [('arg', 'foo'), ('argoptional', '['), ('argoptionalc', ']'), ('ending', ''), ('opt', '-a')]
-    >>> sorted(_option('-a=<foo>').groupdict().iteritems())
+    >>> sorted(_option('-a=<foo>').groupdict().items())
     [('arg', 'foo'), ('argoptional', '<'), ('argoptionalc', '>'), ('ending', ''), ('opt', '-a')]
-    >>> sorted(_option('-a=<foo bar>').groupdict().iteritems())
+    >>> sorted(_option('-a=<foo bar>').groupdict().items())
     [('arg', 'foo bar'), ('argoptional', '<'), ('argoptionalc', '>'), ('ending', ''), ('opt', '-a')]
-    >>> sorted(_option('-a=foo').groupdict().iteritems())
+    >>> sorted(_option('-a=foo').groupdict().items())
     [('arg', 'foo'), ('argoptional', None), ('argoptionalc', None), ('ending', ''), ('opt', '-a')]
     >>> bool(_option('-a=[foo>'))
     False
