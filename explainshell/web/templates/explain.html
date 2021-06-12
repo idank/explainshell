@@ -40,7 +40,7 @@
 <div class="push"></div><div class="text-center"><small>
 {% for m in matches if m.name %}
 {% if loop.first %}source manpages: {% endif %}
-<a href="http://manpages.ubuntu.com/manpages/precise/en/man{{ m.section }}/{{ m.source|e }}.html">{{ m.name|e }}</a>{% if not loop.last %},&nbsp;{% endif %}
+<a href="http://manpages.ubuntu.com/manpages/focal/en/man{{ m.section }}/{{ m.source|e }}.html">{{ m.name|e }}</a>{% if not loop.last %},&nbsp;{% endif %}
 {% endfor %}
 </small></div>
 {%- endblock %}
