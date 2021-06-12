@@ -40,6 +40,10 @@ a {
 	text-align: center;
 }
 
+.command0 {
+    white-space: nowrap;
+}
+
 #command-wrapper {
     z-index: 3;
 }
