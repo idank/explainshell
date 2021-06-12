@@ -2,9 +2,13 @@ version: '2'
 services:
   db:
     image: mongo
+    container_name: explainshell-db
+    restart: always
   web:
     build: .
     command: make serve
+    container_name: explainshell
+    restart: always
     environment:
       - MONGO_URI=mongodb://db
       - HOST_IP=0.0.0.0
