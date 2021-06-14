@@ -1,6 +1,6 @@
-Flask==0.12
-MarkupSafe==1.0
+Flask==1.1.4
+MarkupSafe==1.1.1
 nltk==3.4.5
-nose==1.3.0
-pymongo==2.6
-bashlex==0.12
+nose==1.3.7
+pymongo==2.9.5
+bashlex==0.15
