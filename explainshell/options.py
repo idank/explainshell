@@ -23,9 +23,9 @@ def extract(manpage):
 opt_regex = re.compile(r'''
     (?P<opt>--?(?:\?|\#|(?:\w+-)*\w+))  # option starts with - or -- and can have - in the middle but not at the end, also allow '-?'
     (?:
-     (?:\s*(=)?\s*)           # -a=
+     (?:\s?(=)?\s?)           # -a=
      (?P<argoptional>[<\[])?  # -a=< or -a=[
-     (?:\s*(=)?\s*)           # or maybe -a<=
+     (?:\s?(=)?\s?)           # or maybe -a<=
      (?P<arg>
       (?(argoptional)         # if we think we have an arg (we saw [ or <)
        [^\]>]+                # either read everything until the closing ] or >
@@ -39,7 +39,7 @@ opt_regex = re.compile(r'''
      )
      (?(argoptional)(?P<argoptionalc>[\]>])) # read closing ] or > if we have an arg
     )?                        # the whole arg thing is optional
-    (?P<ending>,\s*|\s+|\Z|/|\|)''', re.X) # read any trailing whitespace or the end of the string
+    (?P<ending>,\s*|\s+|\Z|/|\|)''', re.X)  # read any trailing whitespace or the end of the string
 
 opt2_regex = re.compile(r'''
         (?P<opt>\w+)    # an option that doesn't start with any of the usual characters, e.g. options from 'dd' like bs=BYTES
