@@ -23,9 +23,7 @@ def extract(manpage):
 opt_regex = re.compile(r'''
     (?P<opt>--?(?:\?|\#|(?:\w+-)*\w+))  # option starts with - or -- and can have - in the middle but not at the end, also allow '-?'
     (?:
-     (?:\s*(=)?\s*)           # -a=
-     (?P<argoptional>[<\[])?  # -a=< or -a=[
-     (?:\s*(=)?\s*)           # or maybe -a<=
+     (?:\s*((?P<argoptional>(<=|=<|=\[))|=)\s*)  # -a= or -a=< or -a=[ or maybe -a<=
      (?P<arg>
       (?(argoptional)         # if we think we have an arg (we saw [ or <)
        [^\]>]+                # either read everything until the closing ] or >
