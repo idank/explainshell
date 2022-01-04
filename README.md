@@ -3,7 +3,7 @@
 explainshell is a tool (with a web interface) capable of parsing man pages, extracting options and
 explain a given command-line by matching each argument to the relevant help text in the man page.
 
-## How?
+### How?
 
 explainshell is built from the following components:
 
@@ -27,15 +27,85 @@ When querying explainshell, it:
    list of known options
 4. returns a list of matches that are rendered with Flask
 
-## [TODO](https://raw.github.com/idank/explainshell/master/TODO) file
+#### [TODO](https://raw.github.com/idank/explainshell/master/TODO) file
 
-## Missing man pages
+This is still under development. Some commands may not parse perfectly.
 
-Right now explainshell.com contains the entire [archive of Ubuntu](http://manpages.ubuntu.com/). It's not
-possible to directly add a missing man page to the live site (it might be in the future). Instead, submit a link [here](https://github.com/idank/explainshell/issues/1)
+
+#### Missing man pages
+
+Right now explainshell.com contains the entire [archive of Ubuntu](http://manpages.ubuntu.com/). It's not possible to directly add a missing man page to the live site (it might be in the future). Instead, submit a link [here](https://github.com/idank/explainshell/issues/1)
 and I'll add it.
 
+- - -
+
+## Running on Docker
+
+The simplest way to run this locally is using Docker and `docker-compose`.
+
+### Build docker web and db containers
+
+A Docker compose file has been provided to simplify getting started.
+
+#### Build containers
+
+```bash
+docker-compose build
+```
+
+#### Start containers
+Note: this will automatically import the classifiers
+
+```bash
+docker-compose up
+```
+
+#### Importing man pages
+
+An import script has been provided that will import man pages located in `manpages`, which is shared into the container.
+
+```ShellSession
+$ docker exec explainshell_web /opt/webapp/import.sh --help
+usage /opt/webapp/import.sh DISTRO
+
+DISTRO: _test centos7 centos8 opensuse15 ubuntu18.04 ubuntu20.04
+```
+
+Importing CentOS 7 man pages
+
+```bash
+docker exec explainshell_web /opt/webapp/import.sh centos7
+```
+
+#### Open browser at port 5000
+
+[http://localhost:5000/](http://localhost:5000/)
+
+### Restore test db to run tests
+
+```bash
+docker exec explainshell_web mongorestore --host db -d explainshell_tests dump/explainshell
+```
+
+```bash
+docker exec explainshell_web make tests
+```
+
+```ShellSession
+$ docker exec explainshell_web make tests
+nosetests --with-doctest tests/ explainshell/
+................................................................................
+----------------------------------------------------------------------
+Ran 80 tests in 2.843s
+
+OK
+```
+
+- - -
+
 ## Running explainshell locally
+
+Explainshell is still being ported to Python 3. Suggest using Docker Compose to run locally.
 
 To setup a working environment that lets you run the web interface locally, you'll need to:
 
@@ -47,7 +117,7 @@ $ mongorestore dump/explainshell && mongorestore -d explainshell_tests dump/expl
 $ make tests
 ..............................................................................
 ----------------------------------------------------------------------
-Ran 79 tests in 3.847s
+Ran 80 tests in 3.847s
 
 OK
 ```
@@ -79,36 +149,4 @@ $ make serve
 python runserver.py
  * Running on http://127.0.0.1:5000/
  * Restarting with reloader
-```
-
-### Start up a local web server with docker
-
-```ShellSession
-# Build docker web and db containers
-$ docker-compose build
-$ docker-compose up
-
-# Copy dump over to container for than to import it.
-$ docker cp dump/ explainshell_db_1:/tmp/dump
-
-# Import classifiers
-$ docker exec explainshell_db_1 mongorestore /tmp/dump
-
-# Import a man page
-$ docker exec explainshell_web_1 bash -c "PYTHONPATH=. python explainshell/manager.py --log info /usr/share/man/man1/grep.1.gz"
-...
-successfully added grep.1.gz
-
-# Open browser at port 5000
-$ open http://localhost:5000
-
-# Restore test db to run tests
-$ docker exec explainshell_db_1 mongorestore -d explainshell_tests /tmp/dump/explainshell
-
-$ docker exec explainshell_web_1 make tests
-..............................................................................
-----------------------------------------------------------------------
-Ran 79 tests in 3.847s
-
-OK
 ```

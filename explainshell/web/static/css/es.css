@@ -40,6 +40,10 @@ a {
 	text-align: center;
 }
 
+.command0 {
+    white-space: nowrap;
+}
+
 #command-wrapper {
     z-index: 3;
 }
@@ -115,24 +119,18 @@ a {
     width: 460px; /* necessary for right:0 to work at #themeSelector */
     position: absolute;
     top: -30px;
-    left: 240px;
+    left: 130px;
     font-family: 'Berkshire Swash', cursive;
     font-size: 24px;
 }
 
 #top-search {
-   width: 150px;
+   width: 260px;
    -webkit-transition: all .5s ease;
    -moz-transition: all .5s ease;
    transition: all .5s ease;
    position: relative;
-   top: -3px; /* looks a bit unaligned without this in chrome */
    left: 0;
-}
-
-#top-search:focus {
-   left: -110px;
-   width: 260px;
 }
 
 #prevnext {
@@ -166,7 +164,7 @@ a {
     /* using a fixed margin-left doesn't work both
        with and without the search bar in the menu */
     position: absolute;
-    right: 0;
+    right: -110px;
     margin-top: 5px;
     font-family: "Courier New",Courier,Monaco,Menlo,Consolas,monospace;
     font-size: 20px;

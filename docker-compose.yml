@@ -1,16 +1,22 @@
-version: '2'
+version: '3.6'
+
 services:
   db:
     image: mongo
+    container_name: explainshell_db
+    restart: always
+
   web:
     build: .
-    command: make serve
+    command: bash start.sh
+    container_name: explainshell_web
+    restart: always
     environment:
       - MONGO_URI=mongodb://db
       - HOST_IP=0.0.0.0
     volumes:
       - .:/opt/webapp
     ports:
-      - "5000:5000"
+      - '5000:5000'
     depends_on:
       - db
