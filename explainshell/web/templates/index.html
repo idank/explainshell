@@ -26,7 +26,7 @@
                     <ul>
                         {{ macros.examplebullet(":(){ :|:& };:") }}
                         {{ macros.examplebullet("for user in $(cut -f1 -d: /etc/passwd); do crontab -u $user -l 2>/dev/null; done") }}
-                        {{ macros.examplebullet('file=$(echo `basename "$file"`)') }}
+                        {{ macros.examplebullet('name=$(printf "%s@%s" "$(id -nu)" "$(uname -n)")') }}
                         {{ macros.examplebullet("true && { echo success; } || { echo failed; }") }}
                         {{ macros.examplebullet("cut -d ' ' -f 1 /var/log/apache2/access_logs | uniq -c | sort -n") }}
                         {{ macros.examplebullet('tar zcf - some-dir | ssh some-server "cd /; tar xvzf -"') }}
