@@ -56,6 +56,7 @@ class test_manager(unittest.TestCase):
         self.assertEquals(list(notfound), ['bar'])
         self.assertEquals(list(unreachable), ['tar'])
 
+    @unittest.skip("https://github.com/idank/explainshell/pull/303#issuecomment-1272387073")
     def test_aliases(self):
         m = self._getmanager(['lsbcpp.1.gz', 'tar.1.gz', 'bsdtar.1.gz', 'basket.1.gz'])
         m.run()
