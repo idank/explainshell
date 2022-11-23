@@ -1,5 +1,5 @@
 Flask==0.12
-nltk==3.4.5
+nltk==3.6.6
 MarkupSafe==1.1.1
 nose==1.3.0
 pymongo==2.6
