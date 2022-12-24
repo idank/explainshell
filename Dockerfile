@@ -1,8 +1,5 @@
 FROM python:2.7
 
-LABEL AUTHOR="Simon Toivo Telhaug <simon.toivo@gmail.com>"
-LABEL MAINTAINER="Simon Toivo Telhaug <simon.toivo@gmail.com>"
-
 RUN apt-get update \
   && apt-get install man-db -y \
   && apt-get clean
