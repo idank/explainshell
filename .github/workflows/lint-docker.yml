@@ -1,0 +1,26 @@
+name: "Lint Dockerfile"
+
+on:
+  pull_request:
+    paths:
+      - "**/Dockerfile.*"
+      - "**/docker-compose.*"
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  hadolint:
+    name: "Lint Docker with hadolint"
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # tag=v3
+      - name: run tflint
+        uses: reviewdog/action-hadolint@master
+        with:
+          github_token: ${{ secrets.github_token }}
+          reporter: github-pr-review
+          fail_on_error: "false"
+          level: warning
+          filter_mode: "nofilter" # Optional. Check all files, not just the diff
