@@ -32,24 +32,23 @@ When querying explainshell, it:
 ## Missing man pages
 
 Right now explainshell.com contains the entire [archive of Ubuntu](http://manpages.ubuntu.com/). It's not
-possible to directly add a missing man page to the live site (it might be in the future). Instead, submit a link [here](https://github.com/idank/explainshell/issues/1)
-and I'll add it.
+possible to directly add a missing man page to the live site (it might be in the future).
 
 ## Running explainshell locally
 
-To setup a working environment that lets you run the web interface locally, you'll need to:
+Setup a working environment that lets you run the web interface locally using docker:
 
 ```ShellSession
-$ pip install -r requirements.txt
+# download db dump
+$ curl -L -o /tmp/dump.gz https://github.com/idank/explainshell/releases/download/db-dump/dump.gz
 
-# load classifier data, needs a mongodb
-$ mongorestore dump/explainshell && mongorestore -d explainshell_tests dump/explainshell
-$ make tests
-..............................................................................
-----------------------------------------------------------------------
-Ran 79 tests in 3.847s
+# start containers, load man pages from dump
+docker-compose build
+docker-compose up
 
-OK
+docker-compose exec -T db mongorestore --archive --gzip < /tmp/dump.gz
+
+# open http://localhost:5000
 ```
 
 ### Processing a man page
