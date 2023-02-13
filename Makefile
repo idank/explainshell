@@ -1,5 +1,5 @@
 tests:
-	nosetests --with-doctest tests/ explainshell/
+	nosetests --exe --with-doctest tests/ explainshell/
 
 serve:
 	python runserver.py
