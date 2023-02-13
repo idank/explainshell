@@ -40,16 +40,16 @@ Setup a working environment that lets you run the web interface locally using do
 
 ```ShellSession
 # download db dump
-curl -L -o /tmp/dump.gz https://github.com/idank/explainshell/releases/download/db-dump/dump.gz
+$ curl -L -o /tmp/dump.gz https://github.com/idank/explainshell/releases/download/db-dump/dump.gz
 
 # start containers, load man pages from dump
-docker-compose build
-docker-compose up
+$ docker-compose build
+$ docker-compose up
 
-docker-compose exec -T db mongorestore --archive --gzip < /tmp/dump.gz
+$ docker-compose exec -T db mongorestore --archive --gzip < /tmp/dump.gz
 
 # run tests
-docker-compose exec -T web make tests
+$ docker-compose exec -T web make tests
 ..SSSSSSSSS.....................................................................
 ----------------------------------------------------------------------
 Ran 80 tests in 0.041s
