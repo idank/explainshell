@@ -1,6 +1,6 @@
 #!/bin/bash
 
-release="focal"
+release="jammy"
 section="8"
 man1list="http://manpages.ubuntu.com/manpages/$release/en/man$section/"
 gzroot="http://manpages.ubuntu.com/manpages.gz/$release/man$section/"
