@@ -1,7 +1,7 @@
-## [explainshell.com](http://www.explainshell.com) - match command-line arguments to their help text
+# [explainshell.com](http://www.explainshell.com) - match command-line arguments to their help text
 
 explainshell is a tool (with a web interface) capable of parsing man pages, extracting options and
-explain a given command-line by matching each argument to the relevant help text in the man page.
+explaining a given command-line by matching each argument to the relevant help text in the man page.
 
 ## How?
 
@@ -19,9 +19,9 @@ When querying explainshell, it:
 
 1. parses the query into an AST
 2. visits interesting nodes in the AST, such as:
-    - command nodes - these nodes represent a simple command
-    - shell related nodes - these nodes represent something the shell
-      interprets such as '|', '&&'
+   - command nodes - these nodes represent a simple command
+   - shell related nodes - these nodes represent something the shell
+     interprets such as '|', '&&'
 3. for every command node we check if we know how to explain the current program,
    and then go through the rest of the tokens, trying to match each one to the
    list of known options
@@ -32,24 +32,30 @@ When querying explainshell, it:
 ## Missing man pages
 
 Right now explainshell.com contains the entire [archive of Ubuntu](http://manpages.ubuntu.com/). It's not
-possible to directly add a missing man page to the live site (it might be in the future). Instead, submit a link [here](https://github.com/idank/explainshell/issues/1)
-and I'll add it.
+possible to directly add a missing man page to the live site (it might be in the future).
 
 ## Running explainshell locally
 
-To setup a working environment that lets you run the web interface locally, you'll need to:
+Setup a working environment that lets you run the web interface locally using docker:
 
 ```ShellSession
-$ pip install -r requirements.txt
+# download db dump
+$ curl -L -o /tmp/dump.gz https://github.com/idank/explainshell/releases/download/db-dump/dump.gz
 
-# load classifier data, needs a mongodb
-$ mongorestore dump/explainshell && mongorestore -d explainshell_tests dump/explainshell
-$ make tests
-..............................................................................
+# start containers, load man pages from dump
+$ docker-compose build
+$ docker-compose up
+
+$ docker-compose exec -T db mongorestore --archive --gzip < /tmp/dump.gz
+
+# run tests
+$ docker-compose exec -T web make tests
+..SSSSSSSSS.....................................................................
 ----------------------------------------------------------------------
-Ran 79 tests in 3.847s
+Ran 80 tests in 0.041s
 
-OK
+OK (SKIP=9)
+# open http://localhost:5000 to view the ui
 ```
 
 ### Processing a man page
@@ -57,7 +63,7 @@ OK
 Use the manager to parse and save a gzipped man page in raw format:
 
 ```ShellSession
-$ PYTHONPATH=. python explainshell/manager.py --log info manpages/1/echo.1.gz
+$ docker-compose exec -T web bash -c "PYTHONPATH=. python explainshell/manager.py --log info /usr/share/man/man1/echo.1.gz"
 INFO:explainshell.store:creating store, db = 'explainshell_tests', host = 'mongodb://localhost'
 INFO:explainshell.algo.classifier:train on 994 instances
 INFO:explainshell.manager:handling manpage echo (from /tmp/es/manpages/1/echo.1.gz)
@@ -72,43 +78,4 @@ INFO:explainshell.store:inserting mapping (alias) echo -> echo (52207a1fa9b52e42
 successfully added echo
 ```
 
-### Start up a local web server:
-
-```ShellSession
-$ make serve
-python runserver.py
- * Running on http://127.0.0.1:5000/
- * Restarting with reloader
-```
-
-### Start up a local web server with docker
-
-```ShellSession
-# Build docker web and db containers
-$ docker-compose build
-$ docker-compose up
-
-# Copy dump over to container for than to import it.
-$ docker cp dump/ explainshell_db_1:/tmp/dump
-
-# Import classifiers
-$ docker exec explainshell_db_1 mongorestore /tmp/dump
-
-# Import a man page
-$ docker exec explainshell_web_1 bash -c "PYTHONPATH=. python explainshell/manager.py --log info /usr/share/man/man1/grep.1.gz"
-...
-successfully added grep.1.gz
-
-# Open browser at port 5000
-$ open http://localhost:5000
-
-# Restore test db to run tests
-$ docker exec explainshell_db_1 mongorestore -d explainshell_tests /tmp/dump/explainshell
-
-$ docker exec explainshell_web_1 make tests
-..............................................................................
-----------------------------------------------------------------------
-Ran 79 tests in 3.847s
-
-OK
-```
+Note that if you've setup using the docker instructions above, echo will already be in the database.
