@@ -27,8 +27,6 @@ When querying explainshell, it:
    list of known options
 4. returns a list of matches that are rendered with Flask
 
-## [TODO](https://raw.github.com/idank/explainshell/master/TODO) file
-
 ## Missing man pages
 
 Right now explainshell.com contains the entire [archive of Ubuntu](http://manpages.ubuntu.com/). It's not
