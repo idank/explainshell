@@ -37,8 +37,12 @@ possible to directly add a missing man page to the live site (it might be in the
 Setup a working environment that lets you run the web interface locally using docker:
 
 ```ShellSession
+
 # download db dump
 $ curl -L -o /tmp/dump.gz https://github.com/idank/explainshell/releases/download/db-dump/dump.gz
+
+# Clone Repository
+$ git clone https://github.com/idank/explainshell.git
 
 # start containers, load man pages from dump
 $ docker-compose build
