@@ -24,7 +24,6 @@
                 <div class="offset1 span10" id="examples">
                     <h3>examples</h3>
                     <ul>
-                        {{ macros.examplebullet(":(){ :|:& };:") }}
                         {{ macros.examplebullet("for user in $(cut -f1 -d: /etc/passwd); do crontab -u $user -l 2>/dev/null; done") }}
                         {{ macros.examplebullet('file=$(echo `basename "$file"`)') }}
                         {{ macros.examplebullet("true && { echo success; } || { echo failed; }") }}
