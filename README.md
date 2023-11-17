@@ -29,7 +29,7 @@ When querying explainshell, it:
 
 ## Missing man pages
 
-Right now explainshell.com contains the entire [archive of Ubuntu](http://manpages.ubuntu.com/). It's not
+Right now explainshell.com contains the entire [archive of Ubuntu](https://manpages.ubuntu.com/). It's not
 possible to directly add a missing man page to the live site (it might be in the future).
 
 ## Running explainshell locally

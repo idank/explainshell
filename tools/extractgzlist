@@ -1,9 +1,9 @@
 #!/bin/bash
 
-release="precise"
+release="jammy"
 section="8"
-man1list="http://manpages.ubuntu.com/manpages/$release/en/man$section/"
-gzroot="http://manpages.ubuntu.com/manpages.gz/$release/man$section/"
+man1list="https://manpages.ubuntu.com/manpages/$release/en/man$section/"
+gzroot="https://manpages.ubuntu.com/manpages.gz/$release/man$section/"
 filename="index$section.html"
 
 if ! [ -f $filename ]; then
