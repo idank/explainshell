@@ -3,6 +3,10 @@
 explainshell is a tool (with a web interface) capable of parsing man pages, extracting options and
 explaining a given command-line by matching each argument to the relevant help text in the man page.
 
+![xkcd comic 1168, which is about impossibility of remembering tar syntax](http://imgs.xkcd.com/comics/tar.png)
+
+_[https://xkcd.com/1168/](https://xkcd.com/1168/)_
+
 ## How?
 
 explainshell is built from the following components:
