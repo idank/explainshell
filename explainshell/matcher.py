@@ -341,14 +341,48 @@ class matcher(bashlex.ast.nodevisitor):
         helptext = helpconstants.ASSIGNMENT
         self.groups[0].results.append(matchresult(node.pos[0], node.pos[1], helptext, None))
 
+    # get_tokens: Tries to divide the string of characters into valid tokens of options.
+    # It should recognize multi-letter options and return a list of tokens.
+    # example: wget -mnp should be recognized as [-m, -np], not [-m, -n, -p].
+
+    # Recognizing the options is done using dynamic programming technique.
+    # assume the following:
+    # cnt(i): represents the number of ways you can recognize \
+    # different options starting from position i in the options string.
+    # isoption(i,j): returns 1 if the substring [i:j] is a valid option, else 0.
+    # the dynamic programming technique will goes like:
+    # cnt(i) = 0
+    # for j from i to n
+    #    cnt(i) += isoption(i,j) * cnt(j+1)
+    def get_tokens(self, chars):
+        n = len(chars)
+        count_ways = [0]*(n+1)
+        next_token = [-1]*(n+1)
+        tokens = []
+        for i in xrange(n-1,-1,-1):
+            for j in xrange(i,n+1):
+                if(self.find_option('-'+chars[i:j])):
+                    count_ways[i] += count_ways[j]
+                    next_token[i] = j
+                    # You can assert here that "count_ways[i] <= 1", if it's > 1, then there's an ambiguity.
+
+        # Building the list of tokens.
+        cur_pos = 0
+        while(next_token[cur_pos] != -1):
+            next_pos = next_token[cur_pos]
+            tokens.append(chars[cur_pos:next_pos])
+            cur_pos = next_pos
+        return tokens
+
     def visitword(self, node, word):
         def attemptfuzzy(chars):
             m = []
             if chars[0] == '-':
-                tokens = [chars[0:2]] + list(chars[2:])
+                tokens = self.get_tokens(chars[1:])
+                tokens[0] = '-' + tokens[0]
                 considerarg = True
             else:
-                tokens = list(chars)
+                tokens = self.get_tokens(chars[1:])
                 considerarg = False
 
             pos = node.pos[0]
