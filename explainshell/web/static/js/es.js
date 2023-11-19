@@ -1134,6 +1134,11 @@ function setTheme(theme) {
 
 // Theme-related stuff
 $(document).ready(function() {
+    // use theme from local storage or auto-detect otherwise
+    var selectedTheme = localStorage.getItem('theme')
+        || (window.matchMedia("(prefers-color-scheme: dark)").matches ? 'dark' : 'default')
+        || 'default';
+  
     if (!docCookies.getItem(themeCookieName)) {
         var selectedTheme = 'default';
         setTheme(selectedTheme); // to set the correct css file and data-theme
