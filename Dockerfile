@@ -1,21 +1,15 @@
-FROM python:2.7
+FROM python:3.12
 
-RUN sed -i 's|deb.debian.org/debian|archive.debian.org/debian|g' /etc/apt/sources.list \
-  && sed -i 's|security.debian.org/debian-security|archive.debian.org/debian-security|g' /etc/apt/sources.list \
-  && sed -i '/buster-updates/d' /etc/apt/sources.list \
-  && apt-get update \
-  && apt-get install man-db -y \
-  && apt-get clean
+RUN apt update \
+  && apt install man-db -y \
+  && apt clean
 
-ADD ./requirements.txt /tmp/requirements.txt
-
-RUN pip install --upgrade pip \
-  && python --version \
-  && pip install -r /tmp/requirements.txt \
-  && rm -rf ~/.cache/pip/*
-
-ADD ./ /opt/webapp/
 WORKDIR /opt/webapp
+COPY . .
+
+RUN pip3 install --no-cache-dir --no-warn-script-location --upgrade pip setuptools wheel virtualenv \
+  && pip3 install --no-cache-dir --no-warn-script-location -r requirements.txt
+
 EXPOSE 5000
 
-CMD ["make", "serve"]
+CMD ["python3", "runserver.py"]
