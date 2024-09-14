@@ -2,8 +2,9 @@ services:
   db:
     image: mongo
   web:
-    build: .
-    command: make serve
+    build: 
+      context: .
+      dockerfile: Dockerfile
     environment:
       - MONGO_URI=mongodb://db
       - HOST_IP=0.0.0.0
