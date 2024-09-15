@@ -6,8 +6,12 @@ explainshell can understand, so we have to resort to manually
 writing these down and adding them.
 """
 
+import logging
 import textwrap
+
 from explainshell import store, config
+from explainshell.logger.logger_helper import logger
+from explainshell.logger.logging_interceptor import InterceptHandler
 
 sp = store.Paragraph
 so = store.Option
@@ -241,10 +245,9 @@ line.   If <u>filename</u>  is  supplied,  it  is  used as the name of the histo
 )
 
 if __name__ == "__main__":
-    import logging.config
-
-    logging.config.dictConfig(config.LOGGING_DICT)
+    # activate logging and redirect all logs to loguru
+    logging.basicConfig(handlers=[InterceptHandler()], level=logging.DEBUG, force=True)
 
     s = store.Store("explainshell", config.MONGO_URI)
-    for m in BUILTINS.itervalues():
-        s.addmanpage(m)
+    for m in BUILTINS.values():
+        s.add_manpage(m)
