@@ -172,6 +172,17 @@ a {
     font-size: 20px;
 }
 
+pre code.hljs {
+    background-color: transparent;
+    padding: 2px;
+}
+pre.highlightjs {
+    background-color: transparent;
+    margin: 2px;
+    padding: 0px;
+    border: none;
+}
+
 body[data-theme='dark'] {
     color: white;
 }
@@ -197,6 +208,9 @@ body[data-theme='dark'] {
 [data-theme='dark'] pre {
     background-color: #222;
     color: white;
+}
+[data-theme='dark'] pre.highlightjs {
+    background-color: transparent;
 }
 
 [data-theme='dark'] .caret {

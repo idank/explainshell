@@ -17,10 +17,18 @@ var themes = {
     default: '//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/css/bootstrap.min.css',
     dark: '//maxcdn.bootstrapcdn.com/bootswatch/2.3.1/cyborg/bootstrap.min.css'
 };
+var hljs_themes = {
+    default: '//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css',
+    dark: '//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css'
+}
 if (debug){
     themes = {
         default: '/static/css/bootstrap.min.css',
         dark: '/static/css/bootstrap-cyborg.min.css'
+    };
+    hljs_themes = {
+        default: '/static/css/highlight.default.min.css',
+        dark: '/static/css/hljs-atom-one-dark.min.css'
     };
 }
 
@@ -37,7 +45,7 @@ var docCookies = {
       return decodeURIComponent(document.cookie.replace(new RegExp("(?:(?:^|.*;)\\s*" + encodeURIComponent(sKey).replace(/[\-\.\+\*]/g, "\\$&") + "\\s*\\=\\s*([^;]*).*$)|^.*$"), "$1")) || null;
     },
     setItem: function (sKey, sValue, vEnd, sPath, sDomain, bSecure) {
-      if (!sKey || /^(?:expires|max\-age|path|domain|secure)$/i.test(sKey)) { return false; }
+      if (!sKey || /^(?:expires|max-age|path|domain|secure)$/i.test(sKey)) { return false; }
       var sExpires = "";
       if (vEnd) {
         switch (vEnd.constructor) {
@@ -1127,6 +1135,8 @@ function setTheme(theme) {
     console.log('setting theme to', theme);
 
     $("#bootstrapCSS").attr('href', themes[theme]);
+    $("#hljsCSS").attr('href', hljs_themes[theme]);
+
     $(document.body).attr('data-theme', theme);
     docCookies.setItem(themeCookieName, theme, Infinity, '/');
 }
