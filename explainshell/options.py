@@ -14,7 +14,7 @@ def extract(manpage):
     options"""
     for i, p in enumerate(manpage.paragraphs):
         if p.is_option:
-            s, ln = extract_option(p.cleantext())
+            s, ln = extract_option(p.clean_text())
             if s or ln:
                 expects_arg = any(x.expects_arg for x in s + ln)
                 s = [x.flag for x in s]
