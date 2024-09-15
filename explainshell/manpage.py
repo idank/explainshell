@@ -100,7 +100,7 @@ for search_for, rp_with, underline in _rp_prefix:
         x = list(rp_with)
         x.insert(1, "</u>")
         x = "".join(x)
-        _replacements.append((x, "%s</u>" % rp_with))
+        _replacements.append((x, f"{rp_with}</u>"))
 
 _replacements_no_prefix = [
     "\xc2\xb7",  # bullet
@@ -121,7 +121,7 @@ for s in _replacements_no_prefix:
     x = list(s)
     x.insert(1, "</u>")
     x = "".join(x)
-    _replacements.append((x, "%s</u>" % s))
+    _replacements.append((x, f"{s}</u>"))
 
 _href = re.compile(r'<a href="file:///[^\?]*\?([^\(]*)\(([^\)]*)\)">')
 _section = re.compile(r"<b>([^<]+)</b>")
@@ -139,8 +139,9 @@ def _parse_text(lines):
         )
         for look_for, rp_with in _replacements:
             ln = re.sub(look_for, rp_with, ln)
+
         # confirm the line is valid utf8
-        l_replaced = ln.decode("utf8", "ignore").encode("utf8")
+        l_replaced = ln  # .decode("utf8", "ignore").encode("utf8")
         if l_replaced != ln:
             logger.error("line %r contains invalid utf8", ln)
             ln = l_replaced
@@ -177,14 +178,14 @@ def _parse_synopsis(base, synopsis):
 
 
 class ManPage:
-    """read the man page at path by executing w3mman2html.cgi and find its
-    synopsis with lexgrog
+    """read the man page at path by executing `w3mman2html.cgi` and find it's
+    synopsis with `lexgrog`
 
     since some man pages share the same name (different versions), each
     alias of a man page has a score that's determined in this simple fashion:
     - name of man page source file is given a score of 10
     - all other names found for a particular man page are given a score of 1
-      (other names are found by scanning the output of lexgrog)
+      (other names are found by scanning the output of `lexgrog`)
     """
 
     def __init__(self, path):
@@ -201,11 +202,27 @@ class ManPage:
         on the class instance."""
         cmd = [config.MAN2HTML, urllib.parse.urlencode({"local": os.path.abspath(self.path)})]
         logger.info("executing %r", " ".join(cmd))
-        self._text = subprocess.check_output(cmd, stderr=devnull, env=ENV)
+        self._text = ""
+
         try:
-            self.synopsis = subprocess.check_output(
-                ["lexgrog", self.path], stderr=devnull
-            ).rstrip()
+            t_proc = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=300, env=ENV)
+
+            if t_proc.stdout:
+                self._text = t_proc.stdout
+            if t_proc.stderr:
+                logger.error(f"failed to extract text for {self.name} -> w3mman2html.cgi returned: {t_proc.stderr}")
+        except Exception as error_msg:
+            logger.error(f"failed to extract text for {self.name} -> error: {error_msg}")
+
+        try:
+            self.synopsis = ""
+            s_proc = subprocess.run(
+                ["lexgrog", self.path], capture_output=True, text=True, timeout=300
+            )
+            if s_proc.stdout:
+                self.synopsis = s_proc.stdout.rstrip()
+            if s_proc.stderr:
+                logger.error(f"failed to extract text for {self.name} -> lexgrog returned: {s_proc.stderr}")
         except subprocess.CalledProcessError:
             logger.error("failed to extract synopsis for %s", self.name)
 
@@ -222,7 +239,7 @@ class ManPage:
             d = collections.OrderedDict()
             for prog, text in self.synopsis:
                 d.setdefault(text, []).append(prog)
-            text, progs = d.items()[0]
+            text, progs = list(dict(d).items())[0]
             self.synopsis = text
             self.aliases.update(progs)
         self.aliases.remove(self.name)
