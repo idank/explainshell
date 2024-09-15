@@ -18,6 +18,6 @@ def suggestions(matches, command):
             for other_mp in sorted(m["suggestions"], key=lambda mp: mp.section):
                 mid = f"{other_mp.name}.{other_mp.section}"
                 new_suggestions.append(
-                    {"cmd": "".join([before, mid, after]), "text": other_mp.namesection}
+                    {"cmd": "".join([before, mid, after]), "text": other_mp.name_section}
                 )
             m["suggestions"] = new_suggestions

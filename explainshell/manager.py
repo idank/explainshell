@@ -49,7 +49,7 @@ class Manager:
         assert len(ctx.manpage.paragraphs) > 1
 
         ctx.manpage = store.ManPage(
-            ctx.manpage.shortpath,
+            ctx.manpage.short_path,
             ctx.manpage.name,
             ctx.manpage.synopsis,
             ctx.manpage.paragraphs,
@@ -73,7 +73,7 @@ class Manager:
 
     def _write(self, ctx, f_runner):
         f_runner.pre_add_manpage()
-        return ctx.store.addmanpage(ctx.manpage)
+        return ctx.store.add_manpage(ctx.manpage)
 
     def _update(self, ctx, f_runner):
         f_runner.pre_add_manpage()
@@ -171,7 +171,7 @@ class Manager:
             logger.info("inserting mapping (multi_cmd) %s -> %s", src, dst)
 
         for multi_cmd, _id in multi_cmds.items():
-            self.store.setmulti_cmd(_id)
+            self.store.set_multi_cmd(_id)
             logger.info("making %r a multi_cmd", multi_cmd)
 
         return mappings_to_a, multi_cmds

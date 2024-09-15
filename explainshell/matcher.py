@@ -39,12 +39,12 @@ class Matcher(bashlex.ast.nodevisitor):
     """
 
     def __init__(self, s, store):
-        self.s = s.encode("latin1", "replace")
+        self.s = s
         self.store = store
         self._prev_option = self._current_option = None
         self.groups = [MatchGroup("shell")]
 
-        # a list of matchwordexpansions where expansions happened during word
+        # a list of `match_word_exp` where expansions happened during word
         # expansion
         self.expansions = []
 
@@ -149,6 +149,8 @@ class Matcher(bashlex.ast.nodevisitor):
 
         if r_type in help_constants.REDIRECTION_KIND:
             helptext.append(help_constants.REDIRECTION_KIND[r_type])
+
+        logger.debug(helptext)
 
         self.groups[0].results.append(
             MatchResult(node.pos[0], node.pos[1], "\n\n".join(helptext), None)
@@ -393,18 +395,18 @@ class Matcher(bashlex.ast.nodevisitor):
             m = []
             if chars[0] == "-":
                 tokens = [chars[0:2]] + list(chars[2:])
-                considerarg = True
+                consider_arg = True
             else:
                 tokens = list(chars)
-                considerarg = False
+                consider_arg = False
 
             pos = node.pos[0]
-            prevoption = None
+            prev_option = None
             for i, t in enumerate(tokens):
                 op = t if t[0] == "-" else "-" + t
                 option = self.find_option(op)
                 if option:
-                    if considerarg and not m and option.expects_arg:
+                    if consider_arg and not m and option.expects_arg:
                         logger.info(
                             "option %r expected an arg, taking the rest too", option
                         )
@@ -420,7 +422,7 @@ class Matcher(bashlex.ast.nodevisitor):
                 # match the current token, take the rest as its argument, this
                 # covers a series of short options where the last one has an argument
                 # with no space between it, such as 'xargs -r0n1'
-                elif considerarg and prevoption and prevoption.expects_arg:
+                elif consider_arg and prev_option and prev_option.expects_arg:
                     pmr = m[-1]
                     mr = MatchResult(
                         pmr.start, pmr.end + (len(tokens) - i), pmr.text, None
@@ -434,7 +436,7 @@ class Matcher(bashlex.ast.nodevisitor):
                 else:
                     m.append(self.unknown(t, pos, pos + len(t)))
                 pos += len(t)
-                prevoption = option
+                prev_option = option
             return m
 
         def _visitword(node, word):

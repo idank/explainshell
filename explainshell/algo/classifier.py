@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 def get_features(paragraph):
     features = {}
-    p_text = paragraph.cleantext()
+    p_text = paragraph.clean_text()
+    logger.debug(f"length of p_text: {len(p_text)}")
     assert p_text
 
     features["starts_with_hyphen"] = algo.features.starts_with_hyphen(p_text)
@@ -46,7 +47,7 @@ class Classifier:
         if self.classifier:
             return
 
-        man_pages = self.store.trainingset()
+        man_pages = self.store.training_set()
 
         # flatten the manpages so we get a list of (manpage-name, paragraph)
         def flatten_manpages(manpage):
@@ -58,19 +59,19 @@ class Classifier:
         paragraphs = itertools.chain(*[flatten_manpages(m) for m in man_pages])
         training = list(paragraphs)
 
-        negids = [p for p in training if not p.is_option]
-        posids = [p for p in training if p.is_option]
+        neg_ids = [p for p in training if not p.is_option]
+        pos_ids = [p for p in training if p.is_option]
 
-        negfeats = [(get_features(p), False) for p in negids]
-        posfeats = [(get_features(p), True) for p in posids]
+        neg_feats = [(get_features(p), False) for p in neg_ids]
+        pos_feats = [(get_features(p), True) for p in pos_ids]
 
-        negcutoff = len(negfeats) * 3 / 4
-        poscutoff = len(posfeats) * 3 / 4
+        neg_cutoff = int(len(neg_feats) * 3 / 4)
+        pos_cutoff = int(len(pos_feats) * 3 / 4)
 
-        trainfeats = negfeats[:negcutoff] + posfeats[:poscutoff]
-        self.testfeats = negfeats[negcutoff:] + posfeats[poscutoff:]
+        train_feats = neg_feats[:neg_cutoff] + pos_feats[:pos_cutoff]
+        self.test_feats = neg_feats[neg_cutoff:] + pos_feats[pos_cutoff:]
 
-        logger.info("train on %d instances", len(trainfeats))
+        logger.info("train on %d instances", len(train_feats))
 
         if self.algo == "maxent":
             c = nltk.classify.maxent.MaxentClassifier
@@ -79,14 +80,14 @@ class Classifier:
         else:
             raise ValueError("unknown classifier")
 
-        self.classifier = c.train(trainfeats, **self.classifier_args)
+        self.classifier = c.train(train_feats, **self.classifier_args)
 
     def evaluate(self):
         self.train()
         ref_sets = collections.defaultdict(set)
         test_sets = collections.defaultdict(set)
 
-        for i, (feats, label) in enumerate(self.testfeats):
+        for i, (feats, label) in enumerate(self.test_feats):
             ref_sets[label].add(i)
             guess = self.classifier.prob_classify(feats)
             observed = guess.max()

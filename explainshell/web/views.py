@@ -51,10 +51,10 @@ def explain():
     except NotImplementedError as error_msg:
         logger.warning("not implemented error trying to explain %r", command)
         msg = (
-            "the parser doesn't support %r constructs in the command you tried. you may "
-            "<a href='https://github.com/idank/explainshell/issues'>report a "
-            "bug</a> to have this added, if one doesn't already exist."
-        ) % error_msg.args[0]
+            f"the parser doesn't support {error_msg.args[0]} constructs in the command you tried. you may "
+            f"<a href='https://github.com/idank/explainshell/issues'>report a "
+            f"bug</a> to have this added, if one doesn't already exist."
+        )
 
         return render_template("errors/error.html", title="error!", message=msg)
     except Exception as error_msg:
@@ -77,7 +77,7 @@ def explain_old(section, program):
     if "args" in request.args:
         args = request.args["args"]
         command = f"{program} {args}"
-        return redirect("/explain?cmd=%s" % urllib.parse.quote_plus(command), 301)
+        return redirect(f"/explain?cmd={urllib.parse.quote_plus(command)}", 301)
     else:
         try:
             mp, suggestions = explain_program(program, s)
@@ -91,7 +91,7 @@ def explain_old(section, program):
 def explain_program(program, store):
     mps = store.find_man_page(program)
     mp = mps.pop(0)
-    program = mp.namesection
+    program = mp.name_section
 
     synopsis = mp.synopsis
     if synopsis:
@@ -108,7 +108,7 @@ def explain_program(program, store):
     suggestions = []
     for other_mp in mps:
         d = {
-            "text": other_mp.namesection,
+            "text": other_mp.name_section,
             "link": f"{other_mp.section}/{other_mp.name}",
         }
         suggestions.append(d)
@@ -145,12 +145,17 @@ def explain_cmd(command, store):
     # position
     id_start_pos = {}
 
+    logger.debug(f"processing {len(shell_group.results)} shell_group results ...")
+
     ln = []
     for m in shell_group.results:
         cmd_class = shell_group.name
         help_class = f"help-{len(text_ids)}"
+
         text = str(m.text)
-        if text:
+        if isinstance(m.text, bytes):
+            text = m.text.decode("utf-8")
+        if len(text.replace("None", "")) > 0:
             help_class = text_ids.setdefault(text, help_class)
         else:
             # unknowns in the shell group are possible when our parser left
@@ -166,13 +171,19 @@ def explain_cmd(command, store):
         ln.append(d)
     matches.append(ln)
 
+    logger.debug(f"processing {len(cmd_groups)} cmd_group results ...")
+
     for cmd_group in cmd_groups:
         ln = []
         for m in cmd_group.results:
             cmd_class = cmd_group.name
             help_class = f"help-{len(text_ids)}"
+
             text = str(m.text)
-            if text:
+            if isinstance(m.text, bytes):
+                text = m.text.decode("utf-8")
+
+            if len(text.replace("None", "")) > 0:
                 help_class = text_ids.setdefault(text, help_class)
             else:
                 cmd_class += " unknown"
@@ -199,7 +210,7 @@ def explain_cmd(command, store):
     matches = list(itertools.chain.from_iterable(matches))
     helpers.suggestions(matches, command)
 
-    # _checkoverlaps(matcher_.s, matches)
+    # _check_overlaps(matcher_.s, matches)
     matches.sort(key=lambda d: d["start"])
 
     it = util.Peekable(iter(matches))
@@ -238,42 +249,42 @@ def format_match(d, m, expansions):
 
     # go over the expansions, wrapping them with a link; leave everything else
     # untouched
-    expandedmatch = ""
+    expanded_match = ""
     i = 0
     for start, end, kind in expansions:
         if start >= m.end:
             break
-        relativestart = start - m.start
-        relativeend = end - m.start
+        rel_start = start - m.start
+        rel_end = end - m.start
 
-        if i < relativestart:
-            for j in range(i, relativestart):
+        if i < rel_start:
+            for j in range(i, rel_start):
                 if m.match[j].isspace():
-                    expandedmatch += markupsafe.Markup("&nbsp;")
+                    expanded_match += markupsafe.Markup("&nbsp;")
                 else:
-                    expandedmatch += markupsafe.escape(m.match[j])
-            i = relativestart + 1
+                    expanded_match += markupsafe.escape(m.match[j])
+            i = rel_start + 1
         if m.start <= start and end <= m.end:
-            s = m.match[relativestart:relativeend]
+            s = m.match[rel_start:rel_end]
 
             if kind == "substitution":
-                content = markupsafe.Markup(_substitutionmarkup(s))
+                content = markupsafe.Markup(_substitution_markup(s))
             else:
                 content = s
 
-            expandedmatch += markupsafe.Markup(
+            expanded_match += markupsafe.Markup(
                 '<span class="expansion-{0}">{1}</span>'
             ).format(kind, content)
-            i = relativeend
+            i = rel_end
 
     if i < len(m.match):
-        expandedmatch += markupsafe.escape(m.match[i:])
+        expanded_match += markupsafe.escape(m.match[i:])
 
-    assert expandedmatch
-    d["match"] = expandedmatch
+    assert expanded_match
+    d["match"] = expanded_match
 
 
-def _substitutionmarkup(cmd):
+def _substitution_markup(cmd):
     """
     >>> _substitutionmarkup('foo')
     '<a href="/explain?cmd=foo" title="Zoom in to nested command">foo</a>'
@@ -286,13 +297,12 @@ def _substitutionmarkup(cmd):
     ).format(cmd=cmd, query=encoded)
 
 
-def _checkoverlaps(s, matches):
+def _check_overlaps(s, matches):
     explained = [None] * len(s)
     for d in matches:
         for i in range(d["start"], d["end"]):
             if explained[i]:
                 raise RuntimeError(
-                    "explained overlap for group %s at %d with %s"
-                    % (d, i, explained[i])
+                    f"explained overlap for group {d} at {i} with {explained[i]}"
                 )
             explained[i] = d

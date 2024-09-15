@@ -5,8 +5,10 @@ data objects to save processed man pages to mongodb
 import collections
 import re
 import logging
+from pprint import pprint
 
 import pymongo
+from bson import ObjectId
 
 from explainshell import errors, help_constants, util, config
 
@@ -39,6 +41,9 @@ class Paragraph:
         self.text = text
         self.section = section
         self.is_option = is_option
+
+        if not isinstance(self.text, str):
+            self.text = self.text.decode("utf-8")
 
     def clean_text(self):
         t = re.sub(r"<[^>]+>", "", self.text)
@@ -107,9 +112,9 @@ class Option(Paragraph):
             p,
             d["short"],
             d["long"],
-            d["expects_arg"],
+            d["expectsarg"],
             d["argument"],
-            d.get("nested_cmd"),
+            d.get("nestedcmd"),
         )
 
     def to_store(self):
@@ -117,9 +122,9 @@ class Option(Paragraph):
         assert d["is_option"]
         d["short"] = self.short
         d["long"] = self.long
-        d["expects_arg"] = self.expects_arg
+        d["expectsarg"] = self.expects_arg
         d["argument"] = self.argument
-        d["nested_cmd"] = self.nested_cmd
+        d["nestedcmd"] = self.nested_cmd
         return d
 
     def __str__(self):
@@ -250,10 +255,10 @@ class ManPage:
             synopsis,
             paragraphs,
             [tuple(x) for x in d["aliases"]],
-            d["partial_match"],
-            d["multi_cmd"],
+            d["partialmatch"],
+            d["multicommand"],
             d["updated"],
-            d.get("nested_cmd"),
+            d.get("nestedcmd"),
         )
 
     @staticmethod
@@ -293,12 +298,12 @@ class Store:
         self.mapping.drop()
         self.manpage.drop()
 
-    def trainingset(self):
+    def training_set(self):
         for d in self.classifier.find():
             yield ClassifierManpage.from_store(d)
 
     def __contains__(self, name):
-        c = self.mapping.find({"src": name}).count()
+        c = self.mapping.count_documents({"src": name})
         return c > 0
 
     def __iter__(self):
@@ -332,24 +337,24 @@ class Store:
                 section = splitted[1]
 
         logger.info("looking up manpage in mapping with src %r", name)
-        cursor = self.mapping.find({"src": name})
+        cursor = list(self.mapping.find({"src": name}))
 
-        logger.info(list(cursor))
-        count = len(list(cursor))
+        count = len(cursor)
         if count == 0:
+            logger.debug(f"count is {count}")
             raise errors.ProgramDoesNotExist(name)
 
         dsts = {d["dst"]: d["score"] for d in cursor}
-        cursor = self.manpage.find(
+        cursor = list(self.manpage.find(
             {"_id": {"$in": list(dsts.keys())}}, {"name": 1, "source": 1}
-        )
+        ))
         if len(list(cursor)) != len(dsts):
             logger.error(
                 "one of %r mappings is missing in manpage collection "
                 "(%d mappings, %d found)",
                 dsts,
                 len(dsts),
-                cursor.count(),
+                len(cursor),
             )
         results = [(d.pop("_id"), ManPage.from_store_name_only(**d)) for d in cursor]
         results.sort(key=lambda x: dsts.get(x[0], 0), reverse=True)
@@ -381,40 +386,42 @@ class Store:
         # find all srcs that point to oid
         srcs = [d["src"] for d in cursor]
         # find all dsts of srcs
-        suggestionoids = self.mapping.find({"src": {"$in": srcs}}, {"dst": 1})
+        suggestion_oids = self.mapping.find({"src": {"$in": srcs}}, {"dst": 1})
         # remove already discovered
-        suggestionoids = [d["dst"] for d in suggestionoids if d["dst"] not in skip]
-        if not suggestionoids:
+        suggestion_oids = [d["dst"] for d in suggestion_oids if d["dst"] not in skip]
+        if not suggestion_oids:
             return []
 
         # get just the name and source of found suggestions
-        suggestionoids = self.manpage.find(
-            {"_id": {"$in": suggestionoids}}, {"name": 1, "source": 1}
+        suggestion_oids = self.manpage.find(
+            {"_id": {"$in": suggestion_oids}}, {"name": 1, "source": 1}
         )
         return [
-            (d.pop("_id"), ManPage.from_store_name_only(**d)) for d in suggestionoids
+            (d.pop("_id"), ManPage.from_store_name_only(**d)) for d in suggestion_oids
         ]
 
     def add_mapping(self, src, dst, score):
-        self.mapping.insert({"src": src, "dst": dst, "score": score})
+        if not isinstance(dst, ObjectId):
+            dst = dst.inserted_id
+        self.mapping.insert_one({"src": src, "dst": dst, "score": score})
 
-    def addmanpage(self, m):
-        """add m into the store, if it exists first remove it and its mappings
+    def add_manpage(self, m):
+        """add `m` into the store, if it exists first remove it and it's mappings
 
-        each man page may have aliases besides the name determined by its
+        each man page may have aliases besides the name determined by it's
         basename"""
         d = self.manpage.find_one({"source": m.source})
         if d:
             logger.info("removing old manpage %s (%s)", m.source, d["_id"])
-            self.manpage.remove(d["_id"])
+            self.manpage.delete_one({"_id": d["_id"]})
 
             # remove old mappings if there are any
-            c = self.mapping.count()
-            self.mapping.remove({"dst": d["_id"]})
-            c -= self.mapping.count()
+            c = self.mapping.count_documents({})
+            self.mapping.delete_one({"dst": d["_id"]})
+            c -= self.mapping.count_documents({})
             logger.info("removed %d mappings for manpage %s", c, m.source)
 
-        o = self.manpage.insert(m.to_store())
+        o = self.manpage.insert_one(m.to_store())
 
         for alias, score in m.aliases:
             self.add_mapping(alias, o, score)
@@ -433,7 +440,7 @@ class Store:
         change updated attribute so we don't overwrite this in the future"""
         logger.info("updating manpage %s", m.source)
         m.updated = True
-        self.manpage.update({"source": m.source}, m.to_store())
+        self.manpage.update_one({"source": m.source}, m.to_store())
         _id = self.manpage.find_one({"source": m.source}, fields={"_id": 1})["_id"]
         for alias, score in m.aliases:
             if alias not in self:
@@ -470,20 +477,20 @@ class Store:
 
         notfound = reachable - man_pages
         if notfound:
-            logger.error("mappings to inexisting manpages: %r", notfound)
+            logger.error("mappings to non-existing manpages: %r", notfound)
             ok = False
 
         return ok, unreachable, notfound
 
     def names(self):
-        cursor = self.manpage.find(fields={"name": 1})
+        cursor = self.manpage.find({}, {"name": 1})
         for d in cursor:
             yield d["_id"], d["name"]
 
     def mappings(self):
-        cursor = self.mapping.find(fields={"src": 1})
+        cursor = self.mapping.find({}, {"src": 1})
         for d in cursor:
             yield d["src"], d["_id"]
 
-    def setmulti_cmd(self, manpage_id):
-        self.manpage.update({"_id": manpage_id}, {"$set": {"multi_cmd": True}})
+    def set_multi_cmd(self, manpage_id):
+        self.manpage.update_one({"_id": manpage_id}, {"$set": {"multi_cmd": True}})
