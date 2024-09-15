@@ -42,5 +42,5 @@ class="{{ d.commandclass }}"{% if d.helpclass %} helpref="{{ d.helpclass }}"{% e
 {%- endmacro %}
 
 {%- macro examplebullet(cmd) -%}
-<li><a href='/explain?cmd={{ cmd|urlencode }}'>{{ cmd|e }}</a></li>
+<li><a href='/explain?cmd={{ cmd|urlencode }}'><pre class="highlightjs"><code class="language-bash">{{ cmd|e }}</code></pre></a></li>
 {%- endmacro %}
