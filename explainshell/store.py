@@ -5,7 +5,8 @@ data objects to save processed man pages to mongodb
 import collections
 import re
 import logging
-from pprint import pprint
+
+# from pprint import pprint
 
 import pymongo
 from bson import ObjectId
@@ -69,7 +70,7 @@ class Paragraph:
     def __repr__(self):
         t = self.clean_text()
         t = t[: min(20, t.find("\n"))].lstrip()
-        return "<paragraph %d, %s: %r>" % (self.idx, self.section, t)
+        return f"<paragraph {self.idx}, {self.section}: {t}>"
 
     def __eq__(self, other):
         if not other:
@@ -108,6 +109,8 @@ class Option(Paragraph):
     def from_store(cls, d):
         p = Paragraph.from_store(d)
 
+        # logger.debug(str(vars(d)))
+
         return cls(
             p,
             d["short"],
@@ -128,7 +131,7 @@ class Option(Paragraph):
         return d
 
     def __str__(self):
-        return "(%s)" % ", ".join([str(x) for x in self.opts])
+        return "(" + ", ".join([str(x) for x in self.opts]) + ")"
 
     def __repr__(self):
         return f"<options for paragraph {self.idx}: {self}"
@@ -249,16 +252,34 @@ class ManPage:
         else:
             synopsis = help_constants.NO_SYNOPSIS
 
+        partial_match = None
+        if "partialmatch" in d:
+            partial_match = d["partialmatch"]
+        elif "partial_match" in d:
+            partial_match = d["partial_match"]
+
+        multi_cmd = None
+        if "multicommand" in d:
+            multi_cmd = d["multicommand"]
+        elif "multi_cmd" in d:
+            multi_cmd = d["multi_cmd"]
+
+        nested_cmd = None
+        if "nestedcmd" in d:
+            nested_cmd = d["nestedcmd"]
+        elif "nested_cmd" in d:
+            nested_cmd = d["nested_cmd"]
+
         return ManPage(
             d["source"],
             d["name"],
             synopsis,
             paragraphs,
             [tuple(x) for x in d["aliases"]],
-            d["partialmatch"],
-            d["multicommand"],
+            partial_match,
+            multi_cmd,
             d["updated"],
-            d.get("nestedcmd"),
+            nested_cmd,
         )
 
     @staticmethod
@@ -345,9 +366,11 @@ class Store:
             raise errors.ProgramDoesNotExist(name)
 
         dsts = {d["dst"]: d["score"] for d in cursor}
-        cursor = list(self.manpage.find(
-            {"_id": {"$in": list(dsts.keys())}}, {"name": 1, "source": 1}
-        ))
+        cursor = list(
+            self.manpage.find(
+                {"_id": {"$in": list(dsts.keys())}}, {"name": 1, "source": 1}
+            )
+        )
         if len(list(cursor)) != len(dsts):
             logger.error(
                 "one of %r mappings is missing in manpage collection "
