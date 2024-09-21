@@ -174,6 +174,10 @@ def _parse_synopsis(base, synopsis):
     synopsis = synopsis[len(base) + 3: -1]
     if synopsis[-1] == ".":
         synopsis = synopsis[:-1]
+
+    if not SPLIT_SYNOP.match(synopsis):
+        return []
+
     return SPLIT_SYNOP.match(synopsis).groups()
 
 
