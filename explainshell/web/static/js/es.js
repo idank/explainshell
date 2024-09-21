@@ -232,6 +232,8 @@ function eslink(clazz, option, mid, color) {
         this.goingleft = rrmid <= mid;
 
         $(this.help).css("border-color", this.color);
+        
+        $("#" + clazz + " b:first-of-type").css("color", this.color);
     }
 }
 
@@ -264,7 +266,7 @@ eslink.prototype.nearby = function(other) {
     return Math.abs(r.right - rr.left) <= closeness || Math.abs(r.left - rr.right) <= closeness;
 };
 
-// a conveninent wrapper around an array of points that allows to chain appends
+// a convenient wrapper around an array of points that allows to chain appends
 function espath() {
     this.points = [];
 }
