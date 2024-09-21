@@ -132,9 +132,10 @@ def _parse_text(lines):
     section = None
     i = 0
     for ln in lines:
+        # TODO: check if this url is still valid
         ln = re.sub(
             _href,
-            r'<a href="http://manpages.ubuntu.com/manpages/precise/en/man\2/\1.\2.html">',
+            r'<a href="https://manpages.ubuntu.com/manpages/noble/en/man\2/\1.\2.html">',
             ln,
         )
         for look_for, rp_with in _replacements:
