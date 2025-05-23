@@ -3,6 +3,16 @@
 explainshell is a tool (with a web interface) capable of parsing man pages, extracting options and
 explaining a given command-line by matching each argument to the relevant help text in the man page.
 
+> [!IMPORTANT]  
+> ### ⚠️ Note on Maintenance and Manpages
+>
+> This project is actively maintained in terms of keeping it healthy and functional — issues are addressed, and the core remains stable.
+> 
+> However, please note that the **manpages are outdated**. The previous system for generating them was unsustainable, and they haven’t been updated in some time. There are currently **no active plans** to revise this mechanism.
+> 
+> If you're relying on manpages, be aware that they may not reflect the latest behavior. Contributions in this area are welcome but would require rethinking the documentation pipeline.
+
+
 ## How?
 
 explainshell is built from the following components:
