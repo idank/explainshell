@@ -1,4 +1,6 @@
-import itertools, collections, logging
+import itertools
+import collections
+import logging
 
 import nltk
 import nltk.metrics
@@ -9,26 +11,32 @@ from explainshell import algo, config
 
 logger = logging.getLogger(__name__)
 
+
 def get_features(paragraph):
     features = {}
-    ptext = paragraph.cleantext()
-    assert ptext
+    p_text = paragraph.clean_text()
+    logger.debug(f"length of p_text: {len(p_text)}")
+    assert p_text
 
-    features['starts_with_hyphen'] = algo.features.starts_with_hyphen(ptext)
-    features['is_indented'] = algo.features.is_indented(ptext)
-    features['par_length'] = algo.features.par_length(ptext)
-    for w in ('=', '--', '[', '|', ','):
-        features['first_line_contains_%s' % w] = algo.features.first_line_contains(ptext, w)
-    features['first_line_length'] = algo.features.first_line_length(ptext)
-    features['first_line_word_count'] = algo.features.first_line_word_count(ptext)
-    features['is_good_section'] = algo.features.is_good_section(paragraph)
-    features['word_count'] = algo.features.word_count(ptext)
+    features["starts_with_hyphen"] = algo.features.starts_with_hyphen(p_text)
+    features["is_indented"] = algo.features.is_indented(p_text)
+    features["par_length"] = algo.features.par_length(p_text)
+    for w in ("=", "--", "[", "|", ","):
+        features[f"first_line_contains_{w}"] = algo.features.first_line_contains(
+            p_text, w
+        )
+    features["first_line_length"] = algo.features.first_line_length(p_text)
+    features["first_line_word_count"] = algo.features.first_line_word_count(p_text)
+    features["is_good_section"] = algo.features.is_good_section(paragraph)
+    features["word_count"] = algo.features.word_count(p_text)
 
     return features
 
-class classifier(object):
-    '''classify the paragraphs of a man page as having command line options
-    or not'''
+
+class Classifier:
+    """classify the paragraphs of a man page as having command line options
+    or not"""
+
     def __init__(self, store, algo, **classifier_args):
         self.store = store
         self.algo = algo
@@ -39,59 +47,60 @@ class classifier(object):
         if self.classifier:
             return
 
-        manpages = self.store.trainingset()
+        man_pages = self.store.training_set()
 
         # flatten the manpages so we get a list of (manpage-name, paragraph)
         def flatten_manpages(manpage):
-            l = []
+            p_list = []
             for para in manpage.paragraphs:
-                l.append(para)
-            return l
-        paragraphs = itertools.chain(*[flatten_manpages(m) for m in manpages])
+                p_list.append(para)
+            return p_list
+
+        paragraphs = itertools.chain(*[flatten_manpages(m) for m in man_pages])
         training = list(paragraphs)
 
-        negids = [p for p in training if not p.is_option]
-        posids = [p for p in training if p.is_option]
+        neg_ids = [p for p in training if not p.is_option]
+        pos_ids = [p for p in training if p.is_option]
 
-        negfeats = [(get_features(p), False) for p in negids]
-        posfeats = [(get_features(p), True) for p in posids]
+        neg_feats = [(get_features(p), False) for p in neg_ids]
+        pos_feats = [(get_features(p), True) for p in pos_ids]
 
-        negcutoff = len(negfeats)*3/4
-        poscutoff = len(posfeats)*3/4
+        neg_cutoff = int(len(neg_feats) * 3 / 4)
+        pos_cutoff = int(len(pos_feats) * 3 / 4)
 
-        trainfeats = negfeats[:negcutoff] + posfeats[:poscutoff]
-        self.testfeats = negfeats[negcutoff:] + posfeats[poscutoff:]
+        train_feats = neg_feats[:neg_cutoff] + pos_feats[:pos_cutoff]
+        self.test_feats = neg_feats[neg_cutoff:] + pos_feats[pos_cutoff:]
 
-        logger.info('train on %d instances', len(trainfeats))
+        logger.info("train on %d instances", len(train_feats))
 
-        if self.algo == 'maxent':
+        if self.algo == "maxent":
             c = nltk.classify.maxent.MaxentClassifier
-        elif self.algo == 'bayes':
+        elif self.algo == "bayes":
             c = nltk.classify.NaiveBayesClassifier
         else:
-            raise ValueError('unknown classifier')
+            raise ValueError("unknown classifier")
 
-        self.classifier = c.train(trainfeats, **self.classifier_args)
+        self.classifier = c.train(train_feats, **self.classifier_args)
 
     def evaluate(self):
         self.train()
-        refsets = collections.defaultdict(set)
-        testsets = collections.defaultdict(set)
+        ref_sets = collections.defaultdict(set)
+        test_sets = collections.defaultdict(set)
 
-        for i, (feats, label) in enumerate(self.testfeats):
-            refsets[label].add(i)
+        for i, (feats, label) in enumerate(self.test_feats):
+            ref_sets[label].add(i)
             guess = self.classifier.prob_classify(feats)
             observed = guess.max()
-            testsets[observed].add(i)
-            #if label != observed:
-            #    print 'label:', label, 'observed:', observed, feats
+            test_sets[observed].add(i)
+            # if label != observed:
+            #    print('label:', label, 'observed:', observed, feats
 
-        print 'pos precision:', nltk.metrics.precision(refsets[True], testsets[True])
-        print 'pos recall:', nltk.metrics.recall(refsets[True], testsets[True])
-        print 'neg precision:', nltk.metrics.precision(refsets[False], testsets[False])
-        print 'neg recall:', nltk.metrics.recall(refsets[False], testsets[False])
+        print("pos precision:", nltk.metrics.precision(ref_sets[True], test_sets[True]))
+        print("pos recall:", nltk.metrics.recall(ref_sets[True], test_sets[True]))
+        print("neg precision:", nltk.metrics.precision(ref_sets[False], test_sets[False]))
+        print("neg recall:", nltk.metrics.recall(ref_sets[False], test_sets[False]))
 
-        print self.classifier.show_most_informative_features(10)
+        print(self.classifier.show_most_informative_features(10))
 
     def classify(self, manpage):
         self.train()
@@ -102,10 +111,9 @@ class classifier(object):
             option = guess.max()
             certainty = guess.prob(option)
 
-            if option:
-                if certainty < config.CLASSIFIER_CUTOFF:
-                    pass
-                else:
-                    logger.info('classified %s (%f) as an option paragraph', item, certainty)
-                    item.is_option = True
-                    yield certainty, item
+            if option and certainty >= config.CLASSIFIER_CUTOFF:
+                logger.info(
+                    "classified %s (%f) as an option paragraph", item, certainty
+                )
+                item.is_option = True
+                yield certainty, item

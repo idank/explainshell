@@ -1,10 +1,10 @@
 {% macro outputcommand(mp, suggestions) -%}
     {% if suggestions|length == 0 %}
-    <a href="http://manpages.ubuntu.com/manpages/precise/en/man{{ mp.section }}/{{ mp.source }}.html">{{ mp.program|e }}</a>
+    <a href="https://manpages.ubuntu.com/manpages/precise/en/man{{ mp.section }}/{{ mp.source }}.html">{{ mp.program|e }}</a>
     {% else %}
         <span class="dropdown">
             <b class="caret" data-toggle="dropdown"></b>
-            <a href="http://manpages.ubuntu.com/manpages/precise/en/man{{ mp.section }}/{{ mp.source }}.html">{{ mp.program|e }}</a>
+            <a href="https://manpages.ubuntu.com/manpages/precise/en/man{{ mp.section }}/{{ mp.source }}.html">{{ mp.program|e }}</a>
             <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu">
               <li>other manpages</li>
               <li class="divider"></li>
@@ -42,5 +42,5 @@ class="{{ d.commandclass }}"{% if d.helpclass %} helpref="{{ d.helpclass }}"{% e
 {%- endmacro %}
 
 {%- macro examplebullet(cmd) -%}
-<li><a href='/explain?cmd={{ cmd|urlencode }}'>{{ cmd|e }}</a></li>
+<li><a href='/explain?cmd={{ cmd|urlencode }}'><pre class="highlightjs"><code class="language-bash">{{ cmd|e }}</code></pre></a></li>
 {%- endmacro %}

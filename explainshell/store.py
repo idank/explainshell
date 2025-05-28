@@ -1,74 +1,105 @@
-'''data objects to save processed man pages to mongodb'''
-import pymongo, collections, re, logging
+"""
+data objects to save processed man pages to mongodb
+"""
 
-from explainshell import errors, util, helpconstants, config
+import collections
+import re
+import logging
+
+# from pprint import pprint
+
+import pymongo
+from bson import ObjectId
+
+from explainshell import errors, help_constants, util, config
 
 logger = logging.getLogger(__name__)
 
-class classifiermanpage(collections.namedtuple('classifiermanpage', 'name paragraphs')):
-    '''a man page that had its paragraphs manually tagged as containing options
-    or not'''
+
+class ClassifierManpage(collections.namedtuple("ClassifierManpage", "name paragraphs")):
+    """a man page that had its paragraphs manually tagged as containing options
+    or not"""
+
     @staticmethod
     def from_store(d):
-        m = classifiermanpage(d['name'], [paragraph.from_store(p) for p in d['paragraphs']])
+        m = ClassifierManpage(
+            d["name"], [Paragraph.from_store(p) for p in d["paragraphs"]]
+        )
         return m
 
     def to_store(self):
-        return {'name' : self.name,
-                'paragraphs' : [p.to_store() for p in self.paragraphs]}
+        return {
+            "name": self.name,
+            "paragraphs": [p.to_store() for p in self.paragraphs],
+        }
 
-class paragraph(object):
-    '''a paragraph inside a man page is text that ends with two new lines'''
+
+class Paragraph:
+    """a paragraph inside a man page is text that ends with two new lines"""
+
     def __init__(self, idx, text, section, is_option):
         self.idx = idx
         self.text = text
         self.section = section
         self.is_option = is_option
 
-    def cleantext(self):
-        t = re.sub(r'<[^>]+>', '', self.text)
-        t = re.sub('&lt;', '<', t)
-        t = re.sub('&gt;', '>', t)
+        if not isinstance(self.text, str):
+            self.text = self.text.decode("utf-8")
+
+    def clean_text(self):
+        t = re.sub(r"<[^>]+>", "", self.text)
+        t = re.sub("&lt;", "<", t)
+        t = re.sub("&gt;", ">", t)
         return t
 
     @staticmethod
     def from_store(d):
-        p = paragraph(d.get('idx', 0), d['text'].encode('utf8'), d['section'], d['is_option'])
+        p = Paragraph(
+            d.get("idx", 0), d["text"].encode("utf8"), d["section"], d["is_option"]
+        )
         return p
 
     def to_store(self):
-        return {'idx' : self.idx, 'text' : self.text, 'section' : self.section,
-                'is_option' : self.is_option}
+        return {
+            "idx": self.idx,
+            "text": self.text,
+            "section": self.section,
+            "is_option": self.is_option,
+        }
 
     def __repr__(self):
-        t = self.cleantext()
-        t = t[:min(20, t.find('\n'))].lstrip()
-        return '<paragraph %d, %s: %r>' % (self.idx, self.section, t)
+        t = self.clean_text()
+        t = t[: min(20, t.find("\n"))].lstrip()
+        return f"<paragraph {self.idx}, {self.section}: {t}>"
 
     def __eq__(self, other):
         if not other:
             return False
         return self.__dict__ == other.__dict__
 
-class option(paragraph):
-    '''a paragraph that contains extracted options
+
+class Option(Paragraph):
+    """a paragraph that contains extracted options
 
     short - a list of short options (-a, -b, ..)
     long - a list of long options (--a, --b)
-    expectsarg - specifies if one of the short/long options expects an additional argument
+    expects_arg - specifies if one of the short/long options expects an additional argument
     argument - specifies if to consider this as positional arguments
-    nestedcommand - specifies if the arguments to this option can start a nested command
-    '''
-    def __init__(self, p, short, long, expectsarg, argument=None, nestedcommand=False):
-        paragraph.__init__(self, p.idx, p.text, p.section, p.is_option)
+    nested_cmd - specifies if the arguments to this option can start a nested command
+    """
+
+    def __init__(self, p, short, long, expects_arg, argument=None, nested_cmd=False):
+        Paragraph.__init__(self, p.idx, p.text, p.section, p.is_option)
         self.short = short
         self.long = long
         self._opts = self.short + self.long
         self.argument = argument
-        self.expectsarg = expectsarg
-        self.nestedcommand = nestedcommand
-        if nestedcommand:
-            assert expectsarg, 'an option that can nest commands must expect an argument'
+        self.expects_arg = expects_arg
+        self.nested_cmd = nested_cmd
+        if nested_cmd:
+            assert (
+                expects_arg
+            ), "an option that can nest commands must expect an argument"
 
     @property
     def opts(self):
@@ -76,29 +107,38 @@ class option(paragraph):
 
     @classmethod
     def from_store(cls, d):
-        p = paragraph.from_store(d)
+        p = Paragraph.from_store(d)
 
-        return cls(p, d['short'], d['long'], d['expectsarg'], d['argument'],
-                   d.get('nestedcommand'))
+        # logger.debug(str(vars(d)))
+
+        return cls(
+            p,
+            d["short"],
+            d["long"],
+            d["expectsarg"],
+            d["argument"],
+            d.get("nestedcmd"),
+        )
 
     def to_store(self):
-        d = paragraph.to_store(self)
-        assert d['is_option']
-        d['short'] = self.short
-        d['long'] = self.long
-        d['expectsarg'] = self.expectsarg
-        d['argument'] = self.argument
-        d['nestedcommand'] = self.nestedcommand
+        d = Paragraph.to_store(self)
+        assert d["is_option"]
+        d["short"] = self.short
+        d["long"] = self.long
+        d["expectsarg"] = self.expects_arg
+        d["argument"] = self.argument
+        d["nestedcmd"] = self.nested_cmd
         return d
 
     def __str__(self):
-        return '(%s)' % ', '.join([str(x) for x in self.opts])
+        return "(" + ", ".join([str(x) for x in self.opts]) + ")"
 
     def __repr__(self):
-        return '<options for paragraph %d: %s>' % (self.idx, str(self))
+        return f"<options for paragraph {self.idx}: {self}"
 
-class manpage(object):
-    '''processed man page
+
+class ManPage:
+    """processed man page
 
     source - the path to the original source man page
     name - the name of this man page as extracted by manpage.manpage
@@ -106,48 +146,58 @@ class manpage(object):
     paragraphs - a list of paragraphs (and options) that contain all of the text and options
         extracted from this man page
     aliases - a list of aliases found for this man page
-    partialmatch - allow interperting options without a leading '-'
-    multicommand - consider sub commands when explaining a command with this man page,
+    partial_match - allow interpreting options without a leading '-'
+    multi_cmd - consider sub commands when explaining a command with this man page,
         e.g. git -> git commit
     updated - whether this man page was manually updated
-    nestedcommand - specifies if positional arguments to this program can start a nested command,
+    nested_cmd - specifies if positional arguments to this program can start a nested command,
         e.g. sudo, xargs
-    '''
-    def __init__(self, source, name, synopsis, paragraphs, aliases,
-                 partialmatch=False, multicommand=False, updated=False,
-                 nestedcommand=False):
+    """
+
+    def __init__(
+        self,
+        source,
+        name,
+        synopsis,
+        paragraphs,
+        aliases,
+        partial_match=False,
+        multi_cmd=False,
+        updated=False,
+        nested_cmd=False,
+    ):
         self.source = source
         self.name = name
         self.synopsis = synopsis
         self.paragraphs = paragraphs
         self.aliases = aliases
-        self.partialmatch = partialmatch
-        self.multicommand = multicommand
+        self.partial_match = partial_match
+        self.multi_cmd = multi_cmd
         self.updated = updated
-        self.nestedcommand = nestedcommand
+        self.nested_cmd = nested_cmd
 
-    def removeoption(self, idx):
+    def remove_option(self, idx):
         for i, p in self.paragraphs:
             if p.idx == idx:
-                if not isinstance(p, option):
-                    raise ValueError("paragraph %d isn't an option" % idx)
-                self.paragraphs[i] = paragraph(p.idx, p.text, p.section, False)
+                if not isinstance(p, Option):
+                    raise ValueError(f"paragraph {idx} isn't an option")
+                self.paragraphs[i] = Paragraph(p.idx, p.text, p.section, False)
                 return
-        raise ValueError('idx %d not found' % idx)
+        raise ValueError(f"idx {idx} not found")
 
     @property
-    def namesection(self):
-        name, section = util.namesection(self.source[:-3])
-        return '%s(%s)' % (name, section)
+    def name_section(self):
+        name, section = util.name_section(self.source[:-3])
+        return f"{name}({section})"
 
     @property
     def section(self):
-        name, section = util.namesection(self.source[:-3])
+        name, section = util.name_section(self.source[:-3])
         return section
 
     @property
     def options(self):
-        return [p for p in self.paragraphs if isinstance(p, option)]
+        return [p for p in self.paragraphs if isinstance(p, Option)]
 
     @property
     def arguments(self):
@@ -159,69 +209,103 @@ class manpage(object):
                 groups.setdefault(opt.argument, []).append(opt)
 
         # merge all the paragraphs under the same argument to a single string
-        for k, l in groups.iteritems():
-            groups[k] = '\n\n'.join([p.text for p in l])
+        for k, ln in groups.items():
+            groups[k] = "\n\n".join([p.text for p in ln])
 
         return groups
 
     @property
-    def synopsisnoname(self):
-        return re.match(r'[\w|-]+ - (.*)$', self.synopsis).group(1)
+    def synopsis_no_name(self):
+        return re.match(r"[\w|-]+ - (.*)$", self.synopsis).group(1)
 
     def find_option(self, flag):
-        for option in self.options:
-            for o in option.opts:
+        for o_tmp in self.options:
+            for o in o_tmp.opts:
                 if o == flag:
-                    return option
+                    return o_tmp
 
     def to_store(self):
-        return {'source' : self.source, 'name' : self.name, 'synopsis' : self.synopsis,
-                'paragraphs' : [p.to_store() for p in self.paragraphs],
-                'aliases' : self.aliases, 'partialmatch' : self.partialmatch,
-                'multicommand' : self.multicommand, 'updated' : self.updated,
-                'nestedcommand' : self.nestedcommand}
+        return {
+            "source": self.source,
+            "name": self.name,
+            "synopsis": self.synopsis,
+            "paragraphs": [p.to_store() for p in self.paragraphs],
+            "aliases": self.aliases,
+            "partial_match": self.partial_match,
+            "multi_cmd": self.multi_cmd,
+            "updated": self.updated,
+            "nested_cmd": self.nested_cmd,
+        }
 
     @staticmethod
     def from_store(d):
         paragraphs = []
-        for pd in d.get('paragraphs', []):
-            pp = paragraph.from_store(pd)
-            if pp.is_option == True and 'short' in pd:
-                pp = option.from_store(pd)
+        for pd in d.get("paragraphs", []):
+            pp = Paragraph.from_store(pd)
+            if pp.is_option is True and "short" in pd:
+                pp = Option.from_store(pd)
             paragraphs.append(pp)
 
-        synopsis = d['synopsis']
+        synopsis = d["synopsis"]
         if synopsis:
-            synopsis = synopsis.encode('utf8')
+            synopsis = synopsis.encode("utf8")
         else:
-            synopsis = helpconstants.NOSYNOPSIS
+            synopsis = help_constants.NO_SYNOPSIS
 
-        return manpage(d['source'], d['name'], synopsis, paragraphs,
-                       [tuple(x) for x in d['aliases']], d['partialmatch'],
-                       d['multicommand'], d['updated'], d.get('nestedcommand'))
+        partial_match = None
+        if "partialmatch" in d:
+            partial_match = d["partialmatch"]
+        elif "partial_match" in d:
+            partial_match = d["partial_match"]
+
+        multi_cmd = None
+        if "multicommand" in d:
+            multi_cmd = d["multicommand"]
+        elif "multi_cmd" in d:
+            multi_cmd = d["multi_cmd"]
+
+        nested_cmd = None
+        if "nestedcmd" in d:
+            nested_cmd = d["nestedcmd"]
+        elif "nested_cmd" in d:
+            nested_cmd = d["nested_cmd"]
+
+        return ManPage(
+            d["source"],
+            d["name"],
+            synopsis,
+            paragraphs,
+            [tuple(x) for x in d["aliases"]],
+            partial_match,
+            multi_cmd,
+            d["updated"],
+            nested_cmd,
+        )
 
     @staticmethod
     def from_store_name_only(name, source):
-        return manpage(source, name, None, [], [], None, None, None)
+        return ManPage(source, name, None, [], [], None, None, None)
 
     def __repr__(self):
-        return '<manpage %r(%s), %d options>' % (self.name, self.section, len(self.options))
+        return f"<manpage {self.name}({self.section}), {len(self.options)} options>"
 
-class store(object):
-    '''read/write processed man pages from mongodb
+
+class Store:
+    """read/write processed man pages from mongodb
 
     we use three collections:
     1) classifier - contains manually tagged paragraphs from man pages
     2) manpage - contains a processed man page
     3) mapping - contains (name, manpageid, score) tuples
-    '''
-    def __init__(self, db='explainshell', host=config.MONGO_URI):
-        logger.info('creating store, db = %r, host = %r', db, host)
+    """
+
+    def __init__(self, db="explainshell", host=config.MONGO_URI):
+        logger.info("creating store, db = %r, host = %r", db, host)
         self.connection = pymongo.MongoClient(host)
         self.db = self.connection[db]
-        self.classifier = self.db['classifier']
-        self.manpage = self.db['manpage']
-        self.mapping = self.db['mapping']
+        self.classifier = self.db["classifier"]
+        self.manpage = self.db["manpage"]
+        self.mapping = self.db["mapping"]
 
     def close(self):
         self.connection.disconnect()
@@ -231,169 +315,205 @@ class store(object):
         if not confirm:
             return
 
-        logger.info('dropping mapping, manpage, collections')
+        logger.info("dropping mapping, manpage, collections")
         self.mapping.drop()
         self.manpage.drop()
 
-    def trainingset(self):
+    def training_set(self):
         for d in self.classifier.find():
-            yield classifiermanpage.from_store(d)
+            yield ClassifierManpage.from_store(d)
 
     def __contains__(self, name):
-        c = self.mapping.find({'src' : name}).count()
+        c = self.mapping.count_documents({"src": name})
         return c > 0
 
     def __iter__(self):
         for d in self.manpage.find():
-            yield manpage.from_store(d)
+            yield ManPage.from_store(d)
 
-    def findmanpage(self, name):
-        '''find a man page by its name, everything following the last dot (.) in name,
+    def find_man_page(self, name):
+        """find a man page by its name, everything following the last dot (.) in name,
         is taken as the section of the man page
 
         we return the man page found with the highest score, and a list of
         suggestions that also matched the given name (only the first item
-        is prepopulated with the option data)'''
-        if name.endswith('.gz'):
-            logger.info('name ends with .gz, looking up an exact match by source')
-            d = self.manpage.find_one({'source':name})
+        is prepopulated with the option data)"""
+        if name.endswith(".gz"):
+            logger.info("name ends with .gz, looking up an exact match by source")
+            d = self.manpage.find_one({"source": name})
             if not d:
                 raise errors.ProgramDoesNotExist(name)
-            m = manpage.from_store(d)
-            logger.info('returning %s', m)
+            m = ManPage.from_store(d)
+            logger.info("returning %s", m)
             return [m]
 
         section = None
-        origname = name
+        orig_name = name
 
         # don't try to look for a section if it's . (source)
-        if name != '.':
-            splitted = name.rsplit('.', 1)
+        if name != ".":
+            splitted = name.rsplit(".", 1)
             name = splitted[0]
             if len(splitted) > 1:
                 section = splitted[1]
 
-        logger.info('looking up manpage in mapping with src %r', name)
-        cursor = self.mapping.find({'src' : name})
-        count = cursor.count()
-        if not count:
+        logger.info("looking up manpage in mapping with src %r", name)
+        cursor = list(self.mapping.find({"src": name}))
+
+        count = len(cursor)
+        if count == 0:
+            logger.debug(f"count is {count}")
             raise errors.ProgramDoesNotExist(name)
 
-        dsts = dict(((d['dst'], d['score']) for d in cursor))
-        cursor = self.manpage.find({'_id' : {'$in' : list(dsts.keys())}}, {'name' : 1, 'source' : 1})
-        if cursor.count() != len(dsts):
-            logger.error('one of %r mappings is missing in manpage collection '
-                         '(%d mappings, %d found)', dsts, len(dsts), cursor.count())
-        results = [(d.pop('_id'), manpage.from_store_name_only(**d)) for d in cursor]
+        dsts = {d["dst"]: d["score"] for d in cursor}
+        cursor = list(
+            self.manpage.find(
+                {"_id": {"$in": list(dsts.keys())}}, {"name": 1, "source": 1}
+            )
+        )
+        if len(list(cursor)) != len(dsts):
+            logger.error(
+                "one of %r mappings is missing in manpage collection "
+                "(%d mappings, %d found)",
+                dsts,
+                len(dsts),
+                len(cursor),
+            )
+        results = [(d.pop("_id"), ManPage.from_store_name_only(**d)) for d in cursor]
         results.sort(key=lambda x: dsts.get(x[0], 0), reverse=True)
-        logger.info('got %s', results)
+        logger.info("got %s", results)
         if section is not None:
             if len(results) > 1:
-                results.sort(key=lambda (oid, m): m.section == section, reverse=True)
-                logger.info(r'sorting %r so %s is first', results, section)
-            if not results[0][1].section == section:
-                raise errors.ProgramDoesNotExist(origname)
-            results.extend(self._discovermanpagesuggestions(results[0][0], results))
+                results.sort(
+                    key=lambda oid_m: oid_m[1].section == section, reverse=True
+                )
+                logger.info(r"sorting %r so %s is first", results, section)
+            if results[0][1].section != section:
+                raise errors.ProgramDoesNotExist(orig_name)
+            results.extend(self._discover_manpage_suggestions(results[0][0], results))
 
         oid = results[0][0]
         results = [x[1] for x in results]
-        results[0] = manpage.from_store(self.manpage.find_one({'_id' : oid}))
+        results[0] = ManPage.from_store(self.manpage.find_one({"_id": oid}))
         return results
 
-    def _discovermanpagesuggestions(self, oid, existing):
-        '''find suggestions for a given man page
+    def _discover_manpage_suggestions(self, oid, existing):
+        """find suggestions for a given man page
 
         oid is the objectid of the man page in question,
         existing is a list of (oid, man page) of suggestions that were
         already discovered
-        '''
-        skip = set([oid for oid, m in existing])
-        cursor = self.mapping.find({'dst' : oid})
+        """
+        skip = {oid for oid, m in existing}
+        cursor = self.mapping.find({"dst": oid})
         # find all srcs that point to oid
-        srcs = [d['src'] for d in cursor]
+        srcs = [d["src"] for d in cursor]
         # find all dsts of srcs
-        suggestionoids = self.mapping.find({'src' : {'$in' : srcs}}, {'dst' : 1})
+        suggestion_oids = self.mapping.find({"src": {"$in": srcs}}, {"dst": 1})
         # remove already discovered
-        suggestionoids = [d['dst'] for d in suggestionoids if d['dst'] not in skip]
-        if not suggestionoids:
+        suggestion_oids = [d["dst"] for d in suggestion_oids if d["dst"] not in skip]
+        if not suggestion_oids:
             return []
 
         # get just the name and source of found suggestions
-        suggestionoids = self.manpage.find({'_id' : {'$in' : suggestionoids}},
-                                           {'name' : 1, 'source' : 1})
-        return [(d.pop('_id'), manpage.from_store_name_only(**d)) for d in suggestionoids]
+        suggestion_oids = self.manpage.find(
+            {"_id": {"$in": suggestion_oids}}, {"name": 1, "source": 1}
+        )
+        return [
+            (d.pop("_id"), ManPage.from_store_name_only(**d)) for d in suggestion_oids
+        ]
 
-    def addmapping(self, src, dst, score):
-        self.mapping.insert({'src' : src, 'dst' : dst, 'score' : score})
+    def add_mapping(self, src, dst, score):
+        if not isinstance(dst, ObjectId):
+            dst = dst.inserted_id
+        self.mapping.insert_one({"src": src, "dst": dst, "score": score})
 
-    def addmanpage(self, m):
-        '''add m into the store, if it exists first remove it and its mappings
+    def add_manpage(self, m):
+        """add `m` into the store, if it exists first remove it and it's mappings
 
-        each man page may have aliases besides the name determined by its
-        basename'''
-        d = self.manpage.find_one({'source' : m.source})
+        each man page may have aliases besides the name determined by it's
+        basename"""
+        d = self.manpage.find_one({"source": m.source})
         if d:
-            logger.info('removing old manpage %s (%s)', m.source, d['_id'])
-            self.manpage.remove(d['_id'])
+            logger.info("removing old manpage %s (%s)", m.source, d["_id"])
+            self.manpage.delete_one({"_id": d["_id"]})
 
             # remove old mappings if there are any
-            c = self.mapping.count()
-            self.mapping.remove({'dst' : d['_id']})
-            c -= self.mapping.count()
-            logger.info('removed %d mappings for manpage %s', c, m.source)
+            c = self.mapping.count_documents({})
+            self.mapping.delete_one({"dst": d["_id"]})
+            c -= self.mapping.count_documents({})
+            logger.info("removed %d mappings for manpage %s", c, m.source)
 
-        o = self.manpage.insert(m.to_store())
+        o = self.manpage.insert_one(m.to_store())
 
         for alias, score in m.aliases:
-            self.addmapping(alias, o, score)
-            logger.info('inserting mapping (alias) %s -> %s (%s) with score %d', alias, m.name, o, score)
+            self.add_mapping(alias, o, score)
+            logger.info(
+                "inserting mapping (alias) %s -> %s (%s) with score %d",
+                alias,
+                m.name,
+                o,
+                score,
+            )
         return m
 
-    def updatemanpage(self, m):
-        '''update m and add new aliases if necessary
+    def update_man_page(self, m):
+        """update m and add new aliases if necessary
 
-        change updated attribute so we don't overwrite this in the future'''
-        logger.info('updating manpage %s', m.source)
+        change updated attribute so we don't overwrite this in the future"""
+        logger.info("updating manpage %s", m.source)
         m.updated = True
-        self.manpage.update({'source' : m.source}, m.to_store())
-        _id = self.manpage.find_one({'source' : m.source}, fields={'_id':1})['_id']
+        self.manpage.update_one({"source": m.source}, m.to_store())
+        _id = self.manpage.find_one({"source": m.source}, fields={"_id": 1})["_id"]
         for alias, score in m.aliases:
             if alias not in self:
-                self.addmapping(alias, _id, score)
-                logger.info('inserting mapping (alias) %s -> %s (%s) with score %d', alias, m.name, _id, score)
+                self.add_mapping(alias, _id, score)
+                logger.info(
+                    "inserting mapping (alias) %s -> %s (%s) with score %d",
+                    alias,
+                    m.name,
+                    _id,
+                    score,
+                )
             else:
-                logger.debug('mapping (alias) %s -> %s (%s) already exists', alias, m.name, _id)
+                logger.debug(
+                    "mapping (alias) %s -> %s (%s) already exists", alias, m.name, _id
+                )
         return m
 
     def verify(self):
         # check that everything in manpage is reachable
         mappings = list(self.mapping.find())
-        reachable = set([m['dst'] for m in mappings])
-        manpages = set([m['_id'] for m in self.manpage.find(fields={'_id':1})])
+        reachable = {m["dst"] for m in mappings}
+        man_pages = {m["_id"] for m in self.manpage.find(fields={"_id": 1})}
 
         ok = True
-        unreachable = manpages - reachable
+        unreachable = man_pages - reachable
         if unreachable:
-            logger.error('manpages %r are unreachable (nothing maps to them)', unreachable)
-            unreachable = [self.manpage.find_one({'_id' : u})['name'] for u in unreachable]
+            logger.error(
+                "manpages %r are unreachable (nothing maps to them)", unreachable
+            )
+            unreachable = [
+                self.manpage.find_one({"_id": u})["name"] for u in unreachable
+            ]
             ok = False
 
-        notfound = reachable - manpages
+        notfound = reachable - man_pages
         if notfound:
-            logger.error('mappings to inexisting manpages: %r', notfound)
+            logger.error("mappings to non-existing manpages: %r", notfound)
             ok = False
 
         return ok, unreachable, notfound
 
     def names(self):
-        cursor = self.manpage.find(fields={'name':1})
+        cursor = self.manpage.find({}, {"name": 1})
         for d in cursor:
-            yield d['_id'], d['name']
+            yield d["_id"], d["name"]
 
     def mappings(self):
-        cursor = self.mapping.find(fields={'src':1})
+        cursor = self.mapping.find({}, {"src": 1})
         for d in cursor:
-            yield d['src'], d['_id']
+            yield d["src"], d["_id"]
 
-    def setmulticommand(self, manpageid):
-        self.manpage.update({'_id' : manpageid}, {'$set' : {'multicommand' : True}})
+    def set_multi_cmd(self, manpage_id):
+        self.manpage.update_one({"_id": manpage_id}, {"$set": {"multi_cmd": True}})

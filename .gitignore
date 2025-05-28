@@ -2,4 +2,7 @@
 *.swp
 .coverage
 .vagrant
-application.log
+*.log
+venv/
+__pycache__
+.mpypy_cache/
