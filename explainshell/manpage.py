@@ -120,7 +120,7 @@ def _parsetext(lines):
     section = None
     i = 0
     for l in lines:
-        l = re.sub(_href, r'<a href="http://manpages.ubuntu.com/manpages/precise/en/man\2/\1.\2.html">', l)
+        l = re.sub(_href, r'<a href="https://manpages.ubuntu.com/manpages/jammy/en/man\2/\1.\2.html">', l)
         for lookfor, replacewith in _replacements:
             l = re.sub(lookfor, replacewith, l)
         # confirm the line is valid utf8

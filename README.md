@@ -37,7 +37,7 @@ When querying explainshell, it:
 > 
 > If you're relying on manpages, be aware that they may not reflect the latest behavior. Contributions in this area are welcome but would require rethinking the documentation pipeline.
 
-Right now explainshell.com contains the entire [archive of Ubuntu](http://manpages.ubuntu.com/). It's not
+Right now explainshell.com contains the entire [archive of Ubuntu](https://manpages.ubuntu.com/). It's not
 possible to directly add a missing man page to the live site (it might be in the future).
 
 ## Running explainshell locally
