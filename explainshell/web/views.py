@@ -1,5 +1,6 @@
 from urllib.parse import quote_plus, urlencode
 import markupsafe
+import logging
 
 from flask import render_template, request, redirect
 
