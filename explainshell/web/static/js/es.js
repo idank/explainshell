@@ -1151,10 +1151,6 @@ $(document).ready(function() {
         || (window.matchMedia("(prefers-color-scheme: dark)").matches ? 'dark' : 'default')
         || 'default';
   
-    if (!docCookies.getItem(themeCookieName)) {
-        var selectedTheme = 'default';
-        setTheme(selectedTheme); // to set the correct css file and data-theme
-    }
 
     $("#themeContainer .dropdown-menu a").click(function() {
         setTheme($(this).attr('data-theme-name'));
