@@ -10,7 +10,7 @@ if __name__ == '__main__':
     # activate logging and redirect all logs to loguru
     logging.basicConfig(handlers=[InterceptHandler()], level=logging.DEBUG, force=True)
 
-    if len(config.HOST_IP) > 1:
+    if config.HOST_IP:
         app.run(debug=config.DEBUG, host=config.HOST_IP)
     else:
         app.run(debug=config.DEBUG)
