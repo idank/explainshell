@@ -1,5 +1,5 @@
 tests:
-	nosetests --exe --with-doctest tests/ explainshell/
+	pytest --doctest-modules tests/ explainshell/
 
 serve:
 	docker-compose up --build
