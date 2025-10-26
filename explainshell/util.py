@@ -23,7 +23,7 @@ def consecutive(ln, fn):
     ll = []
     try:
         while True:
-            x = it.next()
+            x = next(it)
             if fn(x):
                 ll.append(x)
             else:
@@ -38,15 +38,15 @@ def consecutive(ln, fn):
 
 def group_continuous(l, key=None):
     """
-    >>> list(groupcontinuous([1, 2, 4, 5, 7, 8, 10]))
+    >>> list(group_continuous([1, 2, 4, 5, 7, 8, 10]))
     [[1, 2], [4, 5], [7, 8], [10]]
-    >>> list(groupcontinuous(range(5)))
+    >>> list(group_continuous(range(5)))
     [[0, 1, 2, 3, 4]]
     """
     if key is None:
         key = lambda x: x
     for k, g in itertools.groupby(enumerate(l), lambda ix: ix[0] - key(ix[1])):
-        yield map(itemgetter(1), g)
+        yield list(map(itemgetter(1), g))
 
 
 def topo_sorted(graph, parents):
@@ -85,7 +85,7 @@ def pairwise(iterable):
 class Peekable:
     """
     >>> it = Peekable(iter('abc'))
-    >>> it.index, it.peek(), it.index, it.peek(), it.next(), it.index, it.peek(), it.next(), it.next(), it.index
+    >>> it.index, it.peek(), it.index, it.peek(), next(it), it.index, it.peek(), next(it), next(it), it.index
     (0, 'a', 0, 'a', 'a', 1, 'b', 'b', 'c', 3)
     >>> it.peek()
     Traceback (most recent call last):
@@ -95,7 +95,7 @@ class Peekable:
     Traceback (most recent call last):
       File "<stdin>", line 1, in ?
     StopIteration
-    >>> it.next()
+    >>> next(it)
     Traceback (most recent call last):
       File "<stdin>", line 1, in ?
     StopIteration
@@ -110,7 +110,7 @@ class Peekable:
     def __iter__(self):
         return self
 
-    def next(self):
+    def __next__(self):
         if self._peeked:
             self._peeked = False
             self._idx += 1
