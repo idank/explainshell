@@ -215,7 +215,7 @@ def explain_cmd(command, store):
 
     it = util.Peekable(iter(matches))
     while it.has_next():
-        m = it.next()
+        m = next(it)
         spaces = 0
         if it.has_next():
             spaces = it.peek()["start"] - m["end"]
@@ -286,9 +286,9 @@ def format_match(d, m, expansions):
 
 def _substitution_markup(cmd):
     """
-    >>> _substitutionmarkup('foo')
+    >>> _substitution_markup('foo')
     '<a href="/explain?cmd=foo" title="Zoom in to nested command">foo</a>'
-    >>> _substitutionmarkup('cat <&3')
+    >>> _substitution_markup('cat <&3')
     '<a href="/explain?cmd=cat+%3C%263" title="Zoom in to nested command">cat <&3</a>'
     """
     encoded = urllib.parse.urlencode({"cmd": cmd})
