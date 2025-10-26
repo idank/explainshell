@@ -7,4 +7,6 @@ while read url; do
 
 	python -c 'import time, random; time.sleep(float(random.randint(1000, 2000)) / 1000)'
 	wget -nv "$url" || echo "$url" >> failed
-done < gzlist
+done < gzlist8
+
+mv -f *.8.gz ../manpages/8/

@@ -17,10 +17,18 @@ var themes = {
     default: '//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/css/bootstrap.min.css',
     dark: '//maxcdn.bootstrapcdn.com/bootswatch/2.3.1/cyborg/bootstrap.min.css'
 };
+var hljs_themes = {
+    default: '//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css',
+    dark: '//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css'
+}
 if (debug){
     themes = {
         default: '/static/css/bootstrap.min.css',
         dark: '/static/css/bootstrap-cyborg.min.css'
+    };
+    hljs_themes = {
+        default: '/static/css/highlight.default.min.css',
+        dark: '/static/css/hljs-atom-one-dark.min.css'
     };
 }
 
@@ -37,7 +45,7 @@ var docCookies = {
       return decodeURIComponent(document.cookie.replace(new RegExp("(?:(?:^|.*;)\\s*" + encodeURIComponent(sKey).replace(/[\-\.\+\*]/g, "\\$&") + "\\s*\\=\\s*([^;]*).*$)|^.*$"), "$1")) || null;
     },
     setItem: function (sKey, sValue, vEnd, sPath, sDomain, bSecure) {
-      if (!sKey || /^(?:expires|max\-age|path|domain|secure)$/i.test(sKey)) { return false; }
+      if (!sKey || /^(?:expires|max-age|path|domain|secure)$/i.test(sKey)) { return false; }
       var sExpires = "";
       if (vEnd) {
         switch (vEnd.constructor) {
@@ -224,6 +232,8 @@ function eslink(clazz, option, mid, color) {
         this.goingleft = rrmid <= mid;
 
         $(this.help).css("border-color", this.color);
+        
+        $("#" + clazz + " b:first-of-type").css("color", this.color);
     }
 }
 
@@ -256,7 +266,7 @@ eslink.prototype.nearby = function(other) {
     return Math.abs(r.right - rr.left) <= closeness || Math.abs(r.left - rr.right) <= closeness;
 };
 
-// a conveninent wrapper around an array of points that allows to chain appends
+// a convenient wrapper around an array of points that allows to chain appends
 function espath() {
     this.points = [];
 }
@@ -1127,6 +1137,8 @@ function setTheme(theme) {
     console.log('setting theme to', theme);
 
     $("#bootstrapCSS").attr('href', themes[theme]);
+    $("#hljsCSS").attr('href', hljs_themes[theme]);
+
     $(document.body).attr('data-theme', theme);
     docCookies.setItem(themeCookieName, theme, Infinity, '/');
 }
@@ -1134,6 +1146,11 @@ function setTheme(theme) {
 
 // Theme-related stuff
 $(document).ready(function() {
+    // use theme from local storage or auto-detect otherwise
+    var selectedTheme = localStorage.getItem('theme')
+        || (window.matchMedia("(prefers-color-scheme: dark)").matches ? 'dark' : 'default')
+        || 'default';
+  
     if (!docCookies.getItem(themeCookieName)) {
         var selectedTheme = 'default';
         setTheme(selectedTheme); // to set the correct css file and data-theme

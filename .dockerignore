@@ -1,0 +1,15 @@
+.gitignore
+.git/
+.github/
+misc/
+tests/
+tools
+venv/
+dump/
+.mpypy_cache/
+*.pyc
+*.log
+README.md
+docker-compose.yml
+Dockerfile
+Makefile

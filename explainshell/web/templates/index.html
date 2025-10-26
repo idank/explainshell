@@ -15,7 +15,7 @@
             <div class="text-center">
                 <div class="input-append">
                     <form action='/explain' method="get">
-                        <input id='explain' class="span10" type="text" name="cmd" autocapitalize="off" autocorrect="off"></input>
+                        <input id='explain' class="span10" type="text" name="cmd" autocapitalize="off" autocorrect="off" autofocus></input>
                         <button class="btn" type="submit">EXPLAIN</button>
                     </form>
                 </div>
@@ -26,7 +26,7 @@
                     <ul>
                         {{ macros.examplebullet(":(){ :|:& };:") }}
                         {{ macros.examplebullet("for user in $(cut -f1 -d: /etc/passwd); do crontab -u $user -l 2>/dev/null; done") }}
-                        {{ macros.examplebullet('file=$(echo `basename "$file"`)') }}
+                        {{ macros.examplebullet('name=$(printf "%s@%s" "$(id -nu)" "$(uname -n)")') }}
                         {{ macros.examplebullet("true && { echo success; } || { echo failed; }") }}
                         {{ macros.examplebullet("cut -d ' ' -f 1 /var/log/apache2/access_logs | uniq -c | sort -n") }}
                         {{ macros.examplebullet('tar zcf - some-dir | ssh some-server "cd /; tar xvzf -"') }}
@@ -40,6 +40,8 @@
             {%- endblock %}
 {% block js -%}
         <script type="text/javascript">
-            $("#explain").focus();
+            if(document.querySelectorAll("code").length > 0){
+                hljs.highlightAll();
+            }
         </script>
 {%- endblock %}
