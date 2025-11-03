@@ -65,7 +65,7 @@ $ docker-compose exec -T web make tests
 Ran 80 tests in 0.041s
 
 OK (SKIP=9)
-# open http://localhost:5000 to view the ui
+# open http://localhost:5001 to view the ui
 ```
 
 ### Processing a man page
