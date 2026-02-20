@@ -22,7 +22,7 @@ class test_matcher(unittest.TestCase):
     def test_unicode(self):
         matchedresult = [
             (0, 3, "bar synopsis", "bar"),
-            (4, 13, "-b <arg> desc", "-b uni???"),
+            (4, 13, "-b <arg> desc", "-b uni\u05e7\u05d5\u05d3"),
         ]
 
         self.assertMatchSingle(

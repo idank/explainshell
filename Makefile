@@ -1,5 +1,5 @@
 tests:
-	pytest --doctest-modules tests/ explainshell/
+	pytest --doctest-modules tests/test-*.py explainshell/
 
 serve:
 	docker-compose up --build
