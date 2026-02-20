@@ -1,4 +1,5 @@
-import unittest, os
+import unittest
+import os
 
 from explainshell import manager, config, store, errors
 
@@ -9,11 +10,11 @@ class test_manager(unittest.TestCase):
         store.Store("explainshell_tests").drop(True)
 
     def _getmanager(self, names, **kwargs):
-        l = []
+        paths = []
         for n in names:
-            l.append(os.path.join(config.MAN_PAGE_DIR, "1", n))
+            paths.append(os.path.join(config.MAN_PAGE_DIR, "1", n))
 
-        m = manager.Manager(config.MONGO_URI, "explainshell_tests", l, **kwargs)
+        m = manager.Manager(config.MONGO_URI, "explainshell_tests", paths, **kwargs)
         return m
 
     def test(self):

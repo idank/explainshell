@@ -1,2 +1,4 @@
-import explainshell.algo.features
-import explainshell.util
+from . import features
+from explainshell import util
+
+__all__ = ["features", "util"]

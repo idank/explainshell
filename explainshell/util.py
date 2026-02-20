@@ -36,7 +36,7 @@ def consecutive(ln, fn):
             yield ll
 
 
-def group_continuous(l, key=None):
+def group_continuous(items, key=None):
     """
     >>> list(group_continuous([1, 2, 4, 5, 7, 8, 10]))
     [[1, 2], [4, 5], [7, 8], [10]]
@@ -44,9 +44,13 @@ def group_continuous(l, key=None):
     [[0, 1, 2, 3, 4]]
     """
     if key is None:
-        key = lambda x: x
-    for k, g in itertools.groupby(enumerate(l), lambda ix: ix[0] - key(ix[1])):
-        yield list(map(itemgetter(1), g))
+        def identity(value):
+            return value
+        key_func = identity
+    else:
+        key_func = key
+    for _, grouped in itertools.groupby(enumerate(items), lambda ix: ix[0] - key_func(ix[1])):
+        yield list(map(itemgetter(1), grouped))
 
 
 def topo_sorted(graph, parents):

@@ -10,7 +10,6 @@ import logging
 import textwrap
 
 from explainshell import store, config
-from explainshell.logger.logger_helper import logger
 from explainshell.logger.logging_interceptor import InterceptHandler
 
 sp = store.Paragraph

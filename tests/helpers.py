@@ -1,4 +1,4 @@
-from explainshell import help_constants, matcher, store, errors, options
+from explainshell import store, errors
 
 
 class MockStore:

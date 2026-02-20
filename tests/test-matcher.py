@@ -1,6 +1,7 @@
 import unittest
 
-import bashlex.errors, bashlex.ast
+import bashlex.errors
+import bashlex.ast
 
 from explainshell import help_constants, matcher, errors
 from tests import helpers

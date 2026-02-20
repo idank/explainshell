@@ -1,4 +1,3 @@
-from explainshell import util
 
 
 def convert_paragraphs(manpage):

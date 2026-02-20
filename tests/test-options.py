@@ -1,6 +1,6 @@
 import unittest
 
-from explainshell import options, store, errors
+from explainshell import options, store
 
 
 class test_options(unittest.TestCase):

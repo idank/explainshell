@@ -5,3 +5,4 @@ pytest-cov==6.0.0
 pymongo==4.8.0
 bashlex==0.18
 loguru==0.7.2
+ruff==0.12.9

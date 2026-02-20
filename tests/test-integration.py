@@ -1,4 +1,5 @@
-import unittest, subprocess, pymongo, os
+import unittest
+import os
 
 from explainshell import manager, config, matcher
 

@@ -1,4 +1,6 @@
-import logging, itertools, urllib
+import logging
+import itertools
+import urllib
 import markupsafe
 
 from flask import render_template, request, redirect
