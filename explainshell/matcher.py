@@ -625,7 +625,7 @@ class Matcher(bashlex.ast.nodevisitor):
         self.ast = bashlex.parser.parsesingle(
             self.s, expansionlimit=1, strictmode=False
         )
-        if self.ast:
+        if isinstance(self.ast, bashlex.ast.node):
             self.visit(self.ast)
             assert (
                 len(self.group_stack) == 1
@@ -640,6 +640,13 @@ class Matcher(bashlex.ast.nodevisitor):
                 and not self.expansions
             ):
                 raise self.groups[1].error
+        elif self.ast:
+            logger.warning(
+                "ignoring unexpected AST root %r (%s)",
+                self.ast,
+                type(self.ast).__name__,
+            )
+            self.ast = None
         else:
             logger.warning("no AST generated for %r", self.s)
 
