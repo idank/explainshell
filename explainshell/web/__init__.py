@@ -1,11 +1,11 @@
 from flask import Flask
+from explainshell import config
 
 app = Flask(__name__)
-
-from explainshell.web import views
-from explainshell import store, config
+app.config.from_object(config)
 
 if config.DEBUG:
-    from explainshell.web import debug_views
+    from explainshell.web import debug_views as debug_views  # noqa: E402,F401
 
-app.config.from_object(config)
+# Import routes after app creation to avoid circular imports.
+from explainshell.web import views as views  # noqa: E402,F401

@@ -1,4 +1,4 @@
-import unittest, os, subprocess
+import unittest
 
 from explainshell import manpage, store
 
@@ -6,8 +6,8 @@ from explainshell import manpage, store
 class test_manpage(unittest.TestCase):
     def test_first_paragraph_no_section(self):
         m = "foo\nbar"
-        l = list(manpage._parse_text(m.splitlines()))
-        self.assertEqual(l, [store.Paragraph(0, "foo\nbar", None, False)])
+        parsed = list(manpage._parse_text(m.splitlines()))
+        self.assertEqual(parsed, [store.Paragraph(0, "foo\nbar", None, False)])
 
     def test_sections(self):
         m = """<b>SECTION</b>
