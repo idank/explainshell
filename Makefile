@@ -1,7 +1,7 @@
 tests:
-	nosetests --exe --with-doctest tests/ explainshell/
+	pytest --doctest-modules tests/test-*.py explainshell/
 
 serve:
-	python runserver.py
+	docker-compose up --build
 
 .PHONY: tests
