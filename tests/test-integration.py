@@ -2,17 +2,23 @@ import os
 import tempfile
 import unittest
 
-from explainshell import manager, config, matcher
+from explainshell import manager, matcher
 
 
 @unittest.skip("nltk usage is broken due to new version")
 class test_integration(unittest.TestCase):
-    def test(self):
-        fd, db_path = tempfile.mkstemp(suffix=".db")
+    def setUp(self):
+        fd, self.db_path = tempfile.mkstemp(suffix=".db")
         os.close(fd)
-        os.unlink(db_path)
+        os.unlink(self.db_path)
+
+    def tearDown(self):
+        if os.path.exists(self.db_path):
+            os.unlink(self.db_path)
+
+    def test(self):
         mngr = manager.Manager(
-            db_path,
+            self.db_path,
             [os.path.join(os.path.dirname(__file__), "echo.1.gz")],
             drop=True,
         )
