@@ -33,7 +33,7 @@ class TestGetPlainText(unittest.TestCase):
         self.assertEqual(result, "some text")
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
-        self.assertEqual(cmd[:3], ["mandoc", "-T", "txt"])
+        self.assertEqual(cmd[:3], ["mandoc", "-T", "ascii"])
 
     @patch("explainshell.llm_extractor.subprocess.run")
     def test_empty_output_raises(self, mock_run):
@@ -46,6 +46,23 @@ class TestGetPlainText(unittest.TestCase):
         mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error msg")
         with self.assertRaises(ExtractionError):
             get_plain_text("dummy.1.gz")
+
+
+# ---------------------------------------------------------------------------
+# TestGetPlainTextReal — exercises the actual mandoc binary
+# ---------------------------------------------------------------------------
+
+_ECHO_GZ = os.path.join(os.path.dirname(__file__), "..", "manpages", "1", "echo.1.gz")
+
+class TestGetPlainTextReal(unittest.TestCase):
+    def test_mandoc_produces_output(self):
+        text = get_plain_text(_ECHO_GZ)
+        self.assertIsInstance(text, str)
+        self.assertGreater(len(text), 0)
+
+    def test_mandoc_output_contains_option(self):
+        text = get_plain_text(_ECHO_GZ)
+        self.assertIn("-n", text)
 
 
 # ---------------------------------------------------------------------------
