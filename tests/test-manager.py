@@ -47,9 +47,13 @@ class test_manager(unittest.TestCase):
         s = m.store
         m.run()
 
-        # invalid mapping (dst doesn't exist as a manpage id)
+        # Temporarily disable FK enforcement to insert a dangling mapping.
+        # In production this is prevented by ON DELETE CASCADE, but verify()
+        # must still detect it gracefully.
+        s._conn.execute("PRAGMA foreign_keys = OFF")
         s._conn.execute("INSERT INTO mapping(src, dst, score) VALUES ('foo', 9999, 1)")
         s._conn.commit()
+        s._conn.execute("PRAGMA foreign_keys = ON")
         ok, unreachable, notfound = s.verify()
         self.assertFalse(ok)
         self.assertIn(9999, notfound)
@@ -60,8 +64,10 @@ class test_manager(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("tar", unreachable)
 
+        s._conn.execute("PRAGMA foreign_keys = OFF")
         s._conn.execute("INSERT INTO mapping(src, dst, score) VALUES ('foo', 9999, 1)")
         s._conn.commit()
+        s._conn.execute("PRAGMA foreign_keys = ON")
         ok, unreachable, notfound = s.verify()
         self.assertIn("tar", unreachable)
         self.assertIn(9999, notfound)

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 @app.route("/debug")
 def debug():
-    s = store.Store("explainshell", config.MONGO_URI)
+    s = store.Store(config.DB_PATH)
     d = {"manpages": []}
     for mp in s:
         synopsis = ""
@@ -38,7 +38,7 @@ def _convert_value(value):
 
 @app.route("/debug/tag/<source>", methods=["GET", "POST"])
 def tag(source):
-    mngr = manager.Manager(config.MONGO_URI, "explainshell", [], False, False)
+    mngr = manager.Manager(config.DB_PATH, [], False, False)
     s = mngr.store
     m = s.find_man_page(source)[0]
     assert m

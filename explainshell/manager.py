@@ -77,7 +77,7 @@ class Manager:
 
     def _update(self, ctx, f_runner):
         f_runner.pre_add_manpage()
-        return ctx.store.updatemanpage(ctx.manpage)
+        return ctx.store.update_man_page(ctx.manpage)
 
     def process(self, ctx):
         f_runner = fixer.Runner(ctx)
@@ -180,7 +180,7 @@ class Manager:
 def main(files, db_path, overwrite, drop, verify):
     if verify:
         s = store.Store(db_path)
-        ok = s.verify()
+        ok, _, _ = s.verify()
         return 0 if ok else 1
 
     if drop:
