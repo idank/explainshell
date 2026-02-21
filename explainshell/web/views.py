@@ -3,6 +3,7 @@ import itertools
 import urllib
 import markupsafe
 
+import markdown as markdown_lib
 from flask import render_template, request, redirect
 
 import bashlex.errors
@@ -11,6 +12,17 @@ from explainshell import matcher, errors, util, store, config
 from explainshell.web import app, helpers
 
 logger = logging.getLogger(__name__)
+
+_md = markdown_lib.Markdown()
+
+
+def render_markdown(text: str) -> str:
+    """Convert markdown text to HTML. Falls through to escaped text on error."""
+    try:
+        _md.reset()
+        return _md.convert(text)
+    except Exception:
+        return markupsafe.escape(text)
 
 
 @app.route("/")
@@ -37,6 +49,9 @@ def explain():
     s = store.Store(config.DB_PATH)
     try:
         matches, helptext = explain_cmd(command, s)
+        helptext = [
+            (render_markdown(text), id_) for text, id_ in helptext
+        ]
         return render_template(
             "explain.html", matches=matches, helptext=helptext, getargs=command
         )

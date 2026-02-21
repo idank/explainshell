@@ -6,3 +6,5 @@ bashlex==0.18
 loguru==0.7.2
 ruff==0.12.9
 litellm>=1.40.0
+markdownify>=0.14.1
+markdown>=3.7
