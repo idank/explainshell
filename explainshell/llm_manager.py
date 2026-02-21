@@ -75,7 +75,8 @@ def main(args):
             continue
 
         try:
-            mp = extract(gz_path, args.model)
+            debug_dir = args.debug_dir if args.dry_run else None
+            mp = extract(gz_path, args.model, debug_dir=debug_dir)
             if s:
                 s.add_manpage(mp)
                 logger.info("added %s (%d options)", short_path, len(mp.options))
@@ -132,6 +133,11 @@ def _build_parser():
         action="store_true",
         default=False,
         help="Run LLM extraction but do not write results to the DB",
+    )
+    parser.add_argument(
+        "--debug-dir",
+        default="debug-output",
+        help="Directory for debug files in dry-run mode (default: debug-output)",
     )
     parser.add_argument(
         "--log",
