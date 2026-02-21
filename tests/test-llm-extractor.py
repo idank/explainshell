@@ -17,6 +17,7 @@ from explainshell.llm_extractor import (
     _validate_llm_response,
     chunk_text,
     extract,
+    get_manpage_text,
     get_plain_text,
 )
 
@@ -25,27 +26,49 @@ from explainshell.llm_extractor import (
 # TestGetPlainText
 # ---------------------------------------------------------------------------
 
-class TestGetPlainText(unittest.TestCase):
+class TestGetManpageText(unittest.TestCase):
     @patch("explainshell.llm_extractor.subprocess.run")
-    def test_success(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout="some text", stderr="")
-        result = get_plain_text("dummy.1.gz")
-        self.assertEqual(result, "some text")
+    def test_success_extracts_manual_text(self, mock_run):
+        html = (
+            '<html><body>'
+            '<div class="manual-text">'
+            '<p><b>bold</b> and <i>italic</i></p>'
+            '</div>'
+            '<table class="foot"><tr><td></td></tr></table>'
+            '</body></html>'
+        )
+        mock_run.return_value = MagicMock(returncode=0, stdout=html, stderr="")
+        result = get_manpage_text("dummy.1.gz")
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
-        self.assertEqual(cmd[:3], ["mandoc", "-T", "ascii"])
+        self.assertEqual(cmd[:3], ["mandoc", "-T", "html"])
+        # Should contain markdown bold/italic
+        self.assertIn("**bold**", result)
+        self.assertIn("*italic*", result)
 
     @patch("explainshell.llm_extractor.subprocess.run")
     def test_empty_output_raises(self, mock_run):
         mock_run.return_value = MagicMock(returncode=0, stdout="   ", stderr="")
         with self.assertRaises(ExtractionError):
-            get_plain_text("dummy.1.gz")
+            get_manpage_text("dummy.1.gz")
 
     @patch("explainshell.llm_extractor.subprocess.run")
     def test_nonzero_exit_raises(self, mock_run):
         mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error msg")
         with self.assertRaises(ExtractionError):
-            get_plain_text("dummy.1.gz")
+            get_manpage_text("dummy.1.gz")
+
+    @patch("explainshell.llm_extractor.subprocess.run")
+    def test_fallback_without_manual_text_div(self, mock_run):
+        """If mandoc output doesn't have the expected div, convert all HTML."""
+        html = "<html><body><p>hello <b>world</b></p></body></html>"
+        mock_run.return_value = MagicMock(returncode=0, stdout=html, stderr="")
+        result = get_manpage_text("dummy.1.gz")
+        self.assertIn("**world**", result)
+
+    def test_backward_compat_alias(self):
+        """get_plain_text is an alias for get_manpage_text."""
+        self.assertIs(get_plain_text, get_manpage_text)
 
 
 # ---------------------------------------------------------------------------
@@ -53,16 +76,44 @@ class TestGetPlainText(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 _ECHO_GZ = os.path.join(os.path.dirname(__file__), "..", "manpages", "1", "echo.1.gz")
+_FIND_GZ = os.path.join(os.path.dirname(__file__), "..", "manpages", "1", "find.1.gz")
 
-class TestGetPlainTextReal(unittest.TestCase):
-    def test_mandoc_produces_output(self):
-        text = get_plain_text(_ECHO_GZ)
+class TestGetManpageTextReal(unittest.TestCase):
+    def test_mandoc_produces_markdown(self):
+        text = get_manpage_text(_ECHO_GZ)
         self.assertIsInstance(text, str)
         self.assertGreater(len(text), 0)
 
     def test_mandoc_output_contains_option(self):
-        text = get_plain_text(_ECHO_GZ)
+        text = get_manpage_text(_ECHO_GZ)
         self.assertIn("-n", text)
+
+    def test_mandoc_output_has_markdown_formatting(self):
+        text = get_manpage_text(_ECHO_GZ)
+        # Should contain some markdown bold or italic markers
+        self.assertTrue(
+            "**" in text or "*" in text,
+            f"Expected markdown formatting in output, got: {text[:300]}",
+        )
+
+    def test_no_non_breaking_spaces(self):
+        """mandoc emits &#x00A0; between flags and args; these should be regular spaces."""
+        text = get_manpage_text(_FIND_GZ)
+        self.assertNotIn("\xa0", text)
+
+    def test_no_artificial_line_wrapping(self):
+        """Prose paragraphs should not be hard-wrapped at terminal width (~78 cols)."""
+        text = get_manpage_text(_FIND_GZ)
+        content_lines = [
+            l for l in text.split("\n")
+            if l and not l.startswith("=") and not l.startswith("[")
+        ]
+        long_lines = [l for l in content_lines if len(l) > 80]
+        self.assertGreater(
+            len(long_lines), 0,
+            "Expected long prose lines (>80 chars) but all lines were short — "
+            "mandoc whitespace may be leaking through as hard wraps",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -257,29 +308,33 @@ class TestDedupOptions(unittest.TestCase):
 
 class TestExtractIntegration(unittest.TestCase):
     @patch("explainshell.llm_extractor._call_llm")
-    @patch("explainshell.llm_extractor.get_plain_text")
+    @patch("explainshell.llm_extractor.get_manpage_text")
     @patch("explainshell.llm_extractor._get_synopsis_and_aliases")
     def test_extract_returns_manpage(self, mock_synopsis, mock_plaintext, mock_llm):
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
         mock_plaintext.return_value = "dummy man page text"
-        mock_llm.return_value = [
-            {
-                "short": ["-n"],
-                "long": [],
-                "expects_arg": False,
-                "argument": None,
-                "nested_cmd": False,
-                "description": "Do not output trailing newline.",
-            },
-            {
-                "short": ["-e"],
-                "long": [],
-                "expects_arg": False,
-                "argument": None,
-                "nested_cmd": False,
-                "description": "Enable interpretation of backslash escapes.",
-            },
-        ]
+        mock_llm.return_value = (
+            [
+                {
+                    "short": ["-n"],
+                    "long": [],
+                    "expects_arg": False,
+                    "argument": None,
+                    "nested_cmd": False,
+                    "description": "Do not output trailing newline.",
+                },
+                {
+                    "short": ["-e"],
+                    "long": [],
+                    "expects_arg": False,
+                    "argument": None,
+                    "nested_cmd": False,
+                    "description": "Enable interpretation of backslash escapes.",
+                },
+            ],
+            [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
+            '{"options": []}',
+        )
         mp = extract("dummy.1.gz", "test-model")
         self.assertIsInstance(mp, store.ManPage)
         self.assertEqual(len(mp.options), 2)
@@ -288,26 +343,65 @@ class TestExtractIntegration(unittest.TestCase):
         self.assertIn("-e", flags)
 
     @patch("explainshell.llm_extractor._call_llm")
-    @patch("explainshell.llm_extractor.get_plain_text")
+    @patch("explainshell.llm_extractor.get_manpage_text")
     @patch("explainshell.llm_extractor._get_synopsis_and_aliases")
     def test_malformed_options_skipped(self, mock_synopsis, mock_plaintext, mock_llm):
         mock_synopsis.return_value = (None, [("dummy", 10)])
         mock_plaintext.return_value = "some text"
-        mock_llm.return_value = [
-            {"short": "not-a-list", "long": [], "expects_arg": False, "description": "bad"},
-            {
-                "short": ["-v"],
-                "long": [],
-                "expects_arg": False,
-                "argument": None,
-                "nested_cmd": False,
-                "description": "Verbose.",
-            },
-        ]
+        mock_llm.return_value = (
+            [
+                {"short": "not-a-list", "long": [], "expects_arg": False, "description": "bad"},
+                {
+                    "short": ["-v"],
+                    "long": [],
+                    "expects_arg": False,
+                    "argument": None,
+                    "nested_cmd": False,
+                    "description": "Verbose.",
+                },
+            ],
+            [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
+            '{"options": []}',
+        )
         mp = extract("dummy.1.gz", "test-model")
         # only the valid option should be kept
         self.assertEqual(len(mp.options), 1)
         self.assertEqual(mp.options[0].short, ["-v"])
+
+    @patch("explainshell.llm_extractor._call_llm")
+    @patch("explainshell.llm_extractor.get_manpage_text")
+    @patch("explainshell.llm_extractor._get_synopsis_and_aliases")
+    def test_debug_dir_writes_files(self, mock_synopsis, mock_plaintext, mock_llm):
+        import tempfile
+        mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
+        mock_plaintext.return_value = "dummy man page text"
+        raw_response = '{"options": [{"short": ["-v"], "long": [], "expects_arg": false, "argument": null, "nested_cmd": false, "description": "Verbose."}]}'
+        mock_llm.return_value = (
+            [{"short": ["-v"], "long": [], "expects_arg": False, "argument": None, "nested_cmd": False, "description": "Verbose."}],
+            [{"role": "system", "content": "sys"}, {"role": "user", "content": "usr"}],
+            raw_response,
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mp = extract("dummy.1.gz", "test-model", debug_dir=tmpdir)
+            self.assertEqual(len(mp.options), 1)
+            # Check markdown file
+            md_path = os.path.join(tmpdir, "dummy.md")
+            self.assertTrue(os.path.exists(md_path))
+            with open(md_path) as f:
+                self.assertEqual(f.read(), "dummy man page text")
+            # Check prompt file
+            prompt_path = os.path.join(tmpdir, "dummy.prompt.json")
+            self.assertTrue(os.path.exists(prompt_path))
+            with open(prompt_path) as f:
+                import json
+                msgs = json.load(f)
+                self.assertEqual(len(msgs), 2)
+                self.assertEqual(msgs[0]["role"], "system")
+            # Check response file
+            response_path = os.path.join(tmpdir, "dummy.response.txt")
+            self.assertTrue(os.path.exists(response_path))
+            with open(response_path) as f:
+                self.assertEqual(f.read(), raw_response)
 
 
 # ---------------------------------------------------------------------------
@@ -324,6 +418,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
             overwrite=overwrite,
             drop=False,
             dry_run=dry_run,
+            debug_dir="debug-output",
             log="WARNING",
             files=[],
         )
@@ -342,7 +437,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
         args = self._make_args(dry_run=True)
         ret = main(args)
 
-        mock_extract.assert_called_once_with("/fake/echo.1.gz", "test-model")
+        mock_extract.assert_called_once_with("/fake/echo.1.gz", "test-model", debug_dir="debug-output")
         mock_store_cls.assert_not_called()
         self.assertEqual(ret, 0)
 

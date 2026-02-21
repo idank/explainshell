@@ -13,6 +13,7 @@ import subprocess
 import time
 
 import litellm
+from markdownify import markdownify as md
 
 from explainshell import manpage, store
 
@@ -22,15 +23,16 @@ CHUNK_SIZE_CHARS = 60_000
 CHUNK_OVERLAP_CHARS = 2_000
 
 _SYSTEM_PROMPT = """\
-You are an expert at parsing Unix man pages. You will be given the plain text of a man page.
-Your task is to extract ALL command-line options documented in this man page and return them
-as a JSON object.
+You are an expert at parsing Unix man pages. You will be given a markdown-formatted man page
+(converted from HTML). Your task is to extract ALL command-line options documented in this
+man page and return them as a JSON object.
 
 Rules:
 1. Extract every option a user can pass on the command line. Include both short options
    (e.g. -v) and long options (e.g. --verbose). If multiple flags share one description,
    include them all in the same entry.
-2. For each option include the full description text exactly as it appears (do not summarize).
+2. For each option include the full description text exactly as it appears. Preserve any
+   markdown formatting such as **bold** and *italic* in the descriptions.
 3. Set "expects_arg":
    - false  → option takes no argument (e.g. -v, --verbose)
    - true   → option requires an argument (e.g. -f FILE, --file=FILE)
@@ -40,7 +42,7 @@ Rules:
 5. Set "nested_cmd" to true only when the argument is itself a shell command
    (e.g. find -exec CMD ;).
 6. Do not invent options. Only include options explicitly documented in the text.
-7. Return ONLY the JSON object. No markdown, no explanation.
+7. Return ONLY the JSON object. No markdown fences, no explanation.
 
 JSON schema:
 {
@@ -61,17 +63,37 @@ class ExtractionError(Exception):
     pass
 
 
-def get_plain_text(gz_path: str) -> str:
-    """Run `mandoc -T txt <gz_path>`, return stdout."""
+def get_manpage_text(gz_path: str) -> str:
+    """Run `mandoc -T html <gz_path>`, extract manual-text, convert to markdown."""
     result = subprocess.run(
-        ["mandoc", "-T", "ascii", gz_path],
+        ["mandoc", "-T", "html", gz_path],
         capture_output=True,
         text=True,
         timeout=60,
     )
     if result.returncode != 0 or not result.stdout.strip():
         raise ExtractionError(f"mandoc failed for {gz_path}: {result.stderr}")
-    return result.stdout
+
+    html = result.stdout
+
+    # Extract only the <div class="manual-text"> content to skip boilerplate
+    m = re.search(
+        r'<div class="manual-text">(.*)</div>\s*<table class="foot">',
+        html,
+        re.DOTALL,
+    )
+    if m:
+        html = m.group(1)
+
+    text = md(html, strip=["img"], wrap=True, wrap_width=10000).strip()
+    # mandoc emits &#x00A0; (non-breaking space) between flags and arguments;
+    # markdownify preserves these as literal \xa0 — replace with regular spaces.
+    text = text.replace("\xa0", " ")
+    return text
+
+
+# Keep backward-compatible alias
+get_plain_text = get_manpage_text
 
 
 def chunk_text(text: str) -> list:
@@ -146,8 +168,11 @@ def _get_synopsis_and_aliases(gz_path: str):
     return synopsis, aliases
 
 
-def _call_llm(chunk: str, chunk_info: str, model: str, litellm_kwargs: dict) -> list:
-    """Call LiteLLM, parse JSON, validate. Retries up to 3x on transient errors."""
+def _call_llm(chunk: str, chunk_info: str, model: str, litellm_kwargs: dict) -> tuple:
+    """Call LiteLLM, parse JSON, validate. Retries up to 3x on transient errors.
+
+    Returns (options_list, messages, raw_response_content).
+    """
     user_content = f"Extract all command-line options from this man page{chunk_info}:\n\n{chunk}"
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
@@ -177,7 +202,7 @@ def _call_llm(chunk: str, chunk_info: str, model: str, litellm_kwargs: dict) -> 
             content = response.choices[0].message.content
             data = _parse_json_response(content)
             _validate_llm_response(data)
-            return data["options"]
+            return data["options"], messages, content
         except ExtractionError:
             raise
         except retryable as e:
@@ -273,16 +298,36 @@ def _llm_option_to_store_option(raw: dict, idx: int) -> store.Option:
     return store.Option(p, short, long, expects_arg, argument, nested_cmd)
 
 
-def extract(gz_path: str, model: str, **litellm_kwargs) -> store.ManPage:
+def extract(gz_path: str, model: str, debug_dir: str | None = None, **litellm_kwargs) -> store.ManPage:
     """Full pipeline: gz → plain text → LLM → store.ManPage"""
     synopsis, aliases = _get_synopsis_and_aliases(gz_path)
-    plain_text = get_plain_text(gz_path)
+    plain_text = get_manpage_text(gz_path)
     chunks = chunk_text(plain_text)
+
+    basename = os.path.splitext(os.path.splitext(os.path.basename(gz_path))[0])[0]
+
+    if debug_dir:
+        os.makedirs(debug_dir, exist_ok=True)
+        with open(os.path.join(debug_dir, f"{basename}.md"), "w") as f:
+            f.write(plain_text)
 
     all_raw = []
     for i, chunk in enumerate(chunks):
         chunk_info = f" (part {i + 1} of {len(chunks)})" if len(chunks) > 1 else ""
-        all_raw.extend(_call_llm(chunk, chunk_info, model, litellm_kwargs))
+        options, messages, raw_response = _call_llm(chunk, chunk_info, model, litellm_kwargs)
+        all_raw.extend(options)
+
+        if debug_dir:
+            if len(chunks) == 1:
+                prompt_name = f"{basename}.prompt.json"
+                response_name = f"{basename}.response.txt"
+            else:
+                prompt_name = f"{basename}.chunk-{i}.prompt.json"
+                response_name = f"{basename}.chunk-{i}.response.txt"
+            with open(os.path.join(debug_dir, prompt_name), "w") as f:
+                json.dump(messages, f, indent=2)
+            with open(os.path.join(debug_dir, response_name), "w") as f:
+                f.write(raw_response)
 
     all_raw = _dedup_options(all_raw)
 
