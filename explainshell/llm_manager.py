@@ -44,7 +44,7 @@ def main(args):
 
     db_path = args.db
 
-    if args.drop:
+    if args.drop and not args.dry_run:
         answer = input("Really drop all data? (y/n) ").strip().lower()
         if answer != "y":
             print("Aborted.")
@@ -55,35 +55,34 @@ def main(args):
         print("No .gz files found.", file=sys.stderr)
         return 1
 
-    if args.dry_run:
-        print(f"Dry run — would process {len(gz_files)} file(s):")
-        for f in gz_files:
-            print(f"  {f}")
-        return 0
-
-    s = store.Store(db_path)
-    if args.drop:
+    s = store.Store(db_path) if not args.dry_run else None
+    if s and args.drop:
         s.drop(confirm=True)
 
     added = 0
     skipped = 0
     failed = 0
 
+    from explainshell import manpage as _manpage
+
     for gz_path in gz_files:
         short_path = os.path.basename(gz_path)
-        from explainshell import manpage as _manpage
         name = _manpage.extract_name(gz_path)
 
-        if not args.overwrite and _already_stored(s, short_path, name):
+        if s and not args.overwrite and _already_stored(s, short_path, name):
             logger.info("skipping %s (already stored)", short_path)
             skipped += 1
             continue
 
         try:
             mp = extract(gz_path, args.model)
-            s.add_manpage(mp)
-            logger.info("added %s (%d options)", short_path, len(mp.options))
-            added += 1
+            if s:
+                s.add_manpage(mp)
+                logger.info("added %s (%d options)", short_path, len(mp.options))
+                added += 1
+            else:
+                print(f"{short_path}: {len(mp.options)} option(s) extracted (dry run, not written)")
+                added += 1
         except ExtractionError as e:
             logger.error("failed to process %s: %s", short_path, e)
             failed += 1
@@ -93,13 +92,14 @@ def main(args):
             logger.error("unexpected error processing %s: %s", short_path, e)
             failed += 1
 
-    # update multi-cmd mappings
-    if added > 0:
+    # update multi-cmd mappings (only when writing to DB)
+    if s and added > 0:
         m = Manager.__new__(Manager)
         m.store = s
         m.findmulti_cmds()
 
-    print(f"Done: {added} added, {skipped} skipped, {failed} failed.")
+    dry_run_note = " (dry run)" if args.dry_run else ""
+    print(f"Done{dry_run_note}: {added} extracted, {skipped} skipped, {failed} failed.")
     return 0 if failed == 0 else 1
 
 
@@ -125,7 +125,7 @@ def _build_parser():
         "--dry-run",
         action="store_true",
         default=False,
-        help="Show what would be processed, no LLM calls",
+        help="Run LLM extraction but do not write results to the DB",
     )
     parser.add_argument(
         "--log",
