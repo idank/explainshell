@@ -227,8 +227,17 @@ def _dedup_options(raw_options: list) -> list:
     seen = set()
     result = []
     for opt in raw_options:
-        short = tuple(sorted(opt.get("short") or []))
-        long = tuple(sorted(opt.get("long") or []))
+        try:
+            raw_short = opt.get("short") or []
+            raw_long = opt.get("long") or []
+            if not isinstance(raw_short, list) or not isinstance(raw_long, list):
+                result.append(opt)
+                continue
+            short = tuple(sorted(str(s) for s in raw_short))
+            long = tuple(sorted(str(s) for s in raw_long))
+        except (TypeError, AttributeError):
+            result.append(opt)
+            continue
         key = (short, long)
         # positional args (no flags) always kept
         if not short and not long:

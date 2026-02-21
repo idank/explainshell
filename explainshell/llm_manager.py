@@ -87,6 +87,11 @@ def main(args):
         except ExtractionError as e:
             logger.error("failed to process %s: %s", short_path, e)
             failed += 1
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            logger.error("unexpected error processing %s: %s", short_path, e)
+            failed += 1
 
     # update multi-cmd mappings
     if added > 0:
