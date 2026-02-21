@@ -3,8 +3,9 @@
 .coverage
 .vagrant
 *.log
-venv/
+.venv/
 __pycache__
 .mpypy_cache/
 tests/screenshots/*.png
 test-results/
+dump.gz
