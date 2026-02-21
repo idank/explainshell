@@ -3,9 +3,11 @@
 .coverage
 .vagrant
 *.log
+.env/
 .venv/
 __pycache__
 .mpypy_cache/
 tests/screenshots/*.png
 test-results/
 dump.gz
+moarcode/

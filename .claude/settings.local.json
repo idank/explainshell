@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(pip3 list:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(python3:*)",
+      "Bash(.venv3/bin/python:*)",
+      "WebFetch(domain:docs.litellm.ai)",
+      "Bash(.venv/bin/python:*)",
+      "Bash(.venv/bin/pip show:*)",
+      "Bash(UPDATE_SNAPSHOTS=1 .venv/bin/pytest:*)",
+      "Bash(.venv/bin/pytest:*)"
+    ]
+  }
+}
