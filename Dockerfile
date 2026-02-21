@@ -1,7 +1,7 @@
 FROM python:3.12
 
 RUN apt update \
-  && apt install man-db -y \
+  && apt install man-db mandoc -y \
   && apt clean
 
 WORKDIR /opt/webapp
