@@ -10,5 +10,5 @@ MAN2HTML = os.path.join(TOOLS_DIR, "w3mman2html.cgi")
 
 # host to pass into Flask's app.run.
 HOST_IP = os.getenv("HOST_IP", "")
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost")
+DB_PATH = os.getenv("DB_PATH", os.path.join(_curr_dir, "explainshell.db"))
 DEBUG = True

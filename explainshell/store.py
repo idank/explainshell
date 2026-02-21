@@ -1,19 +1,47 @@
 """
-data objects to save processed man pages to mongodb
+data objects to save processed man pages to sqlite
 """
 
 import collections
-import re
+import json
 import logging
-
-# from pprint import pprint
-
-import pymongo
-from bson import ObjectId
+import re
+import sqlite3
 
 from explainshell import errors, help_constants, util, config
 
 logger = logging.getLogger(__name__)
+
+_CREATE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS manpage (
+    id            INTEGER PRIMARY KEY,
+    source        TEXT    NOT NULL UNIQUE,
+    name          TEXT    NOT NULL,
+    synopsis      TEXT,
+    paragraphs    TEXT    NOT NULL DEFAULT '[]',
+    aliases       TEXT    NOT NULL DEFAULT '[]',
+    partial_match INTEGER NOT NULL DEFAULT 0,
+    multi_cmd     INTEGER NOT NULL DEFAULT 0,
+    updated       INTEGER NOT NULL DEFAULT 0,
+    nested_cmd    TEXT    NOT NULL DEFAULT 'false'
+);
+
+CREATE TABLE IF NOT EXISTS mapping (
+    id    INTEGER PRIMARY KEY,
+    src   TEXT    NOT NULL,
+    dst   INTEGER NOT NULL REFERENCES manpage(id) ON DELETE CASCADE,
+    score INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_mapping_src ON mapping(src);
+CREATE INDEX IF NOT EXISTS idx_mapping_dst ON mapping(dst);
+
+CREATE TABLE IF NOT EXISTS classifier_manpage (
+    id         INTEGER PRIMARY KEY,
+    name       TEXT NOT NULL UNIQUE,
+    paragraphs TEXT NOT NULL DEFAULT '[]'
+);
+"""
 
 
 class ClassifierManpage(collections.namedtuple("ClassifierManpage", "name paragraphs")):
@@ -23,14 +51,14 @@ class ClassifierManpage(collections.namedtuple("ClassifierManpage", "name paragr
     @staticmethod
     def from_store(d):
         m = ClassifierManpage(
-            d["name"], [Paragraph.from_store(p) for p in d["paragraphs"]]
+            d["name"], [Paragraph.from_store(p) for p in json.loads(d["paragraphs"])]
         )
         return m
 
     def to_store(self):
         return {
             "name": self.name,
-            "paragraphs": [p.to_store() for p in self.paragraphs],
+            "paragraphs": json.dumps([p.to_store() for p in self.paragraphs]),
         }
 
 
@@ -108,8 +136,6 @@ class Option(Paragraph):
     @classmethod
     def from_store(cls, d):
         p = Paragraph.from_store(d)
-
-        # logger.debug(str(vars(d)))
 
         return cls(
             p,
@@ -225,22 +251,25 @@ class ManPage:
                     return o_tmp
 
     def to_store(self):
+        synopsis = self.synopsis
+        if isinstance(synopsis, bytes):
+            synopsis = synopsis.decode("utf-8")
         return {
             "source": self.source,
             "name": self.name,
-            "synopsis": self.synopsis,
-            "paragraphs": [p.to_store() for p in self.paragraphs],
-            "aliases": self.aliases,
-            "partial_match": self.partial_match,
-            "multi_cmd": self.multi_cmd,
-            "updated": self.updated,
-            "nested_cmd": self.nested_cmd,
+            "synopsis": synopsis,
+            "paragraphs": json.dumps([p.to_store() for p in self.paragraphs]),
+            "aliases": json.dumps(self.aliases),
+            "partial_match": int(bool(self.partial_match)),
+            "multi_cmd": int(bool(self.multi_cmd)),
+            "updated": int(bool(self.updated)),
+            "nested_cmd": json.dumps(self.nested_cmd),
         }
 
     @staticmethod
     def from_store(d):
         paragraphs = []
-        for pd in d.get("paragraphs", []):
+        for pd in json.loads(d["paragraphs"]):
             pp = Paragraph.from_store(pd)
             if pp.is_option is True and "short" in pd:
                 pp = Option.from_store(pd)
@@ -252,33 +281,19 @@ class ManPage:
         else:
             synopsis = help_constants.NO_SYNOPSIS
 
-        partial_match = None
-        if "partialmatch" in d:
-            partial_match = d["partialmatch"]
-        elif "partial_match" in d:
-            partial_match = d["partial_match"]
-
-        multi_cmd = None
-        if "multicommand" in d:
-            multi_cmd = d["multicommand"]
-        elif "multi_cmd" in d:
-            multi_cmd = d["multi_cmd"]
-
-        nested_cmd = None
-        if "nestedcmd" in d:
-            nested_cmd = d["nestedcmd"]
-        elif "nested_cmd" in d:
-            nested_cmd = d["nested_cmd"]
+        partial_match = bool(d["partial_match"])
+        multi_cmd = bool(d["multi_cmd"])
+        nested_cmd = json.loads(d["nested_cmd"])
 
         return ManPage(
             d["source"],
             d["name"],
             synopsis,
             paragraphs,
-            [tuple(x) for x in d["aliases"]],
+            [tuple(x) for x in json.loads(d["aliases"])],
             partial_match,
             multi_cmd,
-            d["updated"],
+            bool(d["updated"]),
             nested_cmd,
         )
 
@@ -291,45 +306,52 @@ class ManPage:
 
 
 class Store:
-    """read/write processed man pages from mongodb
+    """read/write processed man pages from sqlite
 
-    we use three collections:
-    1) classifier - contains manually tagged paragraphs from man pages
+    we use three tables:
+    1) classifier_manpage - contains manually tagged paragraphs from man pages
     2) manpage - contains a processed man page
     3) mapping - contains (name, manpageid, score) tuples
     """
 
-    def __init__(self, db="explainshell", host=config.MONGO_URI):
-        logger.info("creating store, db = %r, host = %r", db, host)
-        self.connection = pymongo.MongoClient(host)
-        self.db = self.connection[db]
-        self.classifier = self.db["classifier"]
-        self.manpage = self.db["manpage"]
-        self.mapping = self.db["mapping"]
+    def __init__(self, db_path=config.DB_PATH):
+        logger.info("creating store, db_path = %r", db_path)
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA foreign_keys = ON")
+        self._conn.execute("PRAGMA journal_mode = WAL")
+        self._conn.executescript(_CREATE_SCHEMA)
 
     def close(self):
-        self.connection.disconnect()
-        self.classifier = self.manpage = self.mapping = self.db = None
+        if self._conn:
+            self._conn.close()
+            self._conn = None
 
     def drop(self, confirm=False):
         if not confirm:
             return
 
-        logger.info("dropping mapping, manpage, collections")
-        self.mapping.drop()
-        self.manpage.drop()
+        logger.info("dropping mapping, manpage, classifier_manpage tables")
+        self._conn.executescript("""
+            DELETE FROM mapping;
+            DELETE FROM manpage;
+            DELETE FROM classifier_manpage;
+        """)
+        self._conn.commit()
 
     def training_set(self):
-        for d in self.classifier.find():
-            yield ClassifierManpage.from_store(d)
+        for row in self._conn.execute("SELECT * FROM classifier_manpage"):
+            yield ClassifierManpage.from_store(dict(row))
 
     def __contains__(self, name):
-        c = self.mapping.count_documents({"src": name})
-        return c > 0
+        row = self._conn.execute(
+            "SELECT COUNT(*) FROM mapping WHERE src = ?", (name,)
+        ).fetchone()
+        return row[0] > 0
 
     def __iter__(self):
-        for d in self.manpage.find():
-            yield ManPage.from_store(d)
+        for row in self._conn.execute("SELECT * FROM manpage"):
+            yield ManPage.from_store(dict(row))
 
     def find_man_page(self, name):
         """find a man page by its name, everything following the last dot (.) in name,
@@ -340,10 +362,12 @@ class Store:
         is prepopulated with the option data)"""
         if name.endswith(".gz"):
             logger.info("name ends with .gz, looking up an exact match by source")
-            d = self.manpage.find_one({"source": name})
-            if not d:
+            row = self._conn.execute(
+                "SELECT * FROM manpage WHERE source = ?", (name,)
+            ).fetchone()
+            if not row:
                 raise errors.ProgramDoesNotExist(name)
-            m = ManPage.from_store(d)
+            m = ManPage.from_store(dict(row))
             logger.info("returning %s", m)
             return [m]
 
@@ -358,30 +382,37 @@ class Store:
                 section = splitted[1]
 
         logger.info("looking up manpage in mapping with src %r", name)
-        cursor = list(self.mapping.find({"src": name}))
+        mapping_rows = self._conn.execute(
+            "SELECT dst, score FROM mapping WHERE src = ?", (name,)
+        ).fetchall()
 
-        count = len(cursor)
-        if count == 0:
-            logger.debug(f"count is {count}")
+        if not mapping_rows:
             raise errors.ProgramDoesNotExist(name)
 
-        dsts = {d["dst"]: d["score"] for d in cursor}
-        cursor = list(
-            self.manpage.find(
-                {"_id": {"$in": list(dsts.keys())}}, {"name": 1, "source": 1}
-            )
-        )
-        if len(list(cursor)) != len(dsts):
+        dsts = {row["dst"]: row["score"] for row in mapping_rows}
+
+        placeholders = ",".join("?" * len(dsts))
+        manpage_rows = self._conn.execute(
+            f"SELECT id, name, source FROM manpage WHERE id IN ({placeholders})",
+            list(dsts.keys()),
+        ).fetchall()
+
+        if len(manpage_rows) != len(dsts):
             logger.error(
-                "one of %r mappings is missing in manpage collection "
+                "one of %r mappings is missing in manpage table "
                 "(%d mappings, %d found)",
                 dsts,
                 len(dsts),
-                len(cursor),
+                len(manpage_rows),
             )
-        results = [(d.pop("_id"), ManPage.from_store_name_only(**d)) for d in cursor]
+
+        results = [
+            (row["id"], ManPage.from_store_name_only(row["name"], row["source"]))
+            for row in manpage_rows
+        ]
         results.sort(key=lambda x: dsts.get(x[0], 0), reverse=True)
         logger.info("got %s", results)
+
         if section is not None:
             if len(results) > 1:
                 results.sort(
@@ -394,67 +425,96 @@ class Store:
 
         oid = results[0][0]
         results = [x[1] for x in results]
-        results[0] = ManPage.from_store(self.manpage.find_one({"_id": oid}))
+        row = self._conn.execute(
+            "SELECT * FROM manpage WHERE id = ?", (oid,)
+        ).fetchone()
+        results[0] = ManPage.from_store(dict(row))
         return results
 
     def _discover_manpage_suggestions(self, oid, existing):
         """find suggestions for a given man page
 
-        oid is the objectid of the man page in question,
-        existing is a list of (oid, man page) of suggestions that were
+        oid is the id of the man page in question,
+        existing is a list of (id, man page) of suggestions that were
         already discovered
         """
         skip = {oid for oid, m in existing}
-        cursor = self.mapping.find({"dst": oid})
+
         # find all srcs that point to oid
-        srcs = [d["src"] for d in cursor]
-        # find all dsts of srcs
-        suggestion_oids = self.mapping.find({"src": {"$in": srcs}}, {"dst": 1})
-        # remove already discovered
-        suggestion_oids = [d["dst"] for d in suggestion_oids if d["dst"] not in skip]
-        if not suggestion_oids:
+        src_rows = self._conn.execute(
+            "SELECT src FROM mapping WHERE dst = ?", (oid,)
+        ).fetchall()
+        srcs = [row["src"] for row in src_rows]
+        if not srcs:
+            return []
+
+        # find all dsts of those srcs
+        placeholders = ",".join("?" * len(srcs))
+        dst_rows = self._conn.execute(
+            f"SELECT DISTINCT dst FROM mapping WHERE src IN ({placeholders})",
+            srcs,
+        ).fetchall()
+        suggestion_ids = [row["dst"] for row in dst_rows if row["dst"] not in skip]
+        if not suggestion_ids:
             return []
 
         # get just the name and source of found suggestions
-        suggestion_oids = self.manpage.find(
-            {"_id": {"$in": suggestion_oids}}, {"name": 1, "source": 1}
-        )
+        placeholders = ",".join("?" * len(suggestion_ids))
+        manpage_rows = self._conn.execute(
+            f"SELECT id, name, source FROM manpage WHERE id IN ({placeholders})",
+            suggestion_ids,
+        ).fetchall()
         return [
-            (d.pop("_id"), ManPage.from_store_name_only(**d)) for d in suggestion_oids
+            (row["id"], ManPage.from_store_name_only(row["name"], row["source"]))
+            for row in manpage_rows
         ]
 
     def add_mapping(self, src, dst, score):
-        if not isinstance(dst, ObjectId):
-            dst = dst.inserted_id
-        self.mapping.insert_one({"src": src, "dst": dst, "score": score})
+        self._conn.execute(
+            "INSERT INTO mapping(src, dst, score) VALUES (?, ?, ?)", (src, dst, score)
+        )
+        self._conn.commit()
 
     def add_manpage(self, m):
-        """add `m` into the store, if it exists first remove it and it's mappings
+        """add `m` into the store, if it exists first remove it and its mappings
 
-        each man page may have aliases besides the name determined by it's
+        each man page may have aliases besides the name determined by its
         basename"""
-        d = self.manpage.find_one({"source": m.source})
-        if d:
-            logger.info("removing old manpage %s (%s)", m.source, d["_id"])
-            self.manpage.delete_one({"_id": d["_id"]})
+        existing = self._conn.execute(
+            "SELECT id FROM manpage WHERE source = ?", (m.source,)
+        ).fetchone()
+        if existing:
+            old_id = existing["id"]
+            logger.info("removing old manpage %s (%s)", m.source, old_id)
+            # ON DELETE CASCADE removes all mapping rows for this manpage
+            self._conn.execute("DELETE FROM manpage WHERE id = ?", (old_id,))
+            self._conn.commit()
+            logger.info("removed manpage and its mappings for %s", m.source)
 
-            # remove old mappings if there are any
-            c = self.mapping.count_documents({})
-            self.mapping.delete_one({"dst": d["_id"]})
-            c -= self.mapping.count_documents({})
-            logger.info("removed %d mappings for manpage %s", c, m.source)
-
-        o = self.manpage.insert_one(m.to_store())
+        d = m.to_store()
+        cursor = self._conn.execute(
+            """INSERT INTO manpage(source, name, synopsis, paragraphs, aliases,
+                                   partial_match, multi_cmd, updated, nested_cmd)
+               VALUES (:source, :name, :synopsis, :paragraphs, :aliases,
+                       :partial_match, :multi_cmd, :updated, :nested_cmd)""",
+            d,
+        )
+        self._conn.commit()
+        new_id = cursor.lastrowid
 
         for alias, score in m.aliases:
-            self.add_mapping(alias, o, score)
+            self._conn.execute(
+                "INSERT INTO mapping(src, dst, score) VALUES (?, ?, ?)",
+                (alias, new_id, score),
+            )
             logger.info(
                 "inserting mapping (alias) %s -> %s (%s) with score %d",
                 alias,
                 m.name,
-                o,
+                new_id,
                 score,
             )
+        self._conn.commit()
         return m
 
     def update_man_page(self, m):
@@ -463,29 +523,52 @@ class Store:
         change updated attribute so we don't overwrite this in the future"""
         logger.info("updating manpage %s", m.source)
         m.updated = True
-        self.manpage.update_one({"source": m.source}, m.to_store())
-        _id = self.manpage.find_one({"source": m.source}, fields={"_id": 1})["_id"]
+        d = m.to_store()
+        self._conn.execute(
+            """UPDATE manpage
+               SET name=:name, synopsis=:synopsis, paragraphs=:paragraphs,
+                   aliases=:aliases, partial_match=:partial_match,
+                   multi_cmd=:multi_cmd, updated=:updated, nested_cmd=:nested_cmd
+               WHERE source=:source""",
+            d,
+        )
+        self._conn.commit()
+
+        row = self._conn.execute(
+            "SELECT id FROM manpage WHERE source = ?", (m.source,)
+        ).fetchone()
+        manpage_id = row["id"]
+
         for alias, score in m.aliases:
             if alias not in self:
-                self.add_mapping(alias, _id, score)
+                self._conn.execute(
+                    "INSERT INTO mapping(src, dst, score) VALUES (?, ?, ?)",
+                    (alias, manpage_id, score),
+                )
+                self._conn.commit()
                 logger.info(
                     "inserting mapping (alias) %s -> %s (%s) with score %d",
                     alias,
                     m.name,
-                    _id,
+                    manpage_id,
                     score,
                 )
             else:
                 logger.debug(
-                    "mapping (alias) %s -> %s (%s) already exists", alias, m.name, _id
+                    "mapping (alias) %s -> %s (%s) already exists",
+                    alias,
+                    m.name,
+                    manpage_id,
                 )
         return m
 
     def verify(self):
         # check that everything in manpage is reachable
-        mappings = list(self.mapping.find())
-        reachable = {m["dst"] for m in mappings}
-        man_pages = {m["_id"] for m in self.manpage.find(fields={"_id": 1})}
+        mapping_rows = self._conn.execute("SELECT dst FROM mapping").fetchall()
+        reachable = {row["dst"] for row in mapping_rows}
+
+        manpage_rows = self._conn.execute("SELECT id FROM manpage").fetchall()
+        man_pages = {row["id"] for row in manpage_rows}
 
         ok = True
         unreachable = man_pages - reachable
@@ -493,9 +576,12 @@ class Store:
             logger.error(
                 "manpages %r are unreachable (nothing maps to them)", unreachable
             )
-            unreachable = [
-                self.manpage.find_one({"_id": u})["name"] for u in unreachable
-            ]
+            placeholders = ",".join("?" * len(unreachable))
+            name_rows = self._conn.execute(
+                f"SELECT name FROM manpage WHERE id IN ({placeholders})",
+                list(unreachable),
+            ).fetchall()
+            unreachable = [row["name"] for row in name_rows]
             ok = False
 
         notfound = reachable - man_pages
@@ -506,14 +592,15 @@ class Store:
         return ok, unreachable, notfound
 
     def names(self):
-        cursor = self.manpage.find({}, {"name": 1})
-        for d in cursor:
-            yield d["_id"], d["name"]
+        for row in self._conn.execute("SELECT id, name FROM manpage"):
+            yield row["id"], row["name"]
 
     def mappings(self):
-        cursor = self.mapping.find({}, {"src": 1})
-        for d in cursor:
-            yield d["src"], d["_id"]
+        for row in self._conn.execute("SELECT src, id FROM mapping"):
+            yield row["src"], row["id"]
 
     def set_multi_cmd(self, manpage_id):
-        self.manpage.update_one({"_id": manpage_id}, {"$set": {"multi_cmd": True}})
+        self._conn.execute(
+            "UPDATE manpage SET multi_cmd = 1 WHERE id = ?", (manpage_id,)
+        )
+        self._conn.commit()
