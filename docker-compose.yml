@@ -8,5 +8,9 @@ services:
       - HOST_IP=0.0.0.0
     volumes:
       - .:/opt/webapp
+      - venv:/opt/webapp/.venv
     ports:
       - "5001:5000"
+
+volumes:
+  venv:
