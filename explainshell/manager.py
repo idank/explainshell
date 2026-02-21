@@ -27,11 +27,11 @@ class Manager:
     """the manager uses all parts of the system to read, classify, parse, extract
     and write a man page to the database"""
 
-    def __init__(self, db_host, dbname, paths, overwrite=False, drop=False):
+    def __init__(self, db_path, paths, overwrite=False, drop=False):
         self.paths = paths
         self.overwrite = overwrite
 
-        self.store = store.Store(dbname, db_host)
+        self.store = store.Store(db_path)
 
         self.classifier = classifier.Classifier(self.store, "bayes")
         self.classifier.train()
@@ -177,9 +177,9 @@ class Manager:
         return mappings_to_a, multi_cmds
 
 
-def main(files, dbname, db_host, overwrite, drop, verify):
+def main(files, db_path, overwrite, drop, verify):
     if verify:
-        s = store.Store(dbname, db_host)
+        s = store.Store(db_path)
         ok = s.verify()
         return 0 if ok else 1
 
@@ -199,7 +199,7 @@ def main(files, dbname, db_host, overwrite, drop, verify):
         else:
             gzs.add(os.path.abspath(path))
 
-    m = Manager(db_host, dbname, gzs, overwrite, drop)
+    m = Manager(db_path, gzs, overwrite, drop)
     added, exists = m.run()
     for mp in added:
         print(f"successfully added '{mp.source}'")
@@ -229,8 +229,7 @@ if __name__ == "__main__":
         default=False,
         help="delete all existing man pages",
     )
-    parser.add_argument("--db", default="explainshell", help="mongo db name")
-    parser.add_argument("--host", default=config.MONGO_URI, help="mongo host")
+    parser.add_argument("--db", default=config.DB_PATH, help="sqlite db file path")
     parser.add_argument(
         "--verify", action="store_true", default=False, help="verify db integrity"
     )
@@ -239,5 +238,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     logging.basicConfig(level=getattr(logging, args.log.upper()))
     sys.exit(
-        main(args.files, args.db, args.host, args.overwrite, args.drop, args.verify)
+        main(args.files, args.db, args.overwrite, args.drop, args.verify)
     )

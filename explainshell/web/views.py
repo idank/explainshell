@@ -34,7 +34,7 @@ def explain():
             "errors/error.html", title="parsing error!", message="no newlines please"
         )
 
-    s = store.Store("explainshell", config.MONGO_URI)
+    s = store.Store(config.DB_PATH)
     try:
         matches, helptext = explain_cmd(command, s)
         return render_template(
@@ -71,7 +71,7 @@ def explain():
 def explain_old(section, program):
     logger.info("/explain section=%r program=%r", section, program)
 
-    s = store.Store("explainshell", config.MONGO_URI)
+    s = store.Store(config.DB_PATH)
     if section is not None:
         program = f"{program}.{section}"
 

@@ -1,5 +1,6 @@
-import unittest
 import os
+import tempfile
+import unittest
 
 from explainshell import manager, config, store, errors
 
@@ -7,14 +8,20 @@ from explainshell import manager, config, store, errors
 @unittest.skip("nltk usage is broken due to new version")
 class test_manager(unittest.TestCase):
     def setUp(self):
-        store.Store("explainshell_tests").drop(True)
+        fd, self.db_path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        os.unlink(self.db_path)  # let Store create it fresh
+
+    def tearDown(self):
+        if os.path.exists(self.db_path):
+            os.unlink(self.db_path)
 
     def _getmanager(self, names, **kwargs):
         paths = []
         for n in names:
             paths.append(os.path.join(config.MAN_PAGE_DIR, "1", n))
 
-        m = manager.Manager(config.MONGO_URI, "explainshell_tests", paths, **kwargs)
+        m = manager.Manager(self.db_path, paths, **kwargs)
         return m
 
     def test(self):
@@ -38,26 +45,26 @@ class test_manager(unittest.TestCase):
     def test_verify(self):
         m = self._getmanager(["tar.1.gz"])
         s = m.store
+        m.run()
 
-        # invalid mapping
-        s.add_mapping("foo", "bar", 1)
+        # invalid mapping (dst doesn't exist as a manpage id)
+        s._conn.execute("INSERT INTO mapping(src, dst, score) VALUES ('foo', 9999, 1)")
+        s._conn.commit()
         ok, unreachable, notfound = s.verify()
         self.assertFalse(ok)
-        self.assertEqual(list(notfound), ["bar"])
+        self.assertIn(9999, notfound)
 
-        s.mapping.drop()
-        m.run()
+        s._conn.execute("DELETE FROM mapping")
+        s._conn.commit()
         ok, unreachable, notfound = s.verify()
-        self.assertTrue(ok)
+        self.assertFalse(ok)
+        self.assertIn("tar", unreachable)
 
-        s.mapping.drop()
+        s._conn.execute("INSERT INTO mapping(src, dst, score) VALUES ('foo', 9999, 1)")
+        s._conn.commit()
         ok, unreachable, notfound = s.verify()
-        self.assertEqual(list(unreachable), ["tar"])
-
-        s.add_mapping("foo", "bar", 1)
-        ok, unreachable, notfound = s.verify()
-        self.assertEqual(list(notfound), ["bar"])
-        self.assertEqual(list(unreachable), ["tar"])
+        self.assertIn("tar", unreachable)
+        self.assertIn(9999, notfound)
 
     @unittest.skip(
         "https://github.com/idank/explainshell/pull/303#issuecomment-1272387073"
@@ -84,28 +91,32 @@ class test_manager(unittest.TestCase):
         a, e = m.run()
         self.assertTrue(a)
         self.assertFalse(e)
-        self.assertEqual(m.store.mapping.count(), 1)
+        self.assertEqual(
+            self._count_mappings(m.store), 1
+        )
         self.assertEqual(len(list(m.store)), 1)
 
         a, e = m.run()
         self.assertFalse(a)
         self.assertTrue(e)
-        self.assertEqual(m.store.mapping.count(), 1)
+        self.assertEqual(self._count_mappings(m.store), 1)
         self.assertEqual(len(list(m.store)), 1)
 
         m = manager.Manager(
-            config.MONGO_URI,
-            "explainshell_tests",
+            self.db_path,
             [os.path.join(config.MAN_PAGE_DIR, "1", "tar.1.gz")],
             overwrite=True,
         )
         a, e = m.run()
         self.assertTrue(a)
         self.assertFalse(e)
-        self.assertEqual(m.store.mapping.count(), 1)
+        self.assertEqual(self._count_mappings(m.store), 1)
         self.assertEqual(len(list(m.store)), 1)
 
         m.store.verify()
+
+    def _count_mappings(self, s):
+        return s._conn.execute("SELECT COUNT(*) FROM mapping").fetchone()[0]
 
     def test_multi_cmd(self):
         m = self._getmanager(["git.1.gz", "git-rebase.1.gz"])
@@ -141,7 +152,7 @@ class test_manager(unittest.TestCase):
             os.path.join(config.MAN_PAGE_DIR, "1", "node.1.gz"),
             os.path.join(config.MAN_PAGE_DIR, "8", "node.8.gz"),
         ]
-        m = manager.Manager(config.MONGO_URI, "explainshell_tests", pages)
+        m = manager.Manager(self.db_path, pages)
         a, e = m.run()
         self.assertEqual(len(a), 2)
         self.assertEqual(len(m.store.find_man_page("node")), 2)
