@@ -64,7 +64,7 @@ class ExtractionError(Exception):
 def get_plain_text(gz_path: str) -> str:
     """Run `mandoc -T txt <gz_path>`, return stdout."""
     result = subprocess.run(
-        ["mandoc", "-T", "txt", gz_path],
+        ["mandoc", "-T", "ascii", gz_path],
         capture_output=True,
         text=True,
         timeout=60,
