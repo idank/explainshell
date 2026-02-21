@@ -81,7 +81,13 @@ def main(args):
                 logger.info("added %s (%d options)", short_path, len(mp.options))
                 added += 1
             else:
-                print(f"{short_path}: {len(mp.options)} option(s) extracted (dry run, not written)")
+                print(f"=== {short_path} ({len(mp.options)} option(s)) ===")
+                for opt in mp.options:
+                    flags = ", ".join(opt.short + opt.long)
+                    if opt.argument:
+                        flags = flags or opt.argument
+                    print(f"  {flags}")
+                    print(f"    {opt.text.strip()}")
                 added += 1
         except ExtractionError as e:
             logger.error("failed to process %s: %s", short_path, e)
