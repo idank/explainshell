@@ -11,3 +11,7 @@ tests/screenshots/*.png
 test-results/
 dump.gz
 moarcode/
+*.db
+*.db-shm
+*.db-wal
+.claude/
