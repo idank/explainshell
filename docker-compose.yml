@@ -4,13 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      - DB_PATH=/data/explainshell.db
+      - DB_PATH=/opt/webapp/explainshell.db
       - HOST_IP=0.0.0.0
     volumes:
       - .:/opt/webapp
-      - db_data:/data
     ports:
       - "5001:5000"
-
-volumes:
-  db_data:
