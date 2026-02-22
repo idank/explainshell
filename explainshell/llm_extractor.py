@@ -15,7 +15,8 @@ import time
 import litellm
 from markdownify import markdownify as md
 
-from explainshell import manpage, store
+from explainshell import errors, manpage, store
+from explainshell.errors import ExtractionError
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +58,6 @@ JSON schema:
     }
   ]
 }"""
-
-
-class ExtractionError(Exception):
-    pass
 
 
 def get_manpage_text(gz_path: str) -> str:
