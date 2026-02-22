@@ -133,39 +133,8 @@ def chunk_text(text: str) -> list:
 
 
 def _get_synopsis_and_aliases(gz_path: str):
-    """Reuse manpage.ManPage.read() to get synopsis and aliases from lexgrog."""
-    name = manpage.extract_name(gz_path)
-    mp_reader = manpage.ManPage(gz_path)
-    try:
-        mp_reader.read()
-    except Exception as e:
-        logger.warning("manpage.read() failed for %s: %s", gz_path, e)
-        return None, [(name, 10)]
-
-    synopsis = None
-    aliases = [(name, 10)]
-
-    if mp_reader.synopsis:
-        lines = mp_reader.synopsis.splitlines()
-        parsed = [
-            manpage._parse_synopsis(gz_path, line)
-            for line in lines
-            if line.strip()
-        ]
-        parsed = [p for p in parsed if p]
-        if parsed:
-            # build alias set like ManPage.parse() does
-            import collections
-            d = collections.OrderedDict()
-            for prog, text in parsed:
-                d.setdefault(text, []).append(prog)
-            text, progs = list(dict(d).items())[0]
-            synopsis = text
-            alias_names = set(progs)
-            alias_names.discard(name)
-            aliases = [(name, 10)] + [(x, 1) for x in alias_names]
-
-    return synopsis, aliases
+    """Thin wrapper kept for internal use; delegates to manpage module."""
+    return manpage.get_synopsis_and_aliases(gz_path)
 
 
 def _call_llm(chunk: str, chunk_info: str, model: str, litellm_kwargs: dict) -> tuple:
