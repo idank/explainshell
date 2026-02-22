@@ -15,27 +15,32 @@ logger = logging.getLogger(__name__)
 _CREATE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS manpage (
     id            INTEGER PRIMARY KEY,
-    source        TEXT    NOT NULL UNIQUE,
-    name          TEXT    NOT NULL,
-    synopsis      TEXT,
-    paragraphs    TEXT    NOT NULL DEFAULT '[]',
-    aliases       TEXT    NOT NULL DEFAULT '[]',
-    partial_match INTEGER NOT NULL DEFAULT 0,
-    multi_cmd     INTEGER NOT NULL DEFAULT 0,
-    updated       INTEGER NOT NULL DEFAULT 0,
-    nested_cmd    TEXT    NOT NULL DEFAULT 'false'
+    source        TEXT    NOT NULL UNIQUE,  -- basename of the .gz source file
+    name          TEXT    NOT NULL,         -- command name (e.g. 'git')
+    synopsis      TEXT,                     -- one-line synopsis from the man page
+    paragraphs    TEXT    NOT NULL DEFAULT '[]',  -- JSON list of paragraph/option dicts
+    aliases       TEXT    NOT NULL DEFAULT '[]',  -- JSON list of [alias, score] pairs
+    partial_match INTEGER NOT NULL DEFAULT 0,     -- allow matching options without leading '-'
+    multi_cmd     INTEGER NOT NULL DEFAULT 0,     -- has sub-commands (e.g. git -> git commit)
+    updated       INTEGER NOT NULL DEFAULT 0,     -- manually edited, skip during bulk imports
+    nested_cmd    TEXT    NOT NULL DEFAULT 'false' -- positional args start a nested command (e.g. sudo, xargs)
 );
 
+-- Maps command names (and aliases) to manpage rows.
+-- A single manpage may have many mappings (one per alias).
+-- For multi-cmd parents, sub-command mappings are also stored here
+-- (e.g. src='git commit' -> dst=<git-commit manpage id>).
 CREATE TABLE IF NOT EXISTS mapping (
     id    INTEGER PRIMARY KEY,
-    src   TEXT    NOT NULL,
+    src   TEXT    NOT NULL,      -- lookup key (command name or 'cmd subcmd')
     dst   INTEGER NOT NULL REFERENCES manpage(id) ON DELETE CASCADE,
-    score INTEGER NOT NULL
+    score INTEGER NOT NULL       -- higher score = preferred match
 );
 
 CREATE INDEX IF NOT EXISTS idx_mapping_src ON mapping(src);
 CREATE INDEX IF NOT EXISTS idx_mapping_dst ON mapping(dst);
 
+-- Manually tagged paragraphs used to train the options-vs-text classifier.
 CREATE TABLE IF NOT EXISTS classifier_manpage (
     id         INTEGER PRIMARY KEY,
     name       TEXT NOT NULL UNIQUE,
