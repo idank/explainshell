@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 
-from explainshell import manager, config, store, errors
+from explainshell import legacy_manager as manager, config, store, errors
 
 
 @unittest.skip("nltk usage is broken due to new version")
