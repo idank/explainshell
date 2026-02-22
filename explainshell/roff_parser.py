@@ -185,9 +185,13 @@ def _clean_roff_description(text: str) -> str:
             elif word:
                 result.append(word)
             continue
+        # Paragraph-break macros — insert a blank line to preserve breaks
+        if re.match(r"^\.(sp|PP|LP|P)\b", stripped):
+            result.append("")
+            continue
         # Remaining roff directives to strip entirely
         if re.match(
-            r"^\.(br|sp|fi|nf|nh|hy|ad|na|PD|RS|RE|PP|LP|P|IP|TP|HP"
+            r"^\.(br|fi|nf|nh|hy|ad|na|PD|RS|RE|IP|TP|HP"
             r"|SH|SS|if|ie|el|ft|nr|mk|in|ti|it|ps|ns|ne|ds|de|am"
             r"|TS|TE|ta|ce|ll|pl|po|so|nx|tm|rn|rr|ab|lf|pm)\b",
             stripped,

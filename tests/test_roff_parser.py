@@ -126,19 +126,30 @@ class TestCleanRoffDescription(unittest.TestCase):
         result = _clean_roff_description(text)
         self.assertEqual(result, "before indented after")
 
-    def test_strips_PP_as_paragraph_break(self):
+    def test_PP_preserves_paragraph_break(self):
         text = "first para\n.PP\nsecond para"
         result = _clean_roff_description(text)
-        # .PP becomes a stripped line, but creates implicit paragraph break
-        # since it separates text blocks
-        self.assertIn("first para", result)
-        self.assertIn("second para", result)
+        self.assertEqual(result, "first para\n\nsecond para")
 
-    def test_strips_sp_as_paragraph_break(self):
+    def test_LP_preserves_paragraph_break(self):
+        text = "first para\n.LP\nsecond para"
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "first para\n\nsecond para")
+
+    def test_P_preserves_paragraph_break(self):
+        text = "first para\n.P\nsecond para"
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "first para\n\nsecond para")
+
+    def test_sp_preserves_paragraph_break(self):
         text = "first para\n.sp\nsecond para"
         result = _clean_roff_description(text)
-        self.assertIn("first para", result)
-        self.assertIn("second para", result)
+        self.assertEqual(result, "first para\n\nsecond para")
+
+    def test_multiple_sp_collapsed(self):
+        text = "first para\n.sp\n.sp\nsecond para"
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "first para\n\nsecond para")
 
     def test_strips_unknown_uppercase_macro(self):
         text = "text\n.Xx something\nmore"
@@ -631,6 +642,32 @@ class TestParseGitRebase(unittest.TestCase):
             if "--strategy" in opt.long:
                 self.assertTrue(opt.expects_arg)
                 break
+
+    def test_merge_has_paragraph_breaks(self):
+        """--merge description has multiple paragraphs separated by .sp."""
+        for opt in self.opts:
+            if "--merge" in opt.long:
+                paragraphs = opt.text.split("\n\n")
+                self.assertGreater(
+                    len(paragraphs), 1,
+                    f"--merge description should have multiple paragraphs: {opt.text!r}",
+                )
+                break
+        else:
+            self.fail("--merge option not found")
+
+    def test_strategy_has_paragraph_breaks(self):
+        """--strategy description has multiple paragraphs separated by .sp."""
+        for opt in self.opts:
+            if "--strategy" in opt.long:
+                paragraphs = opt.text.split("\n\n")
+                self.assertGreater(
+                    len(paragraphs), 1,
+                    f"--strategy description should have multiple paragraphs: {opt.text!r}",
+                )
+                break
+        else:
+            self.fail("--strategy option not found")
 
 
 class TestParseOptionsReturnType(unittest.TestCase):
