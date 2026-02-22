@@ -412,8 +412,9 @@ class TestExtractIntegration(unittest.TestCase):
 class TestLlmManagerDryRun(unittest.TestCase):
     """Tests for --dry-run: LLM is called, DB is not written."""
 
-    def _make_args(self, dry_run=True, overwrite=False):
+    def _make_args(self, dry_run=True, overwrite=False, mode="llm"):
         args = argparse.Namespace(
+            mode=mode,
             model="test-model",
             db="/tmp/test.db",
             overwrite=overwrite,
@@ -426,7 +427,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
         )
         return args
 
-    @patch("explainshell.manager.extract")
+    @patch("explainshell.manager.llm_extractor.extract")
     @patch("explainshell.manager.store.Store")
     @patch("explainshell.manager._collect_gz_files")
     def test_dry_run_calls_llm_but_not_store(self, mock_collect, mock_store_cls, mock_extract):
@@ -443,7 +444,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_store_cls.assert_not_called()
         self.assertEqual(ret, 0)
 
-    @patch("explainshell.manager.extract")
+    @patch("explainshell.manager.llm_extractor.extract")
     @patch("explainshell.manager.store.Store")
     @patch("explainshell.manager._collect_gz_files")
     def test_normal_run_writes_to_store(self, mock_collect, mock_store_cls, mock_extract):

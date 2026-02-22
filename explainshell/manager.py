@@ -11,8 +11,9 @@ import logging
 import os
 import sys
 
-from explainshell import config, errors, store
-from explainshell.llm_extractor import ExtractionError, extract
+from explainshell import config, errors, source_extractor, store
+from explainshell.llm_extractor import ExtractionError
+from explainshell import llm_extractor
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +183,10 @@ def _collect_gz_files(paths):
 def main(args):
     logging.basicConfig(level=getattr(logging, args.log.upper()))
 
+    if args.mode == "llm" and not args.model:
+        print("error: --model is required when --mode is 'llm'", file=sys.stderr)
+        return 1
+
     db_path = args.db
 
     if args.drop and not args.dry_run:
@@ -215,8 +220,11 @@ def main(args):
             continue
 
         try:
-            debug_dir = args.debug_dir if args.dry_run else None
-            mp = extract(gz_path, args.model, debug_dir=debug_dir)
+            if args.mode == "source":
+                mp = source_extractor.extract(gz_path)
+            else:
+                debug_dir = args.debug_dir if args.dry_run else None
+                mp = llm_extractor.extract(gz_path, args.model, debug_dir=debug_dir)
             if args.diff:
                 print(f"=== {short_path} ===")
                 try:
@@ -258,7 +266,7 @@ def main(args):
                     for line in lines:
                         print(f"      {line}")
                 added += 1
-        except ExtractionError as e:
+        except (ExtractionError, source_extractor.ExtractionError) as e:
             logger.error("failed to process %s: %s", short_path, e)
             failed += 1
         except KeyboardInterrupt:
@@ -278,9 +286,15 @@ def main(args):
 
 def _build_parser():
     parser = argparse.ArgumentParser(
-        description="Process man pages with an LLM and store the results."
+        description="Extract man page options and store the results."
     )
-    parser.add_argument("--model", required=True, help="LiteLLM model string")
+    parser.add_argument(
+        "--mode",
+        required=True,
+        choices=["source", "llm"],
+        help="Extraction mode: 'source' uses the roff parser, 'llm' uses an LLM",
+    )
+    parser.add_argument("--model", help="LiteLLM model string (required for --mode llm)")
     parser.add_argument("--db", default=config.DB_PATH, help="SQLite DB path")
     parser.add_argument(
         "--overwrite",
