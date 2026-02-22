@@ -84,6 +84,33 @@ def _fmt_value(val, indent, color):
     return "\n".join(out)
 
 
+def _fmt_text_diff(old_text, new_text, indent):
+    """Format a unified diff for multiline text fields, showing only changed lines."""
+    old_lines = str(old_text).splitlines(keepends=True)
+    new_lines = str(new_text).splitlines(keepends=True)
+    diff = list(difflib.unified_diff(old_lines, new_lines, n=1))
+    if not diff:
+        return None
+    out = []
+    for line in diff[2:]:  # skip --- and +++ headers
+        if line.startswith("@@"):
+            continue
+        text = line[1:].rstrip("\n")
+        if line.startswith("-"):
+            out.append(f"{_RED}{indent}- {text}{_RESET}")
+        elif line.startswith("+"):
+            out.append(f"{_GREEN}{indent}+ {text}{_RESET}")
+        else:
+            out.append(f"{_DIM}{indent}  {text}{_RESET}")
+    # Strip leading/trailing blank context lines.
+    blank = f"{_DIM}{indent}  {_RESET}"
+    while out and out[0] == blank:
+        out.pop(0)
+    while out and out[-1] == blank:
+        out.pop()
+    return "\n".join(out)
+
+
 def _print_option_detail(opt, prefix="", color=""):
     """Print all fields of an option (used for added/removed options)."""
     print(f"{color}{prefix}    short: {opt.short}")
@@ -110,8 +137,12 @@ def _diff_manpage(stored_mp, fresh_mp):
         if old_val != new_val:
             has_diff = True
             print(f"  {_BOLD}{field}:{_RESET}")
-            print(_fmt_value(old_val, "    - ", _RED))
-            print(_fmt_value(new_val, "    + ", _GREEN))
+            text_diff = _fmt_text_diff(old_val, new_val, "    ")
+            if text_diff:
+                print(text_diff)
+            else:
+                print(_fmt_value(old_val, "    - ", _RED))
+                print(_fmt_value(new_val, "    + ", _GREEN))
 
     # Build option indexes keyed by _option_key.
     stored_opts = {_option_key(o): o for o in stored_mp.options}
@@ -154,8 +185,12 @@ def _diff_manpage(stored_mp, fresh_mp):
             print(f"    {_CYAN}{_BOLD}{label}{_RESET}")
             for field, old_val, new_val in diffs:
                 print(f"      {field}:")
-                print(_fmt_value(old_val, "        - ", _RED))
-                print(_fmt_value(new_val, "        + ", _GREEN))
+                text_diff = _fmt_text_diff(old_val, new_val, "        ")
+                if text_diff:
+                    print(text_diff)
+                else:
+                    print(_fmt_value(old_val, "        - ", _RED))
+                    print(_fmt_value(new_val, "        + ", _GREEN))
 
     for opt in added_options:
         has_diff = True
