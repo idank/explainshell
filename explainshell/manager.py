@@ -3,9 +3,14 @@ CLI entry point for man page extraction.
 
 Usage:
     python -m explainshell.manager --mode <mode> [options] files...
+
+Modes:
+    source          Use the roff parser
+    llm:<model>     Use an LLM via LiteLLM (e.g. llm:gpt-4o)
 """
 
 import argparse
+import difflib
 import glob
 import logging
 import os
@@ -227,19 +232,39 @@ def _collect_gz_files(paths):
     return result
 
 
+def _parse_mode(raw):
+    """Parse a --mode value into (mode, model).
+
+    Returns ("source", None) or ("llm", "<model>").
+    Raises ValueError on invalid input.
+    """
+    if raw is None:
+        return None, None
+    if raw == "source":
+        return "source", None
+    if raw.startswith("llm:"):
+        model = raw[4:]
+        if not model:
+            raise ValueError("--mode llm:<model> requires a model name (e.g. llm:gpt-4o)")
+        return "llm", model
+    raise ValueError(f"invalid --mode value: {raw!r} (expected 'source' or 'llm:<model>')")
+
+
 def main(args):
     logging.basicConfig(level=getattr(logging, args.log.upper()))
 
-    if args.diff != "modes" and not args.mode:
+    try:
+        mode, model = _parse_mode(args.mode)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+    if args.diff != "modes" and not mode:
         print("error: --mode is required (unless --diff modes)", file=sys.stderr)
         return 1
 
-    if args.mode == "llm" and not args.model:
-        print("error: --model is required when --mode is 'llm'", file=sys.stderr)
-        return 1
-
-    if args.diff == "modes" and not args.model:
-        print("error: --model is required when --diff modes", file=sys.stderr)
+    if args.diff == "modes" and not model:
+        print("error: --mode llm:<model> is required when --diff modes", file=sys.stderr)
         return 1
 
     db_path = args.db
@@ -285,10 +310,10 @@ def main(args):
                 print(f"  {_DIM}(source extractor failed: {e}, skipping){_RESET}")
                 failed += 1
                 continue
-            print(f"{_ts()} [{short_path}] running llm extractor ({args.model})...")
+            print(f"{_ts()} [{short_path}] running llm extractor ({model})...")
             try:
                 debug_dir = args.debug_dir if args.dry_run else None
-                llm_mp = llm_extractor.extract(gz_path, args.model, debug_dir=debug_dir)
+                llm_mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
             except errors.ExtractionError as e:
                 logger.error("llm extractor failed for %s: %s", short_path, e)
                 print(f"=== {short_path} (source vs llm) ===")
@@ -301,13 +326,13 @@ def main(args):
             continue
 
         try:
-            if args.mode == "source":
+            if mode == "source":
                 print(f"{_ts()} [{short_path}] extracting (source)...")
                 mp = source_extractor.extract(gz_path)
             else:
-                print(f"{_ts()} [{short_path}] extracting ({args.model})...")
+                print(f"{_ts()} [{short_path}] extracting ({model})...")
                 debug_dir = args.debug_dir if args.dry_run else None
-                mp = llm_extractor.extract(gz_path, args.model, debug_dir=debug_dir)
+                mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
             if args.diff:
                 print(f"=== {short_path} ===")
                 try:
@@ -374,10 +399,8 @@ def _build_parser():
     )
     parser.add_argument(
         "--mode",
-        choices=["source", "llm"],
-        help="Extraction mode: 'source' uses the roff parser, 'llm' uses an LLM (required unless --diff modes)",
+        help="Extraction mode: 'source' or 'llm:<model>' (e.g. llm:gpt-4o). Required unless --diff modes.",
     )
-    parser.add_argument("--model", help="LiteLLM model string (required for --mode llm)")
     parser.add_argument("--db", default=config.DB_PATH, help="SQLite DB path")
     parser.add_argument(
         "--overwrite",
