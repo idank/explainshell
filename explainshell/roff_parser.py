@@ -147,11 +147,93 @@ def _clean_roff(text: str) -> str:
     text = text.replace("\\d", "")
     # Remove \n(.x register references
     text = re.sub(r"\\n\(?\w+", "", text)
-    # .br, .sp, .fi, .nf, .nh, .hy, .ad, .na - standalone formatting directives
-    text = re.sub(r"^\.(br|sp|fi|nf|nh|hy|ad|na|PD|PD \d+)\s*$", "", text, flags=re.MULTILINE)
     # Collapse multiple spaces
     text = re.sub(r"  +", " ", text)
     return text.strip()
+
+
+def _clean_roff_description(text: str) -> str:
+    """Clean a multi-line roff description into readable plain text.
+
+    Handles inline formatting macros (.B, .I, .BR, etc.) by joining them
+    with surrounding text, and strips all remaining roff directives.
+    """
+    lines = text.split("\n")
+    result = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            # Blank line = paragraph break
+            result.append("")
+            continue
+        # Skip comment lines
+        if stripped.startswith('.\\\"') or stripped.startswith('.\\"'):
+            continue
+        # Inline formatting macros: extract text and join with previous line
+        m = re.match(r"^\.(B|I|BI|BR|IB|IR|RB|RI|SM|SB)\s+(.*)", stripped)
+        if m:
+            macro, args = m.group(1), m.group(2)
+            if macro in ("BI", "BR", "IB", "IR", "RB", "RI"):
+                parts = _parse_roff_args(args)
+                word = "".join(parts)
+            else:
+                word = args.strip().strip('"')
+            word = _clean_roff(word)
+            if word and result and result[-1]:
+                # Join with previous line
+                result[-1] = result[-1] + " " + word
+            elif word:
+                result.append(word)
+            continue
+        # Remaining roff directives to strip entirely
+        if re.match(
+            r"^\.(br|sp|fi|nf|nh|hy|ad|na|PD|RS|RE|PP|LP|P|IP|TP|HP"
+            r"|SH|SS|if|ie|el|ft|nr|mk|in|ti|it|ps|ns|ne|ds|de|am"
+            r"|TS|TE|ta|ce|ll|pl|po|so|nx|tm|rn|rr|ab|lf|pm)\b",
+            stripped,
+        ):
+            continue
+        # Lines that are just .\} (closing conditional block)
+        if stripped == ".\\}" or stripped == ".}":
+            continue
+        # Any remaining line starting with . followed by uppercase
+        # that we haven't handled — skip it as an unknown macro
+        if re.match(r"^\.[A-Z]", stripped):
+            continue
+        # Regular text line
+        cleaned = _clean_roff(stripped)
+        if cleaned:
+            result.append(cleaned)
+
+    # Join consecutive non-blank lines into paragraphs.
+    # In roff, line breaks within a paragraph are just formatting —
+    # a blank line (or .PP/.sp) marks a real paragraph break.
+    paragraphs = []
+    current = []
+    for line in result:
+        if not line:
+            if current:
+                paragraphs.append(" ".join(current))
+                current = []
+            paragraphs.append("")
+        else:
+            current.append(line)
+    if current:
+        paragraphs.append(" ".join(current))
+
+    # Collapse consecutive blank lines
+    output = []
+    prev_blank = False
+    for para in paragraphs:
+        if not para:
+            if not prev_blank and output:
+                output.append("")
+            prev_blank = True
+        else:
+            output.append(para)
+            prev_blank = False
+
+    return "\n".join(output).strip()
 
 
 def _parse_roff_args(args_str: str) -> list:
@@ -521,24 +603,10 @@ def _parse_man_options(lines: list) -> list:
                         desc_lines.append("")
                         i += 1
                         continue
-                    if dm in (".PD", ".br", ".sp", ".fi", ".nf", ".nh",
-                              ".hy", ".ad", ".na", ".in", ".ti"):
-                        i += 1
-                        continue
-                    if dm in (".RS", ".RE"):
-                        i += 1
-                        continue
-                    if dm in (".B", ".I", ".BI", ".BR", ".IR", ".RB", ".RI"):
-                        text = dl[len(dm):].strip()
-                        if text:
-                            desc_lines.append(text)
-                        i += 1
-                        continue
-                    if dl and not dl.startswith(".\\\""):
-                        desc_lines.append(dl)
+                    desc_lines.append(dl)
                     i += 1
 
-                description = _clean_roff("\n".join(desc_lines))
+                description = _clean_roff_description("\n".join(desc_lines))
 
                 results.append({
                     "short": all_short,
@@ -610,21 +678,10 @@ def _parse_man_options(lines: list) -> list:
                             continue
                         if dm in (".PP", ".LP", ".P"):
                             break
-                    if dm in (".PD", ".br", ".sp", ".fi", ".nf", ".nh",
-                              ".hy", ".ad", ".na", ".in", ".ti"):
-                        i += 1
-                        continue
-                    if dm in (".B", ".I", ".BI", ".BR", ".IR", ".RB", ".RI"):
-                        text = dl[len(dm):].strip()
-                        if text:
-                            desc_lines.append(text)
-                        i += 1
-                        continue
-                    if dl and not dl.startswith(".\\\""):
-                        desc_lines.append(dl)
+                    desc_lines.append(dl)
                     i += 1
 
-                description = _clean_roff("\n".join(desc_lines))
+                description = _clean_roff_description("\n".join(desc_lines))
 
                 results.append({
                     "short": parsed.get("short", []),
@@ -660,14 +717,10 @@ def _parse_man_options(lines: list) -> list:
                     dm = dl.split()[0] if dl.split() else ""
                     if dm in (".TP", ".IP", ".HP", ".SH", ".SS", ".PP", ".LP", ".P"):
                         break
-                    if dm in (".PD", ".br", ".sp"):
-                        i += 1
-                        continue
-                    if dl and not dl.startswith(".\\\""):
-                        desc_lines.append(dl)
+                    desc_lines.append(dl)
                     i += 1
 
-                description = _clean_roff("\n".join(desc_lines))
+                description = _clean_roff_description("\n".join(desc_lines))
                 results.append({
                     "short": parsed.get("short", []),
                     "long": parsed.get("long", []),
@@ -736,29 +789,10 @@ def _parse_man_options(lines: list) -> list:
                         continue
                     if dm == ".SH":
                         break
-                    if dm in (".PD", ".br", ".fi", ".nf", ".nh",
-                              ".hy", ".ad", ".na", ".in", ".ti"):
-                        i += 1
-                        continue
-                    if dm == ".sp":
-                        desc_lines.append("")
-                        i += 1
-                        continue
-                    if dm in (".PP", ".LP", ".P"):
-                        desc_lines.append("")
-                        i += 1
-                        continue
-                    if dm in (".B", ".I", ".BI", ".BR", ".IR", ".RB", ".RI"):
-                        text = dl[len(dm):].strip()
-                        if text:
-                            desc_lines.append(text)
-                        i += 1
-                        continue
-                    if dl and not dl.startswith(".\\\""):
-                        desc_lines.append(dl)
+                    desc_lines.append(dl)
                     i += 1
 
-                description = _clean_roff("\n".join(desc_lines))
+                description = _clean_roff_description("\n".join(desc_lines))
                 results.append({
                     "short": parsed.get("short", []),
                     "long": parsed.get("long", []),
@@ -947,7 +981,7 @@ def _clean_mdoc_text(text: str) -> str:
     text = re.sub(r"^\.(Bl|El)\s.*$", "", text, flags=re.MULTILINE)
     text = re.sub(r"^\.(Bl|El)\s*$", "", text, flags=re.MULTILINE)
 
-    return _clean_roff(text)
+    return _clean_roff_description(text)
 
 
 def _parse_mdoc_options(lines: list) -> list:
