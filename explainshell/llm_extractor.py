@@ -15,7 +15,7 @@ import time
 import litellm
 from markdownify import markdownify as md
 
-from explainshell import manpage, store
+from explainshell import manpage, roff_parser, store
 
 logger = logging.getLogger(__name__)
 
@@ -299,8 +299,28 @@ def _llm_option_to_store_option(raw: dict, idx: int) -> store.Option:
 
 
 def extract(gz_path: str, model: str, debug_dir: str | None = None, **litellm_kwargs) -> store.ManPage:
-    """Full pipeline: gz → plain text → LLM → store.ManPage"""
+    """Full pipeline: try roff parser first, fall back to LLM.
+
+    1. Try roff_parser.parse_options() to extract options directly from roff source.
+    2. If the roff parser returns options, use them (skip mandoc + LLM).
+    3. If the roff parser returns empty, fall back to mandoc → markdown → LLM.
+    """
     synopsis, aliases = _get_synopsis_and_aliases(gz_path)
+
+    # --- Try roff parser first ---
+    roff_options = roff_parser.parse_options(gz_path)
+    if roff_options:
+        logger.info("roff parser extracted %d options from %s", len(roff_options), gz_path)
+        return store.ManPage(
+            source=os.path.basename(gz_path),
+            name=manpage.extract_name(gz_path),
+            synopsis=synopsis,
+            paragraphs=roff_options,
+            aliases=aliases,
+        )
+
+    # --- Fall back to LLM pipeline ---
+    logger.info("roff parser found no options in %s, falling back to LLM", gz_path)
     plain_text = get_manpage_text(gz_path)
     chunks = chunk_text(plain_text)
 
