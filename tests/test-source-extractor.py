@@ -4,7 +4,8 @@ import unittest
 from unittest.mock import patch
 
 from explainshell import store
-from explainshell.source_extractor import ExtractionError, extract
+from explainshell.errors import ExtractionError
+from explainshell.source_extractor import extract
 
 
 class TestExtract(unittest.TestCase):

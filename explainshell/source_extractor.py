@@ -11,25 +11,21 @@ Public API:
 import logging
 import os
 
-from explainshell import manpage, roff_parser, store
+from explainshell import errors, manpage, roff_parser, store
 
 logger = logging.getLogger(__name__)
-
-
-class ExtractionError(Exception):
-    pass
 
 
 def extract(gz_path: str) -> store.ManPage:
     """Extract options from raw roff source.
 
-    Raises ExtractionError if the roff parser finds no options.
+    Raises errors.ExtractionError if the roff parser finds no options.
     """
     synopsis, aliases = manpage.get_synopsis_and_aliases(gz_path)
 
     options = roff_parser.parse_options(gz_path)
     if not options:
-        raise ExtractionError(
+        raise errors.ExtractionError(
             f"roff parser found no options in {os.path.basename(gz_path)}"
         )
 

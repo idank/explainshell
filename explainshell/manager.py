@@ -11,9 +11,7 @@ import logging
 import os
 import sys
 
-from explainshell import config, errors, source_extractor, store
-from explainshell.llm_extractor import ExtractionError
-from explainshell import llm_extractor
+from explainshell import config, errors, llm_extractor, source_extractor, store
 
 logger = logging.getLogger(__name__)
 
@@ -266,7 +264,7 @@ def main(args):
                     for line in lines:
                         print(f"      {line}")
                 added += 1
-        except (ExtractionError, source_extractor.ExtractionError) as e:
+        except errors.ExtractionError as e:
             logger.error("failed to process %s: %s", short_path, e)
             failed += 1
         except KeyboardInterrupt:
