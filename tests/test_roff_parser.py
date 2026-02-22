@@ -6,6 +6,7 @@ import unittest
 from explainshell import store
 from explainshell.roff_parser import (
     _clean_roff,
+    _clean_roff_description,
     _detect_dialect,
     _parse_flag_text,
     _parse_man_options,
@@ -52,6 +53,189 @@ class TestCleanRoff(unittest.TestCase):
 
     def test_multiple_spaces(self):
         self.assertEqual(_clean_roff("foo   bar"), "foo bar")
+
+
+# ---------------------------------------------------------------------------
+# _clean_roff_description
+# ---------------------------------------------------------------------------
+
+class TestCleanRoffDescription(unittest.TestCase):
+    def test_inline_B_joined_with_previous(self):
+        text = "Follow symbolic links. When\n.B find\nexamines files."
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "Follow symbolic links. When find examines files.")
+
+    def test_inline_BR_joined(self):
+        text = "implies\n.BR \\-noleaf .\nIf you later use"
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "implies -noleaf. If you later use")
+
+    def test_inline_I_joined(self):
+        text = "the\n.I command\nis executed"
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "the command is executed")
+
+    def test_inline_BI_joined(self):
+        text = "Use\n.BI \\-\\-file= NAME\nto specify."
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "Use --file=NAME to specify.")
+
+    def test_inline_macro_at_start(self):
+        """Inline macro with no preceding text starts a new line."""
+        text = ".B find\nsearches directories."
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "find searches directories.")
+
+    def test_paragraph_breaks_preserved(self):
+        text = "First paragraph.\n\nSecond paragraph."
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "First paragraph.\n\nSecond paragraph.")
+
+    def test_consecutive_text_lines_joined(self):
+        text = "This is a long\ndescription that spans\nmultiple lines."
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "This is a long description that spans multiple lines.")
+
+    def test_strips_if_conditional(self):
+        text = "some text\n.if n \\{\\\n.\\}\nmore text"
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "some text more text")
+
+    def test_strips_ie_el_conditionals(self):
+        text = "before\n.ie condition\n.el\nafter"
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "before after")
+
+    def test_strips_nr_register(self):
+        text = "text\n.nr an-no-space-flag 1\nmore"
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "text more")
+
+    def test_strips_IP_in_description(self):
+        text = "options include\n.IP exec\nShow diagnostic info\n.IP opt\nPrint info"
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "options include Show diagnostic info Print info")
+
+    def test_strips_TS_TE_table(self):
+        text = "before\n.TS\ntab(;);\n.TE\nafter"
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "before tab(;); after")
+
+    def test_strips_RS_RE(self):
+        text = "before\n.RS 4\nindented\n.RE\nafter"
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "before indented after")
+
+    def test_strips_PP_as_paragraph_break(self):
+        text = "first para\n.PP\nsecond para"
+        result = _clean_roff_description(text)
+        # .PP becomes a stripped line, but creates implicit paragraph break
+        # since it separates text blocks
+        self.assertIn("first para", result)
+        self.assertIn("second para", result)
+
+    def test_strips_sp_as_paragraph_break(self):
+        text = "first para\n.sp\nsecond para"
+        result = _clean_roff_description(text)
+        self.assertIn("first para", result)
+        self.assertIn("second para", result)
+
+    def test_strips_unknown_uppercase_macro(self):
+        text = "text\n.Xx something\nmore"
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "text more")
+
+    def test_strips_comments(self):
+        text = 'before\n.\\" a comment\nafter'
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "before after")
+
+    def test_strips_closing_brace(self):
+        text = "before\n.\\}\nafter"
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "before after")
+
+    def test_font_escapes_cleaned(self):
+        text = "the \\fBbold\\fR word"
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "the bold word")
+
+    def test_consecutive_blank_lines_collapsed(self):
+        text = "first\n\n\n\nsecond"
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "first\n\nsecond")
+
+    def test_empty_input(self):
+        self.assertEqual(_clean_roff_description(""), "")
+
+    def test_only_macros(self):
+        text = ".br\n.sp\n.PD 0"
+        result = _clean_roff_description(text)
+        self.assertEqual(result, "")
+
+
+class TestDescriptionCleaningIntegration(unittest.TestCase):
+    """Verify descriptions in real man pages are clean of roff artifacts."""
+
+    def _all_descriptions(self, gz_name):
+        opts = parse_options(_gz(gz_name))
+        return [(o.short + o.long, o.text) for o in opts]
+
+    def _assert_no_roff_macros(self, gz_name):
+        import re
+        for flags, desc in self._all_descriptions(gz_name):
+            for line in desc.split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                self.assertNotRegex(
+                    line,
+                    r"^\.[A-Z][a-z]?\b",
+                    f"Roff macro leaked in {gz_name} option {flags}: {line!r}",
+                )
+                self.assertNotRegex(
+                    line,
+                    r"^\.(if|ie|el|fi|nf|br|sp|nr|mk|it|ps|ft|PD|RS|RE|PP|LP|IP|TP|HP)\b",
+                    f"Roff directive leaked in {gz_name} option {flags}: {line!r}",
+                )
+                self.assertNotRegex(
+                    line,
+                    r"^\.\\\}",
+                    f"Closing brace leaked in {gz_name} option {flags}: {line!r}",
+                )
+
+    def test_find_no_roff_macros(self):
+        self._assert_no_roff_macros("find.1.gz")
+
+    def test_git_no_roff_macros(self):
+        self._assert_no_roff_macros("git.1.gz")
+
+    def test_git_rebase_no_roff_macros(self):
+        self._assert_no_roff_macros("git-rebase.1.gz")
+
+    def test_xargs_no_roff_macros(self):
+        self._assert_no_roff_macros("xargs.1.gz")
+
+    def test_echo_no_roff_macros(self):
+        self._assert_no_roff_macros("echo.1.gz")
+
+    def test_tar_no_roff_macros(self):
+        self._assert_no_roff_macros("tar.1.gz")
+
+    def test_bsdtar_no_roff_macros(self):
+        self._assert_no_roff_macros("bsdtar.1.gz")
+
+    def test_find_descriptions_are_single_line_paragraphs(self):
+        """Lines within a paragraph should be joined — no mid-sentence breaks."""
+        for flags, desc in self._all_descriptions("find.1.gz"):
+            for para in desc.split("\n\n"):
+                lines = [l for l in para.split("\n") if l.strip()]
+                if not lines:
+                    continue
+                self.assertEqual(
+                    len(lines), 1,
+                    f"Multi-line paragraph in find option {flags}: {para[:120]!r}",
+                )
 
 
 # ---------------------------------------------------------------------------
