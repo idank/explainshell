@@ -10,6 +10,7 @@ import glob
 import logging
 import os
 import sys
+import time
 
 from explainshell import config, errors, llm_extractor, source_extractor, store
 
@@ -31,6 +32,19 @@ _CYAN = "\033[36m"
 _DIM = "\033[2m"
 _BOLD = "\033[1m"
 _RESET = "\033[0m"
+
+
+def _ts():
+    """Return a bracketed timestamp string, e.g. [14:05:23]."""
+    return time.strftime("[%H:%M:%S]")
+
+
+def _fmt_elapsed(seconds):
+    """Format elapsed seconds as a human-readable string."""
+    m, s = divmod(int(seconds), 60)
+    if m:
+        return f"{m}m{s}s"
+    return f"{s}s"
 
 
 def _normalize(field, val):
@@ -213,6 +227,7 @@ def main(args):
     added = 0
     skipped = 0
     failed = 0
+    t0 = time.monotonic()
 
     from explainshell import manpage as _manpage
 
@@ -226,7 +241,7 @@ def main(args):
             continue
 
         if args.diff == "modes":
-            print(f"[{short_path}] running source extractor...")
+            print(f"{_ts()} [{short_path}] running source extractor...")
             try:
                 source_mp = source_extractor.extract(gz_path)
             except errors.ExtractionError as e:
@@ -235,7 +250,7 @@ def main(args):
                 print(f"  {_DIM}(source extractor failed: {e}, skipping){_RESET}")
                 failed += 1
                 continue
-            print(f"[{short_path}] running llm extractor ({args.model})...")
+            print(f"{_ts()} [{short_path}] running llm extractor ({args.model})...")
             try:
                 debug_dir = args.debug_dir if args.dry_run else None
                 llm_mp = llm_extractor.extract(gz_path, args.model, debug_dir=debug_dir)
@@ -252,10 +267,10 @@ def main(args):
 
         try:
             if args.mode == "source":
-                print(f"[{short_path}] extracting (source)...")
+                print(f"{_ts()} [{short_path}] extracting (source)...")
                 mp = source_extractor.extract(gz_path)
             else:
-                print(f"[{short_path}] extracting ({args.model})...")
+                print(f"{_ts()} [{short_path}] extracting ({args.model})...")
                 debug_dir = args.debug_dir if args.dry_run else None
                 mp = llm_extractor.extract(gz_path, args.model, debug_dir=debug_dir)
             if args.diff:
@@ -312,8 +327,9 @@ def main(args):
     if s and added > 0 and not args.dry_run and not args.diff:
         s.update_multi_cmd_mappings()
 
+    elapsed = time.monotonic() - t0
     dry_run_note = " (dry run)" if args.dry_run else ""
-    print(f"Done{dry_run_note}: {added} extracted, {skipped} skipped, {failed} failed.")
+    print(f"Done{dry_run_note}: {added} extracted, {skipped} skipped, {failed} failed. Total time: {_fmt_elapsed(elapsed)}")
     return 0 if failed == 0 else 1
 
 
