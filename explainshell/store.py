@@ -609,3 +609,41 @@ class Store:
             "UPDATE manpage SET multi_cmd = 1 WHERE id = ?", (manpage_id,)
         )
         self._conn.commit()
+
+    def update_multi_cmd_mappings(self):
+        """Discover sub-command relationships and create mappings.
+
+        For every man page whose name contains a hyphen (e.g. ``git-commit``),
+        check whether the prefix (``git``) also exists as a man page.  If so,
+        add a mapping ``git commit`` -> ``git-commit`` and mark the parent as
+        ``multi_cmd``.
+        """
+        manpages = {}
+        potential = []
+        for _id, name in self.names():
+            if "-" in name:
+                potential.append((name.split("-"), _id))
+            else:
+                manpages[name] = _id
+
+        existing_mappings = {src for src, _ in self.mappings()}
+        mappings_to_add = []
+        multi_cmds = {}
+
+        for parts, _id in potential:
+            joined = " ".join(parts)
+            if joined in existing_mappings:
+                continue
+            if parts[0] in manpages:
+                mappings_to_add.append((joined, _id))
+                multi_cmds[parts[0]] = manpages[parts[0]]
+
+        for src, dst in mappings_to_add:
+            self.add_mapping(src, dst, 1)
+            logger.info("inserting mapping (multi_cmd) %s -> %s", src, dst)
+
+        for name, _id in multi_cmds.items():
+            self.set_multi_cmd(_id)
+            logger.info("making %r a multi_cmd", name)
+
+        return mappings_to_add, multi_cmds

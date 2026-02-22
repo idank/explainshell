@@ -13,7 +13,6 @@ import sys
 
 from explainshell import config, errors, store
 from explainshell.llm_extractor import ExtractionError, extract
-from explainshell.manager import Manager
 
 logger = logging.getLogger(__name__)
 
@@ -270,9 +269,7 @@ def main(args):
 
     # update multi-cmd mappings (only when writing to DB)
     if s and added > 0 and not args.dry_run and not args.diff:
-        m = Manager.__new__(Manager)
-        m.store = s
-        m.findmulti_cmds()
+        s.update_multi_cmd_mappings()
 
     dry_run_note = " (dry run)" if args.dry_run else ""
     print(f"Done{dry_run_note}: {added} extracted, {skipped} skipped, {failed} failed.")
