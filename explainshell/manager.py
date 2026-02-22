@@ -226,6 +226,7 @@ def main(args):
             continue
 
         if args.diff == "modes":
+            print(f"[{short_path}] running source extractor...")
             try:
                 source_mp = source_extractor.extract(gz_path)
             except errors.ExtractionError as e:
@@ -234,6 +235,7 @@ def main(args):
                 print(f"  {_DIM}(source extractor failed: {e}, skipping){_RESET}")
                 failed += 1
                 continue
+            print(f"[{short_path}] running llm extractor ({args.model})...")
             try:
                 debug_dir = args.debug_dir if args.dry_run else None
                 llm_mp = llm_extractor.extract(gz_path, args.model, debug_dir=debug_dir)
@@ -250,8 +252,10 @@ def main(args):
 
         try:
             if args.mode == "source":
+                print(f"[{short_path}] extracting (source)...")
                 mp = source_extractor.extract(gz_path)
             else:
+                print(f"[{short_path}] extracting ({args.model})...")
                 debug_dir = args.debug_dir if args.dry_run else None
                 mp = llm_extractor.extract(gz_path, args.model, debug_dir=debug_dir)
             if args.diff:

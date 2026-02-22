@@ -146,7 +146,6 @@ def _call_llm(chunk: str, chunk_info: str, model: str, litellm_kwargs: dict) -> 
     ]
 
     kwargs = dict(litellm_kwargs)
-    kwargs.setdefault("temperature", 0)
     # request JSON object output where supported
     try:
         kwargs["response_format"] = {"type": "json_object"}
