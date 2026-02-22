@@ -353,6 +353,20 @@ class TestParseFlagText(unittest.TestCase):
         self.assertEqual(result["long"], ["--strategy"])
         self.assertTrue(result["expects_arg"])
 
+    def test_short_flag_with_glued_angle_arg(self):
+        """Single-char flag with angle-bracket arg glued on: -C<n>"""
+        result = _parse_flag_text("-C<n>")
+        self.assertEqual(result["short"], ["-C"])
+        self.assertTrue(result["expects_arg"])
+        self.assertEqual(result["argument"], "<n>")
+
+    def test_multichar_flag_with_glued_angle_arg(self):
+        """Multi-char flag with angle-bracket arg glued on: -lf<logfile>"""
+        result = _parse_flag_text("-lf<logfile>")
+        self.assertEqual(result["short"], ["-lf"])
+        self.assertTrue(result["expects_arg"])
+        self.assertEqual(result["argument"], "<logfile>")
+
 
 # ---------------------------------------------------------------------------
 # _detect_dialect
