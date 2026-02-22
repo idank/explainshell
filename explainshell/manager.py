@@ -181,8 +181,16 @@ def _collect_gz_files(paths):
 def main(args):
     logging.basicConfig(level=getattr(logging, args.log.upper()))
 
+    if args.diff != "modes" and not args.mode:
+        print("error: --mode is required (unless --diff modes)", file=sys.stderr)
+        return 1
+
     if args.mode == "llm" and not args.model:
         print("error: --model is required when --mode is 'llm'", file=sys.stderr)
+        return 1
+
+    if args.diff == "modes" and not args.model:
+        print("error: --model is required when --diff modes", file=sys.stderr)
         return 1
 
     db_path = args.db
@@ -198,7 +206,7 @@ def main(args):
         print("No .gz files found.", file=sys.stderr)
         return 1
 
-    s = store.Store(db_path) if not args.dry_run or args.diff else None
+    s = store.Store(db_path) if not args.dry_run or args.diff == "db" else None
     if s and args.drop:
         s.drop(confirm=True)
 
@@ -215,6 +223,29 @@ def main(args):
         if s and not args.diff and not args.overwrite and _already_stored(s, short_path, name):
             logger.info("skipping %s (already stored)", short_path)
             skipped += 1
+            continue
+
+        if args.diff == "modes":
+            try:
+                source_mp = source_extractor.extract(gz_path)
+            except errors.ExtractionError as e:
+                logger.error("source extractor failed for %s: %s", short_path, e)
+                print(f"=== {short_path} (source vs llm) ===")
+                print(f"  {_DIM}(source extractor failed: {e}, skipping){_RESET}")
+                failed += 1
+                continue
+            try:
+                debug_dir = args.debug_dir if args.dry_run else None
+                llm_mp = llm_extractor.extract(gz_path, args.model, debug_dir=debug_dir)
+            except errors.ExtractionError as e:
+                logger.error("llm extractor failed for %s: %s", short_path, e)
+                print(f"=== {short_path} (source vs llm) ===")
+                print(f"  {_DIM}(llm extractor failed: {e}, skipping){_RESET}")
+                failed += 1
+                continue
+            print(f"=== {short_path} (source vs llm) ===")
+            _diff_manpage(source_mp, llm_mp)
+            added += 1
             continue
 
         try:
@@ -288,9 +319,8 @@ def _build_parser():
     )
     parser.add_argument(
         "--mode",
-        required=True,
         choices=["source", "llm"],
-        help="Extraction mode: 'source' uses the roff parser, 'llm' uses an LLM",
+        help="Extraction mode: 'source' uses the roff parser, 'llm' uses an LLM (required unless --diff modes)",
     )
     parser.add_argument("--model", help="LiteLLM model string (required for --mode llm)")
     parser.add_argument("--db", default=config.DB_PATH, help="SQLite DB path")
@@ -314,9 +344,11 @@ def _build_parser():
     )
     parser.add_argument(
         "--diff",
-        action="store_true",
-        default=False,
-        help="Compare fresh LLM extraction against what is stored in the DB",
+        nargs="?",
+        const="db",
+        choices=["db", "modes"],
+        help="Diff mode: 'db' (default) compares fresh extraction against the DB; "
+             "'modes' compares source vs LLM extraction against each other",
     )
     parser.add_argument(
         "--debug-dir",
