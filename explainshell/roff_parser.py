@@ -345,6 +345,15 @@ def _parse_flag_text(text: str) -> dict:
                     argument = arg_part
             continue
 
+        # Split short flag with angle-bracket arg glued on: -C<n>, -lf<logfile>, -ap<path>
+        m_glued = re.match(r'^(-[A-Za-z]+)<(.+)>$', flag)
+        if m_glued:
+            short.append(m_glued.group(1))
+            expects_arg = True
+            if not argument:
+                argument = f"<{m_glued.group(2)}>"
+            continue
+
         if flag.startswith("--"):
             long.append(flag)
         elif flag.startswith("-") and len(flag) >= 2:
