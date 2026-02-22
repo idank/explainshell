@@ -3,6 +3,7 @@
 .coverage
 .vagrant
 *.log
+.env
 .env/
 .venv/
 __pycache__
