@@ -142,39 +142,10 @@ class Manager:
         if not added:
             logger.warning("no manpages added")
         else:
-            self.findmulti_cmds()
+            self.store.update_multi_cmd_mappings()
 
         return added, exists
 
-    def findmulti_cmds(self):
-        manpages = {}
-        potential = []
-        for _id, m in self.store.names():
-            if "-" in m:
-                potential.append((m.split("-"), _id))
-            else:
-                manpages[m] = _id
-
-        mappings = {x[0] for x in self.store.mappings()}
-        mappings_to_a = []
-        multi_cmds = {}
-
-        for p, _id in potential:
-            if " ".join(p) in mappings:
-                continue
-            if p[0] in manpages:
-                mappings_to_a.append((" ".join(p), _id))
-                multi_cmds[p[0]] = manpages[p[0]]
-
-        for src, dst in mappings_to_a:
-            self.store.add_mapping(src, dst, 1)
-            logger.info("inserting mapping (multi_cmd) %s -> %s", src, dst)
-
-        for multi_cmd, _id in multi_cmds.items():
-            self.store.set_multi_cmd(_id)
-            logger.info("making %r a multi_cmd", multi_cmd)
-
-        return mappings_to_a, multi_cmds
 
 
 def main(files, db_path, overwrite, drop, verify):
