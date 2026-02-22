@@ -83,19 +83,25 @@ def main(args):
                 added += 1
             else:
                 print(f"=== {short_path} ({len(mp.options)} option(s)) ===")
+                print(f"  name: {mp.name}")
+                print(f"  synopsis: {mp.synopsis}")
+                print(f"  aliases: {mp.aliases}")
+                print(f"  nested_cmd: {mp.nested_cmd}")
+                print(f"  multi_cmd: {mp.multi_cmd}")
+                print(f"  partial_match: {mp.partial_match}")
+                print()
                 for i, opt in enumerate(mp.options):
                     if i > 0:
                         print()
-                    # Build flag display
-                    flags = ", ".join(opt.short + opt.long)
-                    if opt.argument and not flags:
-                        flags = opt.argument
-                    elif opt.argument and opt.expects_arg:
-                        flags += f" {opt.argument}"
-                    elif opt.expects_arg:
-                        flags += " ..."
-                    print(f"  [{i}] {flags}")
-                    # Print description, indented and with line limit
+                    print(f"  [{i}]")
+                    print(f"      short: {opt.short}")
+                    print(f"      long: {opt.long}")
+                    print(f"      expects_arg: {opt.expects_arg}")
+                    if opt.argument:
+                        print(f"      argument: {opt.argument}")
+                    if opt.nested_cmd:
+                        print(f"      nested_cmd: {opt.nested_cmd}")
+                    # Print description, indented
                     desc = opt.text.strip()
                     lines = desc.split("\n")
                     for line in lines:
