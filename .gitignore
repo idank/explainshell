@@ -15,3 +15,4 @@ moarcode/
 *.db-shm
 *.db-wal
 .claude/
+data/
