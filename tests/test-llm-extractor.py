@@ -307,10 +307,12 @@ class TestDedupOptions(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestExtractIntegration(unittest.TestCase):
+    @patch("explainshell.llm_extractor.roff_parser.parse_options")
     @patch("explainshell.llm_extractor._call_llm")
     @patch("explainshell.llm_extractor.get_manpage_text")
     @patch("explainshell.llm_extractor._get_synopsis_and_aliases")
-    def test_extract_returns_manpage(self, mock_synopsis, mock_plaintext, mock_llm):
+    def test_extract_returns_manpage(self, mock_synopsis, mock_plaintext, mock_llm, mock_roff):
+        mock_roff.return_value = []  # roff parser finds nothing → LLM fallback
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
         mock_plaintext.return_value = "dummy man page text"
         mock_llm.return_value = (
@@ -342,10 +344,12 @@ class TestExtractIntegration(unittest.TestCase):
         self.assertIn("-n", flags)
         self.assertIn("-e", flags)
 
+    @patch("explainshell.llm_extractor.roff_parser.parse_options")
     @patch("explainshell.llm_extractor._call_llm")
     @patch("explainshell.llm_extractor.get_manpage_text")
     @patch("explainshell.llm_extractor._get_synopsis_and_aliases")
-    def test_malformed_options_skipped(self, mock_synopsis, mock_plaintext, mock_llm):
+    def test_malformed_options_skipped(self, mock_synopsis, mock_plaintext, mock_llm, mock_roff):
+        mock_roff.return_value = []  # roff parser finds nothing → LLM fallback
         mock_synopsis.return_value = (None, [("dummy", 10)])
         mock_plaintext.return_value = "some text"
         mock_llm.return_value = (
@@ -368,11 +372,13 @@ class TestExtractIntegration(unittest.TestCase):
         self.assertEqual(len(mp.options), 1)
         self.assertEqual(mp.options[0].short, ["-v"])
 
+    @patch("explainshell.llm_extractor.roff_parser.parse_options")
     @patch("explainshell.llm_extractor._call_llm")
     @patch("explainshell.llm_extractor.get_manpage_text")
     @patch("explainshell.llm_extractor._get_synopsis_and_aliases")
-    def test_debug_dir_writes_files(self, mock_synopsis, mock_plaintext, mock_llm):
+    def test_debug_dir_writes_files(self, mock_synopsis, mock_plaintext, mock_llm, mock_roff):
         import tempfile
+        mock_roff.return_value = []  # roff parser finds nothing → LLM fallback
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
         mock_plaintext.return_value = "dummy man page text"
         raw_response = '{"options": [{"short": ["-v"], "long": [], "expects_arg": false, "argument": null, "nested_cmd": false, "description": "Verbose."}]}'
@@ -402,6 +408,24 @@ class TestExtractIntegration(unittest.TestCase):
             self.assertTrue(os.path.exists(response_path))
             with open(response_path) as f:
                 self.assertEqual(f.read(), raw_response)
+
+    @patch("explainshell.llm_extractor._get_synopsis_and_aliases")
+    def test_roff_parser_success_skips_llm(self, mock_synopsis):
+        """When roff parser finds options, LLM should not be called."""
+        mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
+        fake_opts = [
+            store.Option(
+                store.Paragraph(0, "Do not output trailing newline.", "OPTIONS", True),
+                ["-n"], [], False, None, False,
+            ),
+        ]
+        with patch("explainshell.llm_extractor.roff_parser.parse_options", return_value=fake_opts) as mock_roff, \
+             patch("explainshell.llm_extractor._call_llm") as mock_llm:
+            mp = extract("dummy.1.gz", "test-model")
+            mock_roff.assert_called_once_with("dummy.1.gz")
+            mock_llm.assert_not_called()
+            self.assertEqual(len(mp.options), 1)
+            self.assertEqual(mp.options[0].short, ["-n"])
 
 
 # ---------------------------------------------------------------------------

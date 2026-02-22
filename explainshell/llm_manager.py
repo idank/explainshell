@@ -83,12 +83,23 @@ def main(args):
                 added += 1
             else:
                 print(f"=== {short_path} ({len(mp.options)} option(s)) ===")
-                for opt in mp.options:
+                for i, opt in enumerate(mp.options):
+                    if i > 0:
+                        print()
+                    # Build flag display
                     flags = ", ".join(opt.short + opt.long)
-                    if opt.argument:
-                        flags = flags or opt.argument
-                    print(f"  {flags}")
-                    print(f"    {opt.text.strip()}")
+                    if opt.argument and not flags:
+                        flags = opt.argument
+                    elif opt.argument and opt.expects_arg:
+                        flags += f" {opt.argument}"
+                    elif opt.expects_arg:
+                        flags += " ..."
+                    print(f"  [{i}] {flags}")
+                    # Print description, indented and with line limit
+                    desc = opt.text.strip()
+                    lines = desc.split("\n")
+                    for line in lines:
+                        print(f"      {line}")
                 added += 1
         except ExtractionError as e:
             logger.error("failed to process %s: %s", short_path, e)
