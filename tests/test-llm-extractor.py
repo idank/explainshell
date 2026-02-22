@@ -442,6 +442,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
             overwrite=overwrite,
             drop=False,
             dry_run=dry_run,
+            diff=False,
             debug_dir="debug-output",
             log="WARNING",
             files=[],
