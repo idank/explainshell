@@ -449,16 +449,16 @@ class TestLlmManagerDryRun(unittest.TestCase):
         )
         return args
 
-    @patch("explainshell.llm_manager.extract")
-    @patch("explainshell.llm_manager.store.Store")
-    @patch("explainshell.llm_manager._collect_gz_files")
+    @patch("explainshell.manager.extract")
+    @patch("explainshell.manager.store.Store")
+    @patch("explainshell.manager._collect_gz_files")
     def test_dry_run_calls_llm_but_not_store(self, mock_collect, mock_store_cls, mock_extract):
         mock_collect.return_value = ["/fake/echo.1.gz"]
         fake_mp = MagicMock()
         fake_mp.options = [MagicMock(), MagicMock()]
         mock_extract.return_value = fake_mp
 
-        from explainshell.llm_manager import main
+        from explainshell.manager import main
         args = self._make_args(dry_run=True)
         ret = main(args)
 
@@ -466,9 +466,9 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_store_cls.assert_not_called()
         self.assertEqual(ret, 0)
 
-    @patch("explainshell.llm_manager.extract")
-    @patch("explainshell.llm_manager.store.Store")
-    @patch("explainshell.llm_manager._collect_gz_files")
+    @patch("explainshell.manager.extract")
+    @patch("explainshell.manager.store.Store")
+    @patch("explainshell.manager._collect_gz_files")
     def test_normal_run_writes_to_store(self, mock_collect, mock_store_cls, mock_extract):
         mock_collect.return_value = ["/fake/echo.1.gz"]
         fake_mp = MagicMock()
@@ -482,7 +482,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
         from explainshell import errors
         mock_store.find_man_page.side_effect = errors.ProgramDoesNotExist("echo")
 
-        from explainshell.llm_manager import main
+        from explainshell.manager import main
         args = self._make_args(dry_run=False)
         main(args)
 

@@ -1,8 +1,8 @@
 """
-CLI entry point for LLM-based man page extraction.
+CLI entry point for man page extraction.
 
 Usage:
-    python -m explainshell.llm_manager --model <model> [options] files...
+    python -m explainshell.manager --mode <mode> [options] files...
 """
 
 import argparse
