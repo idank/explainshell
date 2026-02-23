@@ -16,7 +16,7 @@ A web tool that parses man pages and explains command-line arguments by matching
 ## Common Commands
 
 ```bash
-# Run unit tests + doctests
+# Run unit tests + doctests (excludes e2e)
 make tests
 
 # Run a single test file
@@ -34,7 +34,13 @@ make e2e
 # Update e2e snapshots
 make e2e-update
 
-# Run web server via docker (accessible at localhost:5001)
+# Run LLM integration test (requires API key in .env)
+make test-llm
+
+# Run all tests (unit + e2e)
+make tests-all
+
+# Run web server locally
 make serve
 
 # Process a man page into the database
