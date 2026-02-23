@@ -2,12 +2,12 @@ tests:
 	pytest --doctest-modules tests/ explainshell/ --ignore=tests/e2e
 
 e2e:
-	@command -v playwright >/dev/null 2>&1 || (echo "playwright is required. Install with: pip install -r requirements-e2e.txt && playwright install chromium"; exit 1)
-	pytest tests/e2e/ -v
+	@npx playwright --version >/dev/null 2>&1 || (echo "playwright is required. Install with: npm install && npx playwright install chromium"; exit 1)
+	npx playwright test
 
 e2e-update:
-	@command -v playwright >/dev/null 2>&1 || (echo "playwright is required. Install with: pip install -r requirements-e2e.txt && playwright install chromium"; exit 1)
-	UPDATE_SNAPSHOTS=1 pytest tests/e2e/ -v
+	@npx playwright --version >/dev/null 2>&1 || (echo "playwright is required. Install with: npm install && npx playwright install chromium"; exit 1)
+	npx playwright test --update-snapshots
 
 test-llm:
 	RUN_LLM_TESTS=1 pytest tests/test_llm_extractor.py::TestRealLlm -v

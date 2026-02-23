@@ -1,3 +1,0 @@
-pytest-playwright
-playwright
-Pillow

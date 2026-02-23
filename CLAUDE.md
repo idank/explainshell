@@ -10,8 +10,8 @@ A web tool that parses man pages and explains command-line arguments by matching
 
 - Python 3.12, Flask, SQLite, bashlex, LiteLLM
 - Linting: ruff
-- Testing: pytest (unit + doctests), Playwright (e2e)
-- Dependencies: `requirements.txt` (main), `requirements-e2e.txt` (Playwright)
+- Testing: pytest (unit + doctests), JS Playwright Test (e2e)
+- Dependencies: `requirements.txt` (main), `package.json` (Playwright e2e)
 
 ## Common Commands
 
@@ -101,3 +101,4 @@ Uses bashlex AST visitor pattern:
 - E2E tests and snapshots live in `tests/e2e/`
 - E2E snapshot updates via `make e2e-update`
 - **Always run `make tests` after making changes** to verify nothing is broken
+- **Always lint the codebase after making changes**
