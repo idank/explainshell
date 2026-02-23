@@ -1,7 +1,7 @@
 """
 End-to-end regression tests using Playwright.
 
-Requires the dev server to be running (`make serve`) before executing.
+A Flask dev server is started automatically by the dev_server fixture.
 Install dependencies: pip install -r requirements-e2e.txt && playwright install chromium
 
 Workflow
@@ -18,6 +18,9 @@ Failure diffs are written to test-results/ (gitignored).
 import io
 import os
 import re
+import socket
+import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -26,7 +29,6 @@ import pytest
 from PIL import Image, ImageChops, ImageStat
 from playwright.sync_api import Page, expect
 
-BASE_URL = "http://localhost:5001"
 SAMPLE_CMD = "tar xzvf archive.tar.gz"
 SNAPSHOT_DIR = "tests/snapshots"
 UPDATE_SNAPSHOTS = os.environ.get("UPDATE_SNAPSHOTS", "").lower() in ("1", "true", "yes")
@@ -80,22 +82,46 @@ def assert_screenshot(page: Page, name: str, *, full_page: bool = False, thresho
         )
 
 
+def _free_port():
+    """Find a free TCP port on localhost."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 @pytest.fixture(scope="session", autouse=True)
-def require_dev_server():
-    """Fail early with a clear message if the dev server is not reachable."""
-    try:
-        urllib.request.urlopen(BASE_URL, timeout=5)
-    except urllib.error.URLError as e:
-        pytest.fail(
-            f"Dev server is not running at {BASE_URL}. "
-            f"Start it with 'make serve' and wait for it to be ready, then re-run. "
-            f"Error: {e}"
-        )
+def dev_server():
+    """Start a local Flask server for the test session."""
+    from werkzeug.serving import make_server
+    from explainshell.web import app
+
+    app.config["TESTING"] = True
+
+    port = _free_port()
+    server = make_server("127.0.0.1", port, app)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    base_url = f"http://127.0.0.1:{port}"
+
+    # Wait for the server to be ready.
+    for _ in range(50):
+        try:
+            urllib.request.urlopen(base_url, timeout=1)
+            break
+        except urllib.error.URLError:
+            time.sleep(0.1)
+    else:
+        pytest.fail("Flask test server failed to start")
+
+    yield base_url
+
+    server.shutdown()
 
 
-def test_homepage_loads(page: Page):
+def test_homepage_loads(page: Page, dev_server):
     """The home page loads and matches the committed baseline screenshot."""
-    page.goto(BASE_URL)
+    page.goto(dev_server)
 
     expect(page).to_have_title(re.compile(r"explainshell", re.IGNORECASE))
     # The index page replaces the nav search with a full-width input#explain.
@@ -104,9 +130,9 @@ def test_homepage_loads(page: Page):
     assert_screenshot(page, "homepage.png")
 
 
-def test_explain_sample_command(page: Page):
+def test_explain_sample_command(page: Page, dev_server):
     """Explaining a sample command matches the committed baseline screenshot."""
-    url = f"{BASE_URL}/explain?cmd={urllib.parse.quote_plus(SAMPLE_CMD)}"
+    url = f"{dev_server}/explain?cmd={urllib.parse.quote_plus(SAMPLE_CMD)}"
     page.goto(url)
     page.wait_for_load_state("networkidle")
 
