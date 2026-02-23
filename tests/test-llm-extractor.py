@@ -471,6 +471,17 @@ class TestLlmManagerDryRun(unittest.TestCase):
 # Real-LLM integration test (skipped unless RUN_LLM_TESTS=1)
 # ---------------------------------------------------------------------------
 
+# Map LiteLLM model prefixes to the environment variable they need.
+_MODEL_KEY_ENV = {
+    "gemini/": "GEMINI_API_KEY",
+    "gpt-": "OPENAI_API_KEY",
+    "o1": "OPENAI_API_KEY",
+    "claude-": "ANTHROPIC_API_KEY",
+}
+
+_DEFAULT_LLM_MODEL = "gemini/gemini-3-flash-preview"
+
+
 @unittest.skipUnless(os.environ.get("RUN_LLM_TESTS") == "1", "set RUN_LLM_TESTS=1 to run")
 class TestRealLlm(unittest.TestCase):
     ECHO_GZ = os.path.join(os.path.dirname(__file__), "echo.1.gz")
@@ -484,8 +495,18 @@ class TestRealLlm(unittest.TestCase):
             )
             shutil.copy(src, self.ECHO_GZ)
 
+        model = os.environ.get("LLM_MODEL", _DEFAULT_LLM_MODEL)
+        for prefix, env_var in _MODEL_KEY_ENV.items():
+            if model.startswith(prefix):
+                if not os.environ.get(env_var):
+                    self.fail(
+                        f"LLM model '{model}' requires {env_var} to be set. "
+                        f"Either set it in .env or choose a different model via LLM_MODEL."
+                    )
+                break
+
     def test_echo_manpage(self):
-        model = os.environ.get("LLM_MODEL", "gemini/gemini-3-flash-preview")
+        model = os.environ.get("LLM_MODEL", _DEFAULT_LLM_MODEL)
         mp = extract(self.ECHO_GZ, model)
         flags = set()
         for opt in mp.options:
