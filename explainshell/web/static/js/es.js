@@ -287,7 +287,7 @@ function swapNodes(a, b) {
 // reorder the help <pre>'s of all links that go left
 function reorder(lefteslinks) {
     var help = _.pluck(lefteslinks, 'help'),
-        visiblehelp = $("#help pre:visible");
+        visiblehelp = $("#help .help-box:visible");
 
     // check the indices of the first and last help boxes. if the first is
     // greater than the last, then it appears later in the DOM which means
@@ -456,7 +456,7 @@ function handlesynopsis() {
 function assigncolors() {
     var shuffledcolors = _.shuffle(colors);
 
-    $("#help pre").each(function() {
+    $("#help .help-box").each(function() {
         color = shuffledcolors.shift();
         shuffledcolors.push(color);
 
@@ -525,7 +525,7 @@ function drawgrouplines(commandselector, options) {
     // the <pre>'s help of the current group
     if (options.hidepres) {
         if (currentgroup.name != 'all') {
-            $("#help pre").not(helpselector(commandselector)).parent().parent().hide();
+            $("#help .help-box").not(helpselector(commandselector)).parent().parent().hide();
             helpselector(commandselector).parent().parent().show();
 
             // the first item in a non-shell group is always the synopsis of the
@@ -547,7 +547,7 @@ function drawgrouplines(commandselector, options) {
     if (helpselector(commandselector).length > 0) {
         // the height of the canvas is determined by the bottom of the last visible <pre>
         // in #help
-        $("#canvas").height($("#help pre:visible").last()[0].getBoundingClientRect().bottom - canvasTop);
+        $("#canvas").height($("#help .help-box:visible").last()[0].getBoundingClientRect().bottom - canvasTop);
 
         // need to recompute the top of the canvas after height change
         canvasTop = $("#canvas")[0].getBoundingClientRect().top;
@@ -1108,7 +1108,7 @@ function drawvisible() {
 
     viewtop += topspace;
 
-    var visible = $("#help pre:visible").filter(function() {
+    var visible = $("#help .help-box:visible").filter(function() {
         return (inview(viewtop, viewbottom, $(this)));
     });
 

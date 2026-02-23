@@ -34,7 +34,7 @@ SNAPSHOT_DIR = "tests/e2e/snapshots"
 UPDATE_SNAPSHOTS = os.environ.get("UPDATE_SNAPSHOTS", "").lower() in ("1", "true", "yes")
 
 
-def assert_screenshot(page: Page, name: str, *, full_page: bool = False, threshold: float = 0.02):
+def assert_screenshot(page: Page, name: str, *, full_page: bool = False, threshold: float = 0.005):
     """Compare a page screenshot against a committed baseline.
 
     On the first run (or when UPDATE_SNAPSHOTS=1) the baseline is written.
@@ -74,10 +74,27 @@ def assert_screenshot(page: Page, name: str, *, full_page: bool = False, thresho
         stem = os.path.splitext(name)[0]
         Image.open(io.BytesIO(actual_bytes)).save(f"test-results/{stem}-actual.png")
         diff.save(f"test-results/{stem}-diff.png")
+
+        # Build a side-by-side comparison: baseline | actual | diff
+        label_h = 20
+        w, h = baseline.size
+        side_by_side = Image.new("RGB", (w * 3, h + label_h), (255, 255, 255))
+        side_by_side.paste(baseline, (0, label_h))
+        side_by_side.paste(actual, (w, label_h))
+        side_by_side.paste(diff, (w * 2, label_h))
+
+        from PIL import ImageDraw
+
+        draw = ImageDraw.Draw(side_by_side)
+        for i, label in enumerate(("Baseline", "Actual", "Diff")):
+            draw.text((i * w + 5, 2), label, fill=(0, 0, 0))
+
+        side_by_side.save(f"test-results/{stem}-comparison.png")
+
         pytest.fail(
             f"Screenshot '{name}' differs from baseline "
             f"(mean diff {mean_diff:.4f} > threshold {threshold}). "
-            f"Inspect test-results/{stem}-*.png. "
+            f"Inspect test-results/{stem}-comparison.png for a side-by-side view. "
             "Run 'make e2e-update' to accept the new look as the baseline."
         )
 
@@ -131,17 +148,41 @@ def test_homepage_loads(page: Page, dev_server):
 
 
 def test_explain_sample_command(page: Page, dev_server):
-    """Explaining a sample command matches the committed baseline screenshot."""
+    """Explaining a sample command renders help boxes with borders, lines, and matches baseline."""
     url = f"{dev_server}/explain?cmd={urllib.parse.quote_plus(SAMPLE_CMD)}"
     page.goto(url)
     page.wait_for_load_state("networkidle")
 
-    # Structural assertions first — clearer failure messages than a pixel diff.
-    expect(page).to_have_title(re.compile(re.escape(SAMPLE_CMD)))
-    expect(page.locator("#command")).to_be_visible()
-    assert page.locator("#help tr").count() >= 1, (
-        f"Expected at least one help text row for '{SAMPLE_CMD}', got 0. "
-        "The man page data may not be loaded in the database."
-    )
-
+    # Take the screenshot first so the comparison image is always available.
     assert_screenshot(page, "explain-sample.png", full_page=True)
+
+    # Structural assertions — collect all failures for a single clear report.
+    errors = []
+
+    if not re.search(re.escape(SAMPLE_CMD), page.title()):
+        errors.append(f"Expected page title to contain '{SAMPLE_CMD}', got '{page.title()}'")
+
+    if not page.locator("#command").is_visible():
+        errors.append("Expected #command to be visible")
+
+    help_boxes = page.locator("#help .help-box")
+    if help_boxes.count() < 1:
+        errors.append(
+            f"Expected at least one help text row for '{SAMPLE_CMD}', got 0. "
+            "The man page data may not be loaded in the database."
+        )
+
+    for i in range(help_boxes.count()):
+        box = help_boxes.nth(i)
+        if not box.is_visible():
+            continue
+        border = box.evaluate("el => getComputedStyle(el).borderStyle")
+        if border != "solid":
+            errors.append(f"Help box {i} should have a solid border, got '{border}'")
+
+    svg_paths = page.locator("#canvas path")
+    if svg_paths.count() < 1:
+        errors.append("Expected SVG connecting lines in the canvas")
+
+    if errors:
+        pytest.fail("\n".join(errors))
