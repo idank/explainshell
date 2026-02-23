@@ -17,3 +17,5 @@ moarcode/
 *.db-wal
 .claude/
 data/
+docs/
+manpages/ubuntu
