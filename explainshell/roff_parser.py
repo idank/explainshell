@@ -94,7 +94,20 @@ def parse_options(gz_path: str) -> list:
         if not short and not long and not argument:
             continue
 
-        p = store.Paragraph(idx, description, "OPTIONS", True)
+        # Build the full text: flags line + description, separated by newline
+        flag_text = entry.get("flag_text", "")
+        if not flag_text:
+            # Fallback: reconstruct from short/long
+            flag_text = ", ".join(short + long)
+            if argument:
+                flag_text += " " + argument
+        if flag_text and description:
+            text = flag_text + "\n" + description
+        elif flag_text:
+            text = flag_text
+        else:
+            text = description
+        p = store.Paragraph(idx, text, "OPTIONS", True)
         options.append(store.Option(p, short, long, expects_arg, argument, nested_cmd))
         idx += 1
 
@@ -642,12 +655,29 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
 
                 description = _clean_roff_description("\n".join(desc_lines))
 
+                def _clean_flag_line(fl):
+                    """Clean a raw flag line for display: strip macros then roff escapes."""
+                    s = fl.strip()
+                    # Handle alternating-font macros: .BI, .BR, .IR, .RB, .RI
+                    m = re.match(r"^\.(BI|BR|IB|IR|RB|RI)\s+(.+)$", s)
+                    if m:
+                        parts = _parse_roff_args(m.group(2))
+                        s = "".join(parts)
+                    else:
+                        # Strip simple .B / .I prefix
+                        s = re.sub(r"^\.[BI]\s+", "", s)
+                    return _clean_roff(s)
+
+                flag_text = ", ".join(
+                    _clean_flag_line(fl) for fl in flag_lines
+                )
                 results.append({
                     "short": all_short,
                     "long": all_long,
                     "expects_arg": has_arg,
                     "argument": arg_name,
                     "description": description,
+                    "flag_text": flag_text,
                 })
 
             # --- .IP pattern ---
@@ -723,6 +753,7 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                     "expects_arg": parsed.get("expects_arg", False),
                     "argument": parsed.get("argument"),
                     "description": description,
+                    "flag_text": _clean_roff(tag_text),
                 })
 
             # --- .HP pattern ---
@@ -761,6 +792,7 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                     "expects_arg": parsed.get("expects_arg", False),
                     "argument": parsed.get("argument"),
                     "description": description,
+                    "flag_text": _clean_roff(tag_line),
                 })
 
             # --- .PP/.sp + flag + .RS/.RE pattern ---
@@ -832,6 +864,7 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                         "expects_arg": parsed.get("expects_arg", False),
                         "argument": parsed.get("argument"),
                         "description": description,
+                        "flag_text": _clean_roff(flag_line),
                     })
 
                 elif macro != ".sp":
@@ -874,6 +907,7 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                         "expects_arg": parsed.get("expects_arg", False),
                         "argument": parsed.get("argument"),
                         "description": description,
+                        "flag_text": _clean_roff(flag_line),
                     })
 
                 else:
@@ -1063,6 +1097,67 @@ def _clean_mdoc_text(text: str) -> str:
     return _clean_roff_description(text)
 
 
+def _clean_mdoc_it_text(it_line: str) -> str:
+    """Clean an mdoc .It line into human-readable flag text.
+
+    Converts '.It Fl x , Fl -extract , Fl -get' → '-x, --extract, --get'
+    Handles Fl, Cm, Ar, Op, Ns macros and comma separators.
+    """
+    rest = it_line.strip()
+    if rest.startswith(".It "):
+        rest = rest[4:]
+    else:
+        return rest
+
+    tokens = rest.split()
+    parts = []  # accumulate flag/arg strings
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        if tok == "Fl":
+            i += 1
+            if i < len(tokens):
+                flag = tokens[i]
+                if flag == "Fl" or flag == "-":
+                    # double Fl → long option prefix
+                    i += 1
+                    if i < len(tokens):
+                        parts.append("--" + tokens[i].replace("\\-", "-"))
+                elif flag.startswith("\\-") or flag.startswith("-"):
+                    clean = flag.replace("\\-", "-")
+                    if not clean.startswith("--"):
+                        clean = "-" + clean
+                    parts.append(clean)
+                elif len(flag) == 1:
+                    parts.append("-" + flag)
+                else:
+                    parts.append("--" + flag.replace("\\-", "-"))
+        elif tok == "Cm":
+            i += 1
+            if i < len(tokens):
+                parts.append(tokens[i])
+        elif tok == "Ar":
+            i += 1
+            arg_parts = []
+            while i < len(tokens) and tokens[i] not in ("Fl", ",", "Ns", "Op", "Cm"):
+                arg_parts.append(tokens[i])
+                i += 1
+            if arg_parts:
+                # Attach argument to last flag
+                if parts:
+                    parts[-1] = parts[-1] + " " + " ".join(arg_parts)
+                else:
+                    parts.append(" ".join(arg_parts))
+            continue  # don't increment
+        elif tok == ",":
+            pass  # handled by join below
+        elif tok in ("Ns", "Op", "Oo", "Oc", "=", "\\=", "|"):
+            pass
+        i += 1
+
+    return ", ".join(parts)
+
+
 def _parse_mdoc_options(lines: list) -> list:
     """Parse options from mdoc(7) format pages."""
     sections = _find_option_sections_mdoc(lines)
@@ -1135,6 +1230,7 @@ def _parse_mdoc_options(lines: list) -> list:
                     "expects_arg": parsed.get("expects_arg", False),
                     "argument": parsed.get("argument"),
                     "description": description,
+                    "flag_text": _clean_mdoc_it_text(stripped),
                 })
             else:
                 i += 1
