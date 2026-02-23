@@ -98,6 +98,6 @@ Uses bashlex AST visitor pattern:
 
 - Test files use `test_*.py` naming (underscored)
 - Doctests embedded in `util.py`, `manpage.py`
-- E2E tests live in `tests/e2e/`, snapshots in `tests/snapshots/`
+- E2E tests and snapshots live in `tests/e2e/`
 - E2E snapshot updates via `make e2e-update`
 - **Always run `make tests` after making changes** to verify nothing is broken
