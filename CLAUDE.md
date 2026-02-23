@@ -20,10 +20,10 @@ A web tool that parses man pages and explains command-line arguments by matching
 make tests
 
 # Run a single test file
-pytest tests/test-matcher.py -v
+pytest tests/test_matcher.py -v
 
 # Run a single test method
-pytest tests/test-matcher.py::test_matcher::test_no_options -v
+pytest tests/test_matcher.py::test_matcher::test_no_options -v
 
 # Lint
 make lint
@@ -59,7 +59,8 @@ python -m explainshell.manager --mode source /path/to/manpage.1.gz
   - `manpage.py` - Man page reading and HTML conversion
   - `web/views.py` - Flask routes
   - `config.py` - Configuration (DB_PATH, HOST_IP, DEBUG)
-- `tests/` - Test files (`test-*.py`), fixtures, e2e snapshots
+- `tests/` - Unit tests (`test_*.py`), fixtures
+- `tests/e2e/` - Playwright e2e tests and snapshots
 - `runserver.py` - Flask app entry point
 
 ## Architecture
@@ -95,9 +96,8 @@ Uses bashlex AST visitor pattern:
 
 ### Test Conventions
 
-- Test files use `test-*.py` naming (hyphenated, not underscored)
+- Test files use `test_*.py` naming (underscored)
 - Doctests embedded in `util.py`, `manpage.py`
-- E2E snapshots stored in `tests/snapshots/`
-- E2E snapshot updates via `UPDATE_SNAPSHOTS=1` env var
+- E2E tests live in `tests/e2e/`, snapshots in `tests/snapshots/`
+- E2E snapshot updates via `make e2e-update`
 - **Always run `make tests` after making changes** to verify nothing is broken
-- E2E test errors about "Dev server" and `Connection refused` are expected when the server isn't running — ignore those
