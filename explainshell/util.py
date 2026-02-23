@@ -2,40 +2,6 @@ import itertools
 from operator import itemgetter
 
 
-def consecutive(ln, fn):
-    """yield consecutive items from l that fn returns True for them
-
-    >>> even = lambda x: x % 2 == 0
-    >>> list(consecutive([], even))
-    []
-    >>> list(consecutive([1], even))
-    [[1]]
-    >>> list(consecutive([1, 2], even))
-    [[1], [2]]
-    >>> list(consecutive([2, 4], even))
-    [[2, 4]]
-    >>> list(consecutive([1, 2, 4], even))
-    [[1], [2, 4]]
-    >>> list(consecutive([1, 2, 4, 5, 7, 8, 10], even))
-    [[1], [2, 4], [5], [7], [8, 10]]
-    """
-    it = iter(ln)
-    ll = []
-    try:
-        while True:
-            x = next(it)
-            if fn(x):
-                ll.append(x)
-            else:
-                if ll:
-                    yield ll
-                    ll = []
-                yield [x]
-    except StopIteration:
-        if ll:
-            yield ll
-
-
 def group_continuous(items, key=None):
     """
     >>> list(group_continuous([1, 2, 4, 5, 7, 8, 10]))
@@ -51,39 +17,6 @@ def group_continuous(items, key=None):
         key_func = key
     for _, grouped in itertools.groupby(enumerate(items), lambda ix: ix[0] - key_func(ix[1])):
         yield list(map(itemgetter(1), grouped))
-
-
-def topo_sorted(graph, parents):
-    """
-    Returns vertices of a DAG in topological order.
-
-    Arguments:
-    graph -- vertices of a graph to be topo_sorted
-    parents -- function (vertex) -> vertices to proceed
-               given vertex in output
-    """
-    result = []
-    used = set()
-
-    def use(v, top):
-        if id(v) in used:
-            return
-        for parent in parents(v):
-            if parent is top:
-                raise ValueError("graph is cyclical", graph)
-            use(parent, v)
-        used.add(id(v))
-        result.append(v)
-
-    for v in graph:
-        use(v, v)
-    return result
-
-
-def pairwise(iterable):
-    a, b = itertools.tee(iterable)
-    next(b, None)
-    return zip(a, b)
 
 
 class Peekable:
@@ -148,17 +81,3 @@ def name_section(path):
     assert ".gz" not in path
     name, section = path.rsplit(".", 1)
     return name, section
-
-
-class PropertyCache:
-    def __init__(self, func):
-        self.func = func
-        self.name = func.__name__
-
-    def __get__(self, obj, type=None):
-        result = self.func(obj)
-        self.cache_value(obj, result)
-        return result
-
-    def cache_value(self, obj, value):
-        setattr(obj, self.name, value)

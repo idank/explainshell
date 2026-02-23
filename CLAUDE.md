@@ -52,7 +52,7 @@ python -m explainshell.manager --mode source /path/to/manpage.1.gz
   - `roff_parser.py` - Roff macro parser (man/mdoc dialects)
   - `manpage.py` - Man page reading and HTML conversion
   - `web/views.py` - Flask routes
-  - `config.py` - Configuration (DB_PATH, MAN_PAGE_DIR)
+  - `config.py` - Configuration (DB_PATH, HOST_IP, DEBUG)
 - `tests/` - Test files (`test-*.py`), fixtures, e2e snapshots
 - `runserver.py` - Flask app entry point
 
