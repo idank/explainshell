@@ -299,10 +299,8 @@ def _parse_flag_text(text: str) -> dict:
     # These concatenate their arguments with alternating fonts:
     #   .BI "--file=" FILE → "--file=FILE"
     #   .BI "-a " file → "-a file"
-    macro_type = None
     m_altfont = re.match(r"^\.(BI|BR|IB|IR|RB|RI)\s+(.+)$", cleaned)
     if m_altfont:
-        macro_type = m_altfont.group(1)
         args_str = m_altfont.group(2)
         # Parse quoted and unquoted arguments
         parts = _parse_roff_args(args_str)

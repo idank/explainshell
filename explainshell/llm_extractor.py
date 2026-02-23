@@ -15,7 +15,7 @@ import time
 import litellm
 from markdownify import markdownify as md
 
-from explainshell import errors, manpage, store
+from explainshell import manpage, store
 from explainshell.errors import ExtractionError
 
 logger = logging.getLogger(__name__)

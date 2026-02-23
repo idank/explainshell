@@ -2,9 +2,8 @@
 
 import argparse
 import os
-import subprocess
 import unittest
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from explainshell import store
 from explainshell.llm_extractor import (
@@ -105,10 +104,10 @@ class TestGetManpageTextReal(unittest.TestCase):
         """Prose paragraphs should not be hard-wrapped at terminal width (~78 cols)."""
         text = get_manpage_text(_FIND_GZ)
         content_lines = [
-            l for l in text.split("\n")
-            if l and not l.startswith("=") and not l.startswith("[")
+            line for line in text.split("\n")
+            if line and not line.startswith("=") and not line.startswith("[")
         ]
-        long_lines = [l for l in content_lines if len(l) > 80]
+        long_lines = [line for line in content_lines if len(line) > 80]
         self.assertGreater(
             len(long_lines), 0,
             "Expected long prose lines (>80 chars) but all lines were short — "
