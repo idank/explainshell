@@ -30,7 +30,7 @@ from PIL import Image, ImageChops, ImageStat
 from playwright.sync_api import Page, expect
 
 SAMPLE_CMD = "tar xzvf archive.tar.gz"
-SNAPSHOT_DIR = "tests/snapshots"
+SNAPSHOT_DIR = "tests/e2e/snapshots"
 UPDATE_SNAPSHOTS = os.environ.get("UPDATE_SNAPSHOTS", "").lower() in ("1", "true", "yes")
 
 
