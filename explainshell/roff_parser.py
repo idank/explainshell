@@ -63,6 +63,21 @@ def parse_options(gz_path: str) -> list:
         raw = _parse_mdoc_options(lines)
     else:
         raw = _parse_man_options(lines)
+        # Supplement from non-option-named sections.  Many pages (nmap,
+        # ps, jq, ebook-convert) document options under section headings
+        # that don't contain "option".  We scan all sections but only
+        # keep entries with actual flags (short/long) to avoid false
+        # positives from placeholder entries like <object>.
+        all_raw = _parse_man_options(lines, scan_all_sections=True)
+        existing_flags = set()
+        for e in raw:
+            for f in e.get("short", []) + e.get("long", []):
+                existing_flags.add(f)
+        for e in all_raw:
+            flags = e.get("short", []) + e.get("long", [])
+            if flags and not any(f in existing_flags for f in flags):
+                raw.append(e)
+                existing_flags.update(flags)
 
     # Convert raw dicts to store.Option objects, filtering out non-option entries
     options = []
@@ -110,7 +125,12 @@ def _in_option_section(section_name: str) -> bool:
     """Check if the given section name is one that contains options."""
     # Strip quotes and normalize
     name = section_name.strip().strip('"').strip("'").lower()
-    return name in _OPTION_SECTION_NAMES
+    if name in _OPTION_SECTION_NAMES:
+        return True
+    # Contains-based matching: any section with "option" in its name
+    if "option" in name:
+        return True
+    return False
 
 
 def _clean_roff(text: str) -> str:
@@ -390,12 +410,15 @@ def _parse_flag_text(text: str) -> dict:
 # man(7) parser — .TP, .IP, .HP, .PP+.RS/.RE patterns
 # ---------------------------------------------------------------------------
 
-def _find_option_sections_man(lines: list) -> list:
+def _find_option_sections_man(lines: list, scan_all: bool = False) -> list:
     """Find line ranges for option-related sections in man(7) pages.
 
     Returns list of (start_line, end_line) tuples.
     Includes both .SH sections and .SS subsections whose names match
     option-related patterns.
+
+    If *scan_all* is True, return ranges for every .SH section (used as
+    a fallback when name-filtered scanning produces no results).
     """
     sections = []
     current_start = None
@@ -421,7 +444,7 @@ def _find_option_sections_man(lines: list) -> list:
                 in_option_section = False
 
             section_name = stripped[4:].strip().strip('"')
-            if _in_option_section(section_name):
+            if scan_all or _in_option_section(section_name):
                 current_start = i + 1
                 in_option_section = True
             else:
@@ -438,7 +461,7 @@ def _find_option_sections_man(lines: list) -> list:
                     in_ss_option = False
 
                 ss_name = stripped[3:].strip().strip('"')
-                if _in_option_section(ss_name):
+                if scan_all or _in_option_section(ss_name):
                     ss_start = i + 1
                     in_ss_option = True
                 else:
@@ -499,9 +522,9 @@ def _collect_description_lines(lines: list, start: int, end: int) -> list:
     return desc_lines
 
 
-def _parse_man_options(lines: list) -> list:
+def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
     """Parse options from man(7) format pages using .TP, .IP, .HP, and .PP+.RS/.RE."""
-    sections = _find_option_sections_man(lines)
+    sections = _find_option_sections_man(lines, scan_all=scan_all_sections)
     if not sections:
         return []
 
@@ -740,10 +763,13 @@ def _parse_man_options(lines: list) -> list:
                     "description": description,
                 })
 
-            # --- .PP + .RS/.RE pattern (git/DocBook style) ---
-            elif macro in (".PP", ".LP", ".P"):
-                # Look ahead: next non-empty line should be flag text,
-                # followed by .RS
+            # --- .PP/.sp + flag + .RS/.RE pattern ---
+            # Covers three styles:
+            #   1. git/DocBook: .PP + flag line + .RS + desc + .RE
+            #   2. util-linux/asciidoc: .sp + flag line + .RS + desc + .RE
+            #   3. docker/go-md2man: .PP + flag line + plain desc (no .RS)
+            elif macro in (".PP", ".LP", ".P", ".sp"):
+                # Look ahead: next non-empty line should be flag text
                 j = i + 1
                 flag_line = None
                 while j < sec_end:
@@ -768,49 +794,91 @@ def _parse_man_options(lines: list) -> list:
                         break
                     k += 1
 
-                if not has_rs:
-                    i += 1
-                    continue
-
                 parsed = _parse_flag_text(flag_line)
                 if not parsed.get("short") and not parsed.get("long") and not parsed.get("argument"):
                     i += 1
                     continue
 
-                # Skip to after .RS
-                i = k + 1
+                if has_rs:
+                    # Style 1/2: flag line + .RS + description + .RE
+                    i = k + 1
 
-                # Collect description until .RE
-                desc_lines = []
-                rs_depth = 1
-                while i < sec_end:
-                    dl = lines[i].rstrip("\n").strip()
-                    dm = dl.split()[0] if dl.split() else ""
+                    desc_lines = []
+                    rs_depth = 1
+                    while i < sec_end:
+                        dl = lines[i].rstrip("\n").strip()
+                        dm = dl.split()[0] if dl.split() else ""
 
-                    if dm == ".RS":
-                        rs_depth += 1
-                        i += 1
-                        continue
-                    if dm == ".RE":
-                        rs_depth -= 1
-                        if rs_depth <= 0:
+                        if dm == ".RS":
+                            rs_depth += 1
                             i += 1
+                            continue
+                        if dm == ".RE":
+                            rs_depth -= 1
+                            if rs_depth <= 0:
+                                i += 1
+                                break
+                            i += 1
+                            continue
+                        if dm == ".SH":
                             break
+                        desc_lines.append(dl)
                         i += 1
-                        continue
-                    if dm == ".SH":
-                        break
-                    desc_lines.append(dl)
-                    i += 1
 
-                description = _clean_roff_description("\n".join(desc_lines))
-                results.append({
-                    "short": parsed.get("short", []),
-                    "long": parsed.get("long", []),
-                    "expects_arg": parsed.get("expects_arg", False),
-                    "argument": parsed.get("argument"),
-                    "description": description,
-                })
+                    description = _clean_roff_description("\n".join(desc_lines))
+                    results.append({
+                        "short": parsed.get("short", []),
+                        "long": parsed.get("long", []),
+                        "expects_arg": parsed.get("expects_arg", False),
+                        "argument": parsed.get("argument"),
+                        "description": description,
+                    })
+
+                elif macro != ".sp":
+                    # Style 3 (docker/go-md2man): .PP + flag + plain desc
+                    # Only for .PP/.LP/.P — bare .sp without .RS is too
+                    # common as spacing to treat as an entry start.
+                    i = j + 1
+
+                    desc_lines = []
+                    while i < sec_end:
+                        dl = lines[i].rstrip("\n").strip()
+                        dm = dl.split()[0] if dl.split() else ""
+                        if dm in (".SH", ".SS", ".TP", ".IP", ".HP"):
+                            break
+                        if dm in (".PP", ".LP", ".P"):
+                            # Check if next content is a new flag entry
+                            nj = i + 1
+                            while nj < sec_end:
+                                nnl = lines[nj].rstrip("\n").strip()
+                                if nnl and not nnl.startswith(".\\\""):
+                                    break
+                                nj += 1
+                            if nj < sec_end:
+                                probe = _parse_flag_text(
+                                    lines[nj].rstrip("\n").strip()
+                                )
+                                if probe.get("short") or probe.get("long"):
+                                    break
+                            # Otherwise it's a paragraph break in desc
+                            desc_lines.append("")
+                            i += 1
+                            continue
+                        desc_lines.append(dl)
+                        i += 1
+
+                    description = _clean_roff_description("\n".join(desc_lines))
+                    results.append({
+                        "short": parsed.get("short", []),
+                        "long": parsed.get("long", []),
+                        "expects_arg": parsed.get("expects_arg", False),
+                        "argument": parsed.get("argument"),
+                        "description": description,
+                    })
+
+                else:
+                    # .sp without .RS — just spacing, skip
+                    i += 1
 
             # --- .SS subsection — continue parsing within it ---
             elif macro == ".SS":

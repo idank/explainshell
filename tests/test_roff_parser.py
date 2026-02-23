@@ -705,6 +705,199 @@ class TestParseOptionsReturnType(unittest.TestCase):
             self.assertFalse(opt.nested_cmd)
 
 
+# ---------------------------------------------------------------------------
+# Regression tests for audit fixes (section-name & format-pattern expansion)
+# ---------------------------------------------------------------------------
+
+
+class TestParseCurl(unittest.TestCase):
+    """curl.1.gz — .IP pattern in ALL OPTIONS section (section-name miss)."""
+
+    def setUp(self):
+        self.opts = parse_options(_gz("curl.1.gz"))
+
+    def test_finds_many_options(self):
+        self.assertGreater(len(self.opts), 200)
+
+    def test_has_verbose(self):
+        longs = {f for o in self.opts for f in o.long}
+        self.assertIn("--verbose", longs)
+
+    def test_has_data(self):
+        longs = {f for o in self.opts for f in o.long}
+        self.assertIn("--data", longs)
+
+    def test_has_output(self):
+        longs = {f for o in self.opts for f in o.long}
+        self.assertIn("--output", longs)
+
+
+class TestParseNmap(unittest.TestCase):
+    """nmap.1.gz — .PP+.RS/.RE in non-option-named sections (all-sections fallback)."""
+
+    def setUp(self):
+        self.opts = parse_options(_gz("nmap.1.gz"))
+
+    def test_finds_many_options(self):
+        self.assertGreater(len(self.opts), 50)
+
+    def test_has_sn(self):
+        shorts = {f for o in self.opts for f in o.short}
+        self.assertIn("-sn", shorts)
+
+    def test_has_ipv6(self):
+        shorts = {f for o in self.opts for f in o.short}
+        self.assertIn("-6", shorts)
+
+    def test_has_exclude(self):
+        longs = {f for o in self.opts for f in o.long}
+        self.assertIn("--exclude", longs)
+
+
+class TestParseJq(unittest.TestCase):
+    """jq.1.gz — .TP pattern in INVOKING JQ section (all-sections fallback)."""
+
+    def setUp(self):
+        self.opts = parse_options(_gz("jq.1.gz"))
+
+    def test_finds_options(self):
+        self.assertGreater(len(self.opts), 10)
+
+    def test_has_null_input(self):
+        longs = {f for o in self.opts for f in o.long}
+        self.assertIn("--null-input", longs)
+
+    def test_has_raw_output(self):
+        longs = {f for o in self.opts for f in o.long}
+        self.assertIn("--raw-output", longs)
+
+
+class TestParseEbookConvert(unittest.TestCase):
+    """ebook-convert.1.gz — .TP in *INPUT/*OUTPUT OPTIONS sections (section-name miss)."""
+
+    def setUp(self):
+        self.opts = parse_options(_gz("ebook-convert.1.gz"))
+
+    def test_finds_many_options(self):
+        self.assertGreater(len(self.opts), 200)
+
+    def test_has_input_encoding(self):
+        longs = {f for o in self.opts for f in o.long}
+        self.assertIn("--input-encoding", longs)
+
+
+class TestParsePs(unittest.TestCase):
+    """ps.1.gz — .TP in SIMPLE PROCESS SELECTION etc. (all-sections fallback)."""
+
+    def setUp(self):
+        self.opts = parse_options(_gz("ps.1.gz"))
+
+    def test_finds_many_options(self):
+        self.assertGreater(len(self.opts), 30)
+
+    def test_has_A(self):
+        shorts = {f for o in self.opts for f in o.short}
+        self.assertIn("-A", shorts)
+
+    def test_has_e(self):
+        shorts = {f for o in self.opts for f in o.short}
+        self.assertIn("-e", shorts)
+
+
+class TestParseSu(unittest.TestCase):
+    """su.1.gz — .sp + flag + .RS/.RE pattern (util-linux/asciidoc style)."""
+
+    def setUp(self):
+        self.opts = parse_options(_gz("su.1.gz"))
+
+    def test_finds_options(self):
+        self.assertGreater(len(self.opts), 5)
+
+    def test_has_command(self):
+        longs = {f for o in self.opts for f in o.long}
+        self.assertIn("--command", longs)
+
+    def test_has_login(self):
+        longs = {f for o in self.opts for f in o.long}
+        self.assertIn("--login", longs)
+
+    def test_command_expects_arg(self):
+        for opt in self.opts:
+            if "--command" in opt.long:
+                self.assertTrue(opt.expects_arg)
+                break
+        else:
+            self.fail("--command not found")
+
+
+class TestParseMore(unittest.TestCase):
+    """more.1.gz — .sp + flag + .RS/.RE pattern (util-linux/asciidoc style)."""
+
+    def setUp(self):
+        self.opts = parse_options(_gz("more.1.gz"))
+
+    def test_finds_options(self):
+        self.assertGreater(len(self.opts), 5)
+
+    def test_has_silent(self):
+        longs = {f for o in self.opts for f in o.long}
+        self.assertIn("--silent", longs)
+
+
+class TestParseDocker(unittest.TestCase):
+    """docker.1.gz — .PP + flag + plain description (go-md2man style)."""
+
+    def setUp(self):
+        self.opts = parse_options(_gz("docker.1.gz"))
+
+    def test_finds_options(self):
+        self.assertGreater(len(self.opts), 5)
+
+    def test_has_debug(self):
+        longs = {f for o in self.opts for f in o.long}
+        self.assertIn("--debug", longs)
+
+    def test_has_host(self):
+        longs = {f for o in self.opts for f in o.long}
+        self.assertIn("--host", longs)
+
+
+class TestParseLogger(unittest.TestCase):
+    """logger.1.gz — .sp + flag + .RS/.RE pattern (util-linux/asciidoc style)."""
+
+    def setUp(self):
+        self.opts = parse_options(_gz("logger.1.gz"))
+
+    def test_finds_options(self):
+        self.assertGreater(len(self.opts), 10)
+
+    def test_has_udp(self):
+        longs = {f for o in self.opts for f in o.long}
+        self.assertIn("--udp", longs)
+
+    def test_has_file(self):
+        longs = {f for o in self.opts for f in o.long}
+        self.assertIn("--file", longs)
+
+
+class TestParseTaskset(unittest.TestCase):
+    """taskset.1.gz — .sp + flag + .RS/.RE pattern (util-linux/asciidoc style)."""
+
+    def setUp(self):
+        self.opts = parse_options(_gz("taskset.1.gz"))
+
+    def test_finds_options(self):
+        self.assertGreater(len(self.opts), 3)
+
+    def test_has_all_tasks(self):
+        longs = {f for o in self.opts for f in o.long}
+        self.assertIn("--all-tasks", longs)
+
+    def test_has_cpu_list(self):
+        longs = {f for o in self.opts for f in o.long}
+        self.assertIn("--cpu-list", longs)
+
+
 class TestParseOptionsEdgeCases(unittest.TestCase):
     def test_nonexistent_file(self):
         result = parse_options("/nonexistent/path.1.gz")
