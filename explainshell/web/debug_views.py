@@ -2,7 +2,7 @@ import logging
 
 from flask import render_template, request, abort, redirect, url_for, json
 
-from explainshell import legacy_manager as manager, config, store
+from explainshell import config, store
 from explainshell.web import app, helpers
 
 logger = logging.getLogger(__name__)
@@ -38,8 +38,7 @@ def _convert_value(value):
 
 @app.route("/debug/tag/<source>", methods=["GET", "POST"])
 def tag(source):
-    mngr = manager.Manager(config.DB_PATH, [], False, False)
-    s = mngr.store
+    s = store.Store(config.DB_PATH)
     m = s.find_man_page(source)[0]
     assert m
 
@@ -71,7 +70,8 @@ def tag(source):
             m.nested_cmd = True
         else:
             m.nested_cmd = False
-        m = mngr.edit(m, m_paragraphs)
+        m.paragraphs = m_paragraphs
+        m = s.update_man_page(m)
         if m:
             return redirect(url_for("explain", cmd=m.name))
         else:

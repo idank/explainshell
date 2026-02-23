@@ -6,7 +6,6 @@ Usage:
     python tools/migrate_mongo_to_sqlite.py \
         --manpage /tmp/mongo_export/manpage.json \
         --mapping /tmp/mongo_export/mapping.json \
-        --classifier /tmp/mongo_export/classifier.json \
         [--db explainshell.db]
 """
 
@@ -42,12 +41,6 @@ CREATE TABLE IF NOT EXISTS mapping (
 
 CREATE INDEX IF NOT EXISTS idx_mapping_src ON mapping(src);
 CREATE INDEX IF NOT EXISTS idx_mapping_dst ON mapping(dst);
-
-CREATE TABLE IF NOT EXISTS classifier_manpage (
-    id         INTEGER PRIMARY KEY,
-    name       TEXT NOT NULL UNIQUE,
-    paragraphs TEXT NOT NULL DEFAULT '[]'
-);
 """
 
 
@@ -83,7 +76,7 @@ def _para_to_store(p):
     }
 
 
-def migrate(manpage_file, mapping_file, classifier_file, db_path):
+def migrate(manpage_file, mapping_file, db_path):
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
@@ -180,42 +173,14 @@ def migrate(manpage_file, mapping_file, classifier_file, db_path):
     logger.info("mappings: inserted=%d skipped=%d", inserted, skipped)
 
     # ------------------------------------------------------------------ #
-    # 3. classifier_manpage                                                #
-    # ------------------------------------------------------------------ #
-    logger.info("Migrating classifier from %s …", classifier_file)
-    with open(classifier_file) as fh:
-        lines = fh.readlines()
-
-    inserted = skipped = 0
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        doc = json.loads(line)
-        paragraphs = [_para_to_store(p) for p in doc.get("paragraphs", [])]
-        try:
-            conn.execute(
-                "INSERT INTO classifier_manpage(name, paragraphs) VALUES (?, ?)",
-                (doc["name"], json.dumps(paragraphs)),
-            )
-            inserted += 1
-        except sqlite3.IntegrityError:
-            skipped += 1
-
-    conn.commit()
-    logger.info("classifier: inserted=%d skipped=%d", inserted, skipped)
-
-    # ------------------------------------------------------------------ #
-    # 4. verify                                                            #
+    # 3. verify                                                            #
     # ------------------------------------------------------------------ #
     (mp_count,) = conn.execute("SELECT COUNT(*) FROM manpage").fetchone()
     (map_count,) = conn.execute("SELECT COUNT(*) FROM mapping").fetchone()
-    (cls_count,) = conn.execute("SELECT COUNT(*) FROM classifier_manpage").fetchone()
     logger.info(
-        "Final counts — manpage: %d, mapping: %d, classifier_manpage: %d",
+        "Final counts — manpage: %d, mapping: %d",
         mp_count,
         map_count,
-        cls_count,
     )
     conn.close()
     return True
@@ -225,11 +190,10 @@ def main():
     parser = argparse.ArgumentParser(description="Migrate MongoDB exports to SQLite")
     parser.add_argument("--manpage", required=True, help="Path to manpage.json export")
     parser.add_argument("--mapping", required=True, help="Path to mapping.json export")
-    parser.add_argument("--classifier", required=True, help="Path to classifier.json export")
     parser.add_argument("--db", default="explainshell.db", help="SQLite DB path (default: explainshell.db)")
     args = parser.parse_args()
 
-    ok = migrate(args.manpage, args.mapping, args.classifier, args.db)
+    ok = migrate(args.manpage, args.mapping, args.db)
     sys.exit(0 if ok else 1)
 
 

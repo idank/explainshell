@@ -40,31 +40,7 @@ CREATE TABLE IF NOT EXISTS mapping (
 CREATE INDEX IF NOT EXISTS idx_mapping_src ON mapping(src);
 CREATE INDEX IF NOT EXISTS idx_mapping_dst ON mapping(dst);
 
--- Manually tagged paragraphs used to train the options-vs-text classifier.
-CREATE TABLE IF NOT EXISTS classifier_manpage (
-    id         INTEGER PRIMARY KEY,
-    name       TEXT NOT NULL UNIQUE,
-    paragraphs TEXT NOT NULL DEFAULT '[]'
-);
 """
-
-
-class ClassifierManpage(collections.namedtuple("ClassifierManpage", "name paragraphs")):
-    """a man page that had its paragraphs manually tagged as containing options
-    or not"""
-
-    @staticmethod
-    def from_store(d):
-        m = ClassifierManpage(
-            d["name"], [Paragraph.from_store(p) for p in json.loads(d["paragraphs"])]
-        )
-        return m
-
-    def to_store(self):
-        return {
-            "name": self.name,
-            "paragraphs": json.dumps([p.to_store() for p in self.paragraphs]),
-        }
 
 
 class Paragraph:
@@ -313,10 +289,9 @@ class ManPage:
 class Store:
     """read/write processed man pages from sqlite
 
-    we use three tables:
-    1) classifier_manpage - contains manually tagged paragraphs from man pages
-    2) manpage - contains a processed man page
-    3) mapping - contains (name, manpageid, score) tuples
+    we use two tables:
+    1) manpage - contains a processed man page
+    2) mapping - contains (name, manpageid, score) tuples
     """
 
     def __init__(self, db_path=config.DB_PATH):
@@ -336,17 +311,12 @@ class Store:
         if not confirm:
             return
 
-        logger.info("dropping mapping, manpage, classifier_manpage tables")
+        logger.info("dropping mapping, manpage tables")
         self._conn.executescript("""
             DELETE FROM mapping;
             DELETE FROM manpage;
-            DELETE FROM classifier_manpage;
         """)
         self._conn.commit()
-
-    def training_set(self):
-        for row in self._conn.execute("SELECT * FROM classifier_manpage"):
-            yield ClassifierManpage.from_store(dict(row))
 
     def __contains__(self, name):
         row = self._conn.execute(
