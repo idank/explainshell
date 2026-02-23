@@ -412,10 +412,9 @@ class TestExtractIntegration(unittest.TestCase):
 class TestLlmManagerDryRun(unittest.TestCase):
     """Tests for --dry-run: LLM is called, DB is not written."""
 
-    def _make_args(self, dry_run=True, overwrite=False, mode="llm"):
+    def _make_args(self, dry_run=True, overwrite=False, mode="llm:test-model"):
         args = argparse.Namespace(
             mode=mode,
-            model="test-model",
             db="/tmp/test.db",
             overwrite=overwrite,
             drop=False,

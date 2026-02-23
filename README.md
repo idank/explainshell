@@ -8,11 +8,9 @@ explaining a given command-line by matching each argument to the relevant help t
 explainshell is built from the following components:
 
 1. man page reader which converts a given man page from raw format to html (manpage.py)
-2. classifier which goes through every paragraph in the man page and classifies
-   it as contains options or not (algo/classifier.py)
-3. an options extractor that scans classified paragraphs and looks for options (options.py)
-4. a storage backend that saves processed man pages to mongodb (store.py)
-5. a matcher that walks the command's AST (parsed by [bashlex](https://github.com/idank/bashlex)) and contextually matches each node
+2. an options extractor that parses roff macros or uses an LLM to extract options (source_extractor.py, llm_extractor.py)
+3. a storage backend that saves processed man pages to sqlite (store.py)
+4. a matcher that walks the command's AST (parsed by [bashlex](https://github.com/idank/bashlex)) and contextually matches each node
    to the relevant help text (matcher.py)
 
 When querying explainshell, it:
@@ -73,19 +71,7 @@ OK (SKIP=9)
 Use the manager to parse and save a gzipped man page in raw format:
 
 ```ShellSession
-$ docker-compose exec -T web bash -c "PYTHONPATH=. python explainshell/manager.py --log info /usr/share/man/man1/echo.1.gz"
-INFO:explainshell.store:creating store, db = 'explainshell_tests', host = 'mongodb://localhost'
-INFO:explainshell.algo.classifier:train on 994 instances
-INFO:explainshell.manager:handling manpage echo (from /tmp/es/manpages/1/echo.1.gz)
-INFO:explainshell.store:looking up manpage in mapping with src 'echo'
-INFO:explainshell.manpage:executing '/tmp/es/tools/w3mman2html.cgi local=%2Ftmp%2Fes%2Fmanpages%2F1%2Fecho.1.gz'
-INFO:explainshell.algo.classifier:classified <paragraph 3, DESCRIPTION: '-n     do not output the trailing newlin'> (0.991381) as an option paragraph
-INFO:explainshell.algo.classifier:classified <paragraph 4, DESCRIPTION: '-e     enable interpretation of backslash escape'> (0.996904) as an option paragraph
-INFO:explainshell.algo.classifier:classified <paragraph 5, DESCRIPTION: '-E     disable interpretation of backslash escapes (default'> (0.998640) as an option paragraph
-INFO:explainshell.algo.classifier:classified <paragraph 6, DESCRIPTION: '--help display this help and exi'> (0.999215) as an option paragraph
-INFO:explainshell.algo.classifier:classified <paragraph 7, DESCRIPTION: '--version'> (0.999993) as an option paragraph
-INFO:explainshell.store:inserting mapping (alias) echo -> echo (52207a1fa9b52e42fb59df36) with score 10
-successfully added echo
+$ python -m explainshell.manager --mode source /usr/share/man/man1/echo.1.gz
 ```
 
 Note that if you've setup using the docker instructions above, echo will already be in the database.
