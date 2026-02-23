@@ -485,7 +485,7 @@ class TestRealLlm(unittest.TestCase):
             shutil.copy(src, self.ECHO_GZ)
 
     def test_echo_manpage(self):
-        model = os.environ.get("LLM_MODEL", "claude-sonnet-4-6")
+        model = os.environ.get("LLM_MODEL", "gemini/gemini-3-flash-preview")
         mp = extract(self.ECHO_GZ, model)
         flags = set()
         for opt in mp.options:
