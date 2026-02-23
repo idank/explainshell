@@ -9,10 +9,7 @@ from explainshell.roff_parser import (
     _clean_roff_description,
     _detect_dialect,
     _parse_flag_text,
-    _parse_man_options,
-    _parse_mdoc_options,
     _parse_roff_args,
-    _read_roff,
     parse_options,
 )
 
@@ -193,7 +190,6 @@ class TestDescriptionCleaningIntegration(unittest.TestCase):
         return [(o.short + o.long, o.text) for o in opts]
 
     def _assert_no_roff_macros(self, gz_name):
-        import re
         for flags, desc in self._all_descriptions(gz_name):
             for line in desc.split("\n"):
                 line = line.strip()
@@ -240,7 +236,7 @@ class TestDescriptionCleaningIntegration(unittest.TestCase):
         """Lines within a paragraph should be joined — no mid-sentence breaks."""
         for flags, desc in self._all_descriptions("find.1.gz"):
             for para in desc.split("\n\n"):
-                lines = [l for l in para.split("\n") if l.strip()]
+                lines = [line for line in para.split("\n") if line.strip()]
                 if not lines:
                     continue
                 self.assertEqual(
