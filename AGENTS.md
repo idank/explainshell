@@ -10,7 +10,7 @@ A web tool that parses man pages and explains command-line arguments by matching
 
 - Python 3.12, Flask, SQLite, bashlex, LiteLLM
 - Linting: ruff
-- Testing: pytest (unit + doctests), JS Playwright Test (e2e)
+- Testing: pytest (unit + doctests + parsing regression), JS Playwright Test (e2e)
 - Dependencies: `requirements.txt` (main), `package.json` (Playwright e2e)
 
 ## Common Commands
@@ -37,7 +37,13 @@ make e2e-update
 # Run LLM integration test (requires API key in .env)
 make test-llm
 
-# Run all tests (unit + e2e)
+# Run parsing regression tests (requires DB)
+make parsing-regression
+
+# Update DB to accept current parser output for regression manpages
+make parsing-update
+
+# Run all tests (unit + e2e + parsing regression)
 make tests-all
 
 # Run web server locally
@@ -61,6 +67,7 @@ python -m explainshell.manager --mode source /path/to/manpage.1.gz
   - `config.py` - Configuration (DB_PATH, HOST_IP, DEBUG)
 - `tests/` - Unit tests (`test_*.py`), fixtures
 - `tests/e2e/` - Playwright e2e tests and snapshots
+- `tests/regression/` - Parsing regression tests and manpage .gz fixtures
 - `runserver.py` - Flask app entry point
 
 ## Architecture
@@ -100,5 +107,9 @@ Uses bashlex AST visitor pattern:
 - Doctests embedded in `util.py`, `manpage.py`
 - E2E tests and snapshots live in `tests/e2e/`
 - E2E snapshot updates via `make e2e-update`
+- Parsing regression tests live in `tests/regression/` with .gz manpage fixtures in `tests/regression/manpages/`
+- Parsing regression compares re-parsed manpages against DB; run via `make parsing-regression`
+- To accept parser changes into the DB: `make parsing-update`, then re-run `make parsing-regression`
 - **Always run `make tests` after making changes** to verify nothing is broken
+- **Always run `make parsing-regression` after changing `roff_parser.py`, `source_extractor.py`, or `manager.py`**
 - **Always lint the codebase after making changes**
