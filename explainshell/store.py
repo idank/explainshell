@@ -52,8 +52,7 @@ class Paragraph:
         self.section = section
         self.is_option = is_option
 
-        if not isinstance(self.text, str):
-            self.text = self.text.decode("utf-8")
+
 
     def clean_text(self):
         t = re.sub(r"<[^>]+>", "", self.text)
@@ -64,7 +63,7 @@ class Paragraph:
     @staticmethod
     def from_store(d):
         p = Paragraph(
-            d.get("idx", 0), d["text"].encode("utf8"), d["section"], d["is_option"]
+            d.get("idx", 0), d["text"], d["section"], d["is_option"]
         )
         return p
 
@@ -232,13 +231,10 @@ class ManPage:
                     return o_tmp
 
     def to_store(self):
-        synopsis = self.synopsis
-        if isinstance(synopsis, bytes):
-            synopsis = synopsis.decode("utf-8")
         return {
             "source": self.source,
             "name": self.name,
-            "synopsis": synopsis,
+            "synopsis": self.synopsis,
             "paragraphs": json.dumps([p.to_store() for p in self.paragraphs]),
             "aliases": json.dumps(self.aliases),
             "partial_match": int(bool(self.partial_match)),
@@ -257,9 +253,7 @@ class ManPage:
             paragraphs.append(pp)
 
         synopsis = d["synopsis"]
-        if synopsis:
-            synopsis = synopsis.encode("utf8")
-        else:
+        if not synopsis:
             synopsis = help_constants.NO_SYNOPSIS
 
         partial_match = bool(d["partial_match"])
