@@ -111,15 +111,15 @@ def explain_program(program, store):
     program = mp.name_section
 
     synopsis = mp.synopsis
-    if synopsis:
-        synopsis = synopsis.decode("utf-8")
+    if not synopsis:
+        synopsis = None
 
     mp = {
         "source": mp.source[:-3],
         "section": mp.section,
         "program": program,
         "synopsis": synopsis,
-        "options": [o.text.decode("utf-8") for o in mp.options],
+        "options": [o.text for o in mp.options],
     }
 
     suggestions = []
@@ -170,8 +170,6 @@ def explain_cmd(command, store):
         help_class = f"help-{len(text_ids)}"
 
         text = str(m.text)
-        if isinstance(m.text, bytes):
-            text = m.text.decode("utf-8")
         if len(text.replace("None", "")) > 0:
             help_class = text_ids.setdefault(text, help_class)
         else:
@@ -197,8 +195,6 @@ def explain_cmd(command, store):
             help_class = f"help-{len(text_ids)}"
 
             text = str(m.text)
-            if isinstance(m.text, bytes):
-                text = m.text.decode("utf-8")
 
             if len(text.replace("None", "")) > 0:
                 help_class = text_ids.setdefault(text, help_class)
