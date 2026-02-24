@@ -53,9 +53,15 @@ def _fmt_elapsed(seconds):
 
 
 def _normalize(field, val):
-    """Normalize a field value so that None and False compare equal."""
+    """Normalize a field value so that None and False compare equal.
+
+    Also sorts alias lists so that non-deterministic ordering from lexgrog
+    does not produce spurious diffs.
+    """
     if field in _FALSY_EQUIVALENT and not val:
         return None
+    if field == "aliases" and isinstance(val, list):
+        return sorted(val)
     return val
 
 
@@ -131,28 +137,93 @@ def _print_option_detail(opt, prefix="", color=""):
     print(_RESET, end="")
 
 
-def _diff_manpage(stored_mp, fresh_mp):
-    """Print a unified-diff-style comparison between stored and fresh ManPage."""
-    has_diff = False
+def compare_manpages(stored_mp, fresh_mp, skip_fields=()):
+    """Compare two ManPage objects and return a list of structured diff entries.
+
+    Each entry is a dict with:
+      - "type": "field" | "option_changed" | "option_added" | "option_removed"
+      - "label": human-readable label
+      - "details": list of (field, old_val, new_val) tuples (for field/option_changed)
+                   or option object (for added/removed)
+
+    *skip_fields* is an optional iterable of top-level field names to ignore.
+    """
+    diffs = []
+    skip = set(skip_fields)
 
     # Compare top-level fields.
     for field in _MP_FIELDS:
+        if field in skip:
+            continue
         old_val = _normalize(field, getattr(stored_mp, field))
         new_val = _normalize(field, getattr(fresh_mp, field))
         if old_val != new_val:
-            has_diff = True
-            print(f"  {_BOLD}{field}:{_RESET}")
-            text_diff = _fmt_text_diff(old_val, new_val, "    ")
-            if text_diff:
-                print(text_diff)
-            else:
-                print(_fmt_value(old_val, "    - ", _RED))
-                print(_fmt_value(new_val, "    + ", _GREEN))
+            diffs.append({
+                "type": "field",
+                "label": field,
+                "details": [(field, old_val, new_val)],
+            })
 
     # Build option indexes keyed by _option_key.
     stored_opts = {_option_key(o): o for o in stored_mp.options}
     fresh_opts = {_option_key(o): o for o in fresh_mp.options}
 
+    all_keys = list(dict.fromkeys(list(stored_opts.keys()) + list(fresh_opts.keys())))
+
+    for key in all_keys:
+        s_opt = stored_opts.get(key)
+        f_opt = fresh_opts.get(key)
+
+        if s_opt and f_opt:
+            opt_diffs = []
+            for field in _OPT_FIELDS:
+                old_val = _normalize(field, getattr(s_opt, field))
+                new_val = _normalize(field, getattr(f_opt, field))
+                if old_val != new_val:
+                    opt_diffs.append((field, old_val, new_val))
+            if opt_diffs:
+                diffs.append({
+                    "type": "option_changed",
+                    "label": _fmt_flags(s_opt),
+                    "details": opt_diffs,
+                })
+        elif f_opt:
+            diffs.append({
+                "type": "option_added",
+                "label": _fmt_flags(f_opt),
+                "details": f_opt,
+            })
+        else:
+            diffs.append({
+                "type": "option_removed",
+                "label": _fmt_flags(s_opt),
+                "details": s_opt,
+            })
+
+    return diffs
+
+
+def _diff_manpage(stored_mp, fresh_mp):
+    """Print a unified-diff-style comparison between stored and fresh ManPage."""
+    diffs = compare_manpages(stored_mp, fresh_mp)
+
+    # Separate field-level diffs for display.
+    field_diffs = [d for d in diffs if d["type"] == "field"]
+
+    for d in field_diffs:
+        field = d["label"]
+        _, old_val, new_val = d["details"][0]
+        print(f"  {_BOLD}{field}:{_RESET}")
+        text_diff = _fmt_text_diff(old_val, new_val, "    ")
+        if text_diff:
+            print(text_diff)
+        else:
+            print(_fmt_value(old_val, "    - ", _RED))
+            print(_fmt_value(new_val, "    + ", _GREEN))
+
+    # Rebuild changed/added/removed lists for option display, including unchanged.
+    stored_opts = {_option_key(o): o for o in stored_mp.options}
+    fresh_opts = {_option_key(o): o for o in fresh_mp.options}
     all_keys = list(dict.fromkeys(list(stored_opts.keys()) + list(fresh_opts.keys())))
 
     changed_options = []
@@ -162,18 +233,14 @@ def _diff_manpage(stored_mp, fresh_mp):
     for key in all_keys:
         s_opt = stored_opts.get(key)
         f_opt = fresh_opts.get(key)
-
         if s_opt and f_opt:
-            diffs = []
+            opt_diffs = []
             for field in _OPT_FIELDS:
                 old_val = _normalize(field, getattr(s_opt, field))
                 new_val = _normalize(field, getattr(f_opt, field))
                 if old_val != new_val:
-                    diffs.append((field, old_val, new_val))
-            if diffs:
-                changed_options.append((_fmt_flags(s_opt), diffs))
-            else:
-                changed_options.append((_fmt_flags(s_opt), None))
+                    opt_diffs.append((field, old_val, new_val))
+            changed_options.append((_fmt_flags(s_opt), opt_diffs if opt_diffs else None))
         elif f_opt:
             added_options.append(f_opt)
         else:
@@ -182,13 +249,12 @@ def _diff_manpage(stored_mp, fresh_mp):
     if changed_options or added_options or removed_options:
         print(f"  {_BOLD}options:{_RESET}")
 
-    for label, diffs in changed_options:
-        if diffs is None:
+    for label, opt_field_diffs in changed_options:
+        if opt_field_diffs is None:
             print(f"    {_DIM}{label}  (unchanged){_RESET}")
         else:
-            has_diff = True
             print(f"    {_CYAN}{_BOLD}{label}{_RESET}")
-            for field, old_val, new_val in diffs:
+            for field, old_val, new_val in opt_field_diffs:
                 print(f"      {field}:")
                 text_diff = _fmt_text_diff(old_val, new_val, "        ")
                 if text_diff:
@@ -198,16 +264,14 @@ def _diff_manpage(stored_mp, fresh_mp):
                     print(_fmt_value(new_val, "        + ", _GREEN))
 
     for opt in added_options:
-        has_diff = True
         print(f"    {_GREEN}{_BOLD}+ {_fmt_flags(opt)}   (added){_RESET}")
         _print_option_detail(opt, prefix="    ", color=_GREEN)
 
     for opt in removed_options:
-        has_diff = True
         print(f"    {_RED}{_BOLD}- {_fmt_flags(opt)}   (removed){_RESET}")
         _print_option_detail(opt, prefix="    ", color=_RED)
 
-    if not has_diff:
+    if not diffs:
         print(f"  {_DIM}(no changes){_RESET}")
 
 
@@ -225,7 +289,7 @@ def _collect_gz_files(paths):
         if os.path.isdir(path):
             result.extend(
                 os.path.abspath(f)
-                for f in glob.glob(os.path.join(path, "*.gz"))
+                for f in glob.glob(os.path.join(path, "**", "*.gz"), recursive=True)
             )
         else:
             result.append(os.path.abspath(path))
