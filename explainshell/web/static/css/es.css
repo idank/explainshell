@@ -86,19 +86,6 @@ a {
     height: 40px;
 }
 
-.taggernooption {
-    background-color: #f8c7c7;
-}
-
-.taggeroption {
-    background-color: #caf8c7;
-}
-
-.taggercurrent {
-    border-color: red;
-    border-width: 2px;
-}
-
 .dropdown-menu {
     font-size: 14px;
 }
