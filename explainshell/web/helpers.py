@@ -1,11 +1,5 @@
 
 
-def convert_paragraphs(manpage):
-    for p in manpage.paragraphs:
-        p.text = p.text.decode("utf-8")
-    return manpage
-
-
 def suggestions(matches, command):
     """enrich command matches with links to other man pages with the
     same name"""
