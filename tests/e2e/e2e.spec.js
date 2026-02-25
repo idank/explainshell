@@ -56,7 +56,7 @@ test("hover highlights help box", async ({ page }) => {
   // Wait for the hover effect to apply
   await page.waitForTimeout(300);
 
-  await expect(page).toHaveScreenshot("explain-hover.png", { fullPage: true });
+  await expect(page).toHaveScreenshot("explain-hover.png");
 });
 
 test("unicode characters in echo command", async ({ page }) => {
