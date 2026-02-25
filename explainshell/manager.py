@@ -21,8 +21,8 @@ from explainshell import config, errors, llm_extractor, source_extractor, store
 
 logger = logging.getLogger(__name__)
 
-# ManPage-level fields to compare in diff mode.
-_MP_FIELDS = ("name", "synopsis", "aliases", "nested_cmd", "multi_cmd", "partial_match")
+# ParsedManpage-level fields to compare in diff mode.
+_MP_FIELDS = ("name", "synopsis", "aliases", "nested_cmd", "multi_cmd", "dashless_opts")
 
 # Per-option fields to compare in diff mode.
 _OPT_FIELDS = ("expects_arg", "argument", "nested_cmd", "text")
@@ -138,7 +138,7 @@ def _print_option_detail(opt, prefix="", color=""):
 
 
 def compare_manpages(stored_mp, fresh_mp, skip_fields=()):
-    """Compare two ManPage objects and return a list of structured diff entries.
+    """Compare two ParsedManpage objects and return a list of structured diff entries.
 
     Each entry is a dict with:
       - "type": "field" | "option_changed" | "option_added" | "option_removed"
@@ -204,7 +204,7 @@ def compare_manpages(stored_mp, fresh_mp, skip_fields=()):
 
 
 def _diff_manpage(stored_mp, fresh_mp):
-    """Print a unified-diff-style comparison between stored and fresh ManPage."""
+    """Print a unified-diff-style comparison between stored and fresh ParsedManpage."""
     diffs = compare_manpages(stored_mp, fresh_mp)
 
     # Separate field-level diffs for display.
@@ -419,7 +419,7 @@ def main(args):
                 print(f"  aliases: {mp.aliases}")
                 print(f"  nested_cmd: {mp.nested_cmd}")
                 print(f"  multi_cmd: {mp.multi_cmd}")
-                print(f"  partial_match: {mp.partial_match}")
+                print(f"  dashless_opts: {mp.dashless_opts}")
                 print()
                 for i, opt in enumerate(mp.options):
                     if i > 0:

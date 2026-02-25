@@ -12,9 +12,8 @@ import textwrap
 from explainshell import store, config
 from explainshell.logger.logging_interceptor import InterceptHandler
 
-sp = store.Paragraph
 so = store.Option
-sm = store.ManPage
+sm = store.ParsedManpage
 
 BUILTINS = {}
 
@@ -25,7 +24,8 @@ def _add(names, synopsis, options):
     # explainshell, oh well)
     names.append(f"bash-{name}")
     BUILTINS[name] = sm(
-        "bash-%s.1.gz" % name, name, synopsis, options, [(name, 20) for name in names]
+        source="bash-%s.1.gz" % name, name=name, synopsis=synopsis,
+        options=options, aliases=[(name, 20) for name in names],
     )
 
 
@@ -34,18 +34,12 @@ _add(
     "the command does nothing",
     [
         so(
-            sp(
-                0,
-                """No  effect;  the command does nothing beyond expanding arguments and performing any specified redirections.  A zero
+            text="""No  effect;  the command does nothing beyond expanding arguments and performing any specified redirections.  A zero
 exit code  is returned.""",
-                "",
-                True,
-            ),
-            [],
-            [],
-            False,
-            True,
-            False,
+            short=[],
+            long=[],
+            expects_arg=False,
+            argument=True,
         )
     ],
 )
@@ -65,7 +59,7 @@ source = textwrap.dedent(
 _add(
     ["source", "."],
     "read and execute commands in the current shell",
-    [so(sp(0, source, "", True), [], [], False, True, False)],
+    [so(text=source, short=[], long=[], expects_arg=False, argument=True)],
 )
 
 _add(
@@ -73,17 +67,11 @@ _add(
     "exit from within a for, while, until, or select loop",
     [
         so(
-            sp(
-                0,
-                """If <u>n</u> is specified, break <u>n</u> levels.  <u>n</u> must be ≥ 1.  If <u>n</u> is greater than the  number  of enclosing loops, all enclosing loops are exited.  The return value is 0 unless <u>n</u> is not greater than or  equal  to 1.""",
-                "",
-                True,
-            ),
-            [],
-            [],
-            False,
-            True,
-            False,
+            text="""If <u>n</u> is specified, break <u>n</u> levels.  <u>n</u> must be ≥ 1.  If <u>n</u> is greater than the  number  of enclosing loops, all enclosing loops are exited.  The return value is 0 unless <u>n</u> is not greater than or  equal  to 1.""",
+            short=[],
+            long=[],
+            expects_arg=False,
+            argument=True,
         )
     ],
 )
@@ -93,9 +81,7 @@ _add(
     "display the  command  history  list  with  line numbers",
     [
         so(
-            sp(
-                0,
-                """<b>history</b> <b>[</b><u>n</u><b>]</b>
+            text="""<b>history</b> <b>[</b><u>n</u><b>]</b>
 <b>history</b> <b>-c</b>
 <b>history</b> <b>-d</b> <u>offset</u>
 <b>history</b> <b>-anrw</b> [<u>filename</u>]
@@ -108,137 +94,78 @@ and  not  null,  it is used as a format string for <u>strftime</u>(3) to display
 displayed  history entry.  No intervening blank is printed between the formatted time  stamp  and  the  history
 line.   If <u>filename</u>  is  supplied,  it  is  used as the name of the history file; if not, the  value  of
 <b>HISTFILE</b>  is  used.""",
-                "",
-                True,
-            ),
-            [],
-            [],
-            False,
-            True,
-            False,
+            short=[],
+            long=[],
+            expects_arg=False,
+            argument=True,
         ),
         so(
-            sp(
-                1,
-                "<b>-c</b>     Clear the history list by deleting all the entries.",
-                "",
-                True,
-            ),
-            ["-c"],
-            [],
-            False,
-            False,
-            False,
+            text="<b>-c</b>     Clear the history list by deleting all the entries.",
+            short=["-c"],
+            long=[],
+            expects_arg=False,
         ),
         so(
-            sp(
-                2,
-                textwrap.dedent(
-                    """              <b>-d</b> <u>offset</u>
+            text=textwrap.dedent(
+                """              <b>-d</b> <u>offset</u>
                      Delete the history entry at position <u>offset</u>."""
-                ),
-                "",
-                True,
             ),
-            ["-d"],
-            [],
-            "offset",
-            False,
-            False,
+            short=["-d"],
+            long=[],
+            expects_arg="offset",
         ),
         so(
-            sp(
-                3,
-                textwrap.dedent(
-                    """              <b>-a</b>     Append  the  ``new'' history lines (history lines entered since the beginning of the current <b>bash</b> session)
+            text=textwrap.dedent(
+                """              <b>-a</b>     Append  the  ``new'' history lines (history lines entered since the beginning of the current <b>bash</b> session)
                      to  the history file."""
-                ),
-                "",
-                True,
             ),
-            ["-a"],
-            [],
-            False,
-            False,
-            False,
+            short=["-a"],
+            long=[],
+            expects_arg=False,
         ),
         so(
-            sp(
-                4,
-                textwrap.dedent(
-                    """              <b>-n</b>     Read  the history lines not already read from the history file into the current  history  list.   These  are
+            text=textwrap.dedent(
+                """              <b>-n</b>     Read  the history lines not already read from the history file into the current  history  list.   These  are
                      lines appended  to  the history file since the beginning of the current <b>bash</b> session."""
-                ),
-                "",
-                True,
             ),
-            ["-n"],
-            [],
-            False,
-            False,
-            False,
+            short=["-n"],
+            long=[],
+            expects_arg=False,
         ),
         so(
-            sp(
-                5,
-                textwrap.dedent(
-                    """              <b>-r</b>     Read the contents of the history file and append them  to the current history list."""
-                ),
-                "",
-                True,
+            text=textwrap.dedent(
+                """              <b>-r</b>     Read the contents of the history file and append them  to the current history list."""
             ),
-            ["-r"],
-            [],
-            False,
-            False,
-            False,
+            short=["-r"],
+            long=[],
+            expects_arg=False,
         ),
         so(
-            sp(
-                6,
-                textwrap.dedent(
-                    """              <b>-w</b>     Write  the  current  history  list  to  the history file, overwriting the history file's contents."""
-                ),
-                "",
-                True,
+            text=textwrap.dedent(
+                """              <b>-w</b>     Write  the  current  history  list  to  the history file, overwriting the history file's contents."""
             ),
-            ["-w"],
-            [],
-            "filename",
-            False,
-            False,
+            short=["-w"],
+            long=[],
+            expects_arg="filename",
         ),
         so(
-            sp(
-                7,
-                textwrap.dedent(
-                    """              <b>-p</b>     Perform history substitution on the  following  <u>args</u>  and display  the  result  on  the  standard output.
+            text=textwrap.dedent(
+                """              <b>-p</b>     Perform history substitution on the  following  <u>args</u>  and display  the  result  on  the  standard output.
                      Does not store the results in the history list.  Each <u>arg</u> must  be quoted to disable normal history expansion."""
-                ),
-                "",
-                True,
             ),
-            ["-p"],
-            [],
-            "arg",
-            True,
-            False,
+            short=["-p"],
+            long=[],
+            expects_arg="arg",
+            nested_cmd=True,
         ),
         so(
-            sp(
-                8,
-                textwrap.dedent(
-                    """              <b>-s</b>     Store  the  <u>args</u>  in  the history list as a single entry.  The last command in the history list  is
+            text=textwrap.dedent(
+                """              <b>-s</b>     Store  the  <u>args</u>  in  the history list as a single entry.  The last command in the history list  is
                      removed  before the <u>args</u> are added."""
-                ),
-                "",
-                True,
             ),
-            ["-s"],
-            [],
-            "arg",
-            False,
-            False,
+            short=["-s"],
+            long=[],
+            expects_arg="arg",
         ),
     ],
 )

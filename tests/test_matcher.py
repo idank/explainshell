@@ -62,7 +62,7 @@ class test_matcher(unittest.TestCase):
 
         self.assertMatchSingle(cmd, s.find_man_page("baz")[0], matchedresult)
 
-    def test_partial_match_with_arguments(self):
+    def test_dashless_opts_with_arguments(self):
         cmd = "withargs arg"
         matchedresult = [
             (0, 8, "withargs synopsis", "withargs"),
