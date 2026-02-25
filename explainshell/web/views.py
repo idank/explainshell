@@ -1,5 +1,6 @@
 import logging
 import itertools
+import os
 import urllib
 import markupsafe
 
@@ -105,6 +106,24 @@ def explain_old(section, program):
             )
 
 
+def manpage_url(source):
+    """Resolve a manpage source path to an external URL, or None."""
+    basename = os.path.basename(source)
+    name_with_section = basename[:-3]  # remove .gz
+    name, section = name_with_section.rsplit(".", 1)
+
+    best_match = None
+    best_len = 0
+    for prefix, template in config.MANPAGE_URLS.items():
+        if source.startswith(prefix + "/") and len(prefix) > best_len:
+            best_match = template
+            best_len = len(prefix)
+
+    if best_match:
+        return best_match.format(section=section, name=name)
+    return None
+
+
 def explain_program(program, store):
     mps = store.find_man_page(program)
     mp = mps.pop(0)
@@ -114,12 +133,15 @@ def explain_program(program, store):
     if not synopsis:
         synopsis = None
 
+    url = manpage_url(mp.source)
+
     mp = {
-        "source": mp.source[:-3],
+        "source": os.path.basename(mp.source)[:-3],
         "section": mp.section,
         "program": program,
         "synopsis": synopsis,
         "options": [o.text for o in mp.options],
+        "url": url,
     }
 
     suggestions = []
@@ -217,7 +239,8 @@ def explain_cmd(command, store):
             if "." not in d["match"]:
                 d["match"] = f"{d['match']}({d['section']})"
             d["suggestions"] = cmd_group.suggestions
-            d["source"] = cmd_group.manpage.source[:-5]
+            d["source"] = cmd_group.manpage.name
+            d["url"] = manpage_url(cmd_group.manpage.source)
         matches.append(ln)
 
     matches = list(itertools.chain.from_iterable(matches))
