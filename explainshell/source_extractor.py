@@ -7,6 +7,7 @@ without using an LLM.
 Public API:
     extract(gz_path) -> store.ParsedManpage
     detect_dashless_opts(gz_path) -> bool
+    detect_nested_cmd(gz_path) -> bool
 """
 
 import gzip
@@ -104,6 +105,44 @@ def detect_dashless_opts(gz_path: str) -> bool:
     return False
 
 
+# Matches "command" as a standalone word, case-insensitive
+_COMMAND_WORD = re.compile(r"\bcommand\b", re.IGNORECASE)
+# Matches "command" inside angle brackets: <command>
+_COMMAND_ANGLE = re.compile(r"<command>", re.IGNORECASE)
+# Matches "command" as part of an option name: --foo-command, --command-foo
+_COMMAND_IN_OPT = re.compile(r"-\w*command\w*", re.IGNORECASE)
+
+
+def detect_nested_cmd(gz_path: str) -> bool:
+    """Detect whether a man page's positional args start a nested command.
+
+    Checks the SYNOPSIS section for a positional argument named 'command'.
+    Excludes angle-bracket patterns like <command> (git subcommand style).
+    """
+    try:
+        with gzip.open(gz_path, "rt", errors="replace") as f:
+            lines = f.readlines()
+    except Exception as e:
+        logger.warning("Failed to read %s for nested_cmd detection: %s", gz_path, e)
+        return False
+
+    synopsis_lines = _extract_section(lines, "SYNOPSIS")
+    for line in synopsis_lines:
+        cleaned = roff_parser.clean_roff(line)
+        if not _COMMAND_WORD.search(cleaned):
+            continue
+        # Exclude <command> (git-style subcommand pattern)
+        if _COMMAND_ANGLE.search(cleaned):
+            continue
+        # Strip option-name occurrences (e.g. --rsh-command) and recheck
+        stripped = _COMMAND_IN_OPT.sub("", cleaned)
+        if _COMMAND_WORD.search(stripped):
+            logger.info("nested_cmd: found 'command' in SYNOPSIS of %s", gz_path)
+            return True
+
+    return False
+
+
 def extract(gz_path: str) -> store.ParsedManpage:
     """Extract options from raw roff source.
 
@@ -127,4 +166,5 @@ def extract(gz_path: str) -> store.ParsedManpage:
         options=options,
         aliases=aliases,
         dashless_opts=detect_dashless_opts(gz_path),
+        nested_cmd=detect_nested_cmd(gz_path),
     )
