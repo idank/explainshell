@@ -17,6 +17,7 @@ moarcode/
 *.db
 *.db-shm
 *.db-wal
+!tests/regression/regression.db
 .claude/
 data/
 docs/

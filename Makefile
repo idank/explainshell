@@ -16,7 +16,7 @@ parsing-regression:
 	python -m pytest tests/regression/test_parsing_regression.py -v
 
 parsing-update:
-	python -m explainshell.manager --mode source --overwrite tests/regression/manpages/
+	python -m explainshell.manager --mode source --overwrite --db tests/regression/regression.db tests/regression/manpages/
 
 tests-all: lint tests e2e parsing-regression
 
