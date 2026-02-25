@@ -13,6 +13,11 @@ A web tool that parses man pages and explains command-line arguments by matching
 - Testing: pytest (unit + doctests + parsing regression), JS Playwright Test (e2e)
 - Dependencies: `requirements.txt` (main), `package.json` (Playwright e2e)
 
+## Environment
+
+- Python virtualenv: repo-local `.venv`
+- Activate with: `source .venv/bin/activate`
+
 ## Common Commands
 
 ```bash
@@ -58,7 +63,7 @@ python -m explainshell.manager --mode source /path/to/manpage.1.gz
 - `explainshell/` - Main package
   - `manager.py` - CLI entry point for man page processing (`python -m explainshell.manager`)
   - `matcher.py` - Core logic: walks bash AST and matches tokens to help text
-  - `store.py` - SQLite storage layer and data classes (ManPage, Option, Paragraph)
+  - `store.py` - SQLite storage layer and data classes (ParsedManpage, Option)
   - `llm_extractor.py` - LLM-based option extraction (via LiteLLM)
   - `source_extractor.py` - Direct roff parsing extractor
   - `roff_parser.py` - Roff macro parser (man/mdoc dialects)
@@ -85,13 +90,12 @@ Manager key flags: `--overwrite`, `--dry-run`, `--diff [db|modes]`, `--debug-dir
 ### Data Model (store.py)
 
 SQLite with two tables:
-- **manpage** - source (unique basename), name, synopsis, paragraphs (JSON), aliases, flags
+- **manpage** - source (unique basename), name, synopsis, options (JSON), aliases, flags
 - **mapping** - command name → manpage id lookup (many-to-one, with score for preference)
 
-Key classes:
-- `Paragraph` - text block with idx, text, section, is_option flag
-- `Option(Paragraph)` - extends Paragraph with short/long flag lists, expects_arg, argument, nested_cmd
-- `ManPage` - container with options/arguments properties and `find_option(flag)` lookup
+Key classes (Pydantic models):
+- `Option` - text, short/long flag lists, expects_arg, argument, nested_cmd
+- `ParsedManpage` - container with options/arguments properties and `find_option(flag)` lookup
 
 ### Command Matching (matcher.py)
 
@@ -110,6 +114,5 @@ Uses bashlex AST visitor pattern:
 - Parsing regression tests live in `tests/regression/` with .gz manpage fixtures in `tests/regression/manpages/`
 - Parsing regression compares re-parsed manpages against DB; run via `make parsing-regression`
 - To accept parser changes into the DB: `make parsing-update`, then re-run `make parsing-regression`
-- **Always run `make tests` after making changes** to verify nothing is broken
-- **Always run `make parsing-regression` after changing `roff_parser.py`, `source_extractor.py`, or `manager.py`**
+- **Always run ALL test suites before declaring tests pass**: `make tests`, `make e2e`, and `make parsing-regression`. Do not skip any.
 - **Always lint the codebase after making changes**
