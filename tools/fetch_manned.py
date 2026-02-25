@@ -259,18 +259,29 @@ def load_metadata(data_dir):
     return systems, english_locale_ids, mans, packages, pkg_versions
 
 
+def _is_standard_manpath(filename):
+    """Check if filename is under a standard man page directory.
+
+    Matches manned.org's is_standard_man_location() logic. Prefers man pages
+    installed to standard paths over application-specific directories (e.g.
+    fish, zsh).
+    """
+    return filename.startswith("/usr/share/man/man") or filename.startswith("/usr/local/man/man")
+
+
 def select_content_ids(data_dir, sections, english_locale_ids, mans,
                        packages, pkg_versions, matching_sys_ids):
     """
     Process the files table to select which content IDs to extract.
 
     Filters by distro and English locale. For each unique man page
-    (name+section), picks one content entry.
+    (name+section), picks one content entry, preferring entries from
+    standard man page paths (e.g. /usr/share/man/).
 
     Returns:
         content_to_manpages: dict mapping content_id -> [(name, section), ...]
     """
-    # Track seen (name, section) to deduplicate within the distro
+    # Track seen (name, section) -> (content_id, is_standard) to deduplicate
     seen = {}
 
     files_path = os.path.join(data_dir, "files.tsv")
@@ -285,6 +296,7 @@ def select_content_ids(data_dir, sections, english_locale_ids, mans,
         man_id = int(row[1])
         content_id = int(row[2])
         locale_id = int(row[4])
+        filename = row[6] if len(row) > 6 else ""
         count += 1
 
         # Filter: English locale only
@@ -314,8 +326,10 @@ def select_content_ids(data_dir, sections, english_locale_ids, mans,
             continue
 
         key = (name, section)
-        if key not in seen:
-            seen[key] = content_id
+        is_standard = _is_standard_manpath(filename)
+        prev = seen.get(key)
+        if prev is None or (is_standard and not prev[1]):
+            seen[key] = (content_id, is_standard)
 
     logger.info(
         "Processed %d file entries: %d skipped (locale), %d skipped (distro), "
@@ -325,7 +339,7 @@ def select_content_ids(data_dir, sections, english_locale_ids, mans,
 
     # Build content_id -> [(name, section), ...] mapping
     content_to_manpages = defaultdict(list)
-    for (name, section), content_id in seen.items():
+    for (name, section), (content_id, _) in seen.items():
         content_to_manpages[content_id].append((name, section))
 
     logger.info("Need %d unique content entries", len(content_to_manpages))
