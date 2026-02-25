@@ -8,6 +8,8 @@ import logging
 import re
 import sqlite3
 
+from pydantic import BaseModel
+
 from explainshell import errors, help_constants, util, config
 
 logger = logging.getLogger(__name__)
@@ -18,9 +20,9 @@ CREATE TABLE IF NOT EXISTS manpage (
     source        TEXT    NOT NULL UNIQUE,  -- basename of the .gz source file
     name          TEXT    NOT NULL,         -- command name (e.g. 'git')
     synopsis      TEXT,                     -- one-line synopsis from the man page
-    paragraphs    TEXT    NOT NULL DEFAULT '[]',  -- JSON list of paragraph/option dicts
+    options       TEXT    NOT NULL DEFAULT '[]',  -- JSON list of option dicts
     aliases       TEXT    NOT NULL DEFAULT '[]',  -- JSON list of [alias, score] pairs
-    partial_match INTEGER NOT NULL DEFAULT 0,     -- allow matching options without leading '-'
+    dashless_opts INTEGER NOT NULL DEFAULT 0,      -- allow matching options without leading '-'
     multi_cmd     INTEGER NOT NULL DEFAULT 0,     -- has sub-commands (e.g. git -> git commit)
     updated       INTEGER NOT NULL DEFAULT 0,     -- manually edited, skip during bulk imports
     nested_cmd    TEXT    NOT NULL DEFAULT 'false' -- positional args start a nested command (e.g. sudo, xargs)
@@ -43,51 +45,8 @@ CREATE INDEX IF NOT EXISTS idx_mapping_dst ON mapping(dst);
 """
 
 
-class Paragraph:
-    """a paragraph inside a man page is text that ends with two new lines"""
-
-    def __init__(self, idx, text, section, is_option):
-        self.idx = idx
-        self.text = text
-        self.section = section
-        self.is_option = is_option
-
-
-
-    def clean_text(self):
-        t = re.sub(r"<[^>]+>", "", self.text)
-        t = re.sub("&lt;", "<", t)
-        t = re.sub("&gt;", ">", t)
-        return t
-
-    @staticmethod
-    def from_store(d):
-        p = Paragraph(
-            d.get("idx", 0), d["text"], d["section"], d["is_option"]
-        )
-        return p
-
-    def to_store(self):
-        return {
-            "idx": self.idx,
-            "text": self.text,
-            "section": self.section,
-            "is_option": self.is_option,
-        }
-
-    def __repr__(self):
-        t = self.clean_text()
-        t = t[: min(20, t.find("\n"))].lstrip()
-        return f"<paragraph {self.idx}, {self.section}: {t}>"
-
-    def __eq__(self, other):
-        if not other:
-            return False
-        return self.__dict__ == other.__dict__
-
-
-class Option(Paragraph):
-    """a paragraph that contains extracted options
+class Option(BaseModel):
+    """An extracted command-line option from a man page.
 
     short - a list of short options (-a, -b, ..)
     long - a list of long options (--a, --b)
@@ -96,63 +55,33 @@ class Option(Paragraph):
     nested_cmd - specifies if the arguments to this option can start a nested command
     """
 
-    def __init__(self, p, short, long, expects_arg, argument=None, nested_cmd=False):
-        Paragraph.__init__(self, p.idx, p.text, p.section, p.is_option)
-        self.short = short
-        self.long = long
-        self._opts = self.short + self.long
-        self.argument = argument
-        self.expects_arg = expects_arg
-        self.nested_cmd = nested_cmd
-        if nested_cmd:
-            assert (
-                expects_arg
-            ), "an option that can nest commands must expect an argument"
+    text: str
+    short: list[str] = []
+    long: list[str] = []
+    expects_arg: bool | str | list[str] = False
+    argument: str | bool | None = None
+    nested_cmd: bool | list[str] = False
 
     @property
-    def opts(self):
-        return self._opts
-
-    @classmethod
-    def from_store(cls, d):
-        p = Paragraph.from_store(d)
-
-        return cls(
-            p,
-            d["short"],
-            d["long"],
-            d["expectsarg"],
-            d["argument"],
-            d.get("nestedcmd"),
-        )
-
-    def to_store(self):
-        d = Paragraph.to_store(self)
-        assert d["is_option"]
-        d["short"] = self.short
-        d["long"] = self.long
-        d["expectsarg"] = self.expects_arg
-        d["argument"] = self.argument
-        d["nestedcmd"] = self.nested_cmd
-        return d
+    def opts(self) -> list[str]:
+        return self.short + self.long
 
     def __str__(self):
         return "(" + ", ".join([str(x) for x in self.opts]) + ")"
 
     def __repr__(self):
-        return f"<options for paragraph {self.idx}: {self}"
+        return f"<option {self}>"
 
 
-class ManPage:
+class ParsedManpage(BaseModel):
     """processed man page
 
     source - the path to the original source man page
     name - the name of this man page as extracted by manpage.manpage
     synopsis - the synopsis of this man page as extracted by manpage.manpage
-    paragraphs - a list of paragraphs (and options) that contain all of the text and options
-        extracted from this man page
+    options - a list of options extracted from this man page
     aliases - a list of aliases found for this man page
-    partial_match - allow interpreting options without a leading '-'
+    dashless_opts - allow interpreting options without a leading '-'
     multi_cmd - consider sub commands when explaining a command with this man page,
         e.g. git -> git commit
     updated - whether this man page was manually updated
@@ -160,36 +89,15 @@ class ManPage:
         e.g. sudo, xargs
     """
 
-    def __init__(
-        self,
-        source,
-        name,
-        synopsis,
-        paragraphs,
-        aliases,
-        partial_match=False,
-        multi_cmd=False,
-        updated=False,
-        nested_cmd=False,
-    ):
-        self.source = source
-        self.name = name
-        self.synopsis = synopsis
-        self.paragraphs = paragraphs
-        self.aliases = aliases
-        self.partial_match = partial_match
-        self.multi_cmd = multi_cmd
-        self.updated = updated
-        self.nested_cmd = nested_cmd
-
-    def remove_option(self, idx):
-        for i, p in self.paragraphs:
-            if p.idx == idx:
-                if not isinstance(p, Option):
-                    raise ValueError(f"paragraph {idx} isn't an option")
-                self.paragraphs[i] = Paragraph(p.idx, p.text, p.section, False)
-                return
-        raise ValueError(f"idx {idx} not found")
+    source: str
+    name: str
+    synopsis: str | None = None
+    options: list[Option] = []
+    aliases: list[tuple[str, int]] = []
+    dashless_opts: bool = False
+    multi_cmd: bool = False
+    updated: bool = False
+    nested_cmd: bool | str = False
 
     @property
     def name_section(self):
@@ -202,19 +110,14 @@ class ManPage:
         return section
 
     @property
-    def options(self):
-        return [p for p in self.paragraphs if isinstance(p, Option)]
-
-    @property
     def arguments(self):
-        # go over all paragraphs and look for those with the same 'argument'
-        # field
+        # go over all options and look for those with the same 'argument' field
         groups = collections.OrderedDict()
         for opt in self.options:
             if opt.argument:
                 groups.setdefault(opt.argument, []).append(opt)
 
-        # merge all the paragraphs under the same argument to a single string
+        # merge all the options under the same argument to a single string
         for k, ln in groups.items():
             groups[k] = "\n\n".join([p.text for p in ln])
 
@@ -235,9 +138,9 @@ class ManPage:
             "source": self.source,
             "name": self.name,
             "synopsis": self.synopsis,
-            "paragraphs": json.dumps([p.to_store() for p in self.paragraphs]),
+            "options": json.dumps([o.model_dump() for o in self.options]),
             "aliases": json.dumps(self.aliases),
-            "partial_match": int(bool(self.partial_match)),
+            "dashless_opts": int(bool(self.dashless_opts)),
             "multi_cmd": int(bool(self.multi_cmd)),
             "updated": int(bool(self.updated)),
             "nested_cmd": json.dumps(self.nested_cmd),
@@ -245,36 +148,29 @@ class ManPage:
 
     @staticmethod
     def from_store(d):
-        paragraphs = []
-        for pd in json.loads(d["paragraphs"]):
-            pp = Paragraph.from_store(pd)
-            if pp.is_option is True and "short" in pd:
-                pp = Option.from_store(pd)
-            paragraphs.append(pp)
+        options = []
+        for od in json.loads(d["options"]):
+            options.append(Option.model_validate(od))
 
         synopsis = d["synopsis"]
         if not synopsis:
             synopsis = help_constants.NO_SYNOPSIS
 
-        partial_match = bool(d["partial_match"])
+        dashless_opts = bool(d["dashless_opts"])
         multi_cmd = bool(d["multi_cmd"])
         nested_cmd = json.loads(d["nested_cmd"])
 
-        return ManPage(
-            d["source"],
-            d["name"],
-            synopsis,
-            paragraphs,
-            [tuple(x) for x in json.loads(d["aliases"])],
-            partial_match,
-            multi_cmd,
-            bool(d["updated"]),
-            nested_cmd,
+        return ParsedManpage(
+            source=d["source"],
+            name=d["name"],
+            synopsis=synopsis,
+            options=options,
+            aliases=[tuple(x) for x in json.loads(d["aliases"])],
+            dashless_opts=dashless_opts,
+            multi_cmd=multi_cmd,
+            updated=bool(d["updated"]),
+            nested_cmd=nested_cmd,
         )
-
-    @staticmethod
-    def from_store_name_only(name, source):
-        return ManPage(source, name, None, [], [], None, None, None)
 
     def __repr__(self):
         return f"<manpage {self.name}({self.section}), {len(self.options)} options>"
@@ -320,7 +216,7 @@ class Store:
 
     def __iter__(self):
         for row in self._conn.execute("SELECT * FROM manpage"):
-            yield ManPage.from_store(dict(row))
+            yield ParsedManpage.from_store(dict(row))
 
     def find_man_page(self, name):
         """find a man page by its name, everything following the last dot (.) in name,
@@ -336,7 +232,7 @@ class Store:
             ).fetchone()
             if not row:
                 raise errors.ProgramDoesNotExist(name)
-            m = ManPage.from_store(dict(row))
+            m = ParsedManpage.from_store(dict(row))
             logger.info("returning %s", m)
             return [m]
 
@@ -376,7 +272,7 @@ class Store:
             )
 
         results = [
-            (row["id"], ManPage.from_store_name_only(row["name"], row["source"]))
+            (row["id"], ParsedManpage(source=row["source"], name=row["name"]))
             for row in manpage_rows
         ]
         results.sort(key=lambda x: dsts.get(x[0], 0), reverse=True)
@@ -397,7 +293,7 @@ class Store:
         row = self._conn.execute(
             "SELECT * FROM manpage WHERE id = ?", (oid,)
         ).fetchone()
-        results[0] = ManPage.from_store(dict(row))
+        results[0] = ParsedManpage.from_store(dict(row))
         return results
 
     def _discover_manpage_suggestions(self, oid, existing):
@@ -434,7 +330,7 @@ class Store:
             suggestion_ids,
         ).fetchall()
         return [
-            (row["id"], ManPage.from_store_name_only(row["name"], row["source"]))
+            (row["id"], ParsedManpage(source=row["source"], name=row["name"]))
             for row in manpage_rows
         ]
 
@@ -462,10 +358,10 @@ class Store:
 
         d = m.to_store()
         cursor = self._conn.execute(
-            """INSERT INTO manpage(source, name, synopsis, paragraphs, aliases,
-                                   partial_match, multi_cmd, updated, nested_cmd)
-               VALUES (:source, :name, :synopsis, :paragraphs, :aliases,
-                       :partial_match, :multi_cmd, :updated, :nested_cmd)""",
+            """INSERT INTO manpage(source, name, synopsis, options, aliases,
+                                   dashless_opts, multi_cmd, updated, nested_cmd)
+               VALUES (:source, :name, :synopsis, :options, :aliases,
+                       :dashless_opts, :multi_cmd, :updated, :nested_cmd)""",
             d,
         )
         self._conn.commit()
@@ -495,8 +391,8 @@ class Store:
         d = m.to_store()
         self._conn.execute(
             """UPDATE manpage
-               SET name=:name, synopsis=:synopsis, paragraphs=:paragraphs,
-                   aliases=:aliases, partial_match=:partial_match,
+               SET name=:name, synopsis=:synopsis, options=:options,
+                   aliases=:aliases, dashless_opts=:dashless_opts,
                    multi_cmd=:multi_cmd, updated=:updated, nested_cmd=:nested_cmd
                WHERE source=:source""",
             d,

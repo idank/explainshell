@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS manpage (
     synopsis      TEXT,
     paragraphs    TEXT    NOT NULL DEFAULT '[]',
     aliases       TEXT    NOT NULL DEFAULT '[]',
-    partial_match INTEGER NOT NULL DEFAULT 0,
+    dashless_opts INTEGER NOT NULL DEFAULT 0,
     multi_cmd     INTEGER NOT NULL DEFAULT 0,
     updated       INTEGER NOT NULL DEFAULT 0,
     nested_cmd    TEXT    NOT NULL DEFAULT 'false'
@@ -108,7 +108,7 @@ def migrate(manpage_file, mapping_file, db_path):
         # aliases may be [[name, score], ...] already
         aliases_json = json.dumps(aliases)
 
-        partial_match = _coerce_bool(
+        dashless_opts = _coerce_bool(
             doc.get("partial_match", doc.get("partialmatch")), False
         )
         multi_cmd = _coerce_bool(
@@ -121,7 +121,7 @@ def migrate(manpage_file, mapping_file, db_path):
             cur = conn.execute(
                 """INSERT INTO manpage
                        (source, name, synopsis, paragraphs, aliases,
-                        partial_match, multi_cmd, updated, nested_cmd)
+                        dashless_opts, multi_cmd, updated, nested_cmd)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     doc["source"],
@@ -129,7 +129,7 @@ def migrate(manpage_file, mapping_file, db_path):
                     synopsis or None,
                     json.dumps(paragraphs),
                     aliases_json,
-                    int(partial_match),
+                    int(dashless_opts),
                     int(multi_cmd),
                     int(_coerce_bool(doc.get("updated"), False)),
                     nested_cmd_json,

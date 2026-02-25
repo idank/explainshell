@@ -520,7 +520,7 @@ class Matcher(bashlex.ast.nodevisitor):
                             self.unknown(word, node.pos[0], node.pos[1])
                         )
                 else:
-                    if self.man_page.partial_match:
+                    if self.man_page.dashless_opts:
                         logger.info("attempting to do a partial match")
 
                         m = attemptfuzzy(word)
