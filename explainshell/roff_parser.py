@@ -107,8 +107,10 @@ def parse_options(gz_path: str) -> list:
             text = flag_text
         else:
             text = description
-        p = store.Paragraph(idx, text, "OPTIONS", True)
-        options.append(store.Option(p, short, long, expects_arg, argument, nested_cmd))
+        options.append(store.Option(
+            text=text, short=short, long=long,
+            expects_arg=expects_arg, argument=argument, nested_cmd=nested_cmd,
+        ))
         idx += 1
 
     return options
@@ -146,7 +148,7 @@ def _in_option_section(section_name: str) -> bool:
     return False
 
 
-def _clean_roff(text: str) -> str:
+def clean_roff(text: str) -> str:
     """Strip roff escape sequences and formatting from text."""
     # Remove font escapes: \fB, \fI, \fR, \fP, \f(xx
     text = re.sub(r"\\f[BIRP]", "", text)
@@ -211,7 +213,7 @@ def _clean_roff_description(text: str) -> str:
                 word = "".join(parts)
             else:
                 word = args.strip().strip('"')
-            word = _clean_roff(word)
+            word = clean_roff(word)
             if word and result and result[-1]:
                 # Join with previous line
                 result[-1] = result[-1] + " " + word
@@ -238,7 +240,7 @@ def _clean_roff_description(text: str) -> str:
         if re.match(r"^\.[A-Z]", stripped):
             continue
         # Regular text line
-        cleaned = _clean_roff(stripped)
+        cleaned = clean_roff(stripped)
         if cleaned:
             result.append(cleaned)
 
@@ -318,7 +320,7 @@ def _parse_flag_text(text: str) -> dict:
       --exec-path[=<path>]
     """
     # Clean roff formatting first
-    cleaned = _clean_roff(text).strip()
+    cleaned = clean_roff(text).strip()
 
     if not cleaned:
         return {}
@@ -643,7 +645,7 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                             # If followed by a flag-like line, it's a new entry
                             if nm in (".TP", ".IP", ".HP"):
                                 break
-                            cleaned_nl = _clean_roff(nl)
+                            cleaned_nl = clean_roff(nl)
                             if cleaned_nl.startswith("-"):
                                 break
                         # Otherwise it's a paragraph break within the description
@@ -666,7 +668,7 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                     else:
                         # Strip simple .B / .I prefix
                         s = re.sub(r"^\.[BI]\s+", "", s)
-                    return _clean_roff(s)
+                    return clean_roff(s)
 
                 flag_text = ", ".join(
                     _clean_flag_line(fl) for fl in flag_lines
@@ -753,7 +755,7 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                     "expects_arg": parsed.get("expects_arg", False),
                     "argument": parsed.get("argument"),
                     "description": description,
-                    "flag_text": _clean_roff(tag_text),
+                    "flag_text": clean_roff(tag_text),
                 })
 
             # --- .HP pattern ---
@@ -792,7 +794,7 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                     "expects_arg": parsed.get("expects_arg", False),
                     "argument": parsed.get("argument"),
                     "description": description,
-                    "flag_text": _clean_roff(tag_line),
+                    "flag_text": clean_roff(tag_line),
                 })
 
             # --- .PP/.sp + flag + .RS/.RE pattern ---
@@ -864,7 +866,7 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                         "expects_arg": parsed.get("expects_arg", False),
                         "argument": parsed.get("argument"),
                         "description": description,
-                        "flag_text": _clean_roff(flag_line),
+                        "flag_text": clean_roff(flag_line),
                     })
 
                 elif macro != ".sp":
@@ -907,7 +909,7 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                         "expects_arg": parsed.get("expects_arg", False),
                         "argument": parsed.get("argument"),
                         "description": description,
-                        "flag_text": _clean_roff(flag_line),
+                        "flag_text": clean_roff(flag_line),
                     })
 
                 else:

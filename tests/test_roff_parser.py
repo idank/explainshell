@@ -5,7 +5,7 @@ import unittest
 
 from explainshell import store
 from explainshell.roff_parser import (
-    _clean_roff,
+    clean_roff,
     _clean_roff_description,
     _detect_dialect,
     _parse_flag_text,
@@ -26,30 +26,30 @@ def _gz(name):
 
 class TestCleanRoff(unittest.TestCase):
     def test_font_escapes(self):
-        self.assertEqual(_clean_roff(r"\fBbold\fR"), "bold")
-        self.assertEqual(_clean_roff(r"\fIitalic\fP"), "italic")
+        self.assertEqual(clean_roff(r"\fBbold\fR"), "bold")
+        self.assertEqual(clean_roff(r"\fIitalic\fP"), "italic")
 
     def test_dash_escape(self):
-        self.assertEqual(_clean_roff(r"\-"), "-")
-        self.assertEqual(_clean_roff(r"\-\-verbose"), "--verbose")
+        self.assertEqual(clean_roff(r"\-"), "-")
+        self.assertEqual(clean_roff(r"\-\-verbose"), "--verbose")
 
     def test_zero_width_space(self):
-        self.assertEqual(_clean_roff(r"foo\&bar"), "foobar")
+        self.assertEqual(clean_roff(r"foo\&bar"), "foobar")
 
     def test_backslash_escape(self):
-        self.assertEqual(_clean_roff(r"\e"), "\\")
+        self.assertEqual(clean_roff(r"\e"), "\\")
 
     def test_quote_escapes(self):
-        self.assertEqual(_clean_roff(r"\(aq"), "'")
+        self.assertEqual(clean_roff(r"\(aq"), "'")
 
     def test_color_directives(self):
-        self.assertEqual(_clean_roff(r"\m[blue]text\m[]"), "text")
+        self.assertEqual(clean_roff(r"\m[blue]text\m[]"), "text")
 
     def test_size_changes(self):
-        self.assertEqual(_clean_roff(r"\s-2small\s+2"), "small")
+        self.assertEqual(clean_roff(r"\s-2small\s+2"), "small")
 
     def test_multiple_spaces(self):
-        self.assertEqual(_clean_roff("foo   bar"), "foo bar")
+        self.assertEqual(clean_roff("foo   bar"), "foo bar")
 
 
 # ---------------------------------------------------------------------------
@@ -688,22 +688,12 @@ class TestParseGitRebase(unittest.TestCase):
 
 
 class TestParseOptionsReturnType(unittest.TestCase):
-    """parse_options() should return store.Option instances with sequential indices."""
+    """parse_options() should return store.Option instances."""
 
-    def test_sequential_indices(self):
-        opts = parse_options(_gz("echo.1.gz"))
-        for i, opt in enumerate(opts):
-            self.assertEqual(opt.idx, i)
-
-    def test_section_is_options(self):
+    def test_returns_option_instances(self):
         opts = parse_options(_gz("echo.1.gz"))
         for opt in opts:
-            self.assertEqual(opt.section, "OPTIONS")
-
-    def test_is_option_true(self):
-        opts = parse_options(_gz("echo.1.gz"))
-        for opt in opts:
-            self.assertTrue(opt.is_option)
+            self.assertIsInstance(opt, store.Option)
 
     def test_nested_cmd_false(self):
         """Roff parser always sets nested_cmd to False."""
