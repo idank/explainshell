@@ -18,7 +18,7 @@ parsing-regression:
 parsing-update:
 	python -m explainshell.manager --mode source --overwrite tests/regression/manpages/
 
-tests-all: tests e2e parsing-regression
+tests-all: lint tests e2e parsing-regression
 
 lint:
 	@command -v ruff >/dev/null 2>&1 || (echo "ruff is required. Install with: pip install ruff"; exit 1)
