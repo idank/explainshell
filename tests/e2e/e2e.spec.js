@@ -82,6 +82,21 @@ test("unicode characters in echo command", async ({ page }) => {
   await expect(page).toHaveScreenshot("explain-unicode.png", { fullPage: true });
 });
 
+test("manpage source links use configured URL", async ({ page }) => {
+  await page.goto("/explain?cmd=grep+-i+hello");
+  await page.waitForLoadState("networkidle");
+
+  // Footer should contain "source manpages:" with a link to Ubuntu manpages
+  const footerLink = page.locator('a[href*="manpages.ubuntu.com"]').first();
+  await expect(footerLink).toBeVisible();
+
+  const href = await footerLink.getAttribute("href");
+  // Should use the configured URL (plucky release), not the old hardcoded one (precise)
+  expect(href).toContain("/manpages/plucky/");
+  expect(href).not.toContain("/manpages/precise/");
+  expect(href).toContain("grep.1.html");
+});
+
 test("long explanation scrolls with many help boxes", async ({ page }) => {
   await page.goto(
     "/explain?cmd=gcc+-Wall+-Wextra+-O2+-g+-std%3Dc11+-I%2Fusr%2Finclude+-L%2Fusr%2Flib+-lm+-lpthread+-o+program+main.c"

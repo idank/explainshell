@@ -356,7 +356,7 @@ def main(args):
     from explainshell import manpage as _manpage
 
     for gz_path in gz_files:
-        short_path = os.path.basename(gz_path)
+        short_path = config.source_from_path(gz_path)
         name = _manpage.extract_name(gz_path)
 
         if s and not args.diff and not args.overwrite and _already_stored(s, short_path, name):

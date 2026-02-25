@@ -4,7 +4,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from explainshell import store
+from explainshell import config, store
 from explainshell.errors import ExtractionError
 from explainshell.source_extractor import detect_dashless_opts, detect_nested_cmd, extract
 
@@ -32,9 +32,11 @@ class TestExtract(unittest.TestCase):
         mock_roff.return_value = fake_opts
         mock_detect.return_value = False
 
-        mp = extract("dummy.1.gz")
+        gz_path = os.path.join(config.MANPAGES_DIR, "ubuntu", "25.10", "1", "dummy.1.gz")
+        mp = extract(gz_path)
 
         self.assertIsInstance(mp, store.ParsedManpage)
+        self.assertEqual(mp.source, "ubuntu/25.10/1/dummy.1.gz")
         self.assertEqual(mp.name, "dummy")
         self.assertEqual(mp.synopsis, "a test tool")
         self.assertEqual(len(mp.options), 1)
@@ -47,8 +49,9 @@ class TestExtract(unittest.TestCase):
         mock_synopsis.return_value = (None, [("dummy", 10)])
         mock_roff.return_value = []
 
+        gz_path = os.path.join(config.MANPAGES_DIR, "ubuntu", "25.10", "1", "dummy.1.gz")
         with self.assertRaises(ExtractionError):
-            extract("dummy.1.gz")
+            extract(gz_path)
 
 
 class TestDetectDashlessOpts(unittest.TestCase):

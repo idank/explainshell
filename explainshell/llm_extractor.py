@@ -15,7 +15,7 @@ import time
 import litellm
 from markdownify import markdownify as md
 
-from explainshell import manpage, store
+from explainshell import config, manpage, store
 from explainshell.errors import ExtractionError
 
 logger = logging.getLogger(__name__)
@@ -314,7 +314,7 @@ def extract(gz_path: str, model: str, debug_dir: str | None = None, **litellm_kw
             logger.warning("skipping malformed option %d: %s", idx, e)
 
     return store.ParsedManpage(
-        source=os.path.basename(gz_path),
+        source=config.source_from_path(gz_path),
         name=manpage.extract_name(gz_path),
         synopsis=synopsis,
         options=options,

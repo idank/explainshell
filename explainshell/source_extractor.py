@@ -15,7 +15,7 @@ import logging
 import os
 import re
 
-from explainshell import errors, manpage, roff_parser, store
+from explainshell import config, errors, manpage, roff_parser, store
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +160,7 @@ def extract(gz_path: str) -> store.ParsedManpage:
         "roff parser extracted %d options from %s", len(options), gz_path
     )
     return store.ParsedManpage(
-        source=os.path.basename(gz_path),
+        source=config.source_from_path(gz_path),
         name=manpage.extract_name(gz_path),
         synopsis=synopsis,
         options=options,

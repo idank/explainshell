@@ -5,6 +5,7 @@ data objects to save processed man pages to sqlite
 import collections
 import json
 import logging
+import os
 import re
 import sqlite3
 
@@ -101,12 +102,12 @@ class ParsedManpage(BaseModel):
 
     @property
     def name_section(self):
-        name, section = util.name_section(self.source[:-3])
+        name, section = util.name_section(os.path.basename(self.source)[:-3])
         return f"{name}({section})"
 
     @property
     def section(self):
-        name, section = util.name_section(self.source[:-3])
+        name, section = util.name_section(os.path.basename(self.source)[:-3])
         return section
 
     @property
