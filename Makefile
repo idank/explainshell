@@ -13,7 +13,7 @@ test-llm:
 	RUN_LLM_TESTS=1 pytest tests/test_llm_extractor.py::TestRealLlm -v
 
 parsing-regression:
-	pytest tests/regression/test_parsing_regression.py -v
+	python -m pytest tests/regression/test_parsing_regression.py -v
 
 parsing-update:
 	python -m explainshell.manager --mode source --overwrite tests/regression/manpages/
