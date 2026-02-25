@@ -222,7 +222,7 @@ class TestLlmOptionToStoreOption(unittest.TestCase):
             "nested_cmd": False,
             "description": "Be verbose.",
         }
-        opt = _llm_option_to_store_option(raw, 0)
+        opt = _llm_option_to_store_option(raw)
         self.assertIsInstance(opt, store.Option)
         self.assertEqual(opt.short, ["-v"])
         self.assertEqual(opt.long, ["--verbose"])
@@ -239,7 +239,7 @@ class TestLlmOptionToStoreOption(unittest.TestCase):
             "nested_cmd": False,
             "description": "Colorize output.",
         }
-        opt = _llm_option_to_store_option(raw, 1)
+        opt = _llm_option_to_store_option(raw)
         self.assertEqual(opt.expects_arg, ["always", "never", "auto"])
 
     def test_nested_cmd_auto_corrects_expects_arg(self):
@@ -251,7 +251,7 @@ class TestLlmOptionToStoreOption(unittest.TestCase):
             "nested_cmd": True,
             "description": "Execute command.",
         }
-        opt = _llm_option_to_store_option(raw, 2)
+        opt = _llm_option_to_store_option(raw)
         self.assertTrue(opt.nested_cmd)
         self.assertTrue(opt.expects_arg)  # auto-corrected
 
@@ -264,7 +264,7 @@ class TestLlmOptionToStoreOption(unittest.TestCase):
             "nested_cmd": False,
             "description": "Input file.",
         }
-        opt = _llm_option_to_store_option(raw, 3)
+        opt = _llm_option_to_store_option(raw)
         self.assertEqual(opt.argument, "FILE")
         self.assertEqual(opt.short, [])
         self.assertEqual(opt.long, [])
@@ -313,29 +313,32 @@ class TestExtractIntegration(unittest.TestCase):
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
         mock_plaintext.return_value = "dummy man page text"
         mock_llm.return_value = (
-            [
-                {
-                    "short": ["-n"],
-                    "long": [],
-                    "expects_arg": False,
-                    "argument": None,
-                    "nested_cmd": False,
-                    "description": "Do not output trailing newline.",
-                },
-                {
-                    "short": ["-e"],
-                    "long": [],
-                    "expects_arg": False,
-                    "argument": None,
-                    "nested_cmd": False,
-                    "description": "Enable interpretation of backslash escapes.",
-                },
-            ],
+            {
+                "dashless_opts": False,
+                "options": [
+                    {
+                        "short": ["-n"],
+                        "long": [],
+                        "expects_arg": False,
+                        "argument": None,
+                        "nested_cmd": False,
+                        "description": "Do not output trailing newline.",
+                    },
+                    {
+                        "short": ["-e"],
+                        "long": [],
+                        "expects_arg": False,
+                        "argument": None,
+                        "nested_cmd": False,
+                        "description": "Enable interpretation of backslash escapes.",
+                    },
+                ],
+            },
             [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
             '{"options": []}',
         )
         mp = extract("dummy.1.gz", "test-model")
-        self.assertIsInstance(mp, store.ManPage)
+        self.assertIsInstance(mp, store.ParsedManpage)
         self.assertEqual(len(mp.options), 2)
         flags = [opt.short[0] for opt in mp.options]
         self.assertIn("-n", flags)
@@ -348,17 +351,19 @@ class TestExtractIntegration(unittest.TestCase):
         mock_synopsis.return_value = (None, [("dummy", 10)])
         mock_plaintext.return_value = "some text"
         mock_llm.return_value = (
-            [
-                {"short": "not-a-list", "long": [], "expects_arg": False, "description": "bad"},
-                {
-                    "short": ["-v"],
-                    "long": [],
-                    "expects_arg": False,
-                    "argument": None,
-                    "nested_cmd": False,
-                    "description": "Verbose.",
-                },
-            ],
+            {
+                "options": [
+                    {"short": "not-a-list", "long": [], "expects_arg": False, "description": "bad"},
+                    {
+                        "short": ["-v"],
+                        "long": [],
+                        "expects_arg": False,
+                        "argument": None,
+                        "nested_cmd": False,
+                        "description": "Verbose.",
+                    },
+                ],
+            },
             [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
             '{"options": []}',
         )
@@ -376,7 +381,7 @@ class TestExtractIntegration(unittest.TestCase):
         mock_plaintext.return_value = "dummy man page text"
         raw_response = '{"options": [{"short": ["-v"], "long": [], "expects_arg": false, "argument": null, "nested_cmd": false, "description": "Verbose."}]}'
         mock_llm.return_value = (
-            [{"short": ["-v"], "long": [], "expects_arg": False, "argument": None, "nested_cmd": False, "description": "Verbose."}],
+            {"options": [{"short": ["-v"], "long": [], "expects_arg": False, "argument": None, "nested_cmd": False, "description": "Verbose."}]},
             [{"role": "system", "content": "sys"}, {"role": "user", "content": "usr"}],
             raw_response,
         )
