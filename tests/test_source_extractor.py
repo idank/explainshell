@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from explainshell import store
 from explainshell.errors import ExtractionError
-from explainshell.source_extractor import detect_dashless_opts, extract
+from explainshell.source_extractor import detect_dashless_opts, detect_nested_cmd, extract
 
 _MANPAGES = os.path.join(os.path.dirname(__file__), "..", "manpages", "ubuntu", "25.10", "1")
 _MANPAGES_CUSTOM = os.path.join(os.path.dirname(__file__), "..", "manpages", "1")
@@ -68,6 +68,33 @@ class TestDetectDashlessOpts(unittest.TestCase):
         """extract() wires detect_dashless_opts into the result."""
         mp = extract(_gz("tar.1.gz"))
         self.assertTrue(mp.dashless_opts)
+
+
+class TestDetectNestedCmd(unittest.TestCase):
+    def test_watch_detected(self):
+        """watch has 'command' in synopsis."""
+        self.assertTrue(detect_nested_cmd(_gz("watch.1.gz")))
+
+    def test_xargs_detected(self):
+        """xargs has [command [initial-arguments]] in synopsis."""
+        self.assertTrue(detect_nested_cmd(_gz("xargs.1.gz")))
+
+    def test_doas_detected(self):
+        """doas has .Ar command in synopsis."""
+        self.assertTrue(detect_nested_cmd(_gz("doas.1.gz")))
+
+    def test_curl_not_detected(self):
+        """curl has no 'command' in synopsis."""
+        self.assertFalse(detect_nested_cmd(_gz("curl.1.gz")))
+
+    def test_git_not_detected(self):
+        """git has <command> (angle brackets), should be excluded."""
+        self.assertFalse(detect_nested_cmd(_gz("git.1.gz")))
+
+    def test_extract_sets_nested_cmd(self):
+        """extract() wires detect_nested_cmd into the result."""
+        mp = extract(_gz("watch.1.gz"))
+        self.assertTrue(mp.nested_cmd)
 
 
 if __name__ == "__main__":
