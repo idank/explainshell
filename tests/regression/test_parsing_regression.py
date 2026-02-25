@@ -17,6 +17,7 @@ from explainshell import errors, source_extractor, store
 from explainshell.manager import compare_manpages
 
 _REGRESSION_DIR = os.path.join(os.path.dirname(__file__), "manpages")
+_REGRESSION_DB = os.path.join(os.path.dirname(__file__), "regression.db")
 
 _gz_files = sorted(glob.glob(os.path.join(_REGRESSION_DIR, "**", "*.gz"), recursive=True))
 
@@ -47,7 +48,7 @@ def _format_diffs(diffs):
 
 @pytest.fixture(scope="session")
 def db_store():
-    return store.Store()
+    return store.Store(_REGRESSION_DB)
 
 
 @pytest.mark.parametrize("gz_path", _gz_files, ids=[os.path.basename(p) for p in _gz_files])
