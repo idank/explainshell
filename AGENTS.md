@@ -114,5 +114,4 @@ Uses bashlex AST visitor pattern:
 - Parsing regression tests live in `tests/regression/` with .gz manpage fixtures in `tests/regression/manpages/`
 - Parsing regression compares re-parsed manpages against DB; run via `make parsing-regression`
 - To accept parser changes into the DB: `make parsing-update`, then re-run `make parsing-regression`
-- **Always run ALL test suites before declaring tests pass**: `make tests`, `make e2e`, and `make parsing-regression`. Do not skip any.
-- **Always lint the codebase after making changes**
+- **Always run `make tests-all` before declaring tests pass** — it runs lint, unit tests, e2e, and parsing regression in one shot.
