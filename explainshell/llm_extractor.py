@@ -2,7 +2,7 @@
 LLM-based man page option extractor.
 
 Public API:
-    extract(gz_path, model, **litellm_kwargs) -> store.ManPage
+    extract(gz_path, model, **litellm_kwargs) -> store.ParsedManpage
 """
 
 import json
@@ -44,9 +44,13 @@ Rules:
    (e.g. find -exec CMD ;).
 6. Do not invent options. Only include options explicitly documented in the text.
 7. Return ONLY the JSON object. No markdown fences, no explanation.
+8. Set "dashless_opts" to true if the man page documents that options can be
+   specified without a leading dash (e.g., "traditional usage", "BSD-style
+   options", or usage examples like `tar xzvf`). Otherwise set it to false.
 
 JSON schema:
 {
+  "dashless_opts": false,
   "options": [
     {
       "short": ["-f"],
@@ -137,7 +141,7 @@ def _get_synopsis_and_aliases(gz_path: str):
 def _call_llm(chunk: str, chunk_info: str, model: str, litellm_kwargs: dict) -> tuple:
     """Call LiteLLM, parse JSON, validate. Retries up to 3x on transient errors.
 
-    Returns (options_list, messages, raw_response_content).
+    Returns (data_dict, messages, raw_response_content).
     """
     user_content = f"Extract all command-line options from this man page{chunk_info}:\n\n{chunk}"
     messages = [
@@ -167,7 +171,7 @@ def _call_llm(chunk: str, chunk_info: str, model: str, litellm_kwargs: dict) -> 
             content = response.choices[0].message.content
             data = _parse_json_response(content)
             _validate_llm_response(data)
-            return data["options"], messages, content
+            return data, messages, content
         except ExtractionError:
             raise
         except retryable as e:
@@ -239,7 +243,7 @@ def _dedup_options(raw_options: list) -> list:
     return result
 
 
-def _llm_option_to_store_option(raw: dict, idx: int) -> store.Option:
+def _llm_option_to_store_option(raw: dict) -> store.Option:
     """Convert one LLM option dict to a store.Option."""
     short = raw.get("short") or []
     long = raw.get("long") or []
@@ -259,12 +263,14 @@ def _llm_option_to_store_option(raw: dict, idx: int) -> store.Option:
     if nested_cmd and not expects_arg:
         expects_arg = True
 
-    p = store.Paragraph(idx, description, None, True)
-    return store.Option(p, short, long, expects_arg, argument, nested_cmd)
+    return store.Option(
+        text=description, short=short, long=long,
+        expects_arg=expects_arg, argument=argument, nested_cmd=nested_cmd,
+    )
 
 
-def extract(gz_path: str, model: str, debug_dir: str | None = None, **litellm_kwargs) -> store.ManPage:
-    """LLM extraction pipeline: mandoc → markdown → LLM → ManPage."""
+def extract(gz_path: str, model: str, debug_dir: str | None = None, **litellm_kwargs) -> store.ParsedManpage:
+    """LLM extraction pipeline: mandoc → markdown → LLM → ParsedManpage."""
     synopsis, aliases = _get_synopsis_and_aliases(gz_path)
 
     plain_text = get_manpage_text(gz_path)
@@ -278,10 +284,13 @@ def extract(gz_path: str, model: str, debug_dir: str | None = None, **litellm_kw
             f.write(plain_text)
 
     all_raw = []
+    dashless_opts = False
     for i, chunk in enumerate(chunks):
         chunk_info = f" (part {i + 1} of {len(chunks)})" if len(chunks) > 1 else ""
-        options, messages, raw_response = _call_llm(chunk, chunk_info, model, litellm_kwargs)
-        all_raw.extend(options)
+        chunk_data, messages, raw_response = _call_llm(chunk, chunk_info, model, litellm_kwargs)
+        all_raw.extend(chunk_data["options"])
+        if chunk_data.get("dashless_opts"):
+            dashless_opts = True
 
         if debug_dir:
             if len(chunks) == 1:
@@ -297,17 +306,18 @@ def extract(gz_path: str, model: str, debug_dir: str | None = None, **litellm_kw
 
     all_raw = _dedup_options(all_raw)
 
-    paragraphs = []
+    options = []
     for idx, raw in enumerate(all_raw):
         try:
-            paragraphs.append(_llm_option_to_store_option(raw, idx))
+            options.append(_llm_option_to_store_option(raw))
         except (AssertionError, ValueError) as e:
             logger.warning("skipping malformed option %d: %s", idx, e)
 
-    return store.ManPage(
+    return store.ParsedManpage(
         source=os.path.basename(gz_path),
         name=manpage.extract_name(gz_path),
         synopsis=synopsis,
-        paragraphs=paragraphs,
+        options=options,
         aliases=aliases,
+        dashless_opts=dashless_opts,
     )
