@@ -288,14 +288,18 @@ class Store:
             for row in manpage_rows
         ]
         results.sort(key=lambda x: dsts.get(x[0], 0), reverse=True)
-        logger.info("got %s", results)
+        logger.info(
+            "found %d candidates: %s",
+            len(results),
+            [(oid, m.name_section) for oid, m in results],
+        )
 
         if section is not None:
             if len(results) > 1:
                 results.sort(
                     key=lambda oid_m: oid_m[1].section == section, reverse=True
                 )
-                logger.info(r"sorting %r so %s is first", results, section)
+                logger.info("sorted candidates so section %s is first", section)
             if results[0][1].section != section:
                 raise errors.ProgramDoesNotExist(orig_name)
             results.extend(self._discover_manpage_suggestions(results[0][0], results))
