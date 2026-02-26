@@ -368,12 +368,15 @@ def _parse_diff(raw):
     """Parse a --diff value into a structured result.
 
     Returns:
-        ("db", None, None)                              for "db" or None
+        (None, None, None)                              for None/False (no diff)
+        ("db", None, None)                              for "db"
         ("extractors", (modeA, modelA), (modeB, modelB))  for "A..B"
 
     Raises ValueError on invalid input.
     """
-    if raw is None or raw == "db":
+    if not raw:
+        return (None, None, None)
+    if raw == "db":
         return ("db", None, None)
     if ".." in raw:
         parts = raw.split("..", 1)
