@@ -31,7 +31,7 @@ from explainshell import (
 logger = logging.getLogger(__name__)
 
 # ParsedManpage-level fields to compare in diff mode.
-_MP_FIELDS = ("name", "synopsis", "aliases", "nested_cmd", "multi_cmd", "dashless_opts")
+_MP_FIELDS = ("name", "synopsis", "aliases", "nested_cmd", "multi_cmd", "dashless_opts", "extractor", "extraction_meta")
 
 # Per-option fields to compare in diff mode.
 _OPT_FIELDS = ("expects_arg", "argument", "nested_cmd", "text")
@@ -351,16 +351,35 @@ def _parse_mode(raw):
 def _run_extractor(mode, gz_path, model=None, debug_dir=None):
     """Run a single extractor by mode name and return a ParsedManpage."""
     if mode == "source":
-        return source_extractor.extract(gz_path)
+        mp = source_extractor.extract(gz_path)
+        mp.extractor = "source"
+        mp.extraction_meta = {}
+        return mp
     if mode == "mandoc":
-        return mandoc_extractor.extract(gz_path)
+        mp = mandoc_extractor.extract(gz_path)
+        mp.extractor = "mandoc"
+        mp.extraction_meta = {}
+        return mp
     if mode == "llm":
-        return llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
+        mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
+        mp.extractor = "llm"
+        mp.extraction_meta = {"model": model}
+        return mp
     if mode == "hybrid":
         try:
-            return mandoc_extractor.extract(gz_path)
-        except errors.LowConfidenceError:
-            return llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
+            mp = mandoc_extractor.extract(gz_path)
+            mp.extractor = "mandoc"
+            mp.extraction_meta = {}
+            return mp
+        except errors.LowConfidenceError as e:
+            mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
+            mp.extractor = "llm"
+            mp.extraction_meta = {
+                "model": model,
+                "fallback": True,
+                "fallback_reason": str(e)[:256],
+            }
+            return mp
     raise ValueError(f"unknown extractor mode: {mode!r}")
 
 
@@ -502,13 +521,19 @@ def main(args):
             if mode == "source":
                 print(f"{_ts()} {progress} [{short_path}] extracting (source)...")
                 mp = source_extractor.extract(gz_path)
+                mp.extractor = "source"
+                mp.extraction_meta = {}
             elif mode == "mandoc":
                 print(f"{_ts()} {progress} [{short_path}] extracting (mandoc)...")
                 mp = mandoc_extractor.extract(gz_path)
+                mp.extractor = "mandoc"
+                mp.extraction_meta = {}
             elif mode == "hybrid":
                 print(f"{_ts()} {progress} [{short_path}] extracting (hybrid)...")
                 try:
                     mp = mandoc_extractor.extract(gz_path)
+                    mp.extractor = "mandoc"
+                    mp.extraction_meta = {}
                 except errors.LowConfidenceError as e:
                     logger.warning(
                         "hybrid: falling back to LLM for %s: %s", short_path, e
@@ -518,10 +543,18 @@ def main(args):
                     )
                     debug_dir = args.debug_dir if args.dry_run else None
                     mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
+                    mp.extractor = "llm"
+                    mp.extraction_meta = {
+                        "model": model,
+                        "fallback": True,
+                        "fallback_reason": str(e)[:256],
+                    }
             else:
                 print(f"{_ts()} {progress} [{short_path}] extracting ({model})...")
                 debug_dir = args.debug_dir if args.dry_run else None
                 mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
+                mp.extractor = "llm"
+                mp.extraction_meta = {"model": model}
             file_elapsed = _fmt_elapsed(time.monotonic() - file_t0)
             if args.diff:
                 print(f"=== {short_path} ===")
@@ -550,6 +583,8 @@ def main(args):
                 print(f"  nested_cmd: {mp.nested_cmd}")
                 print(f"  multi_cmd: {mp.multi_cmd}")
                 print(f"  dashless_opts: {mp.dashless_opts}")
+                print(f"  extractor: {mp.extractor}")
+                print(f"  extraction_meta: {mp.extraction_meta}")
                 print()
                 for i, opt in enumerate(mp.options):
                     if i > 0:
