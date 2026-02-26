@@ -1,8 +1,4 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Overview
+# Project Instructions — explainshell
 
 A web tool that parses man pages and explains command-line arguments by matching each argument to its help text.
 
@@ -12,6 +8,15 @@ A web tool that parses man pages and explains command-line arguments by matching
 - Linting: ruff
 - Testing: pytest (unit + doctests + parsing regression), JS Playwright Test (e2e)
 - Dependencies: `requirements.txt` (main), `package.json` (Playwright e2e)
+
+## Workflow Requirements
+
+**Before finishing any task**, always:
+
+1. Run make format; make lint
+1. Update README.md if the change adds/removes/renames CLI commands, env vars, or user-facing features
+1. Update AGENTS.md if the change affects structure, convention, workflow, etc.
+1. Provide a draft commit message using Conventional Commits format
 
 ## Environment
 
@@ -32,6 +37,9 @@ pytest tests/test_matcher.py::test_matcher::test_no_options -v
 
 # Lint
 make lint
+
+# Format
+make format
 
 # Run e2e tests (requires playwright)
 make e2e
@@ -106,15 +114,3 @@ Uses bashlex AST visitor pattern:
 - `visitcommand()` - looks up man page, handles multi-command (e.g., `git commit`)
 - `visitword()` - matches tokens to options (exact match, then fuzzy split for combined short flags like `-abc`)
 - Produces `MatchResult(start, end, text, match)` where start/end are character positions in the original string
-
-### Test Conventions
-
-- Test files use `test_*.py` naming (underscored)
-- Doctests embedded in `util.py`, `manpage.py`
-- E2E tests and snapshots live in `tests/e2e/`
-- E2E snapshot updates via `make e2e-update`
-- Parsing regression tests live in `tests/regression/` with .gz manpage fixtures in `tests/regression/manpages/`
-- Parsing regression compares re-parsed manpages against DB; run via `make parsing-regression`
-- To accept parser changes into the DB: `make parsing-update`, then re-run `make parsing-regression`
-- **Always run `make tests-all` before declaring tests pass** — it runs lint, unit tests, e2e, and parsing regression in one shot.
-- **Always run `ruff format` after changing Python code** to keep formatting consistent.
