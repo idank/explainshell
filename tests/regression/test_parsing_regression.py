@@ -52,8 +52,9 @@ def db_store():
 
 
 @pytest.mark.parametrize("gz_path", _gz_files, ids=[os.path.basename(p) for p in _gz_files])
-def test_parsing_matches_db(gz_path, db_store):
+def test_parsing_matches_db(gz_path, db_store, request):
     basename = os.path.basename(gz_path)
+    extractor = request.config.getoption("--extractor")
 
     # Look up stored manpage by source basename.
     try:
@@ -62,8 +63,11 @@ def test_parsing_matches_db(gz_path, db_store):
     except errors.ProgramDoesNotExist:
         pytest.skip(f"{basename} not in DB")
 
-    # Re-parse with current source extractor.
-    fresh_mp = source_extractor.extract(gz_path)
+    # Re-parse with selected extractor.
+    if extractor == "mandoc":
+        fresh_mp = source_extractor.extract_mandoc(gz_path)
+    else:
+        fresh_mp = source_extractor.extract(gz_path)
 
     # multi_cmd is computed post-extraction by update_multi_cmd_mappings(),
     # not by the parser, so exclude it from comparison.

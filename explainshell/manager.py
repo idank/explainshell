@@ -5,8 +5,9 @@ Usage:
     python -m explainshell.manager --mode <mode> [options] files...
 
 Modes:
-    source          Use the roff parser
-    llm:<model>     Use an LLM via LiteLLM (e.g. llm:gpt-4o)
+    source              Use the roff parser
+    mandoc              Use mandoc -T tree parser
+    llm:<model>         Use an LLM via LiteLLM (e.g. llm:gpt-4o)
 """
 
 import argparse
@@ -299,19 +300,21 @@ def _collect_gz_files(paths):
 def _parse_mode(raw):
     """Parse a --mode value into (mode, model).
 
-    Returns ("source", None) or ("llm", "<model>").
+    Returns ("source", None), ("mandoc", None), or ("llm", "<model>").
     Raises ValueError on invalid input.
     """
     if raw is None:
         return None, None
     if raw == "source":
         return "source", None
+    if raw == "mandoc":
+        return "mandoc", None
     if raw.startswith("llm:"):
         model = raw[4:]
         if not model:
             raise ValueError("--mode llm:<model> requires a model name (e.g. llm:gpt-4o)")
         return "llm", model
-    raise ValueError(f"invalid --mode value: {raw!r} (expected 'source' or 'llm:<model>')")
+    raise ValueError(f"invalid --mode value: {raw!r} (expected 'source', 'mandoc', or 'llm:<model>')")
 
 
 def main(args):
@@ -393,6 +396,9 @@ def main(args):
             if mode == "source":
                 print(f"{_ts()} [{short_path}] extracting (source)...")
                 mp = source_extractor.extract(gz_path)
+            elif mode == "mandoc":
+                print(f"{_ts()} [{short_path}] extracting (mandoc)...")
+                mp = source_extractor.extract_mandoc(gz_path)
             else:
                 print(f"{_ts()} [{short_path}] extracting ({model})...")
                 debug_dir = args.debug_dir if args.dry_run else None
@@ -463,7 +469,7 @@ def _build_parser():
     )
     parser.add_argument(
         "--mode",
-        help="Extraction mode: 'source' or 'llm:<model>' (e.g. llm:gpt-4o). Required unless --diff modes.",
+        help="Extraction mode: 'source', 'mandoc', or 'llm:<model>' (e.g. llm:gpt-4o). Required unless --diff modes.",
     )
     parser.add_argument("--db", default=config.DB_PATH, help="SQLite DB path")
     parser.add_argument(
