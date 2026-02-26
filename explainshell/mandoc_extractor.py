@@ -38,6 +38,8 @@ def extract(gz_path: str) -> store.ParsedManpage:
     """Extract options using the mandoc -T tree parser.
 
     Raises errors.ExtractionError if the tree parser finds no options.
+    Raises errors.LowConfidenceError if the result has low confidence
+    (the partial manpage is attached to the exception).
     """
     result = tree_parser.parse_options(gz_path)
     if not result.options:
@@ -48,4 +50,10 @@ def extract(gz_path: str) -> store.ParsedManpage:
     logger.info(
         "tree parser extracted %d options from %s", len(result.options), gz_path
     )
-    return build_manpage(gz_path, result.options)
+    mp = build_manpage(gz_path, result.options)
+
+    confidence = tree_parser.assess_confidence(result)
+    if not confidence.confident:
+        raise errors.LowConfidenceError(str(confidence), manpage=mp)
+
+    return mp
