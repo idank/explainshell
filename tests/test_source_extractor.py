@@ -9,7 +9,9 @@ from explainshell.errors import ExtractionError
 from explainshell.roff_utils import detect_dashless_opts, detect_nested_cmd
 from explainshell.source_extractor import extract
 
-_MANPAGES = os.path.join(os.path.dirname(__file__), "..", "manpages", "ubuntu", "25.10", "1")
+_MANPAGES = os.path.join(
+    os.path.dirname(__file__), "..", "manpages", "ubuntu", "25.10", "1"
+)
 _MANPAGES_CUSTOM = os.path.join(os.path.dirname(__file__), "..", "manpages", "1")
 
 
@@ -27,13 +29,17 @@ class TestExtract(unittest.TestCase):
         fake_opts = [
             store.Option(
                 text="Do not output trailing newline.",
-                short=["-n"], long=[], expects_arg=False,
+                short=["-n"],
+                long=[],
+                expects_arg=False,
             ),
         ]
         mock_roff.return_value = fake_opts
         mock_detect.return_value = False
 
-        gz_path = os.path.join(config.MANPAGES_DIR, "ubuntu", "25.10", "1", "dummy.1.gz")
+        gz_path = os.path.join(
+            config.MANPAGES_DIR, "ubuntu", "25.10", "1", "dummy.1.gz"
+        )
         mp = extract(gz_path)
 
         self.assertIsInstance(mp, store.ParsedManpage)
@@ -50,7 +56,9 @@ class TestExtract(unittest.TestCase):
         mock_synopsis.return_value = (None, [("dummy", 10)])
         mock_roff.return_value = []
 
-        gz_path = os.path.join(config.MANPAGES_DIR, "ubuntu", "25.10", "1", "dummy.1.gz")
+        gz_path = os.path.join(
+            config.MANPAGES_DIR, "ubuntu", "25.10", "1", "dummy.1.gz"
+        )
         with self.assertRaises(ExtractionError):
             extract(gz_path)
 

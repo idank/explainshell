@@ -6,7 +6,7 @@ from explainshell.logger.logger_helper import logger
 from explainshell.logger.logging_interceptor import InterceptHandler
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # activate logging and redirect all logs to loguru
     logging.basicConfig(handlers=[InterceptHandler()], level=logging.DEBUG, force=True)
 

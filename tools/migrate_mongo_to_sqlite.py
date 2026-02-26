@@ -72,7 +72,11 @@ def _para_to_store(p):
         "section": p.get("section", ""),
         "is_option": p.get("is_option", False),
         # option-specific fields (absent for plain paragraphs)
-        **{k: p[k] for k in ("short", "long", "expectsarg", "argument", "nestedcmd") if k in p},
+        **{
+            k: p[k]
+            for k in ("short", "long", "expectsarg", "argument", "nestedcmd")
+            if k in p
+        },
     }
 
 
@@ -111,9 +115,7 @@ def migrate(manpage_file, mapping_file, db_path):
         dashless_opts = _coerce_bool(
             doc.get("partial_match", doc.get("partialmatch")), False
         )
-        multi_cmd = _coerce_bool(
-            doc.get("multi_cmd", doc.get("multicommand")), False
-        )
+        multi_cmd = _coerce_bool(doc.get("multi_cmd", doc.get("multicommand")), False)
         nested_cmd = doc.get("nested_cmd", doc.get("nestedcmd", False))
         nested_cmd_json = json.dumps(nested_cmd)
 
@@ -160,7 +162,9 @@ def migrate(manpage_file, mapping_file, db_path):
         dst_oid = _oid(doc["dst"])
         new_dst = oid_to_id.get(dst_oid)
         if new_dst is None:
-            logger.warning("mapping dst %s not found in manpage table — skipping", dst_oid)
+            logger.warning(
+                "mapping dst %s not found in manpage table — skipping", dst_oid
+            )
             skipped += 1
             continue
         conn.execute(
@@ -190,7 +194,11 @@ def main():
     parser = argparse.ArgumentParser(description="Migrate MongoDB exports to SQLite")
     parser.add_argument("--manpage", required=True, help="Path to manpage.json export")
     parser.add_argument("--mapping", required=True, help="Path to mapping.json export")
-    parser.add_argument("--db", default="explainshell.db", help="SQLite DB path (default: explainshell.db)")
+    parser.add_argument(
+        "--db",
+        default="explainshell.db",
+        help="SQLite DB path (default: explainshell.db)",
+    )
     args = parser.parse_args()
 
     ok = migrate(args.manpage, args.mapping, args.db)

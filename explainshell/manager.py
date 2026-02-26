@@ -19,7 +19,14 @@ import os
 import sys
 import time
 
-from explainshell import config, errors, llm_extractor, mandoc_extractor, source_extractor, store
+from explainshell import (
+    config,
+    errors,
+    llm_extractor,
+    mandoc_extractor,
+    source_extractor,
+    store,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -160,11 +167,13 @@ def compare_manpages(stored_mp, fresh_mp, skip_fields=()):
         old_val = _normalize(field, getattr(stored_mp, field))
         new_val = _normalize(field, getattr(fresh_mp, field))
         if old_val != new_val:
-            diffs.append({
-                "type": "field",
-                "label": field,
-                "details": [(field, old_val, new_val)],
-            })
+            diffs.append(
+                {
+                    "type": "field",
+                    "label": field,
+                    "details": [(field, old_val, new_val)],
+                }
+            )
 
     # Build option indexes keyed by _option_key.
     stored_opts = {_option_key(o): o for o in stored_mp.options}
@@ -184,23 +193,29 @@ def compare_manpages(stored_mp, fresh_mp, skip_fields=()):
                 if old_val != new_val:
                     opt_diffs.append((field, old_val, new_val))
             if opt_diffs:
-                diffs.append({
-                    "type": "option_changed",
-                    "label": _fmt_flags(s_opt),
-                    "details": opt_diffs,
-                })
+                diffs.append(
+                    {
+                        "type": "option_changed",
+                        "label": _fmt_flags(s_opt),
+                        "details": opt_diffs,
+                    }
+                )
         elif f_opt:
-            diffs.append({
-                "type": "option_added",
-                "label": _fmt_flags(f_opt),
-                "details": f_opt,
-            })
+            diffs.append(
+                {
+                    "type": "option_added",
+                    "label": _fmt_flags(f_opt),
+                    "details": f_opt,
+                }
+            )
         else:
-            diffs.append({
-                "type": "option_removed",
-                "label": _fmt_flags(s_opt),
-                "details": s_opt,
-            })
+            diffs.append(
+                {
+                    "type": "option_removed",
+                    "label": _fmt_flags(s_opt),
+                    "details": s_opt,
+                }
+            )
 
     return diffs
 
@@ -242,7 +257,9 @@ def _diff_manpage(stored_mp, fresh_mp):
                 new_val = _normalize(field, getattr(f_opt, field))
                 if old_val != new_val:
                     opt_diffs.append((field, old_val, new_val))
-            changed_options.append((_fmt_flags(s_opt), opt_diffs if opt_diffs else None))
+            changed_options.append(
+                (_fmt_flags(s_opt), opt_diffs if opt_diffs else None)
+            )
         elif f_opt:
             added_options.append(f_opt)
         else:
@@ -314,12 +331,16 @@ def _parse_mode(raw):
     if raw.startswith("llm:"):
         model = raw[4:]
         if not model:
-            raise ValueError("--mode llm:<model> requires a model name (e.g. llm:gpt-4o)")
+            raise ValueError(
+                "--mode llm:<model> requires a model name (e.g. llm:gpt-4o)"
+            )
         return "llm", model
     if raw.startswith("hybrid:"):
         model = raw[7:]
         if not model:
-            raise ValueError("--mode hybrid:<model> requires a model name (e.g. hybrid:gpt-4o)")
+            raise ValueError(
+                "--mode hybrid:<model> requires a model name (e.g. hybrid:gpt-4o)"
+            )
         return "hybrid", model
     raise ValueError(
         f"invalid --mode value: {raw!r} "
@@ -341,7 +362,9 @@ def main(args):
         return 1
 
     if args.diff == "modes" and not model:
-        print("error: --mode llm:<model> is required when --diff modes", file=sys.stderr)
+        print(
+            "error: --mode llm:<model> is required when --diff modes", file=sys.stderr
+        )
         return 1
 
     db_path = args.db
@@ -372,7 +395,12 @@ def main(args):
         short_path = config.source_from_path(gz_path)
         name = _manpage.extract_name(gz_path)
 
-        if s and not args.diff and not args.overwrite and _already_stored(s, short_path, name):
+        if (
+            s
+            and not args.diff
+            and not args.overwrite
+            and _already_stored(s, short_path, name)
+        ):
             logger.info("skipping %s (already stored)", short_path)
             skipped += 1
             continue
@@ -414,9 +442,12 @@ def main(args):
                 try:
                     mp = mandoc_extractor.extract(gz_path)
                 except errors.LowConfidenceError as e:
-                    logger.warning("hybrid: falling back to LLM for %s: %s",
-                                   short_path, e)
-                    print(f"{_ts()} [{short_path}] tree parser {e}, falling back to LLM ({model})...")
+                    logger.warning(
+                        "hybrid: falling back to LLM for %s: %s", short_path, e
+                    )
+                    print(
+                        f"{_ts()} [{short_path}] tree parser {e}, falling back to LLM ({model})..."
+                    )
                     debug_dir = args.debug_dir if args.dry_run else None
                     mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
             else:
@@ -479,7 +510,9 @@ def main(args):
 
     elapsed = time.monotonic() - t0
     dry_run_note = " (dry run)" if args.dry_run else ""
-    print(f"Done{dry_run_note}: {added} extracted, {skipped} skipped, {failed} failed. Total time: {_fmt_elapsed(elapsed)}")
+    print(
+        f"Done{dry_run_note}: {added} extracted, {skipped} skipped, {failed} failed. Total time: {_fmt_elapsed(elapsed)}"
+    )
     return 0 if failed == 0 else 1
 
 
@@ -516,7 +549,7 @@ def _build_parser():
         const="db",
         choices=["db", "modes"],
         help="Diff mode: 'db' (default) compares fresh extraction against the DB; "
-             "'modes' compares source vs LLM extraction against each other",
+        "'modes' compares source vs LLM extraction against each other",
     )
     parser.add_argument(
         "--debug-dir",

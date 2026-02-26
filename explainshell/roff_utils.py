@@ -18,9 +18,7 @@ from explainshell import roff_parser
 logger = logging.getLogger(__name__)
 
 # Pattern for bare option letters: {A|c|d|...}
-_BARE_LETTERS_BRACES = re.compile(
-    r"\{([A-Za-z0-9](?:\|[A-Za-z0-9])*)\}"
-)
+_BARE_LETTERS_BRACES = re.compile(r"\{([A-Za-z0-9](?:\|[A-Za-z0-9])*)\}")
 
 
 def _is_section_header(line, name):
@@ -30,7 +28,7 @@ def _is_section_header(line, name):
     # mdoc(7) format: .Sh NAME
     for macro in (".SH", ".Sh"):
         if stripped.startswith(macro):
-            rest = stripped[len(macro):].strip().strip('"').strip()
+            rest = stripped[len(macro) :].strip().strip('"').strip()
             if rest.upper() == name.upper():
                 return True
     return False
@@ -81,7 +79,9 @@ def detect_dashless_opts(gz_path: str) -> bool:
         if _is_subsection_header(line):
             header_text = line.strip()[4:].strip().strip('"').lower()
             if "traditional" in header_text or "old" in header_text:
-                logger.info("dashless_opts: found traditional/old subsection in SYNOPSIS")
+                logger.info(
+                    "dashless_opts: found traditional/old subsection in SYNOPSIS"
+                )
                 return True
 
         # A2: Bare option letters like {A|c|d|...}
@@ -97,7 +97,9 @@ def detect_dashless_opts(gz_path: str) -> bool:
     # B1: "BSD" near "option" and "without"/"must not" near "dash"
     if "bsd" in desc_text and "option" in desc_text:
         if ("without" in desc_text or "must not" in desc_text) and "dash" in desc_text:
-            logger.info("dashless_opts: found BSD-style dashless option mention in DESCRIPTION")
+            logger.info(
+                "dashless_opts: found BSD-style dashless option mention in DESCRIPTION"
+            )
             return True
 
     return False

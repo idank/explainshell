@@ -143,7 +143,9 @@ def _call_llm(chunk: str, chunk_info: str, model: str, litellm_kwargs: dict) -> 
 
     Returns (data_dict, messages, raw_response_content).
     """
-    user_content = f"Extract all command-line options from this man page{chunk_info}:\n\n{chunk}"
+    user_content = (
+        f"Extract all command-line options from this man page{chunk_info}:\n\n{chunk}"
+    )
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user", "content": user_content},
@@ -176,7 +178,7 @@ def _call_llm(chunk: str, chunk_info: str, model: str, litellm_kwargs: dict) -> 
             raise
         except retryable as e:
             last_err = e
-            wait = 2 ** attempt
+            wait = 2**attempt
             logger.warning(
                 "LLM call attempt %d failed (%s), retrying in %ds", attempt + 1, e, wait
             )
@@ -197,7 +199,9 @@ def _parse_json_response(content: str) -> dict:
     start = content.find("{")
     end = content.rfind("}")
     if start == -1 or end == -1 or end <= start:
-        raise ExtractionError(f"No JSON object found in LLM response: {content[:200]!r}")
+        raise ExtractionError(
+            f"No JSON object found in LLM response: {content[:200]!r}"
+        )
 
     try:
         return json.loads(content[start : end + 1])
@@ -264,12 +268,18 @@ def _llm_option_to_store_option(raw: dict) -> store.Option:
         expects_arg = True
 
     return store.Option(
-        text=description, short=short, long=long,
-        expects_arg=expects_arg, argument=argument, nested_cmd=nested_cmd,
+        text=description,
+        short=short,
+        long=long,
+        expects_arg=expects_arg,
+        argument=argument,
+        nested_cmd=nested_cmd,
     )
 
 
-def extract(gz_path: str, model: str, debug_dir: str | None = None, **litellm_kwargs) -> store.ParsedManpage:
+def extract(
+    gz_path: str, model: str, debug_dir: str | None = None, **litellm_kwargs
+) -> store.ParsedManpage:
     """LLM extraction pipeline: mandoc → markdown → LLM → ParsedManpage."""
     synopsis, aliases = _get_synopsis_and_aliases(gz_path)
 
@@ -287,7 +297,9 @@ def extract(gz_path: str, model: str, debug_dir: str | None = None, **litellm_kw
     dashless_opts = False
     for i, chunk in enumerate(chunks):
         chunk_info = f" (part {i + 1} of {len(chunks)})" if len(chunks) > 1 else ""
-        chunk_data, messages, raw_response = _call_llm(chunk, chunk_info, model, litellm_kwargs)
+        chunk_data, messages, raw_response = _call_llm(
+            chunk, chunk_info, model, litellm_kwargs
+        )
         all_raw.extend(chunk_data["options"])
         if chunk_data.get("dashless_opts"):
             dashless_opts = True

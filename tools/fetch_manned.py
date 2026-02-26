@@ -39,6 +39,7 @@ def parse_version(version_str):
             parts.append(0)
     return tuple(parts)
 
+
 DEFAULT_DUMP_BASE = "https://dl.manned.org"
 DEFAULT_DATA_DIR = "data/manned"
 
@@ -57,7 +58,8 @@ def resolve_dump_url(base_url):
     """Resolve the current dump URL by reading the 'current' pointer."""
     result = subprocess.run(
         ["curl", "-sfL", f"{base_url}/current"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
         raise RuntimeError(f"Failed to fetch {base_url}/current")
@@ -154,8 +156,7 @@ def cmd_extract(args):
 
     # Load metadata
     logger.info("=== Loading metadata ===")
-    systems, english_locale_ids, mans, packages, pkg_versions = \
-        load_metadata(data_dir)
+    systems, english_locale_ids, mans, packages, pkg_versions = load_metadata(data_dir)
 
     # Find matching system IDs for the requested distro
     distro_systems = {}  # sys_id -> (name, release, short)
@@ -164,7 +165,9 @@ def cmd_extract(args):
             distro_systems[sys_id] = (name, release, short)
     if not distro_systems:
         available = sorted(set(name.lower() for name, _, _ in systems.values()))
-        logger.error("No systems found matching distro '%s'. Available: %s", distro, available)
+        logger.error(
+            "No systems found matching distro '%s'. Available: %s", distro, available
+        )
         sys.exit(1)
 
     # Filter by release
@@ -184,16 +187,29 @@ def cmd_extract(args):
             matching_sys_ids.add(sys_id)
     if not matching_sys_ids:
         available = sorted(set(r for _, r, _ in distro_systems.values() if r))
-        logger.error("No systems found for release '%s'. Available releases: %s", release, available)
+        logger.error(
+            "No systems found for release '%s'. Available releases: %s",
+            release,
+            available,
+        )
         sys.exit(1)
-    logger.info("Matched %d system entries for distro '%s' release '%s'",
-                len(matching_sys_ids), distro, release)
+    logger.info(
+        "Matched %d system entries for distro '%s' release '%s'",
+        len(matching_sys_ids),
+        distro,
+        release,
+    )
 
     # Select content IDs
     logger.info("=== Selecting man pages ===")
     content_to_manpages = select_content_ids(
-        data_dir, sections, english_locale_ids, mans,
-        packages, pkg_versions, matching_sys_ids,
+        data_dir,
+        sections,
+        english_locale_ids,
+        mans,
+        packages,
+        pkg_versions,
+        matching_sys_ids,
     )
 
     # Extract from contents
@@ -266,11 +282,20 @@ def _is_standard_manpath(filename):
     installed to standard paths over application-specific directories (e.g.
     fish, zsh).
     """
-    return filename.startswith("/usr/share/man/man") or filename.startswith("/usr/local/man/man")
+    return filename.startswith("/usr/share/man/man") or filename.startswith(
+        "/usr/local/man/man"
+    )
 
 
-def select_content_ids(data_dir, sections, english_locale_ids, mans,
-                       packages, pkg_versions, matching_sys_ids):
+def select_content_ids(
+    data_dir,
+    sections,
+    english_locale_ids,
+    mans,
+    packages,
+    pkg_versions,
+    matching_sys_ids,
+):
     """
     Process the files table to select which content IDs to extract.
 
@@ -334,7 +359,11 @@ def select_content_ids(data_dir, sections, english_locale_ids, mans,
     logger.info(
         "Processed %d file entries: %d skipped (locale), %d skipped (distro), "
         "%d skipped (section), %d unique man pages selected",
-        count, skipped_locale, skipped_distro, skipped_section, len(seen),
+        count,
+        skipped_locale,
+        skipped_distro,
+        skipped_section,
+        len(seen),
     )
 
     # Build content_id -> [(name, section), ...] mapping
@@ -391,10 +420,7 @@ def extract_contents(data_dir, content_to_manpages, output_dir):
         # Unescape PostgreSQL COPY format
         raw_content = parts[2]
         raw_content = (
-            raw_content
-            .replace("\\n", "\n")
-            .replace("\\t", "\t")
-            .replace("\\\\", "\\")
+            raw_content.replace("\\n", "\n").replace("\\t", "\t").replace("\\\\", "\\")
         )
         # Remove trailing newline from the TSV row itself
         if raw_content.endswith("\n"):
@@ -416,14 +442,19 @@ def extract_contents(data_dir, content_to_manpages, output_dir):
         extracted += 1
 
         if extracted % 1000 == 0:
-            logger.info("  extracted %d / %d content entries (%d remaining)",
-                        extracted, total_needed, len(remaining))
+            logger.info(
+                "  extracted %d / %d content entries (%d remaining)",
+                extracted,
+                total_needed,
+                len(remaining),
+            )
 
     zstd_proc.terminate()
     zstd_proc.wait()
 
-    logger.info("Extraction complete: %d / %d content entries written",
-                extracted, total_needed)
+    logger.info(
+        "Extraction complete: %d / %d content entries written", extracted, total_needed
+    )
     if remaining:
         logger.warning("%d content IDs were not found in the dump", len(remaining))
 
@@ -448,7 +479,7 @@ def main():
         "--dump-url",
         default=None,
         help="Full URL to dump directory (e.g. https://dl.manned.org/2026-02-21). "
-             "Auto-resolves from 'current' pointer if not specified.",
+        "Auto-resolves from 'current' pointer if not specified.",
     )
     dl_parser.add_argument(
         "--data-dir",
@@ -467,27 +498,31 @@ def main():
         help=f"Directory containing dump files (default: {DEFAULT_DATA_DIR})",
     )
     ex_parser.add_argument(
-        "--output-dir", "-o",
+        "--output-dir",
+        "-o",
         default="manpages",
         help="Output directory for .gz man page files (default: manpages)",
     )
     ex_parser.add_argument(
-        "--distro", "-d",
+        "--distro",
+        "-d",
         default="ubuntu",
         help="Distribution to extract man pages from (default: ubuntu). "
-             "Matched case-insensitively against system names.",
+        "Matched case-insensitively against system names.",
     )
     ex_parser.add_argument(
-        "--release", "-r",
+        "--release",
+        "-r",
         default="latest",
         help="Distribution release version to extract (e.g. '24.04'). "
-             "Default: 'latest' (auto-selects the newest release).",
+        "Default: 'latest' (auto-selects the newest release).",
     )
     ex_parser.add_argument(
-        "--sections", "-s",
+        "--sections",
+        "-s",
         default=None,
         help="Comma-separated list of man page sections to fetch (e.g. 1,5,8). "
-             "Default: all sections.",
+        "Default: all sections.",
     )
 
     args = parser.parse_args()

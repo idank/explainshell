@@ -41,7 +41,9 @@ class test_matcher(unittest.TestCase):
             (11, 13, "-? help text", "-?"),
         ]
 
-        self.assertMatchSingle("bar -a --a -?", s.find_man_page("bar")[0], matchedresult)
+        self.assertMatchSingle(
+            "bar -a --a -?", s.find_man_page("bar")[0], matchedresult
+        )
 
     def test_arg_in_fuzzy_with_expected_value(self):
         cmd = "baz -ab arg"

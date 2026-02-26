@@ -3,7 +3,11 @@
 import unittest
 
 from explainshell import store
-from explainshell.tree_parser import ExtractionResult, ConfidenceResult, assess_confidence
+from explainshell.tree_parser import (
+    ExtractionResult,
+    ConfidenceResult,
+    assess_confidence,
+)
 
 
 def _make_option(short=None, long=None, text="flag\ndescription"):
@@ -90,8 +94,10 @@ class TestAssessConfidence(unittest.TestCase):
         self.assertTrue(conf.confident)
 
     def test_high_empty_descriptions(self):
-        opts = [_make_option(short=[f"-{chr(97+i)}"], text=f"-{chr(97+i)}")
-                for i in range(10)]
+        opts = [
+            _make_option(short=[f"-{chr(97 + i)}"], text=f"-{chr(97 + i)}")
+            for i in range(10)
+        ]
         result = ExtractionResult(
             options=opts,
             option_sections_found=1,
@@ -106,8 +112,10 @@ class TestAssessConfidence(unittest.TestCase):
 
     def test_low_empty_descriptions_absolute_is_confident(self):
         """High ratio but low absolute count (<=3) should still be confident."""
-        opts = [_make_option(short=[f"-{chr(97+i)}"], text=f"-{chr(97+i)}")
-                for i in range(4)]
+        opts = [
+            _make_option(short=[f"-{chr(97 + i)}"], text=f"-{chr(97 + i)}")
+            for i in range(4)
+        ]
         result = ExtractionResult(
             options=opts,
             option_sections_found=1,

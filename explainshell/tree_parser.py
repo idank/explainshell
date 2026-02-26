@@ -26,15 +26,17 @@ logger = logging.getLogger(__name__)
 # Result dataclasses
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ExtractionResult:
     """Result of tree-based option extraction with diagnostic metadata."""
+
     options: list = field(default_factory=list)  # list[store.Option]
     mandoc_stderr: str = ""
-    option_sections_found: int = 0   # sections matching _is_option_section()
-    option_sections_empty: int = 0   # matched sections that yielded 0 options
-    total_body_children: int = 0     # children traversed in option sections
-    unrecognized_children: int = 0   # children that fell through to else: i += 1
+    option_sections_found: int = 0  # sections matching _is_option_section()
+    option_sections_empty: int = 0  # matched sections that yielded 0 options
+    total_body_children: int = 0  # children traversed in option sections
+    unrecognized_children: int = 0  # children that fell through to else: i += 1
     empty_description_count: int = 0
     is_mdoc: bool = False
 
@@ -42,6 +44,7 @@ class ExtractionResult:
 @dataclass
 class ConfidenceResult:
     """Whether the tree parser is confident in its extraction."""
+
     confident: bool = True
     reasons: list = field(default_factory=list)  # list[str]
 
@@ -50,23 +53,24 @@ class ConfidenceResult:
             return "confident"
         return f"not confident: {'; '.join(self.reasons)}"
 
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Tree data structure
 # ---------------------------------------------------------------------------
 
+
 class Node:
     """A node in the mandoc parse tree."""
 
     __slots__ = ("kind", "subkind", "text", "attrs", "children")
 
-    def __init__(self, kind: str, subkind: str = "", text: str = "",
-                 attrs: str = ""):
-        self.kind = kind          # "SH", "TP", "IP", "B", "Bl", "It", ...
-        self.subkind = subkind    # "block", "head", "body", "elem", "text"
-        self.text = text          # text content for text/elem nodes
-        self.attrs = attrs        # trailing attributes (e.g. "-tag -width Ds")
+    def __init__(self, kind: str, subkind: str = "", text: str = "", attrs: str = ""):
+        self.kind = kind  # "SH", "TP", "IP", "B", "Bl", "It", ...
+        self.subkind = subkind  # "block", "head", "body", "elem", "text"
+        self.text = text  # text content for text/elem nodes
+        self.attrs = attrs  # trailing attributes (e.g. "-tag -width Ds")
         self.children: list[Node] = []
 
     def __repr__(self):
@@ -79,8 +83,11 @@ class Node:
 
     def find(self, kind: str, subkind: str = "") -> "list[Node]":
         """Find direct children matching kind (and optionally subkind)."""
-        return [c for c in self.children
-                if c.kind == kind and (not subkind or c.subkind == subkind)]
+        return [
+            c
+            for c in self.children
+            if c.kind == kind and (not subkind or c.subkind == subkind)
+        ]
 
     def find_recursive(self, kind: str, subkind: str = "") -> "list[Node]":
         """Find all descendants matching kind (and optionally subkind)."""
@@ -181,9 +188,7 @@ _HEADER_RE = re.compile(r"^(?:title|name|sec|vol|os|date)\s+=")
 
 # Detect lines that have a mandoc tree node marker.
 # The position may not be immediately after the subkind (attrs can intervene).
-_HAS_MARKER_RE = re.compile(
-    r"\((?:text|block|head|body|elem|comment)\)\s+"
-)
+_HAS_MARKER_RE = re.compile(r"\((?:text|block|head|body|elem|comment)\)\s+")
 
 
 def _join_wrapped_lines(text: str) -> str:
@@ -310,10 +315,20 @@ def run_mandoc_tree(gz_path: str) -> tuple[str, str]:
 
 # Section names that contain options (mirrors roff_parser._OPTION_SECTION_NAMES)
 _OPTION_SECTION_NAMES = {
-    "options", "other options", "common options", "description",
-    "function letters", "command options", "optional arguments",
-    "positional arguments", "positional options", "global options",
-    "arguments", "flags", "tests", "actions",
+    "options",
+    "other options",
+    "common options",
+    "description",
+    "function letters",
+    "command options",
+    "optional arguments",
+    "positional arguments",
+    "positional options",
+    "global options",
+    "arguments",
+    "flags",
+    "tests",
+    "actions",
 }
 
 
@@ -347,6 +362,7 @@ def _get_sections(root: Node) -> list[Node]:
 # ---------------------------------------------------------------------------
 # Text extraction from tree nodes
 # ---------------------------------------------------------------------------
+
 
 def _collect_text_from_body(body: Node) -> str:
     """Collect description text from a body node, preserving paragraph breaks.
@@ -382,8 +398,10 @@ def _collect_body_parts(node: Node, parts: list):
                 _collect_body_parts(body, parts)
         elif child.kind == "sp" and child.subkind == "elem":
             parts.append("\n\n")
-        elif child.kind in ("B", "I", "BI", "BR", "IB", "IR", "RB", "RI",
-                            "SM", "SB") and child.subkind == "elem":
+        elif (
+            child.kind in ("B", "I", "BI", "BR", "IB", "IR", "RB", "RI", "SM", "SB")
+            and child.subkind == "elem"
+        ):
             # Inline formatting — collect text from children
             parts.append(child.get_text())
         elif child.kind == "RS" and child.subkind == "block":
@@ -472,6 +490,7 @@ def _rs_has_flags(rs_body: Node) -> bool:
 # Option extraction: man(7) pages — TP, IP, HP, PP+RS patterns
 # ---------------------------------------------------------------------------
 
+
 def _extract_man_options(body: Node) -> tuple[list[dict], int, int]:
     """Extract options from a man(7) section body node.
 
@@ -511,7 +530,7 @@ def _extract_man_options(body: Node) -> tuple[list[dict], int, int]:
                                 ).strip()
                             i += 1
                             continue
-                    if (nxt.kind in ("TP", "IP") and nxt.subkind == "block"):
+                    if nxt.kind in ("TP", "IP") and nxt.subkind == "block":
                         nxt_head = nxt.get_head()
                         head_text = _collect_head_text(nxt_head) if nxt_head else ""
                         if not head_text.strip():
@@ -613,9 +632,12 @@ def _merge_short_long_pairs(entries: list[dict]) -> list[dict]:
     i = 0
     while i < len(entries):
         e = entries[i]
-        if (i + 1 < len(entries)
-                and e.get("short") and not e.get("long")
-                and not e.get("description", "").strip()):
+        if (
+            i + 1 < len(entries)
+            and e.get("short")
+            and not e.get("long")
+            and not e.get("description", "").strip()
+        ):
             nxt = entries[i + 1]
             if nxt.get("long") and not nxt.get("short"):
                 # Merge: take short from first, long+desc from second
@@ -712,7 +734,9 @@ def _extract_pp_rs_entry(children: list[Node], idx: int) -> tuple[dict | None, i
 
     # Check if it looks like a flag
     cleaned_flag = clean_roff(flag_text).strip()
-    if not cleaned_flag or not (cleaned_flag.startswith("-") or cleaned_flag.startswith("<")):
+    if not cleaned_flag or not (
+        cleaned_flag.startswith("-") or cleaned_flag.startswith("<")
+    ):
         return None, 1
 
     # Look for RS block as next sibling
@@ -822,6 +846,7 @@ def _extract_bare_text_entry(node: Node) -> dict | None:
 # ---------------------------------------------------------------------------
 # Option extraction: mdoc pages — Bl/It patterns
 # ---------------------------------------------------------------------------
+
 
 def _extract_mdoc_options(body: Node) -> tuple[list[dict], int, int]:
     """Extract options from an mdoc section body node.
@@ -946,6 +971,7 @@ def _extract_it_entry(node: Node) -> dict | None:
 # Main entry point
 # ---------------------------------------------------------------------------
 
+
 def parse_options(gz_path: str) -> ExtractionResult:
     """Extract options from a .gz man page using mandoc -T tree.
 
@@ -1052,10 +1078,16 @@ def parse_options(gz_path: str) -> ExtractionResult:
         else:
             text = description
 
-        options.append(store.Option(
-            text=text, short=short, long=long,
-            expects_arg=expects_arg, argument=argument, nested_cmd=False,
-        ))
+        options.append(
+            store.Option(
+                text=text,
+                short=short,
+                long=long,
+                expects_arg=expects_arg,
+                argument=argument,
+                nested_cmd=False,
+            )
+        )
 
     result.options = options
     result.empty_description_count = empty_desc
@@ -1070,8 +1102,10 @@ def assess_confidence(result: ExtractionResult) -> ConfidenceResult:
     reasons = []
 
     # All option sections empty
-    if (result.option_sections_found > 0
-            and result.option_sections_empty == result.option_sections_found):
+    if (
+        result.option_sections_found > 0
+        and result.option_sections_empty == result.option_sections_found
+    ):
         reasons.append("all option sections empty")
 
     # No option sections found and no options extracted
@@ -1079,18 +1113,22 @@ def assess_confidence(result: ExtractionResult) -> ConfidenceResult:
         reasons.append("no option sections found")
 
     # High unrecognized ratio (>50% and >5 absolute)
-    if (result.total_body_children > 0
-            and result.unrecognized_children > 5
-            and result.unrecognized_children / result.total_body_children > 0.5):
+    if (
+        result.total_body_children > 0
+        and result.unrecognized_children > 5
+        and result.unrecognized_children / result.total_body_children > 0.5
+    ):
         reasons.append(
             f"high unrecognized ratio: {result.unrecognized_children}"
             f"/{result.total_body_children}"
         )
 
     # High empty descriptions (>50% and >3 absolute)
-    if (len(result.options) > 0
-            and result.empty_description_count > 3
-            and result.empty_description_count / len(result.options) > 0.5):
+    if (
+        len(result.options) > 0
+        and result.empty_description_count > 3
+        and result.empty_description_count / len(result.options) > 0.5
+    ):
         reasons.append(
             f"high empty descriptions: {result.empty_description_count}"
             f"/{len(result.options)}"

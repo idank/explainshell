@@ -27,8 +27,10 @@ def level_filter():
     """
     Filter function to exclude DEBUG and SUCCESS log levels from being logged to standard output.
     """
+
     def is_level(record):
         return record["level"].name not in ["DEBUG", "SUCCESS"]
+
     return is_level
 
 
