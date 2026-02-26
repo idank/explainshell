@@ -21,8 +21,10 @@ parsing-update:
 tests-all: lint tests e2e parsing-regression
 
 lint:
-	@command -v ruff >/dev/null 2>&1 || (echo "ruff is required. Install with: pip install ruff"; exit 1)
 	ruff check explainshell tests tools
+
+format:
+	ruff format explainshell tests tools
 
 serve:
 	python runserver.py
