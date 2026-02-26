@@ -97,7 +97,9 @@ class Matcher(bashlex.ast.nodevisitor):
     def find_man_pages(self, prog):
         logger.info("looking up %r in store", prog)
         man_pages = self.store.find_man_page(prog)
-        logger.info("found %r in store, got: %r, using %r", prog, man_pages, man_pages[0])
+        logger.info(
+            "found %r in store, got: %r, using %r", prog, man_pages, man_pages[0]
+        )
         return man_pages
 
     def unknown(self, token, start, end):
@@ -109,9 +111,9 @@ class Matcher(bashlex.ast.nodevisitor):
         helptext = None
         if self.compound_stack:
             current_compound = self.compound_stack[-1]
-            helptext = help_constants.COMPOUND_RESERVED_WORDS.get(current_compound, {}).get(
-                word
-            )
+            helptext = help_constants.COMPOUND_RESERVED_WORDS.get(
+                current_compound, {}
+            ).get(word)
 
         # try these if we don't have anything specific
         if not helptext:
@@ -125,9 +127,9 @@ class Matcher(bashlex.ast.nodevisitor):
         helptext = None
         if self.compound_stack:
             curr_compound = self.compound_stack[-1]
-            helptext = help_constants.COMPOUND_RESERVED_WORDS.get(curr_compound, {}).get(
-                op
-            )
+            helptext = help_constants.COMPOUND_RESERVED_WORDS.get(
+                curr_compound, {}
+            ).get(op)
 
         if not helptext:
             helptext = help_constants.OPERATORS[op]
@@ -357,9 +359,9 @@ class Matcher(bashlex.ast.nodevisitor):
     def endcommand(self):
         """end the most recently created command group by popping it from the
         group stack. groups are created by visitcommand or a nested command"""
-        assert (
-            len(self.group_stack) >= 2
-        ), "groupstack must contain shell and command groups"
+        assert len(self.group_stack) >= 2, (
+            "groupstack must contain shell and command groups"
+        )
         g = self.group_stack.pop()
         logger.info("ending group %s", g)
 
@@ -502,7 +504,9 @@ class Matcher(bashlex.ast.nodevisitor):
                         )
                     if take:
                         if self._prev_option.nested_cmd:
-                            logger.info("option %r can nest commands", self._prev_option)
+                            logger.info(
+                                "option %r can nest commands", self._prev_option
+                            )
                             if self.startcommand(
                                 None,
                                 [node],
@@ -627,9 +631,9 @@ class Matcher(bashlex.ast.nodevisitor):
         )
         if isinstance(self.ast, bashlex.ast.node):
             self.visit(self.ast)
-            assert (
-                len(self.group_stack) == 1
-            ), "groupstack should contain only shell group after matching"
+            assert len(self.group_stack) == 1, (
+                "groupstack should contain only shell group after matching"
+            )
 
             # if we only have one command in there and no shell results/expansions,
             # reraise the original exception
@@ -653,7 +657,7 @@ class Matcher(bashlex.ast.nodevisitor):
         def debug_match():
             s = "\n".join(
                 [
-                    f"{i}) {self.s[m.start: m.end]} = {m.text}"
+                    f"{i}) {self.s[m.start : m.end]} = {m.text}"
                     for i, m in enumerate(self.all_matches)
                 ]
             )
@@ -675,7 +679,7 @@ class Matcher(bashlex.ast.nodevisitor):
                 for i, m in enumerate(group.results):
                     assert m.end <= len(self.s), f"{m.end} {len(self.s)}"
 
-                    portion = self.s[m.start: m.end]
+                    portion = self.s[m.start : m.end]
                     group.results[i] = MatchResult(m.start, m.end, m.text, portion)
 
         logger.debug("%r matches:\n%s", self.s, debug_match())

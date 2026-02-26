@@ -50,9 +50,7 @@ def explain():
     s = store.Store(config.DB_PATH)
     try:
         matches, helptext = explain_cmd(command, s)
-        helptext = [
-            (render_markdown(text), id_) for text, id_ in helptext
-        ]
+        helptext = [(render_markdown(text), id_) for text, id_ in helptext]
         return render_template(
             "explain.html", matches=matches, helptext=helptext, getargs=command
         )
@@ -329,7 +327,7 @@ def _substitution_markup(cmd):
     """
     encoded = urllib.parse.urlencode({"cmd": cmd})
     return (
-        '<a href="/explain?{query}" title="Zoom in to nested command">{cmd}' "</a>"
+        '<a href="/explain?{query}" title="Zoom in to nested command">{cmd}</a>'
     ).format(cmd=cmd, query=encoded)
 
 

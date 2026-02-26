@@ -19,7 +19,9 @@ from explainshell.manager import compare_manpages
 _REGRESSION_DIR = os.path.join(os.path.dirname(__file__), "manpages")
 _REGRESSION_DB = os.path.join(os.path.dirname(__file__), "regression.db")
 
-_gz_files = sorted(glob.glob(os.path.join(_REGRESSION_DIR, "**", "*.gz"), recursive=True))
+_gz_files = sorted(
+    glob.glob(os.path.join(_REGRESSION_DIR, "**", "*.gz"), recursive=True)
+)
 
 
 def _format_diffs(diffs):
@@ -51,7 +53,9 @@ def db_store():
     return store.Store(_REGRESSION_DB)
 
 
-@pytest.mark.parametrize("gz_path", _gz_files, ids=[os.path.basename(p) for p in _gz_files])
+@pytest.mark.parametrize(
+    "gz_path", _gz_files, ids=[os.path.basename(p) for p in _gz_files]
+)
 def test_parsing_matches_db(gz_path, db_store, request):
     basename = os.path.basename(gz_path)
     extractor = request.config.getoption("--extractor")

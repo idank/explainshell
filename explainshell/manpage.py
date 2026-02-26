@@ -32,7 +32,7 @@ def _parse_synopsis(base, synopsis):
     >>> _parse_synopsis('/a/b/c', '/a/b/c: "p-r+o++g - foo bar."')
     ('p-r+o++g', 'foo bar')
     """
-    synopsis = synopsis[len(base) + 3: -1]
+    synopsis = synopsis[len(base) + 3 : -1]
     if synopsis[-1] == ".":
         synopsis = synopsis[:-1]
 
@@ -71,11 +71,7 @@ def get_synopsis_and_aliases(gz_path):
 
     if raw_synopsis:
         lines = raw_synopsis.splitlines()
-        parsed = [
-            _parse_synopsis(gz_path, line)
-            for line in lines
-            if line.strip()
-        ]
+        parsed = [_parse_synopsis(gz_path, line) for line in lines if line.strip()]
         parsed = [p for p in parsed if p]
         if parsed:
             d = collections.OrderedDict()

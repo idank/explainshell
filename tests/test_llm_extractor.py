@@ -25,16 +25,17 @@ from explainshell.llm_extractor import (
 # TestGetPlainText
 # ---------------------------------------------------------------------------
 
+
 class TestGetManpageText(unittest.TestCase):
     @patch("explainshell.llm_extractor.subprocess.run")
     def test_success_extracts_manual_text(self, mock_run):
         html = (
-            '<html><body>'
+            "<html><body>"
             '<div class="manual-text">'
-            '<p><b>bold</b> and <i>italic</i></p>'
-            '</div>'
+            "<p><b>bold</b> and <i>italic</i></p>"
+            "</div>"
             '<table class="foot"><tr><td></td></tr></table>'
-            '</body></html>'
+            "</body></html>"
         )
         mock_run.return_value = MagicMock(returncode=0, stdout=html, stderr="")
         result = get_manpage_text("dummy.1.gz")
@@ -77,6 +78,7 @@ class TestGetManpageText(unittest.TestCase):
 _ECHO_GZ = os.path.join(os.path.dirname(__file__), "..", "manpages", "1", "echo.1.gz")
 _FIND_GZ = os.path.join(os.path.dirname(__file__), "..", "manpages", "1", "find.1.gz")
 
+
 class TestGetManpageTextReal(unittest.TestCase):
     def test_mandoc_produces_markdown(self):
         text = get_manpage_text(_ECHO_GZ)
@@ -104,12 +106,14 @@ class TestGetManpageTextReal(unittest.TestCase):
         """Prose paragraphs should not be hard-wrapped at terminal width (~78 cols)."""
         text = get_manpage_text(_FIND_GZ)
         content_lines = [
-            line for line in text.split("\n")
+            line
+            for line in text.split("\n")
             if line and not line.startswith("=") and not line.startswith("[")
         ]
         long_lines = [line for line in content_lines if len(line) > 80]
         self.assertGreater(
-            len(long_lines), 0,
+            len(long_lines),
+            0,
             "Expected long prose lines (>80 chars) but all lines were short — "
             "mandoc whitespace may be leaking through as hard wraps",
         )
@@ -118,6 +122,7 @@ class TestGetManpageTextReal(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # TestChunkText
 # ---------------------------------------------------------------------------
+
 
 class TestChunkText(unittest.TestCase):
     def test_small_text_no_split(self):
@@ -133,7 +138,9 @@ class TestChunkText(unittest.TestCase):
         chunks = chunk_text(text)
         self.assertGreater(len(chunks), 1)
         for chunk in chunks:
-            self.assertLessEqual(len(chunk), CHUNK_SIZE_CHARS + 1000)  # at most one para over
+            self.assertLessEqual(
+                len(chunk), CHUNK_SIZE_CHARS + 1000
+            )  # at most one para over
 
     def test_overlap_exists(self):
         para = "y" * 1000
@@ -161,6 +168,7 @@ class TestChunkText(unittest.TestCase):
 # TestParseJsonResponse
 # ---------------------------------------------------------------------------
 
+
 class TestParseJsonResponse(unittest.TestCase):
     def test_clean_json(self):
         content = '{"options": []}'
@@ -168,12 +176,12 @@ class TestParseJsonResponse(unittest.TestCase):
         self.assertEqual(result, {"options": []})
 
     def test_strips_markdown_fences(self):
-        content = "```json\n{\"options\": []}\n```"
+        content = '```json\n{"options": []}\n```'
         result = _parse_json_response(content)
         self.assertEqual(result, {"options": []})
 
     def test_strips_backtick_fence_no_lang(self):
-        content = "```\n{\"options\": []}\n```"
+        content = '```\n{"options": []}\n```'
         result = _parse_json_response(content)
         self.assertEqual(result, {"options": []})
 
@@ -190,6 +198,7 @@ class TestParseJsonResponse(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # TestValidateLlmResponse
 # ---------------------------------------------------------------------------
+
 
 class TestValidateLlmResponse(unittest.TestCase):
     def test_valid_passes(self):
@@ -211,6 +220,7 @@ class TestValidateLlmResponse(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # TestLlmOptionToStoreOption
 # ---------------------------------------------------------------------------
+
 
 class TestLlmOptionToStoreOption(unittest.TestCase):
     def test_short_and_long(self):
@@ -274,6 +284,7 @@ class TestLlmOptionToStoreOption(unittest.TestCase):
 # TestDedupOptions
 # ---------------------------------------------------------------------------
 
+
 class TestDedupOptions(unittest.TestCase):
     def test_duplicates_removed(self):
         opts = [
@@ -304,6 +315,7 @@ class TestDedupOptions(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # TestExtractIntegration
 # ---------------------------------------------------------------------------
+
 
 class TestExtractIntegration(unittest.TestCase):
     @patch("explainshell.llm_extractor._call_llm")
@@ -353,7 +365,12 @@ class TestExtractIntegration(unittest.TestCase):
         mock_llm.return_value = (
             {
                 "options": [
-                    {"short": "not-a-list", "long": [], "expects_arg": False, "description": "bad"},
+                    {
+                        "short": "not-a-list",
+                        "long": [],
+                        "expects_arg": False,
+                        "description": "bad",
+                    },
                     {
                         "short": ["-v"],
                         "long": [],
@@ -377,11 +394,23 @@ class TestExtractIntegration(unittest.TestCase):
     @patch("explainshell.llm_extractor._get_synopsis_and_aliases")
     def test_debug_dir_writes_files(self, mock_synopsis, mock_plaintext, mock_llm):
         import tempfile
+
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
         mock_plaintext.return_value = "dummy man page text"
         raw_response = '{"options": [{"short": ["-v"], "long": [], "expects_arg": false, "argument": null, "nested_cmd": false, "description": "Verbose."}]}'
         mock_llm.return_value = (
-            {"options": [{"short": ["-v"], "long": [], "expects_arg": False, "argument": None, "nested_cmd": False, "description": "Verbose."}]},
+            {
+                "options": [
+                    {
+                        "short": ["-v"],
+                        "long": [],
+                        "expects_arg": False,
+                        "argument": None,
+                        "nested_cmd": False,
+                        "description": "Verbose.",
+                    }
+                ]
+            },
             [{"role": "system", "content": "sys"}, {"role": "user", "content": "usr"}],
             raw_response,
         )
@@ -398,6 +427,7 @@ class TestExtractIntegration(unittest.TestCase):
             self.assertTrue(os.path.exists(prompt_path))
             with open(prompt_path) as f:
                 import json
+
                 msgs = json.load(f)
                 self.assertEqual(len(msgs), 2)
                 self.assertEqual(msgs[0]["role"], "system")
@@ -408,10 +438,10 @@ class TestExtractIntegration(unittest.TestCase):
                 self.assertEqual(f.read(), raw_response)
 
 
-
 # ---------------------------------------------------------------------------
 # TestLlmManagerDryRun
 # ---------------------------------------------------------------------------
+
 
 class TestLlmManagerDryRun(unittest.TestCase):
     """Tests for --dry-run: LLM is called, DB is not written."""
@@ -433,24 +463,31 @@ class TestLlmManagerDryRun(unittest.TestCase):
     @patch("explainshell.manager.llm_extractor.extract")
     @patch("explainshell.manager.store.Store")
     @patch("explainshell.manager._collect_gz_files")
-    def test_dry_run_calls_llm_but_not_store(self, mock_collect, mock_store_cls, mock_extract):
+    def test_dry_run_calls_llm_but_not_store(
+        self, mock_collect, mock_store_cls, mock_extract
+    ):
         mock_collect.return_value = ["/fake/echo.1.gz"]
         fake_mp = MagicMock()
         fake_mp.options = [MagicMock(), MagicMock()]
         mock_extract.return_value = fake_mp
 
         from explainshell.manager import main
+
         args = self._make_args(dry_run=True)
         ret = main(args)
 
-        mock_extract.assert_called_once_with("/fake/echo.1.gz", "test-model", debug_dir="debug-output")
+        mock_extract.assert_called_once_with(
+            "/fake/echo.1.gz", "test-model", debug_dir="debug-output"
+        )
         mock_store_cls.assert_not_called()
         self.assertEqual(ret, 0)
 
     @patch("explainshell.manager.llm_extractor.extract")
     @patch("explainshell.manager.store.Store")
     @patch("explainshell.manager._collect_gz_files")
-    def test_normal_run_writes_to_store(self, mock_collect, mock_store_cls, mock_extract):
+    def test_normal_run_writes_to_store(
+        self, mock_collect, mock_store_cls, mock_extract
+    ):
         mock_collect.return_value = ["/fake/echo.1.gz"]
         fake_mp = MagicMock()
         fake_mp.options = [MagicMock()]
@@ -461,9 +498,11 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_store_cls.return_value = mock_store
         # simulate page not already stored
         from explainshell import errors
+
         mock_store.find_man_page.side_effect = errors.ProgramDoesNotExist("echo")
 
         from explainshell.manager import main
+
         args = self._make_args(dry_run=False)
         main(args)
 
@@ -486,7 +525,9 @@ _MODEL_KEY_ENV = {
 _DEFAULT_LLM_MODEL = "gemini/gemini-3-flash-preview"
 
 
-@unittest.skipUnless(os.environ.get("RUN_LLM_TESTS") == "1", "set RUN_LLM_TESTS=1 to run")
+@unittest.skipUnless(
+    os.environ.get("RUN_LLM_TESTS") == "1", "set RUN_LLM_TESTS=1 to run"
+)
 class TestRealLlm(unittest.TestCase):
     ECHO_GZ = os.path.join(os.path.dirname(__file__), "echo.1.gz")
 
@@ -494,6 +535,7 @@ class TestRealLlm(unittest.TestCase):
         if not os.path.exists(self.ECHO_GZ):
             # copy from manpages dir if not present
             import shutil
+
             src = os.path.join(
                 os.path.dirname(__file__), "..", "manpages", "1", "echo.1.gz"
             )

@@ -24,6 +24,7 @@ def _gz(name):
 # _clean_roff
 # ---------------------------------------------------------------------------
 
+
 class TestCleanRoff(unittest.TestCase):
     def test_font_escapes(self):
         self.assertEqual(clean_roff(r"\fBbold\fR"), "bold")
@@ -55,6 +56,7 @@ class TestCleanRoff(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # _clean_roff_description
 # ---------------------------------------------------------------------------
+
 
 class TestCleanRoffDescription(unittest.TestCase):
     def test_inline_B_joined_with_previous(self):
@@ -91,7 +93,9 @@ class TestCleanRoffDescription(unittest.TestCase):
     def test_consecutive_text_lines_joined(self):
         text = "This is a long\ndescription that spans\nmultiple lines."
         result = _clean_roff_description(text)
-        self.assertEqual(result, "This is a long description that spans multiple lines.")
+        self.assertEqual(
+            result, "This is a long description that spans multiple lines."
+        )
 
     def test_strips_if_conditional(self):
         text = "some text\n.if n \\{\\\n.\\}\nmore text"
@@ -247,7 +251,8 @@ class TestDescriptionCleaningIntegration(unittest.TestCase):
                     continue
                 max_expected = 2 if i == 0 else 1
                 self.assertLessEqual(
-                    len(lines), max_expected,
+                    len(lines),
+                    max_expected,
                     f"Unexpected line count in find option {flags} para {i}: {para[:120]!r}",
                 )
 
@@ -255,6 +260,7 @@ class TestDescriptionCleaningIntegration(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # _parse_roff_args
 # ---------------------------------------------------------------------------
+
 
 class TestParseRoffArgs(unittest.TestCase):
     def test_quoted_and_unquoted(self):
@@ -270,6 +276,7 @@ class TestParseRoffArgs(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # _parse_flag_text
 # ---------------------------------------------------------------------------
+
 
 class TestParseFlagText(unittest.TestCase):
     def test_simple_short(self):
@@ -375,6 +382,7 @@ class TestParseFlagText(unittest.TestCase):
 # _detect_dialect
 # ---------------------------------------------------------------------------
 
+
 class TestDetectDialect(unittest.TestCase):
     def test_man_dialect(self):
         lines = ['.TH ECHO "1" "September 2011"\n', ".SH NAME\n"]
@@ -392,6 +400,7 @@ class TestDetectDialect(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Integration tests with real man pages
 # ---------------------------------------------------------------------------
+
 
 class TestParseEcho(unittest.TestCase):
     """echo.1.gz — .TP pattern (help2man style)."""
@@ -564,10 +573,12 @@ class TestParseFind(unittest.TestCase):
         top-level options."""
         for opt in self.opts:
             for f in opt.short + opt.long:
-                self.assertNotEqual(f, "exec",
-                                    "Nested .IP 'exec' leaked as top-level option")
-                self.assertNotEqual(f, "opt",
-                                    "Nested .IP 'opt' leaked as top-level option")
+                self.assertNotEqual(
+                    f, "exec", "Nested .IP 'exec' leaked as top-level option"
+                )
+                self.assertNotEqual(
+                    f, "opt", "Nested .IP 'opt' leaked as top-level option"
+                )
 
 
 class TestParseBsdtar(unittest.TestCase):
@@ -666,7 +677,8 @@ class TestParseGitRebase(unittest.TestCase):
             if "--merge" in opt.long:
                 paragraphs = opt.text.split("\n\n")
                 self.assertGreater(
-                    len(paragraphs), 1,
+                    len(paragraphs),
+                    1,
                     f"--merge description should have multiple paragraphs: {opt.text!r}",
                 )
                 break
@@ -679,7 +691,8 @@ class TestParseGitRebase(unittest.TestCase):
             if "--strategy" in opt.long:
                 paragraphs = opt.text.split("\n\n")
                 self.assertGreater(
-                    len(paragraphs), 1,
+                    len(paragraphs),
+                    1,
                     f"--strategy description should have multiple paragraphs: {opt.text!r}",
                 )
                 break
@@ -903,6 +916,7 @@ class TestParseOptionsEdgeCases(unittest.TestCase):
     def test_empty_lines(self):
         # Monkey-patch _read_roff to return empty
         import explainshell.roff_parser as rp
+
         original = rp._read_roff
         rp._read_roff = lambda gz: []
         try:

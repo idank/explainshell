@@ -10,12 +10,16 @@ def group_continuous(items, key=None):
     [[0, 1, 2, 3, 4]]
     """
     if key is None:
+
         def identity(value):
             return value
+
         key_func = identity
     else:
         key_func = key
-    for _, grouped in itertools.groupby(enumerate(items), lambda ix: ix[0] - key_func(ix[1])):
+    for _, grouped in itertools.groupby(
+        enumerate(items), lambda ix: ix[0] - key_func(ix[1])
+    ):
         yield list(map(itemgetter(1), grouped))
 
 

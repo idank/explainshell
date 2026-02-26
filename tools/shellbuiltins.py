@@ -24,8 +24,11 @@ def _add(names, synopsis, options):
     # explainshell, oh well)
     names.append(f"bash-{name}")
     BUILTINS[name] = sm(
-        source="bash-%s.1.gz" % name, name=name, synopsis=synopsis,
-        options=options, aliases=[(name, 20) for name in names],
+        source="bash-%s.1.gz" % name,
+        name=name,
+        synopsis=synopsis,
+        options=options,
+        aliases=[(name, 20) for name in names],
     )
 
 

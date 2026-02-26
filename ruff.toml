@@ -1,0 +1,2 @@
+[format]
+exclude = ["explainshell/help_constants.py"]

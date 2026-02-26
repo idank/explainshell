@@ -10,7 +10,9 @@ from explainshell.tree_parser import (
 )
 
 _MANPAGES_1 = os.path.join(os.path.dirname(__file__), "..", "manpages", "1")
-_MANPAGES_UBUNTU = os.path.join(os.path.dirname(__file__), "..", "manpages", "ubuntu", "25.10", "1")
+_MANPAGES_UBUNTU = os.path.join(
+    os.path.dirname(__file__), "..", "manpages", "ubuntu", "25.10", "1"
+)
 
 
 def _gz1(name):
@@ -24,6 +26,7 @@ def _gzu(name):
 # ---------------------------------------------------------------------------
 # Tree parsing
 # ---------------------------------------------------------------------------
+
 
 class TestParseTree(unittest.TestCase):
     def test_basic_structure(self):
@@ -79,6 +82,7 @@ class TestParseTree(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Integration tests with real man pages
 # ---------------------------------------------------------------------------
+
 
 class TestEcho(unittest.TestCase):
     """echo.1.gz — simple help2man TP-style page."""
@@ -181,8 +185,7 @@ class TestGit(unittest.TestCase):
         self.assertTrue(found, "Expected --exec-path flag")
 
     def test_has_paginate(self):
-        found = [o for o in self.options
-                 if "-p" in o.short or "--paginate" in o.long]
+        found = [o for o in self.options if "-p" in o.short or "--paginate" in o.long]
         self.assertTrue(found, "Expected -p/--paginate flag")
 
 
@@ -259,7 +262,11 @@ class TestFirejail(unittest.TestCase):
         self.assertGreaterEqual(len(self.options), 150)
 
     def test_has_allowdebuggers(self):
-        found = [o for o in self.options if "--allowdebuggers" in o.long or "--allow-debuggers" in o.long]
+        found = [
+            o
+            for o in self.options
+            if "--allowdebuggers" in o.long or "--allow-debuggers" in o.long
+        ]
         self.assertTrue(found, "Expected --allowdebuggers flag")
 
 

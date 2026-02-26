@@ -107,10 +107,16 @@ def parse_options(gz_path: str) -> list:
             text = flag_text
         else:
             text = description
-        options.append(store.Option(
-            text=text, short=short, long=long,
-            expects_arg=expects_arg, argument=argument, nested_cmd=nested_cmd,
-        ))
+        options.append(
+            store.Option(
+                text=text,
+                short=short,
+                long=long,
+                expects_arg=expects_arg,
+                argument=argument,
+                nested_cmd=nested_cmd,
+            )
+        )
         idx += 1
 
     return options
@@ -202,7 +208,7 @@ def _clean_roff_description(text: str) -> str:
             result.append("")
             continue
         # Skip comment lines
-        if stripped.startswith('.\\\"') or stripped.startswith('.\\"'):
+        if stripped.startswith('.\\"') or stripped.startswith('.\\"'):
             continue
         # Inline formatting macros: extract text and join with previous line
         m = re.match(r"^\.(B|I|BI|BR|IB|IR|RB|RI|SM|SB)\s+(.*)", stripped)
@@ -288,16 +294,16 @@ def _parse_roff_args(args_str: str) -> list:
             # Find closing quote
             end = args_str.find('"', i + 1)
             if end == -1:
-                parts.append(args_str[i + 1:])
+                parts.append(args_str[i + 1 :])
                 break
-            parts.append(args_str[i + 1:end])
+            parts.append(args_str[i + 1 : end])
             i = end + 1
-        elif args_str[i] in (' ', '\t'):
+        elif args_str[i] in (" ", "\t"):
             i += 1
         else:
             # Unquoted argument — runs to next space
             end = i
-            while end < len(args_str) and args_str[end] not in (' ', '\t', '"'):
+            while end < len(args_str) and args_str[end] not in (" ", "\t", '"'):
                 end += 1
             parts.append(args_str[i:end])
             i = end
@@ -345,13 +351,13 @@ def _parse_flag_text(text: str) -> dict:
     cleaned = re.sub(r"^\.[BI]\s+", "", cleaned)
 
     # Strip optional bracket notation around = sign: --flag[=ARG] → --flag=ARG
-    cleaned = re.sub(r'\[=', '=', cleaned)
+    cleaned = re.sub(r"\[=", "=", cleaned)
     # Handle -e[eof-str] or -e[ eof-str] pattern: flag with optional arg in brackets
     # Transform -flag[arg] or -flag[ arg] to -flag arg
-    cleaned = re.sub(r'(-\w)\[\s*(\w[^\]]*)\]', r'\1 \2', cleaned)
-    cleaned = re.sub(r'(--[\w-]+)\[\s*(\w[^\]]*)\]', r'\1 \2', cleaned)
+    cleaned = re.sub(r"(-\w)\[\s*(\w[^\]]*)\]", r"\1 \2", cleaned)
+    cleaned = re.sub(r"(--[\w-]+)\[\s*(\w[^\]]*)\]", r"\1 \2", cleaned)
     # Remove remaining brackets
-    cleaned = re.sub(r'\[([^\]]*)\]', r'\1', cleaned)
+    cleaned = re.sub(r"\[([^\]]*)\]", r"\1", cleaned)
 
     # Split on ", " to separate flag groups (e.g. "-f, --file" or "-s <s>, --strategy=<s>")
     parts = re.split(r",\s+", cleaned)
@@ -379,7 +385,7 @@ def _parse_flag_text(text: str) -> dict:
             continue
 
         # Split short flag with angle-bracket arg glued on: -C<n>, -lf<logfile>, -ap<path>
-        m_glued = re.match(r'^(-[A-Za-z]+)<(.+)>$', flag)
+        m_glued = re.match(r"^(-[A-Za-z]+)<(.+)>$", flag)
         if m_glued:
             short.append(m_glued.group(1))
             expects_arg = True
@@ -424,6 +430,7 @@ def _parse_flag_text(text: str) -> dict:
 # ---------------------------------------------------------------------------
 # man(7) parser — .TP, .IP, .HP, .PP+.RS/.RE patterns
 # ---------------------------------------------------------------------------
+
 
 def _find_option_sections_man(lines: list, scan_all: bool = False) -> list:
     """Find line ranges for option-related sections in man(7) pages.
@@ -509,8 +516,19 @@ def _collect_description_lines(lines: list, start: int, end: int) -> list:
             break
 
         # Skip pure formatting directives
-        if macro in (".PD", ".br", ".sp", ".fi", ".nf", ".nh", ".hy",
-                      ".ad", ".na", ".in", ".ti"):
+        if macro in (
+            ".PD",
+            ".br",
+            ".sp",
+            ".fi",
+            ".nf",
+            ".nh",
+            ".hy",
+            ".ad",
+            ".na",
+            ".in",
+            ".ti",
+        ):
             i += 1
             continue
 
@@ -522,14 +540,14 @@ def _collect_description_lines(lines: list, start: int, end: int) -> list:
         # .B, .I, .BI, .BR, .IR, .RB, .RI — inline formatted text
         if macro in (".B", ".I", ".BI", ".BR", ".IR", ".RB", ".RI"):
             # Include the text content (without the macro)
-            text = stripped[len(macro):].strip()
+            text = stripped[len(macro) :].strip()
             if text:
                 desc_lines.append(text)
             i += 1
             continue
 
         # Regular text line
-        if stripped and not stripped.startswith(".\\\""):
+        if stripped and not stripped.startswith('.\\"'):
             desc_lines.append(stripped)
 
         i += 1
@@ -551,7 +569,7 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
             line = lines[i].rstrip("\n")
             stripped = line.strip()
 
-            if not stripped or stripped.startswith(".\\\""):
+            if not stripped or stripped.startswith('.\\"'):
                 i += 1
                 continue
 
@@ -633,7 +651,13 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                         j = i + 1
                         while j < sec_end:
                             nl = lines[j].rstrip("\n").strip()
-                            if nl and not nl.startswith(".PD") and nl != ".PP" and nl != ".LP" and nl != ".P":
+                            if (
+                                nl
+                                and not nl.startswith(".PD")
+                                and nl != ".PP"
+                                and nl != ".LP"
+                                and nl != ".P"
+                            ):
                                 break
                             j += 1
                         if j < sec_end:
@@ -670,17 +694,17 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                         s = re.sub(r"^\.[BI]\s+", "", s)
                     return clean_roff(s)
 
-                flag_text = ", ".join(
-                    _clean_flag_line(fl) for fl in flag_lines
+                flag_text = ", ".join(_clean_flag_line(fl) for fl in flag_lines)
+                results.append(
+                    {
+                        "short": all_short,
+                        "long": all_long,
+                        "expects_arg": has_arg,
+                        "argument": arg_name,
+                        "description": description,
+                        "flag_text": flag_text,
+                    }
                 )
-                results.append({
-                    "short": all_short,
-                    "long": all_long,
-                    "expects_arg": has_arg,
-                    "argument": arg_name,
-                    "description": description,
-                    "flag_text": flag_text,
-                })
 
             # --- .IP pattern ---
             elif macro == ".IP":
@@ -704,10 +728,14 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                     # e.g. ".IP \-P" → "\-P", ".IP \-P 4" → "\-P"
                     tag_text = rest.rstrip()
                     # Remove trailing number (indent width)
-                    tag_text = re.sub(r'\s+\d+$', '', tag_text)
+                    tag_text = re.sub(r"\s+\d+$", "", tag_text)
 
                 parsed = _parse_flag_text(tag_text)
-                if not parsed.get("short") and not parsed.get("long") and not parsed.get("argument"):
+                if (
+                    not parsed.get("short")
+                    and not parsed.get("long")
+                    and not parsed.get("argument")
+                ):
                     i += 1
                     continue
 
@@ -749,14 +777,16 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
 
                 description = _clean_roff_description("\n".join(desc_lines))
 
-                results.append({
-                    "short": parsed.get("short", []),
-                    "long": parsed.get("long", []),
-                    "expects_arg": parsed.get("expects_arg", False),
-                    "argument": parsed.get("argument"),
-                    "description": description,
-                    "flag_text": clean_roff(tag_text),
-                })
+                results.append(
+                    {
+                        "short": parsed.get("short", []),
+                        "long": parsed.get("long", []),
+                        "expects_arg": parsed.get("expects_arg", False),
+                        "argument": parsed.get("argument"),
+                        "description": description,
+                        "flag_text": clean_roff(tag_text),
+                    }
+                )
 
             # --- .HP pattern ---
             elif macro == ".HP":
@@ -788,14 +818,16 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                     i += 1
 
                 description = _clean_roff_description("\n".join(desc_lines))
-                results.append({
-                    "short": parsed.get("short", []),
-                    "long": parsed.get("long", []),
-                    "expects_arg": parsed.get("expects_arg", False),
-                    "argument": parsed.get("argument"),
-                    "description": description,
-                    "flag_text": clean_roff(tag_line),
-                })
+                results.append(
+                    {
+                        "short": parsed.get("short", []),
+                        "long": parsed.get("long", []),
+                        "expects_arg": parsed.get("expects_arg", False),
+                        "argument": parsed.get("argument"),
+                        "description": description,
+                        "flag_text": clean_roff(tag_line),
+                    }
+                )
 
             # --- .PP/.sp + flag + .RS/.RE pattern ---
             # Covers three styles:
@@ -808,7 +840,7 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                 flag_line = None
                 while j < sec_end:
                     nl = lines[j].rstrip("\n").strip()
-                    if nl and not nl.startswith(".\\\""):
+                    if nl and not nl.startswith('.\\"'):
                         flag_line = nl
                         break
                     j += 1
@@ -822,14 +854,18 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                 has_rs = False
                 while k < sec_end:
                     rl = lines[k].rstrip("\n").strip()
-                    if rl and not rl.startswith(".\\\""):
+                    if rl and not rl.startswith('.\\"'):
                         if rl.startswith(".RS"):
                             has_rs = True
                         break
                     k += 1
 
                 parsed = _parse_flag_text(flag_line)
-                if not parsed.get("short") and not parsed.get("long") and not parsed.get("argument"):
+                if (
+                    not parsed.get("short")
+                    and not parsed.get("long")
+                    and not parsed.get("argument")
+                ):
                     i += 1
                     continue
 
@@ -860,14 +896,16 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                         i += 1
 
                     description = _clean_roff_description("\n".join(desc_lines))
-                    results.append({
-                        "short": parsed.get("short", []),
-                        "long": parsed.get("long", []),
-                        "expects_arg": parsed.get("expects_arg", False),
-                        "argument": parsed.get("argument"),
-                        "description": description,
-                        "flag_text": clean_roff(flag_line),
-                    })
+                    results.append(
+                        {
+                            "short": parsed.get("short", []),
+                            "long": parsed.get("long", []),
+                            "expects_arg": parsed.get("expects_arg", False),
+                            "argument": parsed.get("argument"),
+                            "description": description,
+                            "flag_text": clean_roff(flag_line),
+                        }
+                    )
 
                 elif macro != ".sp":
                     # Style 3 (docker/go-md2man): .PP + flag + plain desc
@@ -886,13 +924,11 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                             nj = i + 1
                             while nj < sec_end:
                                 nnl = lines[nj].rstrip("\n").strip()
-                                if nnl and not nnl.startswith(".\\\""):
+                                if nnl and not nnl.startswith('.\\"'):
                                     break
                                 nj += 1
                             if nj < sec_end:
-                                probe = _parse_flag_text(
-                                    lines[nj].rstrip("\n").strip()
-                                )
+                                probe = _parse_flag_text(lines[nj].rstrip("\n").strip())
                                 if probe.get("short") or probe.get("long"):
                                     break
                             # Otherwise it's a paragraph break in desc
@@ -903,14 +939,16 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                         i += 1
 
                     description = _clean_roff_description("\n".join(desc_lines))
-                    results.append({
-                        "short": parsed.get("short", []),
-                        "long": parsed.get("long", []),
-                        "expects_arg": parsed.get("expects_arg", False),
-                        "argument": parsed.get("argument"),
-                        "description": description,
-                        "flag_text": clean_roff(flag_line),
-                    })
+                    results.append(
+                        {
+                            "short": parsed.get("short", []),
+                            "long": parsed.get("long", []),
+                            "expects_arg": parsed.get("expects_arg", False),
+                            "argument": parsed.get("argument"),
+                            "description": description,
+                            "flag_text": clean_roff(flag_line),
+                        }
+                    )
 
                 else:
                     # .sp without .RS — just spacing, skip
@@ -930,6 +968,7 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
 # ---------------------------------------------------------------------------
 # mdoc(7) parser — .It Fl pattern
 # ---------------------------------------------------------------------------
+
 
 def _find_option_sections_mdoc(lines: list) -> list:
     """Find line ranges for option-related sections in mdoc(7) pages.
@@ -1220,20 +1259,22 @@ def _parse_mdoc_options(lines: list) -> list:
                                 nest -= 1
                             i += 1
                         continue
-                    if dl and not dl.startswith(".\\\""):
+                    if dl and not dl.startswith('.\\"'):
                         desc_lines.append(dl)
                     i += 1
 
                 description = _clean_mdoc_text("\n".join(desc_lines))
 
-                results.append({
-                    "short": parsed.get("short", []),
-                    "long": parsed.get("long", []),
-                    "expects_arg": parsed.get("expects_arg", False),
-                    "argument": parsed.get("argument"),
-                    "description": description,
-                    "flag_text": _clean_mdoc_it_text(stripped),
-                })
+                results.append(
+                    {
+                        "short": parsed.get("short", []),
+                        "long": parsed.get("long", []),
+                        "expects_arg": parsed.get("expects_arg", False),
+                        "argument": parsed.get("argument"),
+                        "description": description,
+                        "flag_text": _clean_mdoc_it_text(stripped),
+                    }
+                )
             else:
                 i += 1
 

@@ -30,9 +30,7 @@ def extract(gz_path: str) -> store.ParsedManpage:
             f"roff parser found no options in {os.path.basename(gz_path)}"
         )
 
-    logger.info(
-        "roff parser extracted %d options from %s", len(options), gz_path
-    )
+    logger.info("roff parser extracted %d options from %s", len(options), gz_path)
     return store.ParsedManpage(
         source=config.source_from_path(gz_path),
         name=manpage.extract_name(gz_path),

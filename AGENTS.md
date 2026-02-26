@@ -115,3 +115,4 @@ Uses bashlex AST visitor pattern:
 - Parsing regression compares re-parsed manpages against DB; run via `make parsing-regression`
 - To accept parser changes into the DB: `make parsing-update`, then re-run `make parsing-regression`
 - **Always run `make tests-all` before declaring tests pass** — it runs lint, unit tests, e2e, and parsing regression in one shot.
+- **Always run `ruff format` after changing Python code** to keep formatting consistent.
