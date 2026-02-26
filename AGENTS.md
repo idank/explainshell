@@ -16,7 +16,7 @@ A web tool that parses man pages and explains command-line arguments by matching
 ## Environment
 
 - Python virtualenv: repo-local `.venv`
-- Activate with: `source .venv/bin/activate`
+- **CRITICAL**: Every Bash tool call runs in a fresh shell with NO venv active. You MUST prefix every Python/pip/pytest/ruff/make command with `source .venv/bin/activate &&`. Example: `source .venv/bin/activate && make tests`. Never run bare `python`, `pytest`, `ruff`, `pip`, or `make` without activating first.
 
 ## Common Commands
 
