@@ -24,9 +24,11 @@ CREATE TABLE IF NOT EXISTS manpage (
     options       TEXT    NOT NULL DEFAULT '[]',  -- JSON list of option dicts
     aliases       TEXT    NOT NULL DEFAULT '[]',  -- JSON list of [alias, score] pairs
     dashless_opts INTEGER NOT NULL DEFAULT 0,      -- allow matching options without leading '-'
-    multi_cmd     INTEGER NOT NULL DEFAULT 0,     -- has sub-commands (e.g. git -> git commit)
+    multi_cmd     INTEGER NOT NULL DEFAULT 0,     -- command has sub-commands; matcher looks ahead for "git commit" -> git-commit manpage
     updated       INTEGER NOT NULL DEFAULT 0,     -- manually edited, skip during bulk imports
-    nested_cmd    TEXT    NOT NULL DEFAULT 'false' -- positional args start a nested command (e.g. sudo, xargs)
+    nested_cmd    TEXT    NOT NULL DEFAULT 'false', -- positional args start a nested command (e.g. sudo, xargs)
+    extractor     TEXT,                            -- extractor mode: "source", "mandoc", "llm"
+    extraction_meta TEXT NOT NULL DEFAULT '{}'     -- JSON dict of additional extraction metadata
 );
 
 -- Maps command names (and aliases) to manpage rows.
@@ -83,8 +85,8 @@ class ParsedManpage(BaseModel):
     options - a list of options extracted from this man page
     aliases - a list of aliases found for this man page
     dashless_opts - allow interpreting options without a leading '-'
-    multi_cmd - consider sub commands when explaining a command with this man page,
-        e.g. git -> git commit
+    multi_cmd - command has sub-commands; when set, the matcher looks ahead for
+        e.g. "git commit" and resolves it to the git-commit manpage
     updated - whether this man page was manually updated
     nested_cmd - specifies if positional arguments to this program can start a nested command,
         e.g. sudo, xargs
@@ -99,6 +101,8 @@ class ParsedManpage(BaseModel):
     multi_cmd: bool = False
     updated: bool = False
     nested_cmd: bool | str = False
+    extractor: str | None = None
+    extraction_meta: dict | None = None
 
     @property
     def name_section(self):
@@ -145,6 +149,8 @@ class ParsedManpage(BaseModel):
             "multi_cmd": int(bool(self.multi_cmd)),
             "updated": int(bool(self.updated)),
             "nested_cmd": json.dumps(self.nested_cmd),
+            "extractor": self.extractor,
+            "extraction_meta": json.dumps(self.extraction_meta or {}),
         }
 
     @staticmethod
@@ -161,6 +167,9 @@ class ParsedManpage(BaseModel):
         multi_cmd = bool(d["multi_cmd"])
         nested_cmd = json.loads(d["nested_cmd"])
 
+        extraction_meta_raw = d["extraction_meta"]
+        extraction_meta = json.loads(extraction_meta_raw) if extraction_meta_raw else {}
+
         return ParsedManpage(
             source=d["source"],
             name=d["name"],
@@ -171,6 +180,8 @@ class ParsedManpage(BaseModel):
             multi_cmd=multi_cmd,
             updated=bool(d["updated"]),
             nested_cmd=nested_cmd,
+            extractor=d["extractor"],
+            extraction_meta=extraction_meta or None,
         )
 
     def __repr__(self):
@@ -360,9 +371,11 @@ class Store:
         d = m.to_store()
         cursor = self._conn.execute(
             """INSERT INTO manpage(source, name, synopsis, options, aliases,
-                                   dashless_opts, multi_cmd, updated, nested_cmd)
+                                   dashless_opts, multi_cmd, updated, nested_cmd,
+                                   extractor, extraction_meta)
                VALUES (:source, :name, :synopsis, :options, :aliases,
-                       :dashless_opts, :multi_cmd, :updated, :nested_cmd)""",
+                       :dashless_opts, :multi_cmd, :updated, :nested_cmd,
+                       :extractor, :extraction_meta)""",
             d,
         )
         self._conn.commit()
@@ -394,7 +407,8 @@ class Store:
             """UPDATE manpage
                SET name=:name, synopsis=:synopsis, options=:options,
                    aliases=:aliases, dashless_opts=:dashless_opts,
-                   multi_cmd=:multi_cmd, updated=:updated, nested_cmd=:nested_cmd
+                   multi_cmd=:multi_cmd, updated=:updated, nested_cmd=:nested_cmd,
+                   extractor=:extractor, extraction_meta=:extraction_meta
                WHERE source=:source""",
             d,
         )
