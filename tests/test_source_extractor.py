@@ -6,7 +6,8 @@ from unittest.mock import patch
 
 from explainshell import config, store
 from explainshell.errors import ExtractionError
-from explainshell.source_extractor import detect_dashless_opts, detect_nested_cmd, extract
+from explainshell.roff_utils import detect_dashless_opts, detect_nested_cmd
+from explainshell.source_extractor import extract
 
 _MANPAGES = os.path.join(os.path.dirname(__file__), "..", "manpages", "ubuntu", "25.10", "1")
 _MANPAGES_CUSTOM = os.path.join(os.path.dirname(__file__), "..", "manpages", "1")

@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from explainshell import errors, source_extractor, store
+from explainshell import errors, mandoc_extractor, source_extractor, store
 from explainshell.manager import compare_manpages
 
 _REGRESSION_DIR = os.path.join(os.path.dirname(__file__), "manpages")
@@ -65,7 +65,7 @@ def test_parsing_matches_db(gz_path, db_store, request):
 
     # Re-parse with selected extractor.
     if extractor == "mandoc":
-        fresh_mp = source_extractor.extract_mandoc(gz_path)
+        fresh_mp = mandoc_extractor.extract(gz_path)
     else:
         fresh_mp = source_extractor.extract(gz_path)
 
