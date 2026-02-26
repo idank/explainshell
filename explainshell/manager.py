@@ -348,6 +348,44 @@ def _parse_mode(raw):
     )
 
 
+def _run_extractor(mode, gz_path, model=None, debug_dir=None):
+    """Run a single extractor by mode name and return a ParsedManpage."""
+    if mode == "source":
+        return source_extractor.extract(gz_path)
+    if mode == "mandoc":
+        return mandoc_extractor.extract(gz_path)
+    if mode == "llm":
+        return llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
+    if mode == "hybrid":
+        try:
+            return mandoc_extractor.extract(gz_path)
+        except errors.LowConfidenceError:
+            return llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
+    raise ValueError(f"unknown extractor mode: {mode!r}")
+
+
+def _parse_diff(raw):
+    """Parse a --diff value into a structured result.
+
+    Returns:
+        ("db", None, None)                              for "db" or None
+        ("extractors", (modeA, modelA), (modeB, modelB))  for "A..B"
+
+    Raises ValueError on invalid input.
+    """
+    if raw is None or raw == "db":
+        return ("db", None, None)
+    if ".." in raw:
+        parts = raw.split("..", 1)
+        left_mode, left_model = _parse_mode(parts[0])
+        right_mode, right_model = _parse_mode(parts[1])
+        return ("extractors", (left_mode, left_model), (right_mode, right_model))
+    raise ValueError(
+        f"invalid --diff value: {raw!r} "
+        f"(expected 'db' or 'A..B' where A and B are extractor specs like 'source', 'mandoc', 'llm:<model>')"
+    )
+
+
 def main(args):
     logging.basicConfig(level=getattr(logging, args.log.upper()))
 
@@ -357,14 +395,21 @@ def main(args):
         print(f"error: {e}", file=sys.stderr)
         return 1
 
-    if args.diff != "modes" and not mode:
-        print("error: --mode is required (unless --diff modes)", file=sys.stderr)
+    try:
+        diff_kind, diff_left, diff_right = _parse_diff(args.diff)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
         return 1
 
-    if args.diff == "modes" and not model:
-        print(
-            "error: --mode llm:<model> is required when --diff modes", file=sys.stderr
-        )
+    is_extractor_diff = diff_kind == "extractors"
+
+    if not is_extractor_diff and args.diff is not None and not mode:
+        # --diff db requires --mode
+        print("error: --mode is required when using --diff db", file=sys.stderr)
+        return 1
+
+    if not is_extractor_diff and not args.diff and not mode:
+        print("error: --mode is required", file=sys.stderr)
         return 1
 
     db_path = args.db
@@ -380,7 +425,7 @@ def main(args):
         print("No .gz files found.", file=sys.stderr)
         return 1
 
-    s = store.Store(db_path) if not args.dry_run or args.diff == "db" else None
+    s = store.Store(db_path) if not args.dry_run or diff_kind == "db" else None
     if s and args.drop:
         s.drop(confirm=True)
 
@@ -391,9 +436,11 @@ def main(args):
 
     from explainshell import manpage as _manpage
 
-    for gz_path in gz_files:
+    total = len(gz_files)
+    for file_idx, gz_path in enumerate(gz_files, 1):
         short_path = config.source_from_path(gz_path)
         name = _manpage.extract_name(gz_path)
+        progress = f"[{file_idx}/{total}]"
 
         if (
             s
@@ -405,40 +452,58 @@ def main(args):
             skipped += 1
             continue
 
-        if args.diff == "modes":
-            print(f"{_ts()} [{short_path}] running source extractor...")
+        if is_extractor_diff:
+            left_mode, left_model = diff_left
+            right_mode, right_model = diff_right
+            debug_dir = args.debug_dir if args.dry_run else None
+            label = f"{left_mode} vs {right_mode}"
+
+            print(f"{_ts()} {progress} [{short_path}] running {left_mode} extractor...")
             try:
-                source_mp = source_extractor.extract(gz_path)
+                left_mp = _run_extractor(
+                    left_mode, gz_path, model=left_model, debug_dir=debug_dir
+                )
             except errors.ExtractionError as e:
-                logger.error("source extractor failed for %s: %s", short_path, e)
-                print(f"=== {short_path} (source vs llm) ===")
-                print(f"  {_DIM}(source extractor failed: {e}, skipping){_RESET}")
+                logger.error("%s extractor failed for %s: %s", left_mode, short_path, e)
+                print(f"=== {short_path} ({label}) ===")
+                print(f"  {_DIM}({left_mode} extractor failed: {e}, skipping){_RESET}")
                 failed += 1
                 continue
-            print(f"{_ts()} [{short_path}] running llm extractor ({model})...")
+
+            right_label = (
+                right_mode if not right_model else f"{right_mode} ({right_model})"
+            )
+            print(
+                f"{_ts()} {progress} [{short_path}] running {right_label} extractor..."
+            )
             try:
-                debug_dir = args.debug_dir if args.dry_run else None
-                llm_mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
+                right_mp = _run_extractor(
+                    right_mode, gz_path, model=right_model, debug_dir=debug_dir
+                )
             except errors.ExtractionError as e:
-                logger.error("llm extractor failed for %s: %s", short_path, e)
-                print(f"=== {short_path} (source vs llm) ===")
-                print(f"  {_DIM}(llm extractor failed: {e}, skipping){_RESET}")
+                logger.error(
+                    "%s extractor failed for %s: %s", right_mode, short_path, e
+                )
+                print(f"=== {short_path} ({label}) ===")
+                print(f"  {_DIM}({right_mode} extractor failed: {e}, skipping){_RESET}")
                 failed += 1
                 continue
-            print(f"=== {short_path} (source vs llm) ===")
-            _diff_manpage(source_mp, llm_mp)
+
+            print(f"=== {short_path} ({label}) ===")
+            _diff_manpage(left_mp, right_mp)
             added += 1
             continue
 
+        file_t0 = time.monotonic()
         try:
             if mode == "source":
-                print(f"{_ts()} [{short_path}] extracting (source)...")
+                print(f"{_ts()} {progress} [{short_path}] extracting (source)...")
                 mp = source_extractor.extract(gz_path)
             elif mode == "mandoc":
-                print(f"{_ts()} [{short_path}] extracting (mandoc)...")
+                print(f"{_ts()} {progress} [{short_path}] extracting (mandoc)...")
                 mp = mandoc_extractor.extract(gz_path)
             elif mode == "hybrid":
-                print(f"{_ts()} [{short_path}] extracting (hybrid)...")
+                print(f"{_ts()} {progress} [{short_path}] extracting (hybrid)...")
                 try:
                     mp = mandoc_extractor.extract(gz_path)
                 except errors.LowConfidenceError as e:
@@ -446,14 +511,15 @@ def main(args):
                         "hybrid: falling back to LLM for %s: %s", short_path, e
                     )
                     print(
-                        f"{_ts()} [{short_path}] tree parser {e}, falling back to LLM ({model})..."
+                        f"{_ts()} {progress} [{short_path}] tree parser {e}, falling back to LLM ({model})..."
                     )
                     debug_dir = args.debug_dir if args.dry_run else None
                     mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
             else:
-                print(f"{_ts()} [{short_path}] extracting ({model})...")
+                print(f"{_ts()} {progress} [{short_path}] extracting ({model})...")
                 debug_dir = args.debug_dir if args.dry_run else None
                 mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
+            file_elapsed = _fmt_elapsed(time.monotonic() - file_t0)
             if args.diff:
                 print(f"=== {short_path} ===")
                 try:
@@ -467,10 +533,14 @@ def main(args):
                 added += 1
             elif s:
                 s.add_manpage(mp)
-                logger.info("added %s (%d options)", short_path, len(mp.options))
+                print(
+                    f"{_ts()} {progress} [{short_path}] done: {len(mp.options)} option(s) in {file_elapsed}"
+                )
                 added += 1
             else:
-                print(f"=== {short_path} ({len(mp.options)} option(s)) ===")
+                print(
+                    f"=== {short_path} ({len(mp.options)} option(s), {file_elapsed}) ==="
+                )
                 print(f"  name: {mp.name}")
                 print(f"  synopsis: {mp.synopsis}")
                 print(f"  aliases: {mp.aliases}")
@@ -522,7 +592,7 @@ def _build_parser():
     )
     parser.add_argument(
         "--mode",
-        help="Extraction mode: 'source', 'mandoc', 'llm:<model>', or 'hybrid:<model>'. Required unless --diff modes.",
+        help="Extraction mode: 'source', 'mandoc', 'llm:<model>', or 'hybrid:<model>'. Required unless --diff A..B.",
     )
     parser.add_argument("--db", default=config.DB_PATH, help="SQLite DB path")
     parser.add_argument(
@@ -547,9 +617,8 @@ def _build_parser():
         "--diff",
         nargs="?",
         const="db",
-        choices=["db", "modes"],
         help="Diff mode: 'db' (default) compares fresh extraction against the DB; "
-        "'modes' compares source vs LLM extraction against each other",
+        "'A..B' compares two extractors (e.g. source..mandoc, source..llm:gpt-4o)",
     )
     parser.add_argument(
         "--debug-dir",
