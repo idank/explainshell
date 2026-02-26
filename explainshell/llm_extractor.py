@@ -288,9 +288,7 @@ def extract(
 
     basename = os.path.splitext(os.path.splitext(os.path.basename(gz_path))[0])[0]
     n_chunks = len(chunks)
-    logger.info(
-        "%s: %d chars, %d chunk(s)", basename, len(plain_text), n_chunks
-    )
+    logger.info("%s: %d chars, %d chunk(s)", basename, len(plain_text), n_chunks)
 
     if debug_dir:
         os.makedirs(debug_dir, exist_ok=True)
@@ -302,7 +300,9 @@ def extract(
     for i, chunk in enumerate(chunks):
         chunk_info = f" (part {i + 1} of {n_chunks})" if n_chunks > 1 else ""
         chunk_label = f"chunk {i + 1}/{n_chunks}" if n_chunks > 1 else "single chunk"
-        logger.info("%s: calling LLM (%s, %d chars)...", basename, chunk_label, len(chunk))
+        logger.info(
+            "%s: calling LLM (%s, %d chars)...", basename, chunk_label, len(chunk)
+        )
         t0 = time.monotonic()
         chunk_data, messages, raw_response = _call_llm(
             chunk, chunk_info, model, litellm_kwargs
@@ -311,7 +311,10 @@ def extract(
         n_opts = len(chunk_data["options"])
         logger.info(
             "%s: LLM returned %d option(s) for %s in %.1fs",
-            basename, n_opts, chunk_label, elapsed,
+            basename,
+            n_opts,
+            chunk_label,
+            elapsed,
         )
         all_raw.extend(chunk_data["options"])
         if chunk_data.get("dashless_opts"):
