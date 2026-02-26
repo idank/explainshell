@@ -120,7 +120,7 @@ APPENDING_OUTPUT_ERROR = textwrap.dedent('''   <b>Appending</b> <b>Standard</b> 
 
               <b>&gt;&gt;</b><u>word</u> 2<b>&gt;&amp;</b>1''')
 
-HERE_DOCUMENTS = textwrap.dedent('''   <b>Here</b> <b>Documents</b>
+HERE_DOCUMENTS = textwrap.dedent(r'''   <b>Here</b> <b>Documents</b>
        This type of redirection instructs the shell  to  read  input  from  the  current  source  until  a  line
        containing  only <u>delimiter</u> (with no trailing blanks) is seen.  All of the lines read up to that point are
        then used as the standard input for a command.
