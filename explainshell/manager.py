@@ -8,6 +8,7 @@ Modes:
     source              Use the roff parser
     mandoc              Use mandoc -T tree parser
     llm:<model>         Use an LLM via LiteLLM (e.g. llm:gpt-4o)
+    hybrid:<model>      Try tree parser first, fall back to LLM when confidence is low
 """
 
 import argparse
@@ -18,7 +19,7 @@ import os
 import sys
 import time
 
-from explainshell import config, errors, llm_extractor, source_extractor, store
+from explainshell import config, errors, llm_extractor, source_extractor, store, tree_parser
 
 logger = logging.getLogger(__name__)
 
@@ -300,7 +301,8 @@ def _collect_gz_files(paths):
 def _parse_mode(raw):
     """Parse a --mode value into (mode, model).
 
-    Returns ("source", None), ("mandoc", None), or ("llm", "<model>").
+    Returns ("source", None), ("mandoc", None), ("llm", "<model>"),
+    or ("hybrid", "<model>").
     Raises ValueError on invalid input.
     """
     if raw is None:
@@ -314,7 +316,15 @@ def _parse_mode(raw):
         if not model:
             raise ValueError("--mode llm:<model> requires a model name (e.g. llm:gpt-4o)")
         return "llm", model
-    raise ValueError(f"invalid --mode value: {raw!r} (expected 'source', 'mandoc', or 'llm:<model>')")
+    if raw.startswith("hybrid:"):
+        model = raw[7:]
+        if not model:
+            raise ValueError("--mode hybrid:<model> requires a model name (e.g. hybrid:gpt-4o)")
+        return "hybrid", model
+    raise ValueError(
+        f"invalid --mode value: {raw!r} "
+        f"(expected 'source', 'mandoc', 'llm:<model>', or 'hybrid:<model>')"
+    )
 
 
 def main(args):
@@ -399,6 +409,20 @@ def main(args):
             elif mode == "mandoc":
                 print(f"{_ts()} [{short_path}] extracting (mandoc)...")
                 mp = source_extractor.extract_mandoc(gz_path)
+            elif mode == "hybrid":
+                print(f"{_ts()} [{short_path}] extracting (hybrid)...")
+                result = tree_parser.parse_options(gz_path)
+                confidence = tree_parser.assess_confidence(result)
+                if confidence.confident and result.options:
+                    logger.info("hybrid: tree parser confident for %s (%d options)",
+                                short_path, len(result.options))
+                    mp = source_extractor.build_manpage(gz_path, result.options)
+                else:
+                    logger.warning("hybrid: falling back to LLM for %s: %s",
+                                   short_path, confidence)
+                    print(f"{_ts()} [{short_path}] tree parser {confidence}, falling back to LLM ({model})...")
+                    debug_dir = args.debug_dir if args.dry_run else None
+                    mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
             else:
                 print(f"{_ts()} [{short_path}] extracting ({model})...")
                 debug_dir = args.debug_dir if args.dry_run else None
@@ -469,7 +493,7 @@ def _build_parser():
     )
     parser.add_argument(
         "--mode",
-        help="Extraction mode: 'source', 'mandoc', or 'llm:<model>' (e.g. llm:gpt-4o). Required unless --diff modes.",
+        help="Extraction mode: 'source', 'mandoc', 'llm:<model>', or 'hybrid:<model>'. Required unless --diff modes.",
     )
     parser.add_argument("--db", default=config.DB_PATH, help="SQLite DB path")
     parser.add_argument(
