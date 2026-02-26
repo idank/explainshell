@@ -419,6 +419,17 @@ def _collect_body_parts(node: Node, parts: list):
             if body:
                 _collect_body_parts(body, parts)
             parts.append("\n\n")
+        elif child.kind == "Fl" and child.subkind == "elem":
+            # mdoc flag reference — prepend dash
+            parts.append("-" + child.get_text())
+        elif child.kind == "Xr" and child.subkind == "elem":
+            # mdoc cross-reference — format as name(section)
+            texts = []
+            child._collect_text(texts)
+            if len(texts) >= 2:
+                parts.append(f"{texts[0]}({texts[1]})")
+            else:
+                parts.append(child.get_text())
         elif child.subkind == "block":
             # Other blocks — recurse into body
             body = child.get_body()
@@ -432,7 +443,7 @@ def _collect_body_parts(node: Node, parts: list):
 
 # Matches TP/IP indent width values: pure digits or digit+unit suffix
 # e.g. "14", "0.5i", "72u", "3n", "1.5c"
-_TP_INDENT_RE = re.compile(r"^[\d.]+[icnpuPm]?$")
+_TP_INDENT_RE = re.compile(r"^[\d.]+[icnpuPm]?(?:\+\d+)?$")
 
 
 def _collect_head_text(head: Node) -> str:
@@ -544,12 +555,46 @@ def _extract_man_options(body: Node) -> tuple[list[dict], int, int]:
                             i += 1
                             continue
                     break
+                # Consume TQ continuation blocks (strace pattern: TP short flag + TQ long flag with description)
+                while i + 1 < len(children):
+                    nxt = children[i + 1]
+                    if nxt.kind == "TQ" and nxt.subkind == "block":
+                        tq_head = nxt.get_head()
+                        tq_body = nxt.get_body()
+                        if tq_head:
+                            tq_flag = clean_roff(_collect_head_text(tq_head)).strip()
+                            tq_parsed = _parse_flag_text(tq_flag)
+                            # Merge long flags from TQ into entry
+                            for f in tq_parsed.get("long", []):
+                                if f not in entry.get("long", []):
+                                    entry.setdefault("long", []).append(f)
+                            # Update flag_text
+                            if tq_flag:
+                                entry["flag_text"] = entry.get("flag_text", "") + ", " + tq_flag
+                        if tq_body and not entry.get("description", "").strip():
+                            entry["description"] = _collect_text_from_body(tq_body)
+                        i += 1
+                        continue
+                    break
                 entries.append(entry)
             i += 1
 
         elif child.kind == "HP" and child.subkind == "block":
             entry = _extract_hp_entry(child)
             if entry:
+                # Check if next sibling is IP with empty head (HP+IP pattern: sed style)
+                if i + 1 < len(children):
+                    nxt = children[i + 1]
+                    if nxt.kind == "IP" and nxt.subkind == "block":
+                        nxt_head = nxt.get_head()
+                        head_text = _collect_head_text(nxt_head) if nxt_head else ""
+                        if not head_text.strip():
+                            nxt_body = nxt.get_body()
+                            if nxt_body:
+                                extra = _collect_text_from_body(nxt_body)
+                                if extra:
+                                    entry["description"] = extra
+                            i += 1  # consume the IP
                 entries.append(entry)
             i += 1
 
@@ -600,7 +645,20 @@ def _extract_man_options(body: Node) -> tuple[list[dict], int, int]:
             i += 1
 
         elif child.kind in ("SS", "Ss") and child.subkind == "block":
-            # Subsection — recurse into body
+            # Check if SS head itself is a flag (netstat pattern)
+            ss_head = child.get_head()
+            if ss_head:
+                head_text = clean_roff(_collect_head_text(ss_head)).strip()
+                if head_text.startswith("-"):
+                    parsed = _parse_flag_text(head_text)
+                    parsed["flag_text"] = head_text
+                    ss_body = child.get_body()
+                    parsed["description"] = _collect_text_from_body(ss_body) if ss_body else ""
+                    if parsed.get("short") or parsed.get("long"):
+                        entries.append(parsed)
+                        i += 1
+                        continue
+            # Fall back: recurse into body for nested TP/IP
             ss_body = child.get_body()
             if ss_body:
                 sub_entries, _, _ = _extract_man_options(ss_body)
@@ -1045,9 +1103,20 @@ def parse_options(gz_path: str) -> ExtractionResult:
             extra, _, _ = _extract_man_options(body)
         for e in extra:
             flags = e.get("short", []) + e.get("long", [])
-            if flags and not any(f in existing_flags for f in flags):
+            overlap = [f for f in flags if f in existing_flags]
+            if flags and not overlap:
                 raw.append(e)
                 existing_flags.update(flags)
+            elif overlap and e.get("description", "").strip():
+                # Replace existing entry if new one has longer description
+                new_desc = e.get("description", "")
+                for j, existing in enumerate(raw):
+                    ex_flags = existing.get("short", []) + existing.get("long", [])
+                    if any(f in ex_flags for f in overlap):
+                        if len(new_desc) > len(existing.get("description", "")):
+                            raw[j] = e
+                            existing_flags.update(flags)
+                        break
 
     # Convert to store.Option objects
     options = []
