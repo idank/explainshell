@@ -52,6 +52,21 @@ class TestCleanRoff(unittest.TestCase):
     def test_multiple_spaces(self):
         self.assertEqual(clean_roff("foo   bar"), "foo bar")
 
+    def test_backslash_space(self):
+        self.assertEqual(clean_roff(r"-C\ cmdlist"), "-C cmdlist")
+
+    def test_continuation_escape(self):
+        self.assertEqual(clean_roff(r"foo\cbar"), "foobar")
+
+    def test_zero_width_break(self):
+        self.assertEqual(clean_roff(r"foo\:bar"), "foobar")
+
+    def test_thin_space_caret(self):
+        self.assertEqual(clean_roff(r"s\^|\^l"), "s|l")
+
+    def test_thin_space_pipe(self):
+        self.assertEqual(clean_roff(r"s\|l"), "sl")
+
 
 # ---------------------------------------------------------------------------
 # _clean_roff_description
@@ -271,6 +286,12 @@ class TestParseRoffArgs(unittest.TestCase):
 
     def test_unquoted_only(self):
         self.assertEqual(_parse_roff_args("foo bar"), ["foo", "bar"])
+
+    def test_backslash_space_in_unquoted(self):
+        self.assertEqual(
+            _parse_roff_args(r"\-C\ cmdlist"),
+            [r"\-C\ cmdlist"],
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -812,6 +833,26 @@ class TestParsePs(unittest.TestCase):
     def test_has_e(self):
         shorts = {f for o in self.opts for f in o.short}
         self.assertIn("-e", shorts)
+
+    def test_no_backslash_in_flag_names(self):
+        """Flag names should not contain roff backslash escapes."""
+        for opt in self.opts:
+            for flag in opt.short + opt.long:
+                self.assertNotIn(
+                    "\\",
+                    flag,
+                    f"Backslash found in flag name: {flag!r}",
+                )
+
+    def test_no_roff_escapes_in_descriptions(self):
+        """Descriptions should not contain raw roff escapes like \\c, \\:, \\^."""
+        for opt in self.opts:
+            for esc in ("\\c", "\\:", "\\^", "\\|"):
+                self.assertNotIn(
+                    esc,
+                    opt.text,
+                    f"Roff escape {esc!r} found in description of {opt.short + opt.long}",
+                )
 
 
 class TestParseSu(unittest.TestCase):
