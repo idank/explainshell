@@ -31,7 +31,16 @@ from explainshell import (
 logger = logging.getLogger(__name__)
 
 # ParsedManpage-level fields to compare in diff mode.
-_MP_FIELDS = ("name", "synopsis", "aliases", "nested_cmd", "multi_cmd", "dashless_opts", "extractor", "extraction_meta")
+_MP_FIELDS = (
+    "name",
+    "synopsis",
+    "aliases",
+    "nested_cmd",
+    "multi_cmd",
+    "dashless_opts",
+    "extractor",
+    "extraction_meta",
+)
 
 # Per-option fields to compare in diff mode.
 _OPT_FIELDS = ("expects_arg", "argument", "nested_cmd", "text")

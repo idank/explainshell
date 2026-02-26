@@ -570,7 +570,9 @@ def _extract_man_options(body: Node) -> tuple[list[dict], int, int]:
                                     entry.setdefault("long", []).append(f)
                             # Update flag_text
                             if tq_flag:
-                                entry["flag_text"] = entry.get("flag_text", "") + ", " + tq_flag
+                                entry["flag_text"] = (
+                                    entry.get("flag_text", "") + ", " + tq_flag
+                                )
                         if tq_body and not entry.get("description", "").strip():
                             entry["description"] = _collect_text_from_body(tq_body)
                         i += 1
@@ -653,7 +655,9 @@ def _extract_man_options(body: Node) -> tuple[list[dict], int, int]:
                     parsed = _parse_flag_text(head_text)
                     parsed["flag_text"] = head_text
                     ss_body = child.get_body()
-                    parsed["description"] = _collect_text_from_body(ss_body) if ss_body else ""
+                    parsed["description"] = (
+                        _collect_text_from_body(ss_body) if ss_body else ""
+                    )
                     if parsed.get("short") or parsed.get("long"):
                         entries.append(parsed)
                         i += 1

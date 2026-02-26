@@ -75,5 +75,7 @@ def test_parsing_matches_db(gz_path, db_store, request):
 
     # multi_cmd is computed post-extraction by update_multi_cmd_mappings(),
     # not by the parser, so exclude it from comparison.
-    diffs = compare_manpages(stored_mp, fresh_mp, skip_fields=("multi_cmd", "extractor", "extraction_meta"))
+    diffs = compare_manpages(
+        stored_mp, fresh_mp, skip_fields=("multi_cmd", "extractor", "extraction_meta")
+    )
     assert not diffs, f"Parsing regression for {basename}:\n{_format_diffs(diffs)}"
