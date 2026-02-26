@@ -19,7 +19,7 @@ import os
 import sys
 import time
 
-from explainshell import config, errors, llm_extractor, source_extractor, store, tree_parser
+from explainshell import config, errors, llm_extractor, mandoc_extractor, source_extractor, store, tree_parser
 
 logger = logging.getLogger(__name__)
 
@@ -408,7 +408,7 @@ def main(args):
                 mp = source_extractor.extract(gz_path)
             elif mode == "mandoc":
                 print(f"{_ts()} [{short_path}] extracting (mandoc)...")
-                mp = source_extractor.extract_mandoc(gz_path)
+                mp = mandoc_extractor.extract(gz_path)
             elif mode == "hybrid":
                 print(f"{_ts()} [{short_path}] extracting (hybrid)...")
                 result = tree_parser.parse_options(gz_path)
@@ -416,7 +416,7 @@ def main(args):
                 if confidence.confident and result.options:
                     logger.info("hybrid: tree parser confident for %s (%d options)",
                                 short_path, len(result.options))
-                    mp = source_extractor.build_manpage(gz_path, result.options)
+                    mp = mandoc_extractor.build_manpage(gz_path, result.options)
                 else:
                     logger.warning("hybrid: falling back to LLM for %s: %s",
                                    short_path, confidence)

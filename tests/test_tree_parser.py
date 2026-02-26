@@ -4,16 +4,9 @@ import os
 import textwrap
 import unittest
 
-from explainshell import store
 from explainshell.tree_parser import (
-    Node,
     parse_tree,
     parse_options,
-    run_mandoc_tree,
-    _get_sections,
-    _get_section_name,
-    _extract_man_options,
-    _extract_mdoc_options,
 )
 
 _MANPAGES_1 = os.path.join(os.path.dirname(__file__), "..", "manpages", "1")
