@@ -186,6 +186,16 @@ def clean_roff(text: str) -> str:
     # Remove \u (superscript), \d (subscript)
     text = text.replace("\\u", "")
     text = text.replace("\\d", "")
+    # \<space> → regular space (non-breaking space)
+    text = text.replace("\\ ", " ")
+    # \c → remove (continuation / suppress newline)
+    text = text.replace("\\c", "")
+    # \: → remove (zero-width break point)
+    text = text.replace("\\:", "")
+    # \^ → remove (thin space)
+    text = text.replace("\\^", "")
+    # \| → remove (thin space)
+    text = text.replace("\\|", "")
     # Remove \n(.x register references
     text = re.sub(r"\\n\(?\w+", "", text)
     # Collapse multiple spaces
@@ -303,7 +313,14 @@ def _parse_roff_args(args_str: str) -> list:
         else:
             # Unquoted argument — runs to next space
             end = i
-            while end < len(args_str) and args_str[end] not in (" ", "\t", '"'):
+            while end < len(args_str):
+                ch = args_str[end]
+                # Handle \<space> escape (non-breaking space in roff)
+                if ch == "\\" and end + 1 < len(args_str) and args_str[end + 1] == " ":
+                    end += 2
+                    continue
+                if ch in (" ", "\t", '"'):
+                    break
                 end += 1
             parts.append(args_str[i:end])
             i = end
@@ -340,12 +357,13 @@ def _parse_flag_text(text: str) -> dict:
     # These concatenate their arguments with alternating fonts:
     #   .BI "--file=" FILE → "--file=FILE"
     #   .BI "-a " file → "-a file"
-    m_altfont = re.match(r"^\.(BI|BR|IB|IR|RB|RI)\s+(.+)$", cleaned)
+    # Match on original text so \<space> escapes survive into arg parser
+    m_altfont = re.match(r"^\.(BI|BR|IB|IR|RB|RI)\s+(.+)$", text.strip())
     if m_altfont:
         args_str = m_altfont.group(2)
         # Parse quoted and unquoted arguments
         parts = _parse_roff_args(args_str)
-        cleaned = "".join(parts)
+        cleaned = clean_roff("".join(parts))
 
     # Remove simple .B, .I macro prefixes
     cleaned = re.sub(r"^\.[BI]\s+", "", cleaned)
