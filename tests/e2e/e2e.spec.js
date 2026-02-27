@@ -97,6 +97,47 @@ test("manpage source links use configured URL", async ({ page }) => {
   expect(href).toContain("grep.1.html");
 });
 
+test("distro-prefixed URL loads and preserves prefix in links", async ({ page }) => {
+  await page.goto("/explain/ubuntu/25.10?cmd=tar+xzvf+archive.tar.gz");
+  await page.waitForLoadState("networkidle");
+
+  await expect(page).toHaveTitle(/tar xzvf archive\.tar\.gz/);
+  await expect(page.locator("#command")).toBeVisible();
+
+  // Form action should include distro prefix
+  const formAction = await page.locator("#top-search").evaluate(
+    (el) => el.closest("form").getAttribute("action")
+  );
+  expect(formAction).toBe("/explain/ubuntu/25.10");
+
+  // Command links within the page should preserve the distro prefix
+  const commandLinks = page.locator('#command a[href*="/explain/ubuntu/25.10/"]');
+  const count = await commandLinks.count();
+  expect(count).toBeGreaterThan(0);
+});
+
+test("distro dropdown shows active distro as unclickable highlighted item", async ({ page }) => {
+  await page.goto("/explain?cmd=tar+xzvf+archive.tar.gz");
+  await page.waitForLoadState("networkidle");
+
+  // Open the command's dropdown (contains other manpages + distro options)
+  const caret = page.locator("#command .dropdown .caret").first();
+  await caret.click();
+
+  // The active distro should be a plain <li> (no <a> tag) with the active-distro class
+  const activeItem = page.locator("#command .active-distro").first();
+  await expect(activeItem).toBeVisible();
+  await expect(activeItem).toHaveText(/ubuntu 25\.10/);
+
+  // It should not contain a link
+  const link = activeItem.locator("a");
+  await expect(link).toHaveCount(0);
+
+  // It should have a distinct background color
+  const bg = await activeItem.evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(bg).not.toBe("rgba(0, 0, 0, 0)");
+});
+
 test("long explanation scrolls with many help boxes", async ({ page }) => {
   await page.goto(
     "/explain?cmd=gcc+-Wall+-Wextra+-O2+-g+-std%3Dc11+-I%2Fusr%2Finclude+-L%2Fusr%2Flib+-lm+-lpthread+-o+program+main.c"

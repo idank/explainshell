@@ -902,16 +902,6 @@ function clear() {
     }
 }
 
-function commandlinetourl(s) {
-    if (!$.trim(s))
-        return '/';
-
-    q = $.trim(s).split(' ');
-    loc = '/explain/' + q.shift();
-    if (q.length)
-        loc += '?' + $('<input/>', {type: 'hidden', name: 'args', value: q.join(' ')}).serialize();
-    return loc;
-}
 
 // very simple adjustment of the command div font size so it doesn't overflow
 function adjustcommandfontsize() {
@@ -1143,6 +1133,39 @@ function setTheme(theme) {
     docCookies.setItem(themeCookieName, theme, Infinity, '/');
 }
 
+function currentExplainPrefix() {
+    var path = window.location.pathname;
+    if (!path.startsWith('/explain/')) return '/explain';
+    var rest = path.substring('/explain/'.length);
+    var parts = rest.split('/');
+    // Check if first segment is a known distro from the dropdown
+    var knownDistros = $('a[data-distro]').map(function() {
+        return $(this).attr('data-distro');
+    }).get();
+    if (parts.length >= 2 && knownDistros.indexOf(parts[0]) !== -1) {
+        return '/explain/' + parts[0] + '/' + parts[1];
+    }
+    return '/explain';
+}
+
+function setDistro(distro, release) {
+    console.log('setting distro to', distro, release);
+    docCookies.setItem('distro', distro, Infinity, '/');
+    docCookies.setItem('release', release, Infinity, '/');
+
+    var newPrefix = '/explain/' + distro + '/' + release;
+    var path = window.location.pathname;
+    var query = window.location.search;
+    var oldPrefix = currentExplainPrefix();
+
+    if (path.startsWith(oldPrefix)) {
+        var rest = path.substring(oldPrefix.length);
+        window.location.href = newPrefix + rest + query;
+    } else {
+        window.location.href = newPrefix + query;
+    }
+}
+
 
 // Theme-related stuff
 $(document).ready(function() {
@@ -1154,5 +1177,9 @@ $(document).ready(function() {
 
     $("#themeContainer .dropdown-menu a").click(function() {
         setTheme($(this).attr('data-theme-name'));
+    });
+
+    $(document).on('click', 'a[data-distro]', function() {
+        setDistro($(this).attr('data-distro'), $(this).attr('data-release'));
     });
 });

@@ -9,12 +9,58 @@ from flask import render_template, request, redirect
 
 import bashlex.errors
 
-from explainshell import matcher, errors, util, store, config
-from explainshell.web import app, helpers
+from explainshell import matcher, errors, util, config
+from explainshell.web import app, get_cached_distros, helpers
 
 logger = logging.getLogger(__name__)
 
 _md = markdown_lib.Markdown()
+
+
+def _is_known_distro(name):
+    """Return True if *name* matches a distro in the cached distros list."""
+    for distro, _release in get_cached_distros():
+        if distro == name:
+            return True
+    return False
+
+
+def _explain_prefix(distro, release):
+    """Return the URL prefix for explain routes, with or without distro."""
+    if distro and release:
+        return f"/explain/{distro}/{release}"
+    return "/explain"
+
+
+def _get_distro_release(url_distro=None, url_release=None):
+    """Resolve distro/release: URL params > cookies > default."""
+    if url_distro and url_release:
+        return url_distro, url_release
+    distro = request.cookies.get("distro")
+    release = request.cookies.get("release")
+    if distro and release:
+        return distro, release
+    pairs = list(get_cached_distros())
+    if pairs:
+        pairs.sort(key=lambda dr: (dr[0] != "ubuntu", dr[1]), reverse=True)
+        return pairs[0]
+    return None, None
+
+
+def _get_current_url_distro_release():
+    """Parse the current request path for distro/release segments.
+
+    Returns (distro, release) if the path starts with /explain/<distro>/<release>/...,
+    otherwise (None, None).
+    """
+    path = request.path
+    if not path.startswith("/explain/"):
+        return None, None
+    rest = path[len("/explain/"):]
+    parts = rest.split("/")
+    if len(parts) >= 2 and _is_known_distro(parts[0]):
+        return parts[0], parts[1]
+    return None, None
 
 
 def render_markdown(text: str) -> str:
@@ -24,6 +70,18 @@ def render_markdown(text: str) -> str:
         return _md.convert(text)
     except Exception:
         return markupsafe.escape(text)
+
+
+@app.context_processor
+def inject_distros():
+    url_distro, url_release = _get_current_url_distro_release()
+    active_distro, active_release = _get_distro_release(url_distro, url_release)
+    return {
+        "available_distros": get_cached_distros(),
+        "explain_prefix": _explain_prefix(url_distro, url_release),
+        "active_distro": active_distro,
+        "active_release": active_release,
+    }
 
 
 @app.route("/")
@@ -36,20 +94,69 @@ def about():
     return render_template("about.html")
 
 
-@app.route("/explain")
-def explain():
-    if "cmd" not in request.args or not request.args["cmd"].strip():
+@app.route("/explain", defaults={"path": ""})
+@app.route("/explain/<path:path>")
+def explain_router(path):
+    """Unified router that handles all /explain/* URLs.
+
+    Path disambiguation:
+    - With ?cmd=: 0 segments = no distro, 2 segments = distro/release
+    - Without ?cmd=: 1=program, 2=section/program, 3=distro/release/program,
+      4=distro/release/section/program
+    """
+    parts = [p for p in path.split("/") if p] if path else []
+    has_cmd = "cmd" in request.args
+
+    url_distro = None
+    url_release = None
+    section = None
+    program = None
+
+    if has_cmd:
+        if len(parts) == 0:
+            pass  # no distro
+        elif len(parts) == 2 and _is_known_distro(parts[0]):
+            url_distro, url_release = parts[0], parts[1]
+        else:
+            # invalid path with ?cmd
+            return redirect("/")
+    else:
+        if len(parts) == 0:
+            return redirect("/")
+        elif len(parts) == 1:
+            program = parts[0]
+        elif len(parts) == 2:
+            if _is_known_distro(parts[0]):
+                # /explain/ubuntu/25.10 with no ?cmd → redirect to index
+                return redirect("/")
+            section, program = parts[0], parts[1]
+        elif len(parts) == 3 and _is_known_distro(parts[0]):
+            url_distro, url_release, program = parts[0], parts[1], parts[2]
+        elif len(parts) == 4 and _is_known_distro(parts[0]):
+            url_distro, url_release, section, program = parts[0], parts[1], parts[2], parts[3]
+        else:
+            return redirect("/")
+
+    if has_cmd:
+        return _handle_explain_cmd(url_distro, url_release)
+    else:
+        return _handle_explain_program(section, program, url_distro, url_release)
+
+
+def _handle_explain_cmd(url_distro, url_release):
+    if not request.args.get("cmd", "").strip():
         return redirect("/")
     command = request.args["cmd"].strip()
-    command = command[:1000]  # trim commands longer than 1000 characters
+    command = command[:1000]
     if "\n" in command:
         return render_template(
             "errors/error.html", title="parsing error!", message="no newlines please"
         )
 
-    s = store.Store(config.DB_PATH)
+    distro, release = _get_distro_release(url_distro, url_release)
+    prefix = _explain_prefix(url_distro, url_release)
     try:
-        matches, helptext = explain_cmd(command, s)
+        matches, helptext = explain_cmd(command, app.store, distro=distro, release=release, explain_prefix=prefix)
         helptext = [(render_markdown(text), id_) for text, id_ in helptext]
         return render_template(
             "explain.html", matches=matches, helptext=helptext, getargs=command
@@ -80,28 +187,22 @@ def explain():
         return render_template("errors/error.html", title="error!", message=msg)
 
 
-@app.route("/explain/<program>", defaults={"section": None})
-@app.route("/explain/<section>/<program>")
-def explain_old(section, program):
-    logger.info("/explain section=%r program=%r", section, program)
+def _handle_explain_program(section, program, url_distro, url_release):
+    logger.info("/explain section=%r program=%r distro=%r release=%r", section, program, url_distro, url_release)
 
-    s = store.Store(config.DB_PATH)
+    distro, release = _get_distro_release(url_distro, url_release)
     if section is not None:
         program = f"{program}.{section}"
 
-    # keep links to old urls alive
-    if "args" in request.args:
-        args = request.args["args"]
-        command = f"{program} {args}"
-        return redirect(f"/explain?cmd={urllib.parse.quote_plus(command)}", 301)
-    else:
-        try:
-            mp, suggestions = explain_program(program, s)
-            return render_template("options.html", mp=mp, suggestions=suggestions)
-        except errors.ProgramDoesNotExist as e:
-            return render_template(
-                "errors/missingmanpage.html", title="missing man page", e=e
-            )
+    try:
+        mp, suggestions = explain_program(
+            program, app.store, distro=distro, release=release
+        )
+        return render_template("options.html", mp=mp, suggestions=suggestions)
+    except errors.ProgramDoesNotExist as e:
+        return render_template(
+            "errors/missingmanpage.html", title="missing man page", e=e
+        )
 
 
 def manpage_url(source):
@@ -122,8 +223,8 @@ def manpage_url(source):
     return None
 
 
-def explain_program(program, store):
-    mps = store.find_man_page(program)
+def explain_program(program, store, distro=None, release=None):
+    mps = store.find_man_page(program, distro=distro, release=release)
     mp = mps.pop(0)
     program = mp.name_section
 
@@ -164,8 +265,8 @@ def _make_match(start, end, match, cmd_class, help_class):
     }
 
 
-def explain_cmd(command, store):
-    matcher_ = matcher.Matcher(command, store)
+def explain_cmd(command, store, distro=None, release=None, explain_prefix="/explain"):
+    matcher_ = matcher.Matcher(command, store, distro=distro, release=release)
     groups = matcher_.match()
     expansions = matcher_.expansions
 
@@ -201,7 +302,7 @@ def explain_cmd(command, store):
             id_start_pos.setdefault(help_class, m.start)
 
         d = _make_match(m.start, m.end, m.match, cmd_class, help_class)
-        format_match(d, m, expansions)
+        format_match(d, m, expansions, explain_prefix=explain_prefix)
 
         ln.append(d)
     matches.append(ln)
@@ -225,7 +326,7 @@ def explain_cmd(command, store):
                 id_start_pos.setdefault(help_class, m.start)
 
             d = _make_match(m.start, m.end, m.match, cmd_class, help_class)
-            format_match(d, m, expansions)
+            format_match(d, m, expansions, explain_prefix=explain_prefix)
 
             ln.append(d)
 
@@ -260,7 +361,7 @@ def explain_cmd(command, store):
     return matches, helptext
 
 
-def format_match(d, m, expansions):
+def format_match(d, m, expansions, explain_prefix="/explain"):
     """populate the match field in d by escaping m.match and generating
     links to any command/process substitutions"""
 
@@ -302,7 +403,7 @@ def format_match(d, m, expansions):
             s = m.match[rel_start:rel_end]
 
             if kind == "substitution":
-                content = markupsafe.Markup(_substitution_markup(s))
+                content = markupsafe.Markup(_substitution_markup(s, explain_prefix))
             else:
                 content = s
 
@@ -318,7 +419,7 @@ def format_match(d, m, expansions):
     d["match"] = expanded_match
 
 
-def _substitution_markup(cmd):
+def _substitution_markup(cmd, explain_prefix="/explain"):
     """
     >>> _substitution_markup('foo')
     '<a href="/explain?cmd=foo" title="Zoom in to nested command">foo</a>'
@@ -327,8 +428,8 @@ def _substitution_markup(cmd):
     """
     encoded = urllib.parse.urlencode({"cmd": cmd})
     return (
-        '<a href="/explain?{query}" title="Zoom in to nested command">{cmd}</a>'
-    ).format(cmd=cmd, query=encoded)
+        '<a href="{prefix}?{query}" title="Zoom in to nested command">{cmd}</a>'
+    ).format(prefix=explain_prefix, cmd=cmd, query=encoded)
 
 
 def _check_overlaps(s, matches):

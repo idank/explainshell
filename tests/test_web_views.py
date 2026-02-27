@@ -1,7 +1,107 @@
 import unittest
 
+from explainshell.web import app
 from explainshell.web.views import explain_program, manpage_url
 from tests import helpers
+
+
+class TestExplainRouter(unittest.TestCase):
+    """Route-level tests for the unified explain_router."""
+
+    def setUp(self):
+        self.store = helpers.MockStore()
+        app.store = self.store
+        app.config["TESTING"] = True
+        self.client = app.test_client()
+
+    # -- Backwards-compatible routes (no distro in URL) --
+
+    def test_explain_cmd_no_distro(self):
+        rv = self.client.get("/explain?cmd=bar+-a")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"bar", rv.data)
+
+    def test_explain_no_cmd_redirects(self):
+        rv = self.client.get("/explain")
+        self.assertEqual(rv.status_code, 302)
+        self.assertIn("/", rv.headers["Location"])
+
+    def test_explain_empty_cmd_redirects(self):
+        rv = self.client.get("/explain?cmd=")
+        self.assertEqual(rv.status_code, 302)
+
+    def test_explain_program_no_distro(self):
+        rv = self.client.get("/explain/bar")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"bar", rv.data)
+
+    def test_explain_section_program_no_distro(self):
+        rv = self.client.get("/explain/1/bar")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"bar", rv.data)
+
+    # -- Distro-prefixed routes --
+
+    def test_explain_cmd_with_distro(self):
+        rv = self.client.get("/explain/ubuntu/25.10?cmd=bar+-a")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"bar", rv.data)
+
+    def test_explain_program_with_distro(self):
+        rv = self.client.get("/explain/ubuntu/25.10/bar")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"bar", rv.data)
+
+    def test_explain_section_program_with_distro(self):
+        rv = self.client.get("/explain/ubuntu/25.10/1/bar")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"bar", rv.data)
+
+    # -- URL precedence over cookies --
+
+    def test_url_distro_takes_precedence_over_cookies(self):
+        self.client.set_cookie("distro", "debian")
+        self.client.set_cookie("release", "12")
+        rv = self.client.get("/explain/ubuntu/25.10?cmd=bar+-a")
+        self.assertEqual(rv.status_code, 200)
+        # The page should render correctly (using ubuntu/25.10 from URL)
+        self.assertIn(b"bar", rv.data)
+
+    # -- explain_prefix in rendered HTML --
+
+    def test_explain_prefix_with_distro_in_form(self):
+        rv = self.client.get("/explain/ubuntu/25.10?cmd=bar+-a")
+        self.assertIn(b"action='/explain/ubuntu/25.10'", rv.data)
+
+    def test_explain_prefix_without_distro_in_form(self):
+        rv = self.client.get("/explain?cmd=bar+-a")
+        self.assertIn(b"action='/explain'", rv.data)
+        self.assertNotIn(b"action='/explain/ubuntu", rv.data)
+
+    def test_explain_prefix_in_command_links(self):
+        rv = self.client.get("/explain/ubuntu/25.10?cmd=bar+-a")
+        # Command links should use distro prefix
+        self.assertIn(b"/explain/ubuntu/25.10/1/bar", rv.data)
+
+    def test_explain_prefix_without_distro_in_command_links(self):
+        rv = self.client.get("/explain?cmd=bar+-a")
+        self.assertIn(b"/explain/1/bar", rv.data)
+        self.assertNotIn(b"/explain/ubuntu/25.10/1/bar", rv.data)
+
+    def test_distro_only_no_cmd_redirects(self):
+        rv = self.client.get("/explain/ubuntu/25.10")
+        self.assertEqual(rv.status_code, 302)
+
+    def test_suggestion_links_use_distro_prefix(self):
+        rv = self.client.get("/explain/ubuntu/25.10/dup")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"/explain/ubuntu/25.10/2/dup", rv.data)
+
+    def test_suggestion_links_no_distro(self):
+        rv = self.client.get("/explain/dup")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"/explain/2/dup", rv.data)
+        self.assertNotIn(b"/explain/ubuntu/25.10/2/dup", rv.data)
 
 
 class TestManpageUrl(unittest.TestCase):

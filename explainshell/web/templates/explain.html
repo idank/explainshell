@@ -9,7 +9,7 @@
                     <svg id="canvas">
                     </svg>
                     <div id="command">
-                    {% import 'macros.html' as macros -%}
+                    {% import 'macros.html' as macros with context -%}
                     {% for m in matches -%}
                         {%- if m.name -%}
                             {{ macros.outputcommandexplain(m) }}

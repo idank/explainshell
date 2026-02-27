@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% import 'macros.html' as macros -%}
+{% import 'macros.html' as macros with context -%}
 {% block menu %}{% endblock %}
 {% block title %} - match command-line arguments to their help text{% endblock %}
 {% block head -%}
@@ -14,7 +14,7 @@
             <div class="push"></div>
             <div class="text-center">
                 <div class="input-append">
-                    <form action='/explain' method="get">
+                    <form action='{{ explain_prefix }}' method="get">
                         <input id='explain' class="span10" type="text" name="cmd" autocapitalize="off" autocorrect="off" autofocus></input>
                         <button class="btn" type="submit">EXPLAIN</button>
                     </form>

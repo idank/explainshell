@@ -90,7 +90,10 @@ class MockStore:
             nested_cmd=True,
         )
 
-    def find_man_page(self, x, section=None):
+    def distros(self):
+        return [("ubuntu", "25.10")]
+
+    def find_man_page(self, x, section=None, distro=None, release=None):
         try:
             if x == "dup":
                 return self.dup
