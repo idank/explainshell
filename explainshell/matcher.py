@@ -38,9 +38,11 @@ class Matcher(bashlex.ast.nodevisitor):
     each token.
     """
 
-    def __init__(self, s, store):
+    def __init__(self, s, store, distro=None, release=None):
         self.s = s
         self.store = store
+        self.distro = distro
+        self.release = release
         self._prev_option = self._current_option = None
         self.groups = [MatchGroup("shell")]
 
@@ -96,7 +98,11 @@ class Matcher(bashlex.ast.nodevisitor):
 
     def find_man_pages(self, prog):
         logger.info("looking up %r in store", prog)
-        man_pages = self.store.find_man_page(prog)
+        man_pages = self.store.find_man_page(
+            prog,
+            distro=self.distro,
+            release=self.release,
+        )
         logger.info(
             "found %r in store, got: %r, using %r", prog, man_pages, man_pages[0]
         )

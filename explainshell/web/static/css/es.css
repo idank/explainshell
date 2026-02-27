@@ -163,6 +163,15 @@ a {
     font-size: 20px;
 }
 
+.active-distro {
+    background-color: #dddddd;
+}
+
+.dropdown-menu .dropdown-header {
+    background-color: #eeeeee;
+    padding: 5px 0px;
+}
+
 pre code.hljs {
     background-color: transparent;
     padding: 2px;
@@ -207,4 +216,12 @@ body[data-theme='dark'] {
 [data-theme='dark'] .caret {
     /* this is probably a problem with the bootstrap theme */
     border-top: 4px solid #fff;
+}
+
+[data-theme='dark'] .active-distro {
+    background-color: #333;
+}
+
+[data-theme='dark'] .dropdown-menu .dropdown-header {
+    background-color: #2a2a2a;
 }
