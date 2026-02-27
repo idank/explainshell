@@ -12,7 +12,9 @@ from explainshell.source_extractor import extract
 _MANPAGES = os.path.join(
     os.path.dirname(__file__), "..", "manpages", "ubuntu", "25.10", "1"
 )
-_MANPAGES_CUSTOM = os.path.join(os.path.dirname(__file__), "..", "manpages", "1")
+_MANPAGES_CUSTOM = os.path.join(
+    os.path.dirname(__file__), "manpages", "ubuntu", "12.04", "1"
+)
 
 
 def _gz(name, custom=False):

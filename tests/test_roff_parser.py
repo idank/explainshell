@@ -13,7 +13,9 @@ from explainshell.roff_parser import (
     parse_options,
 )
 
-_MANPAGES = os.path.join(os.path.dirname(__file__), "..", "manpages", "1")
+_MANPAGES = os.path.join(
+    os.path.dirname(__file__), "manpages", "ubuntu", "12.04", "1"
+)
 
 
 def _gz(name):

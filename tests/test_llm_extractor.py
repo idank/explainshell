@@ -75,8 +75,12 @@ class TestGetManpageText(unittest.TestCase):
 # TestGetPlainTextReal — exercises the actual mandoc binary
 # ---------------------------------------------------------------------------
 
-_ECHO_GZ = os.path.join(os.path.dirname(__file__), "..", "manpages", "1", "echo.1.gz")
-_FIND_GZ = os.path.join(os.path.dirname(__file__), "..", "manpages", "1", "find.1.gz")
+_ECHO_GZ = os.path.join(
+    os.path.dirname(__file__), "manpages", "ubuntu", "12.04", "1", "echo.1.gz"
+)
+_FIND_GZ = os.path.join(
+    os.path.dirname(__file__), "manpages", "ubuntu", "12.04", "1", "find.1.gz"
+)
 
 
 class TestGetManpageTextReal(unittest.TestCase):
@@ -537,7 +541,13 @@ class TestRealLlm(unittest.TestCase):
             import shutil
 
             src = os.path.join(
-                os.path.dirname(__file__), "..", "manpages", "1", "echo.1.gz"
+                os.path.dirname(__file__),
+                "..",
+                "manpages",
+                "ubuntu",
+                "12.04",
+                "1",
+                "echo.1.gz",
             )
             shutil.copy(src, self.ECHO_GZ)
 
