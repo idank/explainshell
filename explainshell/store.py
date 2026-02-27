@@ -230,13 +230,16 @@ class Store:
         for row in self._conn.execute("SELECT * FROM manpage"):
             yield ParsedManpage.from_store(dict(row))
 
-    def find_man_page(self, name):
+    def find_man_page(self, name, distro=None, release=None):
         """find a man page by its name, everything following the last dot (.) in name,
         is taken as the section of the man page
 
         we return the man page found with the highest score, and a list of
         suggestions that also matched the given name (only the first item
-        is prepopulated with the option data)"""
+        is prepopulated with the option data)
+
+        when distro and release are set, filter results to manpages whose
+        source starts with ``distro/release/``."""
         if name.endswith(".gz"):
             logger.info("name ends with .gz, looking up an exact match by source")
             row = self._conn.execute(
@@ -283,6 +286,17 @@ class Store:
                 len(manpage_rows),
             )
 
+        # Apply distro/release filter when requested
+        if distro is not None and release is not None:
+            prefix = f"{distro}/{release}/"
+            manpage_rows = [
+                row for row in manpage_rows if row["source"].startswith(prefix)
+            ]
+            if not manpage_rows:
+                raise errors.ProgramDoesNotExist(name)
+            # Rebuild dsts to only include filtered rows
+            dsts = {row["id"]: dsts[row["id"]] for row in manpage_rows}
+
         results = [
             (row["id"], ParsedManpage(source=row["source"], name=row["name"]))
             for row in manpage_rows
@@ -302,7 +316,14 @@ class Store:
                 logger.info("sorted candidates so section %s is first", section)
             if results[0][1].section != section:
                 raise errors.ProgramDoesNotExist(orig_name)
-            results.extend(self._discover_manpage_suggestions(results[0][0], results))
+            results.extend(
+                self._discover_manpage_suggestions(
+                    results[0][0],
+                    results,
+                    distro=distro,
+                    release=release,
+                )
+            )
 
         oid = results[0][0]
         results = [x[1] for x in results]
@@ -312,7 +333,7 @@ class Store:
         results[0] = ParsedManpage.from_store(dict(row))
         return results
 
-    def _discover_manpage_suggestions(self, oid, existing):
+    def _discover_manpage_suggestions(self, oid, existing, distro=None, release=None):
         """find suggestions for a given man page
 
         oid is the id of the man page in question,
@@ -345,10 +366,29 @@ class Store:
             f"SELECT id, name, source FROM manpage WHERE id IN ({placeholders})",
             suggestion_ids,
         ).fetchall()
+
+        # Apply distro/release filter when requested
+        if distro is not None and release is not None:
+            prefix = f"{distro}/{release}/"
+            manpage_rows = [
+                row for row in manpage_rows if row["source"].startswith(prefix)
+            ]
+
         return [
             (row["id"], ParsedManpage(source=row["source"], name=row["name"]))
             for row in manpage_rows
         ]
+
+    def distros(self):
+        """Return distinct (distro, release) pairs from manpages."""
+        rows = self._conn.execute("""
+            SELECT DISTINCT
+                SUBSTR(source, 1, INSTR(source, '/') - 1) as distro,
+                SUBSTR(source, INSTR(source, '/') + 1,
+                       INSTR(SUBSTR(source, INSTR(source, '/') + 1), '/') - 1) as release
+            FROM manpage
+        """).fetchall()
+        return [(row["distro"], row["release"]) for row in rows]
 
     def add_mapping(self, src, dst, score):
         self._conn.execute(
@@ -371,6 +411,25 @@ class Store:
             self._conn.execute("DELETE FROM manpage WHERE id = ?", (old_id,))
             self._conn.commit()
             logger.info("removed manpage and its mappings for %s", m.source)
+        else:
+            # Check for duplicate: same distro/release + name + section but different source
+            distro, release = config.parse_distro_release(m.source)
+            section = m.section
+            prefix = f"{distro}/{release}/"
+            conflict = self._conn.execute(
+                "SELECT source FROM manpage WHERE source LIKE ? AND source != ? AND name = ?",
+                (prefix + "%", m.source, m.name),
+            ).fetchone()
+            if conflict:
+                conflict_source = conflict["source"]
+                _, conflict_section = util.name_section(
+                    os.path.basename(conflict_source)[:-3]
+                )
+                if conflict_section == section:
+                    raise errors.DuplicateManpage(
+                        f"manpage {m.name}({section}) already exists with source "
+                        f"{conflict_source!r}, refusing to add duplicate from {m.source!r}"
+                    )
 
         d = m.to_store()
         cursor = self._conn.execute(
