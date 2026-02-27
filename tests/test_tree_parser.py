@@ -9,7 +9,9 @@ from explainshell.tree_parser import (
     parse_options,
 )
 
-_MANPAGES_1 = os.path.join(os.path.dirname(__file__), "..", "manpages", "1")
+_MANPAGES_1 = os.path.join(
+    os.path.dirname(__file__), "manpages", "ubuntu", "12.04", "1"
+)
 _MANPAGES_UBUNTU = os.path.join(
     os.path.dirname(__file__), "..", "manpages", "ubuntu", "25.10", "1"
 )
