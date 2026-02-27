@@ -2,6 +2,10 @@ class ProgramDoesNotExist(Exception):
     pass
 
 
+class DuplicateManpage(Exception):
+    pass
+
+
 class ExtractionError(Exception):
     pass
 

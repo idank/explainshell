@@ -13,7 +13,18 @@ MANPAGES_DIR = os.path.join(_curr_dir, "manpages")
 # Templates may use {section} and {name} placeholders.
 MANPAGE_URLS = {
     "ubuntu/25.10": "https://manpages.ubuntu.com/manpages/plucky/en/man{section}/{name}.{section}.html",
+    "ubuntu/12.04": "https://manpages.ubuntu.com/manpages/precise/en/man{section}/{name}.{section}.html",
 }
+
+
+def parse_distro_release(source):
+    """Extract (distro, release) from a source path.
+
+    All source paths follow the ``distro/release/section/file.gz`` format:
+      "ubuntu/25.10/1/ps.1.gz" -> ("ubuntu", "25.10")
+    """
+    parts = source.split("/")
+    return parts[0], parts[1]
 
 
 def source_from_path(gz_path):

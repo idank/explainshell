@@ -1,6 +1,7 @@
 import pytest
 
 from explainshell import errors
+from explainshell.config import parse_distro_release
 from explainshell.store import Store, ParsedManpage
 
 
@@ -13,9 +14,9 @@ def store(tmp_path):
     s.close()
 
 
-def _make_manpage(name, section, aliases=None):
+def _make_manpage(name, section, aliases=None, distro="ubuntu", release="25.10"):
     """Helper to build a ParsedManpage with the conventional source path."""
-    source = f"ubuntu/25.10/{section}/{name}.{section}.gz"
+    source = f"{distro}/{release}/{section}/{name}.{section}.gz"
     if aliases is None:
         aliases = [(name, 10)]
     return ParsedManpage(
@@ -143,3 +144,103 @@ class TestFindManPageNotFound:
 
         results = store.find_man_page(".")
         assert results[0].name == "."
+
+
+class TestParseDistroRelease:
+    def test_distro_path(self):
+        assert parse_distro_release("ubuntu/25.10/1/ps.1.gz") == ("ubuntu", "25.10")
+
+    def test_different_distro(self):
+        assert parse_distro_release("debian/12/8/foo.8.gz") == ("debian", "12")
+
+
+class TestAddManpageDuplicatePrevention:
+    def test_same_source_reimport_succeeds(self, store):
+        """Re-importing the same source should replace the old entry."""
+        mp = _make_manpage("ps", "1")
+        store.add_manpage(mp)
+        store.add_manpage(mp)  # should not raise
+
+    def test_same_name_section_distro_different_source_raises(self, store):
+        """Two manpages with same name+section+distro but different source should raise."""
+        mp1 = ParsedManpage(
+            source="ubuntu/25.10/1/ps.1.gz",
+            name="ps",
+            synopsis="ps - report",
+            aliases=[("ps", 10)],
+        )
+        mp2 = ParsedManpage(
+            source="ubuntu/25.10/1/procps-ps.1.gz",
+            name="ps",
+            synopsis="ps - report processes",
+            aliases=[("ps", 10)],
+        )
+        store.add_manpage(mp1)
+        with pytest.raises(errors.DuplicateManpage):
+            store.add_manpage(mp2)
+
+    def test_same_name_different_distro_succeeds(self, store):
+        """Same name+section in different distros should be allowed."""
+        mp1 = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
+        mp2 = _make_manpage("ps", "1", distro="debian", release="12")
+        store.add_manpage(mp1)
+        store.add_manpage(mp2)  # should not raise
+
+    def test_same_name_different_section_succeeds(self, store):
+        """Same name in different sections within same distro should be allowed."""
+        mp1 = _make_manpage("printf", "1")
+        mp3 = _make_manpage("printf", "3")
+        store.add_manpage(mp1)
+        store.add_manpage(mp3)  # should not raise
+
+
+class TestFindManPageDistroScoping:
+    def test_filter_by_distro(self, store):
+        """find_man_page with distro/release should only return matching manpages."""
+        mp_ubuntu = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
+        mp_debian = _make_manpage("ps", "1", distro="debian", release="12")
+        store.add_manpage(mp_ubuntu)
+        store.add_manpage(mp_debian)
+
+        results = store.find_man_page("ps", distro="ubuntu", release="25.10")
+        assert len(results) == 1
+        assert results[0].source.startswith("ubuntu/25.10/")
+
+    def test_no_results_raises(self, store):
+        """Filtering by a distro that has no matching manpage should raise."""
+        mp = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
+        store.add_manpage(mp)
+
+        with pytest.raises(errors.ProgramDoesNotExist):
+            store.find_man_page("ps", distro="debian", release="12")
+
+    def test_no_filter_returns_all(self, store):
+        """Without distro/release, all matching manpages should be returned."""
+        mp_ubuntu = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
+        mp_debian = _make_manpage("ps", "1", distro="debian", release="12")
+        store.add_manpage(mp_ubuntu)
+        store.add_manpage(mp_debian)
+
+        results = store.find_man_page("ps")
+        assert len(results) == 2
+
+
+class TestDistros:
+    def test_returns_distro_release_pairs(self, store):
+        mp1 = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
+        mp2 = _make_manpage("ls", "1", distro="debian", release="12")
+        store.add_manpage(mp1)
+        store.add_manpage(mp2)
+
+        pairs = store.distros()
+        assert ("ubuntu", "25.10") in pairs
+        assert ("debian", "12") in pairs
+
+    def test_no_duplicates(self, store):
+        mp1 = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
+        mp2 = _make_manpage("ls", "1", distro="ubuntu", release="25.10")
+        store.add_manpage(mp1)
+        store.add_manpage(mp2)
+
+        pairs = store.distros()
+        assert pairs.count(("ubuntu", "25.10")) == 1
