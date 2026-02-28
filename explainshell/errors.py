@@ -6,6 +6,10 @@ class DuplicateManpage(Exception):
     pass
 
 
+class InvalidSourcePath(Exception):
+    pass
+
+
 class ExtractionError(Exception):
     pass
 

@@ -2,7 +2,7 @@ import pytest
 
 from explainshell import errors
 from explainshell.config import parse_distro_release
-from explainshell.store import Store, ParsedManpage
+from explainshell.store import Store, ParsedManpage, validate_source_path
 
 
 @pytest.fixture
@@ -244,3 +244,29 @@ class TestDistros:
 
         pairs = store.distros()
         assert pairs.count(("ubuntu", "25.10")) == 1
+
+
+class TestValidateSourcePath:
+    def test_valid_path(self):
+        validate_source_path("ubuntu/25.10/1/tar.1.gz")
+
+    def test_valid_path_section_8(self):
+        validate_source_path("debian/12/8/iptables.8.gz")
+
+    def test_bare_basename_rejected(self):
+        with pytest.raises(errors.InvalidSourcePath):
+            validate_source_path("tar.1.gz")
+
+    def test_missing_distro_rejected(self):
+        with pytest.raises(errors.InvalidSourcePath):
+            validate_source_path("25.10/1/tar.1.gz")
+
+    def test_add_manpage_rejects_bare_source(self, store):
+        mp = ParsedManpage(
+            source="tar.1.gz",
+            name="tar",
+            synopsis="tar - archiver",
+            aliases=[("tar", 10)],
+        )
+        with pytest.raises(errors.InvalidSourcePath):
+            store.add_manpage(mp)

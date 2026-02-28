@@ -28,11 +28,10 @@ def parse_distro_release(source):
 
 
 def source_from_path(gz_path):
-    """Return source identifier: relative path from MANPAGES_DIR if possible, else basename."""
-    try:
-        rel = os.path.relpath(gz_path, MANPAGES_DIR)
-        if not rel.startswith(".."):
-            return rel
-    except ValueError:
-        pass
-    return os.path.basename(gz_path)
+    """Return the ``distro/release/section/name.section.gz`` source identifier.
+
+    Extracts the last four path components, which by convention are
+    ``distro/release/section/file.gz``.
+    """
+    parts = os.path.normpath(gz_path).split(os.sep)
+    return "/".join(parts[-4:])

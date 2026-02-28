@@ -58,14 +58,15 @@ def db_store():
 )
 def test_parsing_matches_db(gz_path, db_store, request):
     basename = os.path.basename(gz_path)
+    source = os.path.relpath(gz_path, _REGRESSION_DIR)
     extractor = request.config.getoption("--extractor")
 
-    # Look up stored manpage by source basename.
+    # Look up stored manpage by full source path (distro/release/section/name.gz).
     try:
-        results = db_store.find_man_page(basename)
+        results = db_store.find_man_page(source)
         stored_mp = results[0]
     except errors.ProgramDoesNotExist:
-        pytest.skip(f"{basename} not in DB")
+        pytest.skip(f"{source} not in DB")
 
     # Re-parse with selected extractor.
     if extractor == "mandoc":
