@@ -28,23 +28,15 @@ from explainshell.llm_extractor import (
 
 class TestGetManpageText(unittest.TestCase):
     @patch("explainshell.llm_extractor.subprocess.run")
-    def test_success_extracts_manual_text(self, mock_run):
-        html = (
-            "<html><body>"
-            '<div class="manual-text">'
-            "<p><b>bold</b> and <i>italic</i></p>"
-            "</div>"
-            '<table class="foot"><tr><td></td></tr></table>'
-            "</body></html>"
-        )
-        mock_run.return_value = MagicMock(returncode=0, stdout=html, stderr="")
+    def test_success_returns_markdown(self, mock_run):
+        md_output = "# NAME\n\ngrep - search for patterns\n\n**-v**, **--invert-match**\n"
+        mock_run.return_value = MagicMock(returncode=0, stdout=md_output, stderr="")
         result = get_manpage_text("dummy.1.gz")
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
-        self.assertEqual(cmd[:3], ["mandoc", "-T", "html"])
-        # Should contain markdown bold/italic
-        self.assertIn("**bold**", result)
-        self.assertIn("*italic*", result)
+        self.assertIn("-T", cmd)
+        self.assertIn("markdown", cmd)
+        self.assertEqual(result, md_output.strip())
 
     @patch("explainshell.llm_extractor.subprocess.run")
     def test_empty_output_raises(self, mock_run):
@@ -57,14 +49,6 @@ class TestGetManpageText(unittest.TestCase):
         mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error msg")
         with self.assertRaises(ExtractionError):
             get_manpage_text("dummy.1.gz")
-
-    @patch("explainshell.llm_extractor.subprocess.run")
-    def test_fallback_without_manual_text_div(self, mock_run):
-        """If mandoc output doesn't have the expected div, convert all HTML."""
-        html = "<html><body><p>hello <b>world</b></p></body></html>"
-        mock_run.return_value = MagicMock(returncode=0, stdout=html, stderr="")
-        result = get_manpage_text("dummy.1.gz")
-        self.assertIn("**world**", result)
 
     def test_backward_compat_alias(self):
         """get_plain_text is an alias for get_manpage_text."""

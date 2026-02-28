@@ -13,7 +13,6 @@ import subprocess
 import time
 
 import litellm
-from markdownify import markdownify as md
 
 from explainshell import config, manpage, store
 from explainshell.errors import ExtractionError
@@ -32,8 +31,9 @@ Rules:
 1. Extract every option a user can pass on the command line. Include both short options
    (e.g. -v) and long options (e.g. --verbose). If multiple flags share one description,
    include them all in the same entry.
-2. For each option include the full description text exactly as it appears. Preserve any
-   markdown formatting such as **bold** and *italic* in the descriptions.
+2. For each option, start the "description" with the flags/usage line exactly as it
+   appears in the man page (e.g. "**-n**"), followed by two newlines, then the full
+   description text. Preserve any markdown formatting such as **bold** and *italic*.
 3. Set "expects_arg":
    - false  → option takes no argument (e.g. -v, --verbose)
    - true   → option requires an argument (e.g. -f FILE, --file=FILE)
@@ -64,10 +64,13 @@ JSON schema:
 }"""
 
 
+_MANDOC_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "tools", "mandoc-with-markdown")
+
+
 def get_manpage_text(gz_path: str) -> str:
-    """Run `mandoc -T html <gz_path>`, extract manual-text, convert to markdown."""
+    """Run patched `mandoc -T markdown <gz_path>` to get markdown directly."""
     result = subprocess.run(
-        ["mandoc", "-T", "html", gz_path],
+        [_MANDOC_PATH, "-T", "markdown", gz_path],
         capture_output=True,
         text=True,
         timeout=60,
@@ -75,22 +78,7 @@ def get_manpage_text(gz_path: str) -> str:
     if result.returncode != 0 or not result.stdout.strip():
         raise ExtractionError(f"mandoc failed for {gz_path}: {result.stderr}")
 
-    html = result.stdout
-
-    # Extract only the <div class="manual-text"> content to skip boilerplate
-    m = re.search(
-        r'<div class="manual-text">(.*)</div>\s*<table class="foot">',
-        html,
-        re.DOTALL,
-    )
-    if m:
-        html = m.group(1)
-
-    text = md(html, strip=["img"], wrap=True, wrap_width=10000).strip()
-    # mandoc emits &#x00A0; (non-breaking space) between flags and arguments;
-    # markdownify preserves these as literal \xa0 — replace with regular spaces.
-    text = text.replace("\xa0", " ")
-    return text
+    return result.stdout.strip()
 
 
 # Keep backward-compatible alias
