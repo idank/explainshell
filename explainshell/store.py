@@ -48,6 +48,24 @@ CREATE INDEX IF NOT EXISTS idx_mapping_dst ON mapping(dst);
 """
 
 
+_SOURCE_RE = re.compile(
+    r"^[a-zA-Z][a-zA-Z0-9_-]*/[^/]+/[^/]+/[^/]+\.\d\w*\.gz$"
+)
+
+
+def validate_source_path(source):
+    """Validate that *source* has the ``distro/release/section/name.section.gz`` format.
+
+    Raises ``errors.InvalidSourcePath`` on failure.
+    """
+    if not _SOURCE_RE.match(source):
+        raise errors.InvalidSourcePath(
+            f"source path {source!r} does not match the required "
+            f"'distro/release/section/name.section.gz' format "
+            f"(e.g. 'ubuntu/25.10/1/tar.1.gz')"
+        )
+
+
 class Option(BaseModel):
     """An extracted command-line option from a man page.
 
@@ -401,6 +419,7 @@ class Store:
 
         each man page may have aliases besides the name determined by its
         basename"""
+        validate_source_path(m.source)
         existing = self._conn.execute(
             "SELECT id FROM manpage WHERE source = ?", (m.source,)
         ).fetchone()

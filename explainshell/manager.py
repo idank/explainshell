@@ -677,7 +677,7 @@ def _build_parser():
         default="WARNING",
         help="Log level (default: WARNING)",
     )
-    parser.add_argument("files", nargs="+", help=".gz files or directories")
+    parser.add_argument("files", nargs="*", help=".gz files or directories")
     return parser
 
 

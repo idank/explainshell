@@ -16,7 +16,8 @@ parsing-regression:
 	python -m pytest tests/regression/test_parsing_regression.py -v
 
 parsing-update:
-	python -m explainshell.manager --mode source --overwrite --db tests/regression/regression.db tests/regression/manpages/
+	rm -f tests/regression/regression.db
+	python -m explainshell.manager --mode source --db tests/regression/regression.db tests/regression/manpages/
 
 tests-all: lint tests e2e parsing-regression
 
@@ -29,4 +30,7 @@ format:
 serve:
 	python runserver.py
 
-.PHONY: tests e2e e2e-update test-llm tests-all lint serve parsing-regression parsing-update
+db-check:
+	python tools/db_check.py --db $(or $(DB_PATH),explainshell.db)
+
+.PHONY: tests e2e e2e-update test-llm tests-all lint serve parsing-regression parsing-update db-check
