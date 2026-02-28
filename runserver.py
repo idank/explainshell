@@ -1,4 +1,5 @@
 import logging
+import os
 
 from explainshell import config
 from explainshell.web import app
@@ -10,7 +11,9 @@ if __name__ == "__main__":
     # activate logging and redirect all logs to loguru
     logging.basicConfig(handlers=[InterceptHandler()], level=logging.DEBUG, force=True)
 
+    port = int(os.environ.get("PORT", 5000))
+
     if config.HOST_IP:
-        app.run(debug=config.DEBUG, host=config.HOST_IP)
+        app.run(debug=config.DEBUG, host=config.HOST_IP, port=port)
     else:
-        app.run(debug=config.DEBUG)
+        app.run(debug=config.DEBUG, port=port)
