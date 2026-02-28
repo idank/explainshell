@@ -1,7 +1,7 @@
 import unittest
 
 from explainshell.web import app
-from explainshell.web.views import explain_program, manpage_url
+from explainshell.web.views import explain_program, manpage_url, render_markdown
 from tests import helpers
 
 
@@ -149,3 +149,21 @@ class TestExplainProgram(unittest.TestCase):
         self.assertEqual(len(suggestions), 1)
         self.assertEqual(suggestions[0]["text"], "dup(2)")
         self.assertEqual(suggestions[0]["link"], "2/dup")
+
+
+class TestRenderMarkdown(unittest.TestCase):
+    def test_bold_and_italic(self):
+        result = render_markdown("**bold** and *italic*")
+        self.assertIn("<strong>bold</strong>", result)
+        self.assertIn("<em>italic</em>", result)
+
+    def test_bare_angle_brackets_escaped(self):
+        result = render_markdown("Use --onto <newbase>")
+        self.assertIn("&lt;newbase&gt;", result)
+        self.assertNotIn("<newbase>", result)
+
+    def test_already_escaped_entities(self):
+        result = render_markdown("Use --onto &lt;newbase&gt;")
+        # Should still render as visible angle brackets, not be swallowed
+        self.assertIn("&lt;", result)
+        self.assertIn("&gt;", result)

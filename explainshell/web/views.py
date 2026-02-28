@@ -67,6 +67,9 @@ def render_markdown(text: str) -> str:
     """Convert markdown text to HTML. Falls through to escaped text on error."""
     try:
         _md.reset()
+        # Escape bare angle brackets so the markdown library doesn't swallow
+        # them as HTML tags (e.g. <newbase>, <file>).
+        text = text.replace("<", "&lt;").replace(">", "&gt;")
         return _md.convert(text)
     except Exception:
         return markupsafe.escape(text)

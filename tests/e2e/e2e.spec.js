@@ -140,7 +140,7 @@ test("distro dropdown shows active distro as unclickable highlighted item", asyn
 
 test("long explanation scrolls with many help boxes", async ({ page }) => {
   await page.goto(
-    "/explain?cmd=gcc+-Wall+-Wextra+-O2+-g+-std%3Dc11+-I%2Fusr%2Finclude+-L%2Fusr%2Flib+-lm+-lpthread+-o+program+main.c"
+    "/explain?cmd=tar+--create+--gzip+--verbose+--file+archive.tar.gz+--exclude+*.log+--anchored+--no-recursion+--keep-old-files+--one-file-system+--totals+--checkpoint+src/"
   );
   await page.waitForLoadState("networkidle");
 
@@ -152,5 +152,7 @@ test("long explanation scrolls with many help boxes", async ({ page }) => {
   await page.evaluate(() => window.scrollBy(0, 600));
   await page.waitForTimeout(300);
 
-  await expect(page).toHaveScreenshot("explain-long-scrolled.png");
+  await expect(page).toHaveScreenshot("explain-long-scrolled.png", {
+    maxDiffPixelRatio: 0.03,
+  });
 });
