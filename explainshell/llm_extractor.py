@@ -34,7 +34,8 @@ Rules:
    include them all in the same entry.
 2. For each option, start the "description" with the flags/usage line exactly as it
    appears in the man page (e.g. "**-n**"), followed by two newlines, then the full
-   description text. Preserve any markdown formatting such as **bold** and *italic*.
+   description text. Include the COMPLETE description — do not truncate, summarize,
+   or omit any paragraphs. Preserve any markdown formatting such as **bold** and *italic*.
 3. Set "expects_arg":
    - false  → option takes no argument (e.g. -v, --verbose)
    - true   → option requires an argument (e.g. -f FILE, --file=FILE)
@@ -45,6 +46,8 @@ Rules:
    (e.g. find -exec CMD ;).
 6. Do not invent options. Only include options explicitly documented in the text.
 7. Return ONLY the JSON object. No markdown fences, no explanation.
+   IMPORTANT: properly escape backslashes in JSON strings. Any literal backslash
+   must be written as \\\\ in the JSON output.
 8. Set "dashless_opts" to true if the man page documents that options can be
    specified without a leading dash (e.g., "traditional usage", "BSD-style
    options", or usage examples like `tar xzvf`). Otherwise set it to false.
@@ -184,6 +187,15 @@ def _call_llm(chunk: str, chunk_info: str, model: str, litellm_kwargs: dict) -> 
     raise ExtractionError(f"LLM call failed after 3 attempts: {last_err}") from last_err
 
 
+def _fix_invalid_escapes(s: str) -> str:
+    """Replace invalid JSON escape sequences with their escaped form.
+
+    JSON only allows: \\", \\\\, \\/, \\b, \\f, \\n, \\r, \\t, \\uXXXX.
+    LLMs sometimes produce things like \\p or \\a which are invalid.
+    """
+    return re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', s)
+
+
 def _parse_json_response(content: str) -> dict:
     """Strip markdown fences, find outermost {…}, parse JSON."""
     # strip markdown code fences
@@ -198,8 +210,15 @@ def _parse_json_response(content: str) -> dict:
             f"No JSON object found in LLM response: {content[:200]!r}"
         )
 
+    raw = content[start : end + 1]
     try:
-        return json.loads(content[start : end + 1])
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+
+    # retry after fixing invalid escape sequences
+    try:
+        return json.loads(_fix_invalid_escapes(raw))
     except json.JSONDecodeError as e:
         raise ExtractionError(f"Invalid JSON from LLM: {e}") from e
 
