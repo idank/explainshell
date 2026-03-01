@@ -13,7 +13,6 @@ tests/screenshots/*.png
 test-results/
 playwright-report/
 dump.gz
-moarcode/
 *.db
 *.db-shm
 *.db-wal
