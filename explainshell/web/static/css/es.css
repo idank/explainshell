@@ -143,9 +143,22 @@ a {
     margin-bottom: 0;
 }
 
-.help-box > blockquote {
-    font-size: 13px;
-    border-left: 0;
+.help-box p + blockquote {
+    margin-top: -10px;
+}
+
+.help-box blockquote {
+    border: none;
+    margin: 0 0 10px;
+    padding: 0 0 0 20px;
+    font-size: inherit;
+    font-weight: inherit;
+}
+
+.help-box blockquote p {
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
 }
 
 .help-synopsis {

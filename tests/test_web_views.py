@@ -167,3 +167,8 @@ class TestRenderMarkdown(unittest.TestCase):
         # Should still render as visible angle brackets, not be swallowed
         self.assertIn("&lt;", result)
         self.assertIn("&gt;", result)
+
+    def test_blockquotes_preserved(self):
+        result = render_markdown("Description\n\n> indented example")
+        self.assertIn("<blockquote>", result)
+        self.assertIn("indented example", result)

@@ -156,3 +156,17 @@ test("long explanation scrolls with many help boxes", async ({ page }) => {
     maxDiffPixelRatio: 0.03,
   });
 });
+
+test("blockquotes in help boxes render as plain indented text", async ({ page }) => {
+  await page.goto("/explain/1/git-rebase");
+  await page.waitForLoadState("networkidle");
+
+  // The --empty option contains blockquotes in its description
+  const helpBox = page.locator(".help-box", {
+    hasText: "--empty=(drop|keep|stop)",
+  });
+  await expect(helpBox).toBeVisible();
+  await expect(helpBox.locator("blockquote").first()).toBeVisible();
+
+  await expect(helpBox).toHaveScreenshot("help-box-blockquote.png");
+});

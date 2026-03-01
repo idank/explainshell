@@ -1,6 +1,7 @@
 import logging
 import itertools
 import os
+import re
 import urllib
 import markupsafe
 
@@ -67,9 +68,10 @@ def render_markdown(text: str) -> str:
     """Convert markdown text to HTML. Falls through to escaped text on error."""
     try:
         _md.reset()
-        # Escape bare angle brackets so the markdown library doesn't swallow
-        # them as HTML tags (e.g. <newbase>, <file>).
-        text = text.replace("<", "&lt;").replace(">", "&gt;")
+        # Escape bare <word> placeholders (e.g. <newbase>, <file>) so the
+        # markdown library doesn't swallow them as HTML tags.  Leave
+        # blockquote '>' at line starts and already-escaped &lt;/&gt; alone.
+        text = re.sub(r"<([^>]+)>", r"&lt;\1&gt;", text)
         return _md.convert(text)
     except Exception:
         return markupsafe.escape(text)
