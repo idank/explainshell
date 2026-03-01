@@ -31,7 +31,7 @@ module.exports = defineConfig({
   ],
   webServer: {
     command:
-      ". .venv/bin/activate && DB_PATH=explainshell.db python runserver.py",
+      ". .venv/bin/activate && DB_PATH=tests/e2e/e2e.db python runserver.py",
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,
     env: { PORT: String(port) },
