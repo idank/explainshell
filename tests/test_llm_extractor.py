@@ -452,6 +452,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
             diff=False,
             debug_dir="debug-output",
             log="WARNING",
+            jobs=1,
             files=[],
         )
         return args
