@@ -1,152 +1,204 @@
 # -*- coding: utf-8 -*-
 
-import textwrap
-
 NO_SYNOPSIS = 'no synopsis found'
 
-PIPELINES = textwrap.dedent('''   <b>Pipelines</b>
-       A  <u>pipeline</u> is a sequence of one or more commands separated by one of the control operators <b>|</b> or <b>|&amp;</b>.  The
-       format for a pipeline is:
+PIPELINES = '''A *pipeline* is a sequence of one or more commands separated by one of the control operators
+**|** or **|&**. The format for a pipeline is:
 
-              [<b>time</b> [<b>-p</b>]] [ ! ] <u>command</u> [ [<b>|</b>⎪<b>|&amp;</b>] <u>command2</u> ... ]
+> \\[**time** \\[**-p**]] \\[ ! ] *command1* \\[ \\[**|**|**|&**] *command2* ... ]
 
-       The standard output of <u>command</u> is connected  via  a  pipe  to  the  standard  input  of  <u>command2</u>.   This
-       connection  is performed before any redirections specified by the command (see <b>REDIRECTION</b> below).  If <b>|&amp;</b>
-       is used, the standard error of <u>command</u> is connected to <u>command2</u>'s standard input through the pipe; it  is
-       shorthand  for  <b>2&gt;&amp;1</b>  <b>|</b>.   This  implicit  redirection  of  the  standard  error  is  performed after any
-       redirections specified by the command.
+The standard output of
+*command1* is connected via a pipe to the standard input of
+*command2*. This connection is performed before any redirections specified by the
+*command1*(see
+**REDIRECTION** below). If **|&** is used, *command1*'s standard error, in addition to its standard output, is connected to *command2*'s standard input through the pipe; it is shorthand for **2&gt;&1 |**. This implicit redirection of the standard error to the standard output is performed after any redirections specified by *command1*.
 
-       The return status of a pipeline is the exit status of the last command, unless  the  <b>pipefail</b>  option  is
-       enabled.   If  <b>pipefail</b>  is  enabled,  the  pipeline's return status is the value of the last (rightmost)
-       command to exit with a non-zero status, or zero if all commands exit successfully.  If the reserved  word
-       <b>!</b>   precedes  a  pipeline, the exit status of that pipeline is the logical negation of the exit status as
-       described above.  The shell waits for all commands in the pipeline to terminate before returning a value.
+The return status of a pipeline is the exit status of the last command, unless the **pipefail** option is enabled. If **pipefail** is enabled, the pipeline's return status is the value of the last (rightmost) command to exit with a non-zero status, or zero if all commands exit successfully. If the reserved word
+**!** precedes a pipeline, the exit status of that pipeline is the logical negation of the exit status as described above. The shell waits for all commands in the pipeline to terminate before returning a value.
 
-       If the <b>time</b> reserved word precedes a pipeline, the elapsed as well as user and system  time  consumed  by
-       its execution are reported when the pipeline terminates.  The <b>-p</b> option changes the output format to that
-       specified by POSIX.  When the shell is in <u>posix</u> <u>mode</u>, it does not recognize <b>time</b> as a  reserved  word  if
-       the  next  token begins with a `-'.  The <b>TIMEFORMAT</b> variable may be set to a format string that specifies
-       how the timing information should be displayed; see the description of <b>TIMEFORMAT</b> under  <b>Shell</b>  <b>Variables</b>
-       below.
+If the
+**time** reserved word precedes a pipeline, the elapsed as well as user and system time consumed by its execution are reported when the pipeline terminates. The **-p** option changes the output format to that specified by POSIX. When the shell is in *posix mode*, it does not recognize **time** as a reserved word if the next token begins with a \\`-'. The
+**TIMEFORMAT** variable may be set to a format string that specifies how the timing information should be displayed; see the description of
+**TIMEFORMAT** under
+**Shell Variables** below.
 
-       When the shell is in <u>posix</u> <u>mode</u>, <b>time</b> may be followed by a newline.  In this case, the shell displays the
-       total user and system time consumed by the shell and its children.  The <b>TIMEFORMAT</b> variable may  be  used
-       to specify the format of the time information.
+When the shell is in *posix mode*, **time** may be followed by a newline.  In this case, the shell displays the total user and system time consumed by the shell and its children. The
+**TIMEFORMAT** variable may be used to specify the format of the time information.
 
-       Each command in a pipeline is executed as a separate process (i.e., in a subshell).''')
+Each command in a multi-command pipeline, where pipes are created, is executed in a *subshell*, which is a separate process. See
+**COMMAND EXECUTION ENVIRONMENT** for a description of subshells and a subshell environment. If the **lastpipe** option is enabled using the **shopt** builtin (see the description of **shopt** below), the last element of a pipeline may be run by the shell process when job control is not active.'''
 
-OPSEMICOLON = textwrap.dedent('''       Commands separated  by  a <b>;</b> are executed sequentially; the shell waits for each command to terminate in turn.  The
-       return status is the exit status of the last command executed.''')
+OPSEMICOLON = '''Commands separated by a
+**;** are executed sequentially; the shell waits for each command to terminate in turn.  The return status is the exit status of the last command executed.'''
 
-OPBACKGROUND = textwrap.dedent('''       If a command is terminated by the control operator <b>&amp;</b>, the shell executes the command in the <u>background</u> in
-       a subshell.  The shell does not wait for the command to finish, and the return  status  is  0.''')
+OPBACKGROUND = '''If a command is terminated by the control operator
+**&**, the shell executes the command in the *background* in a subshell. The shell does not wait for the command to finish, and the return status is 0. These are referred to as *asynchronous* commands.'''
 
-OPANDOR = textwrap.dedent('''       AND and OR lists are sequences of one of more pipelines separated by the <b>&amp;&amp;</b>  and  <b>||</b>  control  operators,
-       respectively.  AND and OR lists are executed with left associativity.  An AND list has the form
+OPANDOR = '''AND and OR lists are sequences of one or more pipelines separated by the **&&** and **||** control operators, respectively. AND and OR lists are executed with left associativity. An AND list has the form
 
-              <u>command1</u> <b>&amp;&amp;</b> <u>command2</u>
+> *command1* **&&** *command2*
 
-       <u>command2</u> is executed if, and only if, <u>command1</u> returns an exit status of zero.
+*command2* is executed if, and only if,
+*command1* returns an exit status of zero (success).
 
-       An OR list has the form
+An OR list has the form
 
-              <u>command1</u> <b>||</b> <u>command2</u>
+> *command1* **||** *command2*
 
-       <u>command2</u>  is  executed  if and only if <u>command1</u> returns a non-zero exit status.  The return status of AND
-       and OR lists is the exit status of the last command executed in the list.''')
+*command2* is executed if, and only if,
+*command1* returns a non-zero exit status. The return status of AND and OR lists is the exit status of the last command executed in the list.'''
 
 OPERATORS = {';' : OPSEMICOLON, '&' : OPBACKGROUND, '&&' : OPANDOR, '||' : OPANDOR}
 
-REDIRECTION = textwrap.dedent('''       Before a command is executed, its input and output may be <u>redirected</u> using a special notation interpreted
-       by  the  shell.   Redirection  may  also  be used to open and close files for the current shell execution
-       environment.  The following redirection operators may precede or appear anywhere within a <u>simple</u>  <u>command</u>
-       or may follow a <u>command</u>.  Redirections are processed in the order they appear, from left to right.''')
+REDIRECTION = '''Before a command is executed, its input and output may be
+*redirected* using a special notation interpreted by the shell. *Redirection* allows commands' file handles to be duplicated, opened, closed, made to refer to different files, and can change the files the command reads from and writes to. Redirection may also be used to modify file handles in the current shell execution environment. The following redirection operators may precede or appear anywhere within a
+*simple command* or may follow a
+*command*. Redirections are processed in the order they appear, from left to right.
 
-REDIRECTING_INPUT = textwrap.dedent('''   <b>Redirecting</b> <b>Input</b>
-       Redirection  of  input  causes  the  file  whose name results from the expansion of <u>word</u> to be opened for
-       reading on file descriptor <u>n</u>, or the standard input (file descriptor 0) if <u>n</u> is not specified.
+Each redirection that may be preceded by a file descriptor number may instead be preceded by a word of the form {*varname*}. In this case, for each redirection operator except &gt;&- and &lt;&-, the shell will allocate a file descriptor greater than or equal to 10 and assign it to *varname*. If &gt;&- or &lt;&- is preceded by {*varname*}, the value of *varname* defines the file descriptor to close. If {*varname*} is supplied, the redirection persists beyond the scope of the command, allowing the shell programmer to manage the file descriptor's lifetime manually. The **varredir\\_close** shell option manages this behavior.
 
-       The general format for redirecting input is:
+In the following descriptions, if the file descriptor number is omitted, and the first character of the redirection operator is
+**&lt;**, the redirection refers to the standard input (file descriptor 0).  If the first character of the redirection operator is
+**&gt;**, the redirection refers to the standard output (file descriptor 1).
 
-              [<u>n</u>]<b>&lt;</b><u>word</u>''')
+The word following the redirection operator in the following descriptions, unless otherwise noted, is subjected to brace expansion, tilde expansion, parameter and variable expansion, command substitution, arithmetic expansion, quote removal, pathname expansion, and word splitting. If it expands to more than one word,
+**bash** reports an error.
 
-REDIRECTING_OUTPUT = textwrap.dedent('''   <b>Redirecting</b> <b>Output</b>
-       Redirection of output causes the file whose name results from the expansion of  <u>word</u>  to  be  opened  for
-       writing  on  file descriptor <u>n</u>, or the standard output (file descriptor 1) if <u>n</u> is not specified.  If the
-       file does not exist it is created; if it does exist it is truncated to zero size.
+Note that the order of redirections is significant.  For example, the command
 
-       The general format for redirecting output is:
+> ls **&gt;** dirlist 2**&gt;&**1
 
-              [<u>n</u>]<b>&gt;</b><u>word</u>
+directs both standard output and standard error to the file
+*dirlist*, while the command
 
-       If the redirection operator is <b>&gt;</b>, and the <b>noclobber</b> option to the  <b>set</b>  builtin  has  been  enabled,  the
-       redirection  will  fail if the file whose name results from the expansion of <u>word</u> exists and is a regular
-       file.  If the redirection operator is <b>&gt;|</b>, or the redirection operator is <b>&gt;</b> and the  <b>noclobber</b>  option  to
-       the  <b>set</b>  builtin  command  is  not  enabled, the redirection is attempted even if the file named by <u>word</u>
-       exists.''')
+> ls 2**&gt;&**1 **&gt;** dirlist
 
-APPENDING_REDIRECTED_OUTPUT = textwrap.dedent('''   <b>Appending</b> <b>Redirected</b> <b>Output</b>
-       Redirection of output in this fashion causes the file whose name results from the expansion of <u>word</u> to be
-       opened  for  appending  on  file  descriptor  <u>n</u>,  or  the standard output (file descriptor 1) if <u>n</u> is not
-       specified.  If the file does not exist it is created.
+directs only the standard output to file
+*dirlist*, because the standard error was duplicated from the standard output before the standard output was redirected to
+*dirlist*.
 
-       The general format for appending output is:
+**Bash** handles several filenames specially when they are used in redirections, as described in the following table. If the operating system on which **bash** is running provides these special files, bash will use them; otherwise it will emulate them internally with the behavior described below.
 
-              [<u>n</u>]<b>&gt;&gt;</b><u>word</u>''')
+> **/dev/fd/*fd*&zwnj;**
 
-REDIRECTING_OUTPUT_ERROR = textwrap.dedent('''   <b>Redirecting</b> <b>Standard</b> <b>Output</b> <b>and</b> <b>Standard</b> <b>Error</b>
-       This construct allows both the standard output (file descriptor 1) and the standard  error  output  (file
-       descriptor 2) to be redirected to the file whose name is the expansion of <u>word</u>.
+> > If *fd* is a valid integer, file descriptor *fd* is duplicated.
 
-       There are two formats for redirecting standard output and standard error:
+> **/dev/stdin**
 
-              <b>&amp;&gt;</b><u>word</u>
-       and
-              <b>&gt;&amp;</b><u>word</u>
+> > File descriptor 0 is duplicated.
 
-       Of the two forms, the first is preferred.  This is semantically equivalent to
+> **/dev/stdout**
 
-              <b>&gt;</b><u>word</u> 2<b>&gt;&amp;</b>1''')
+> > File descriptor 1 is duplicated.
 
-APPENDING_OUTPUT_ERROR = textwrap.dedent('''   <b>Appending</b> <b>Standard</b> <b>Output</b> <b>and</b> <b>Standard</b> <b>Error</b>
-       This  construct  allows  both the standard output (file descriptor 1) and the standard error output (file
-       descriptor 2) to be appended to the file whose name is the expansion of <u>word</u>.
+> **/dev/stderr**
 
-       The format for appending standard output and standard error is:
+> > File descriptor 2 is duplicated.
 
-              <b>&amp;&gt;&gt;</b><u>word</u>
+> **/dev/tcp/*host*/*port*&zwnj;**
 
-       This is semantically equivalent to
+> > If *host* is a valid hostname or Internet address, and *port* is an integer port number or service name, **bash** attempts to open the corresponding TCP socket.
 
-              <b>&gt;&gt;</b><u>word</u> 2<b>&gt;&amp;</b>1''')
+> **/dev/udp/*host*/*port*&zwnj;**
 
-HERE_DOCUMENTS = textwrap.dedent(r'''   <b>Here</b> <b>Documents</b>
-       This type of redirection instructs the shell  to  read  input  from  the  current  source  until  a  line
-       containing  only <u>delimiter</u> (with no trailing blanks) is seen.  All of the lines read up to that point are
-       then used as the standard input for a command.
+> > If *host* is a valid hostname or Internet address, and *port* is an integer port number or service name, **bash** attempts to open the corresponding UDP socket.
 
-       The format of here-documents is:
+A failure to open or create a file causes the redirection to fail.
 
-              <b>&lt;&lt;</b>[<b>-</b>]<u>word</u>
-                      <u>here-document</u>
-              <u>delimiter</u>
+Redirections using file descriptors greater than 9 should be used with care, as they may conflict with file descriptors the shell uses internally.
 
-       No parameter expansion, command substitution, arithmetic expansion, or pathname expansion is performed on
-       <u>word</u>.   If  any  characters in <u>word</u> are quoted, the <u>delimiter</u> is the result of quote removal on <u>word</u>, and
-       the lines in the here-document are not expanded.  If <u>word</u> is unquoted, all lines of the here-document are
-       subjected  to  parameter  expansion, command substitution, and arithmetic expansion.  In the latter case,
-       the character sequence <b>\&lt;newline&gt;</b> is ignored, and <b>\</b> must be used to quote the characters <b>\</b>, <b>$</b>, and <b>`</b>.
+Note that the
+**exec** builtin command can make redirections take effect in the current shell.'''
 
-       If the redirection operator is <b>&lt;&lt;-</b>, then all leading tab characters are stripped from input lines and the
-       line  containing  <u>delimiter</u>.  This allows here-documents within shell scripts to be indented in a natural
-       fashion.
+REDIRECTING_INPUT = '''Redirection of input causes the file whose name results from the expansion of
+*word* to be opened for reading on file descriptor
+*n*, or the standard input (file descriptor 0) if
+*n* is not specified.
 
-   <b>Here</b> <b>Strings</b>
-       A variant of here documents, the format is:
+The general format for redirecting input is:
 
-              <b>&lt;&lt;&lt;</b><u>word</u>
+> \\[*n*]**&lt;**&zwnj;*word*'''
 
-       The <u>word</u> is expanded and supplied to the command on its standard input.''')
+REDIRECTING_OUTPUT = '''Redirection of output causes the file whose name results from the expansion of
+*word* to be opened for writing on file descriptor
+*n*, or the standard output (file descriptor 1) if
+*n* is not specified.  If the file does not exist it is created; if it does exist it is truncated to zero size.
+
+The general format for redirecting output is:
+
+> \\[*n*]**&gt;**&zwnj;*word*
+
+If the redirection operator is
+**&gt;**, and the
+**noclobber** option to the
+**set** builtin has been enabled, the redirection will fail if the file whose name results from the expansion of *word* exists and is a regular file. If the redirection operator is
+**&gt;|**, or the redirection operator is
+**&gt;** and the
+**noclobber** option to the
+**set** builtin command is not enabled, the redirection is attempted even if the file named by *word* exists.'''
+
+APPENDING_REDIRECTED_OUTPUT = '''Redirection of output in this fashion causes the file whose name results from the expansion of
+*word* to be opened for appending on file descriptor
+*n*, or the standard output (file descriptor 1) if
+*n* is not specified.  If the file does not exist it is created.
+
+The general format for appending output is:
+
+> \\[*n*]**&gt;&gt;**&zwnj;*word*'''
+
+REDIRECTING_OUTPUT_ERROR = '''This construct allows both the standard output (file descriptor 1) and the standard error output (file descriptor 2) to be redirected to the file whose name is the expansion of
+*word*.
+
+There are two formats for redirecting standard output and standard error:
+
+> **&&gt;**&zwnj;*word*
+
+and
+
+> **&gt;&**&zwnj;*word*
+
+Of the two forms, the first is preferred. This is semantically equivalent to
+
+> **&gt;**&zwnj;*word* 2**&gt;&**1
+
+When using the second form, *word* may not expand to a number or **-**.  If it does, other redirection operators apply (see **Duplicating File Descriptors** below) for compatibility reasons.'''
+
+APPENDING_OUTPUT_ERROR = '''This construct allows both the standard output (file descriptor 1) and the standard error output (file descriptor 2) to be appended to the file whose name is the expansion of
+*word*.
+
+The format for appending standard output and standard error is:
+
+> **&&gt;&gt;**&zwnj;*word*
+
+This is semantically equivalent to
+
+> **&gt;&gt;**&zwnj;*word* 2**&gt;&**1
+
+(see **Duplicating File Descriptors** below).'''
+
+HERE_DOCUMENTS = '''This type of redirection instructs the shell to read input from the current source until a line containing only
+*delimiter* (with no trailing blanks) is seen.  All of the lines read up to that point are then used as the standard input (or file descriptor *n* if *n* is specified) for a command.
+
+The format of here-documents is:
+
+> \\[*n*]**&lt;&lt;**\\[**-**]*word*
+>         *here-document*
+> *delimiter*
+
+No parameter and variable expansion, command substitution, arithmetic expansion, or pathname expansion is performed on
+*word*. If any part of
+*word* is quoted, the
+*delimiter* is the result of quote removal on
+*word*, and the lines in the here-document are not expanded. If *word* is unquoted, all lines of the here-document are subjected to parameter expansion, command substitution, and arithmetic expansion, the character sequence
+**\\&lt;newline&gt;** is ignored, and
+**\\** must be used to quote the characters
+**\\**,
+**$**, and
+**\\`**.
+
+If the redirection operator is
+**&lt;&lt;-**, then all leading tab characters are stripped from input lines and the line containing
+*delimiter*. This allows here-documents within shell scripts to be indented in a natural fashion.'''
 
 REDIRECTION_KIND = {'<' : REDIRECTING_INPUT,
                    '>' : REDIRECTING_OUTPUT,
@@ -157,73 +209,78 @@ REDIRECTION_KIND = {'<' : REDIRECTING_INPUT,
                    '<<' : HERE_DOCUMENTS,
                    '<<<' : HERE_DOCUMENTS}
 
-ASSIGNMENT = textwrap.dedent('''       A <u>variable</u> may be assigned to by a statement of the form
+ASSIGNMENT = '''A
+*variable* may be assigned to by a statement of the form
 
-              <u>name</u>=[<u>value</u>]
+> *name*=\\[*value*]
 
-       If <u>value</u> is not given, the variable is assigned the null string.  All  <u>values</u>  undergo  tilde  expansion,
-       parameter  and  variable  expansion,  command  substitution, arithmetic expansion, and quote removal (see
-       <b>EXPANSION</b> below).  If the variable has  its  <b>integer</b>  attribute  set,  then  <u>value</u>  is  evaluated  as  an
-       arithmetic  expression even if the $((...)) expansion is not used (see <b>Arithmetic</b> <b>Expansion</b> below).  Word
-       splitting is not performed, with the exception of <b>"$@"</b>  as  explained  below  under  <b>Special</b>  <b>Parameters</b>.
-       Pathname  expansion  is  not performed.  Assignment statements may also appear as arguments to the <b>alias</b>,
-       <b>declare</b>, <b>typeset</b>, <b>export</b>, <b>readonly</b>, and <b>local</b> builtin commands.
+If
+*value* is not given, the variable is assigned the null string.  All
+*values* undergo tilde expansion, parameter and variable expansion, command substitution, arithmetic expansion, and quote removal (see
+**EXPANSION** below).  If the variable has its
+**integer** attribute set, then
+*value* is evaluated as an arithmetic expression even if the $((...)) expansion is not used (see
+**Arithmetic Expansion** below). Word splitting and pathname expansion are not performed. Assignment statements may also appear as arguments to the
+**alias**,
+**declare**,
+**typeset**,
+**export**,
+**readonly**, and
+**local** builtin commands (*declaration* commands). When in *posix mode*, these builtins may appear in a command after one or more instances of the **command** builtin and retain these assignment statement properties.
 
-       In the context where an assignment statement is assigning a value to a shell variable or array index, the
-       +=  operator  can  be used to append to or add to the variable's previous value.  When += is applied to a
-       variable for which the <u>integer</u> attribute has been set, <u>value</u> is evaluated as an arithmetic expression and
-       added  to the variable's current value, which is also evaluated.  When += is applied to an array variable
-       using compound assignment (see <b>Arrays</b> below), the variable's value is not unset (as it is when using  =),
-       and  new  values  are  appended to the array beginning at one greater than the array's maximum index (for
-       indexed arrays) or added as additional key-value pairs in  an  associative  array.   When  applied  to  a
-       string-valued variable, <u>value</u> is expanded and appended to the variable's value.''')
+In the context where an assignment statement is assigning a value to a shell variable or array index, the += operator can be used to append to or add to the variable's previous value. This includes arguments to builtin commands such as **declare** that accept assignment statements (*declaration* commands). When += is applied to a variable for which the **integer** attribute has been set, *value* is evaluated as an arithmetic expression and added to the variable's current value, which is also evaluated. When += is applied to an array variable using compound assignment (see
+**Arrays** below), the variable's value is not unset (as it is when using =), and new values are appended to the array beginning at one greater than the array's maximum index (for indexed arrays) or added as additional key-value pairs in an associative array. When applied to a string-valued variable, *value* is expanded and appended to the variable's value.
 
-_group = textwrap.dedent('''       { <u>list</u>; }
-              <u>list</u> is simply executed in the current shell environment.  <u>list</u> must be terminated with a  newline
-              or  semicolon.   This  is known as a <u>group</u> <u>command</u>.  The return status is the exit status of <u>list</u>.
-              Note that unlike the metacharacters <b>(</b> and <b>)</b>, <b>{</b> and <b>}</b> are <u>reserved</u> <u>words</u> and  must  occur  where  a
-              reserved  word  is permitted to be recognized.  Since they do not cause a word break, they must be
-              separated from <u>list</u> by whitespace or another shell metacharacter.''')
+A variable can be assigned the *nameref* attribute using the **-n** option to the **declare** or **local** builtin commands (see the descriptions of **declare** and **local** below) to create a *nameref*, or a reference to another variable. This allows variables to be manipulated indirectly. Whenever the nameref variable is referenced, assigned to, unset, or has its attributes modified (other than using or changing the *nameref* attribute itself), the operation is actually performed on the variable specified by the nameref variable's value. A nameref is commonly used within shell functions to refer to a variable whose name is passed as an argument to the function. For instance, if a variable name is passed to a shell function as its first argument, running
 
-_subshell = textwrap.dedent('''       (<u>list</u>) <u>list</u> is executed in a subshell environment (see <b>COMMAND</b> <b>EXECUTION</b>  <b>ENVIRONMENT</b>  below).   Variable
-              assignments and builtin commands that affect the shell's environment do not remain in effect after
-              the command completes.  The return status is the exit status of <u>list</u>.''')
+> declare -n ref=$1
 
-_negate = '''If the reserved word <b>!</b> precedes a pipeline, the exit status of that pipeline is the logical negation of the
-exit status as described above.'''
+inside the function creates a nameref variable **ref** whose value is the variable name passed as the first argument. References and assignments to **ref**, and changes to its attributes, are treated as references, assignments, and attribute modifications to the variable whose name was passed as **$1**. If the control variable in a **for** loop has the nameref attribute, the list of words can be a list of shell variables, and a name reference will be established for each word in the list, in turn, when the loop is executed. Array variables cannot be given the **nameref** attribute. However, nameref variables can reference array variables and subscripted array variables. Namerefs can be unset using the **-n** option to the **unset** builtin. Otherwise, if **unset** is executed with the name of a nameref variable as an argument, the variable referenced by the nameref variable will be unset.'''
 
-_if = textwrap.dedent('''       <b>if</b> <u>list</u>; <b>then</b> <u>list;</u> [ <b>elif</b> <u>list</u>; <b>then</b> <u>list</u>; ] ... [ <b>else</b> <u>list</u>; ] <b>fi</b>
-              The  <b>if</b> <u>list</u> is executed.  If its exit status is zero, the <b>then</b> <u>list</u> is executed.  Otherwise, each
-              <b>elif</b> <u>list</u> is executed in turn, and if its exit status is zero,  the  corresponding  <b>then</b>  <u>list</u>  is
-              executed  and  the command completes.  Otherwise, the <b>else</b> <u>list</u> is executed, if present.  The exit
-              status is the exit status of the last command executed, or zero if no condition tested true.''')
+_group = '''{ *list*; }
 
-_for = textwrap.dedent('''       <b>for</b> <u>name</u> [ [ <b>in</b> [ <u>word</u> <u>...</u> ] ] ; ] <b>do</b> <u>list</u> ; <b>done</b>
-              The  list of words following <b>in</b> is expanded, generating a list of items.  The variable <u>name</u> is set
-              to each element of this list in turn, and <u>list</u> is executed each time.  If the <b>in</b> <u>word</u> is  omitted,
-              the  <b>for</b>  command  executes  <u>list</u>  once  for each positional parameter that is set (see <b>PARAMETERS</b>
-              below).  The return status is the exit status of the last command that executes.  If the expansion
-              of  the  items  following  <b>in</b>  results  in an empty list, no commands are executed, and the return
-              status is 0.''')
+> *list* is simply executed in the current shell environment. *list* must be terminated with a newline or semicolon. This is known as a *group command*. The return status is the exit status of *list*. Note that unlike the metacharacters **(** and **)**, **{** and **}** are *reserved words* and must occur where a reserved word is permitted to be recognized.  Since they do not cause a word break, they must be separated from *list* by whitespace or another shell metacharacter.'''
 
-_whileuntil = textwrap.dedent('''       <b>while</b> <u>list-1</u>; <b>do</b> <u>list-2</u>; <b>done</b>
-       <b>until</b> <u>list-1</u>; <b>do</b> <u>list-2</u>; <b>done</b>
-              The <b>while</b> command continuously executes the list <u>list-2</u> as long as the last command  in  the  list
-              <u>list-1</u>  returns  an  exit  status  of  zero.  The <b>until</b> command is identical to the <b>while</b> command,
-              except that the test is negated; <u>list-2</u> is executed as long as the last command in <u>list-1</u>  returns
-              a non-zero exit status.  The exit status of the <b>while</b> and <b>until</b> commands is the exit status of the
-              last command executed in <u>list-2</u>, or zero if none was executed.''')
+_subshell = '''(*list*)
 
-_select = textwrap.dedent('''       <b>select</b> <u>name</u> [ <b>in</b> <u>word</u> ] ; <b>do</b> <u>list</u> ; <b>done</b>
-              The list of words following <b>in</b> is expanded, generating a list of items.  The set of expanded words
-              is printed on the standard error, each preceded by a number.  If  the  <b>in</b>  <u>word</u>  is  omitted,  the
-              positional  parameters are printed (see <b>PARAMETERS</b> below).  The <b>PS3</b> prompt is then displayed and a
-              line read from the standard input.  If the line consists of a number corresponding to one  of  the
-              displayed  words, then the value of <u>name</u> is set to that word.  If the line is empty, the words and
-              prompt are displayed again.  If EOF is read, the command completes.  Any other value  read  causes
-              <u>name</u> to be set to null.  The line read is saved in the variable <b>REPLY</b>.  The <u>list</u> is executed after
-              each selection until a <b>break</b> command is executed.  The exit status of <b>select</b> is the exit status of
-              the last command executed in <u>list</u>, or zero if no commands were executed.''')
+> *list* is executed in a subshell (see
+> **COMMAND EXECUTION ENVIRONMENT** below for a description of a subshell environment). Variable assignments and builtin commands that affect the shell's environment do not remain in effect after the command completes.  The return status is the exit status of *list*.'''
+
+_negate = '''If the reserved word
+**!** precedes a pipeline, the exit status of that pipeline is the logical negation of the exit status as described above. The shell waits for all commands in the pipeline to terminate before returning a value.'''
+
+_if = '''**if** *list*; **then** *list*; \\[ **elif** *list*; **then** *list*; ] ... \\[ **else** *list*; ] **fi**
+
+> The
+> **if**
+> *list* is executed.  If its exit status is zero, the **then** *list* is executed.  Otherwise, each **elif** *list* is executed in turn, and if its exit status is zero, the corresponding **then** *list* is executed and the command completes.  Otherwise, the **else** *list* is executed, if present.  The exit status is the exit status of the last command executed, or zero if no condition tested true.'''
+
+_for = '''**for** *name* \\[ \\[ **in** \\[ *word ...* ] ] ; ] **do** *list* ; **done**
+
+> The list of words following **in** is expanded, generating a list of items. The variable *name* is set to each element of this list in turn, and *list* is executed each time. If the **in** *word* is omitted, the **for** command executes *list* once for each positional parameter that is set (see
+> **PARAMETERS** below). The return status is the exit status of the last command that executes. If the expansion of the items following **in** results in an empty list, no commands are executed, and the return status is 0.'''
+
+_whileuntil = '''**while** *list-1*; **do** *list-2*; **done**
+
+**until** *list-1*; **do** *list-2*; **done**
+
+> The **while** command continuously executes the list *list-2* as long as the last command in the list *list-1* returns an exit status of zero.  The **until** command is identical to the **while** command, except that the test is negated:
+> *list-2* is executed as long as the last command in
+> *list-1* returns a non-zero exit status. The exit status of the **while** and **until** commands is the exit status of the last command executed in *list-2*, or zero if none was executed.'''
+
+_select = '''**select** *name* \\[ **in** *word* ] ; **do** *list* ; **done**
+
+> The list of words following **in** is expanded, generating a list of items, and the set of expanded words is printed on the standard error, each preceded by a number.  If the **in** *word* is omitted, the positional parameters are printed (see
+> **PARAMETERS** below).
+> **select** then displays the
+> **PS3** prompt and reads a line from the standard input. If the line consists of a number corresponding to one of the displayed words, then the value of
+> *name* is set to that word. If the line is empty, the words and prompt are displayed again. If EOF is read, the **select** command completes and returns 1. Any other value read causes
+> *name* to be set to null.  The line read is saved in the variable
+> **REPLY**. The
+> *list* is executed after each selection until a
+> **break** command is executed. The exit status of
+> **select** is the exit status of the last command executed in
+> *list*, or zero if no commands were executed.'''
 
 RESERVED_WORDS = {
     '!' : _negate,
@@ -245,30 +302,27 @@ _addwords('while', _whileuntil, 'while', 'do', 'done', ';')
 _addwords('until', _whileuntil, 'until', 'do', 'done')
 _addwords('select', _select, 'select', 'in', 'do', 'done')
 
-_function = textwrap.dedent('''       A shell function is an object that is called like a simple command and executes a compound command with a
-       new set of positional parameters.  Shell functions are declared as follows:
+_function = '''A shell function is an object that is called like a simple command and executes a compound command with a new set of positional parameters. Shell functions are declared as follows:
 
-       <u>name</u> () <u>compound-command</u> [<u>redirection</u>]
-       <b>function</b> <u>name</u> [()] <u>compound-command</u> [<u>redirection</u>]
-              This  defines  a  function  named  <u>name</u>.  The reserved word <b>function</b> is optional.  If the <b>function</b>
-              reserved word is supplied, the parentheses are optional.  The <u>body</u> of the function is the compound
-              command  <u>compound-command</u>  (see  <b>Compound</b>  <b>Commands</b>  above).   That  command  is usually a <u>list</u> of
-              commands between {  and  },  but  may  be  any  command  listed  under  <b>Compound</b>  <b>Commands</b>  above.
-              <u>compound-command</u>  is  executed  whenever  <u>name</u>  is specified as the name of a simple command.  Any
-              redirections (see <b>REDIRECTION</b> below) specified when a function is defined are performed  when  the
-              function  is  executed.   The  exit  status of a function definition is zero unless a syntax error
-              occurs or a readonly function with the same name already exists.  When executed, the  exit  status
-              of a function is the exit status of the last command executed in the body.  (See <b>FUNCTIONS</b> below.)''')
+*fname* () *compound-command* \\[*redirection*]
+
+**function** *fname* \\[()] *compound-command* \\[*redirection*]
+
+> This defines a function named *fname*. The reserved word **function** is optional. If the **function** reserved word is supplied, the parentheses are optional. The *body* of the function is the compound command
+> *compound-command* (see **Compound Commands** above). That command is usually a *list* of commands between { and }, but may be any command listed under **Compound Commands** above. If the **function** reserved word is used, but the parentheses are not supplied, the braces are recommended. *compound-command* is executed whenever *fname* is specified as the name of a simple command. When in *posix mode*, *fname* must be a valid shell *name* and may not be the name of one of the POSIX *special builtins*. In default mode, a function name can be any unquoted shell word that does not contain **$**. Any redirections (see
+> **REDIRECTION** below) specified when a function is defined are performed when the function is executed. The exit status of a function definition is zero unless a syntax error occurs or a readonly function with the same name already exists. When executed, the exit status of a function is the exit status of the last command executed in the body.  (See
+> **FUNCTIONS** below.)'''
 
 _function_call = 'call shell function %r'
 _functionarg = 'argument for shell function %r'
 
-COMMENT = textwrap.dedent('''<b>COMMENTS</b>
-      In a non-interactive shell, or an interactive shell in which the <b>interactive_comments</b> option to the <b>shopt</b>
-      builtin is enabled (see <b>SHELL</b> <b>BUILTIN</b> <b>COMMANDS</b> below), a word beginning with <b>#</b> causes that word  and  all
-      remaining  characters  on that line to be ignored.  An interactive shell without the <b>interactive_comments</b>
-      option enabled does not allow comments.  The <b>interactive_comments</b> option is on by default in  interactive
-      shells.''')
+COMMENT = '''In a non-interactive shell, or an interactive shell in which the
+**interactive\\_comments** option to the
+**shopt** builtin is enabled (see
+**SHELL BUILTIN COMMANDS** below), a word beginning with
+**#** causes that word and all remaining characters on that line to be ignored.  An interactive shell without the
+**interactive\\_comments** option enabled does not allow comments.  The
+**interactive\\_comments** option is on by default in interactive shells.'''
 
 parameters = {
         '*' : 'star',
