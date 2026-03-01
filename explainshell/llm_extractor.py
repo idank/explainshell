@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 CHUNK_SIZE_CHARS = 60_000
 CHUNK_OVERLAP_CHARS = 2_000
+LLM_TIMEOUT_SECONDS = 300
 
 _SYSTEM_PROMPT = """\
 You are an expert at parsing Unix man pages. You will be given a markdown-formatted man page
@@ -157,7 +158,13 @@ def _call_llm(chunk: str, chunk_info: str, model: str, litellm_kwargs: dict) -> 
     last_err = None
     for attempt in range(3):
         try:
-            response = litellm.completion(model=model, messages=messages, **kwargs)
+            response = litellm.completion(
+                model=model,
+                messages=messages,
+                timeout=LLM_TIMEOUT_SECONDS,
+                num_retries=0,
+                **kwargs,
+            )
             content = response.choices[0].message.content
             data = _parse_json_response(content)
             _validate_llm_response(data)
@@ -209,30 +216,42 @@ def _validate_llm_response(data: dict) -> None:
 
 
 def _dedup_options(raw_options: list) -> list:
-    """Remove options with duplicate (short+long) flag sets (from chunk overlap)."""
-    seen = set()
-    result = []
-    for opt in raw_options:
+    """Remove options with duplicate (short+long) flag sets (from chunk overlap).
+
+    When duplicates exist, keep the entry with the longest description so that
+    detailed sections win over brief summary entries.
+    """
+    best = {}  # key -> (index, opt)
+    positional = []  # (index, opt) for keyless entries
+    for idx, opt in enumerate(raw_options):
         try:
             raw_short = opt.get("short") or []
             raw_long = opt.get("long") or []
             if not isinstance(raw_short, list) or not isinstance(raw_long, list):
-                result.append(opt)
+                positional.append((idx, opt))
                 continue
             short = tuple(sorted(str(s) for s in raw_short))
             long = tuple(sorted(str(s) for s in raw_long))
         except (TypeError, AttributeError):
-            result.append(opt)
+            positional.append((idx, opt))
             continue
         key = (short, long)
         # positional args (no flags) always kept
         if not short and not long:
-            result.append(opt)
+            positional.append((idx, opt))
             continue
-        if key not in seen:
-            seen.add(key)
-            result.append(opt)
-    return result
+        prev = best.get(key)
+        if prev is None:
+            best[key] = (idx, opt)
+        else:
+            old_desc = len(prev[1].get("description") or "")
+            new_desc = len(opt.get("description") or "")
+            if new_desc > old_desc:
+                best[key] = (idx, opt)
+    # Merge and sort by original insertion order
+    all_entries = list(best.values()) + positional
+    all_entries.sort(key=lambda x: x[0])
+    return [opt for _, opt in all_entries]
 
 
 def _llm_option_to_store_option(raw: dict) -> store.Option:
@@ -278,6 +297,12 @@ def extract(
     n_chunks = len(chunks)
     logger.info("%s: %d chars, %d chunk(s)", basename, len(plain_text), n_chunks)
 
+    def _progress(msg: str) -> None:
+        ts = time.strftime("[%H:%M:%S]")
+        print(f"{ts} {basename}: {msg}")
+    if n_chunks > 1:
+        _progress(f"{len(plain_text)} chars, {n_chunks} chunks")
+
     if debug_dir:
         os.makedirs(debug_dir, exist_ok=True)
         with open(os.path.join(debug_dir, f"{basename}.md"), "w") as f:
@@ -291,6 +316,7 @@ def extract(
         logger.info(
             "%s: calling LLM (%s, %d chars)...", basename, chunk_label, len(chunk)
         )
+        _progress(f"calling LLM ({chunk_label}, {len(chunk)} chars)...")
         t0 = time.monotonic()
         chunk_data, messages, raw_response = _call_llm(
             chunk, chunk_info, model, litellm_kwargs
@@ -304,6 +330,7 @@ def extract(
             chunk_label,
             elapsed,
         )
+        _progress(f"LLM returned {n_opts} option(s) for {chunk_label} in {elapsed:.1f}s")
         all_raw.extend(chunk_data["options"])
         if chunk_data.get("dashless_opts"):
             dashless_opts = True
