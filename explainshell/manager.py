@@ -12,12 +12,14 @@ Modes:
 """
 
 import argparse
+import concurrent.futures
 import difflib
 import glob
 import logging
 import os
 import sys
 import time
+from dataclasses import dataclass
 
 from explainshell import (
     config,
@@ -55,6 +57,13 @@ _CYAN = "\033[36m"
 _DIM = "\033[2m"
 _BOLD = "\033[1m"
 _RESET = "\033[0m"
+
+
+@dataclass
+class _FileResult:
+    outcome: str  # "added", "skipped", "failed"
+    output_lines: list  # collected print output
+    mp: object = None  # ParsedManpage for deferred DB write
 
 
 def _ts():
@@ -140,19 +149,21 @@ def _fmt_text_diff(old_text, new_text, indent):
     return "\n".join(out)
 
 
-def _print_option_detail(opt, prefix="", color=""):
-    """Print all fields of an option (used for added/removed options)."""
-    print(f"{color}{prefix}    short: {opt.short}")
-    print(f"{prefix}    long: {opt.long}")
-    print(f"{prefix}    expects_arg: {opt.expects_arg}")
+def _option_detail_lines(opt, prefix="", color=""):
+    """Return formatted lines for all fields of an option (used for added/removed options)."""
+    lines = []
+    lines.append(f"{color}{prefix}    short: {opt.short}")
+    lines.append(f"{prefix}    long: {opt.long}")
+    lines.append(f"{prefix}    expects_arg: {opt.expects_arg}")
     if opt.argument:
-        print(f"{prefix}    argument: {opt.argument}")
+        lines.append(f"{prefix}    argument: {opt.argument}")
     if opt.nested_cmd:
-        print(f"{prefix}    nested_cmd: {opt.nested_cmd}")
+        lines.append(f"{prefix}    nested_cmd: {opt.nested_cmd}")
     desc = opt.text.strip()
     for line in desc.split("\n"):
-        print(f"{prefix}    {line}")
-    print(_RESET, end="")
+        lines.append(f"{prefix}    {line}")
+    lines.append(_RESET)
+    return lines
 
 
 def compare_manpages(stored_mp, fresh_mp, skip_fields=()):
@@ -230,8 +241,9 @@ def compare_manpages(stored_mp, fresh_mp, skip_fields=()):
 
 
 def _diff_manpage(stored_mp, fresh_mp):
-    """Print a unified-diff-style comparison between stored and fresh ParsedManpage."""
+    """Return a list of lines with a unified-diff-style comparison between two ParsedManpages."""
     diffs = compare_manpages(stored_mp, fresh_mp)
+    out = []
 
     # Separate field-level diffs for display.
     field_diffs = [d for d in diffs if d["type"] == "field"]
@@ -239,13 +251,13 @@ def _diff_manpage(stored_mp, fresh_mp):
     for d in field_diffs:
         field = d["label"]
         _, old_val, new_val = d["details"][0]
-        print(f"  {_BOLD}{field}:{_RESET}")
+        out.append(f"  {_BOLD}{field}:{_RESET}")
         text_diff = _fmt_text_diff(old_val, new_val, "    ")
         if text_diff:
-            print(text_diff)
+            out.append(text_diff)
         else:
-            print(_fmt_value(old_val, "    - ", _RED))
-            print(_fmt_value(new_val, "    + ", _GREEN))
+            out.append(_fmt_value(old_val, "    - ", _RED))
+            out.append(_fmt_value(new_val, "    + ", _GREEN))
 
     # Rebuild changed/added/removed lists for option display, including unchanged.
     stored_opts = {_option_key(o): o for o in stored_mp.options}
@@ -275,32 +287,34 @@ def _diff_manpage(stored_mp, fresh_mp):
             removed_options.append(s_opt)
 
     if changed_options or added_options or removed_options:
-        print(f"  {_BOLD}options:{_RESET}")
+        out.append(f"  {_BOLD}options:{_RESET}")
 
     for label, opt_field_diffs in changed_options:
         if opt_field_diffs is None:
-            print(f"    {_DIM}{label}  (unchanged){_RESET}")
+            out.append(f"    {_DIM}{label}  (unchanged){_RESET}")
         else:
-            print(f"    {_CYAN}{_BOLD}{label}{_RESET}")
+            out.append(f"    {_CYAN}{_BOLD}{label}{_RESET}")
             for field, old_val, new_val in opt_field_diffs:
-                print(f"      {field}:")
+                out.append(f"      {field}:")
                 text_diff = _fmt_text_diff(old_val, new_val, "        ")
                 if text_diff:
-                    print(text_diff)
+                    out.append(text_diff)
                 else:
-                    print(_fmt_value(old_val, "        - ", _RED))
-                    print(_fmt_value(new_val, "        + ", _GREEN))
+                    out.append(_fmt_value(old_val, "        - ", _RED))
+                    out.append(_fmt_value(new_val, "        + ", _GREEN))
 
     for opt in added_options:
-        print(f"    {_GREEN}{_BOLD}+ {_fmt_flags(opt)}   (added){_RESET}")
-        _print_option_detail(opt, prefix="    ", color=_GREEN)
+        out.append(f"    {_GREEN}{_BOLD}+ {_fmt_flags(opt)}   (added){_RESET}")
+        out.extend(_option_detail_lines(opt, prefix="    ", color=_GREEN))
 
     for opt in removed_options:
-        print(f"    {_RED}{_BOLD}- {_fmt_flags(opt)}   (removed){_RESET}")
-        _print_option_detail(opt, prefix="    ", color=_RED)
+        out.append(f"    {_RED}{_BOLD}- {_fmt_flags(opt)}   (removed){_RESET}")
+        out.extend(_option_detail_lines(opt, prefix="    ", color=_RED))
 
     if not diffs:
-        print(f"  {_DIM}(no changes){_RESET}")
+        out.append(f"  {_DIM}(no changes){_RESET}")
+
+    return out
 
 
 def _already_stored(s, short_path, name):
@@ -417,8 +431,159 @@ def _parse_diff(raw):
     )
 
 
+def _process_one_file(
+    gz_path, short_path, name, progress, mode, model,
+    is_extractor_diff, diff_left, diff_right, diff_kind,
+    dry_run, debug_dir, s,
+):
+    """Process a single gz file and return a _FileResult.
+
+    Output is collected in result.output_lines instead of printed directly.
+    DB writes are deferred via result.mp (written by the caller).
+    """
+    result = _FileResult(outcome="added", output_lines=[])
+    out = result.output_lines.append
+
+    if is_extractor_diff:
+        left_mode, left_model = diff_left
+        right_mode, right_model = diff_right
+        _debug_dir = debug_dir if dry_run else None
+        label = f"{left_mode} vs {right_mode}"
+
+        out(f"{_ts()} {progress} [{short_path}] running {left_mode} extractor...")
+        try:
+            left_mp = _run_extractor(
+                left_mode, gz_path, model=left_model, debug_dir=_debug_dir
+            )
+        except errors.ExtractionError as e:
+            logger.error("%s extractor failed for %s: %s", left_mode, short_path, e)
+            out(f"=== {short_path} ({label}) ===")
+            out(f"  {_DIM}({left_mode} extractor failed: {e}, skipping){_RESET}")
+            result.outcome = "failed"
+            return result
+
+        right_label = (
+            right_mode if not right_model else f"{right_mode} ({right_model})"
+        )
+        out(
+            f"{_ts()} {progress} [{short_path}] running {right_label} extractor..."
+        )
+        try:
+            right_mp = _run_extractor(
+                right_mode, gz_path, model=right_model, debug_dir=_debug_dir
+            )
+        except errors.ExtractionError as e:
+            logger.error(
+                "%s extractor failed for %s: %s", right_mode, short_path, e
+            )
+            out(f"=== {short_path} ({label}) ===")
+            out(f"  {_DIM}({right_mode} extractor failed: {e}, skipping){_RESET}")
+            result.outcome = "failed"
+            return result
+
+        out(f"=== {short_path} ({label}) ===")
+        result.output_lines.extend(_diff_manpage(left_mp, right_mp))
+        return result
+
+    file_t0 = time.monotonic()
+    try:
+        if mode == "source":
+            out(f"{_ts()} {progress} [{short_path}] extracting (source)...")
+            mp = source_extractor.extract(gz_path)
+            mp.extractor = "source"
+            mp.extraction_meta = {}
+        elif mode == "mandoc":
+            out(f"{_ts()} {progress} [{short_path}] extracting (mandoc)...")
+            mp = mandoc_extractor.extract(gz_path)
+            mp.extractor = "mandoc"
+            mp.extraction_meta = {}
+        elif mode == "hybrid":
+            out(f"{_ts()} {progress} [{short_path}] extracting (hybrid)...")
+            try:
+                mp = mandoc_extractor.extract(gz_path)
+                mp.extractor = "mandoc"
+                mp.extraction_meta = {}
+            except errors.LowConfidenceError as e:
+                logger.warning(
+                    "hybrid: falling back to LLM for %s: %s", short_path, e
+                )
+                out(
+                    f"{_ts()} {progress} [{short_path}] tree parser {e}, falling back to LLM ({model})..."
+                )
+                _debug_dir = debug_dir if dry_run else None
+                mp = llm_extractor.extract(gz_path, model, debug_dir=_debug_dir)
+                mp.extractor = "llm"
+                mp.extraction_meta = {
+                    "model": model,
+                    "fallback": True,
+                    "fallback_reason": str(e)[:256],
+                }
+        else:
+            out(f"{_ts()} {progress} [{short_path}] extracting ({model})...")
+            _debug_dir = debug_dir if dry_run else None
+            mp = llm_extractor.extract(gz_path, model, debug_dir=_debug_dir)
+            mp.extractor = "llm"
+            mp.extraction_meta = {"model": model}
+
+        file_elapsed = _fmt_elapsed(time.monotonic() - file_t0)
+        if diff_kind == "db":
+            out(f"=== {short_path} ===")
+            try:
+                results = s.find_man_page(name)
+                stored_mp = results[0]
+            except errors.ProgramDoesNotExist:
+                out("  (not in DB, nothing to diff)")
+                return result
+            result.output_lines.extend(_diff_manpage(stored_mp, mp))
+        elif s:
+            result.mp = mp
+            out(
+                f"{_ts()} {progress} [{short_path}] done: {len(mp.options)} option(s) in {file_elapsed}"
+            )
+        else:
+            out(
+                f"=== {short_path} ({len(mp.options)} option(s), {file_elapsed}) ==="
+            )
+            out(f"  name: {mp.name}")
+            out(f"  synopsis: {mp.synopsis}")
+            out(f"  aliases: {mp.aliases}")
+            out(f"  nested_cmd: {mp.nested_cmd}")
+            out(f"  multi_cmd: {mp.multi_cmd}")
+            out(f"  dashless_opts: {mp.dashless_opts}")
+            out(f"  extractor: {mp.extractor}")
+            out(f"  extraction_meta: {mp.extraction_meta}")
+            out("")
+            for i, opt in enumerate(mp.options):
+                if i > 0:
+                    out("")
+                out(f"  [{i}]")
+                out(f"      short: {opt.short}")
+                out(f"      long: {opt.long}")
+                out(f"      expects_arg: {opt.expects_arg}")
+                if opt.argument:
+                    out(f"      argument: {opt.argument}")
+                if opt.nested_cmd:
+                    out(f"      nested_cmd: {opt.nested_cmd}")
+                desc = opt.text.strip()
+                lines = desc.split("\n")
+                for line in lines:
+                    out(f"      {line}")
+    except errors.ExtractionError as e:
+        logger.error("failed to process %s: %s", short_path, e)
+        result.outcome = "failed"
+    except Exception as e:
+        logger.error("unexpected error processing %s: %s", short_path, e)
+        result.outcome = "failed"
+
+    return result
+
+
 def main(args):
     logging.basicConfig(level=getattr(logging, args.log.upper()))
+
+    if args.jobs < 1:
+        print("error: --jobs must be >= 1", file=sys.stderr)
+        return 1
 
     try:
         mode, model = _parse_mode(args.mode)
@@ -467,159 +632,86 @@ def main(args):
 
     from explainshell import manpage as _manpage
 
+    def _handle_result(result):
+        """Print output lines and write to DB. Returns (added_delta, failed_delta)."""
+        for line in result.output_lines:
+            print(line)
+        if result.mp and s:
+            s.add_manpage(result.mp)
+        if result.outcome == "added":
+            return 1, 0
+        if result.outcome == "failed":
+            return 0, 1
+        return 0, 0
+
     total = len(gz_files)
-    for file_idx, gz_path in enumerate(gz_files, 1):
-        short_path = config.source_from_path(gz_path)
-        name = _manpage.extract_name(gz_path)
-        progress = f"[{file_idx}/{total}]"
+    if args.jobs == 1:
+        # Sequential processing.
+        for file_idx, gz_path in enumerate(gz_files, 1):
+            short_path = config.source_from_path(gz_path)
+            name = _manpage.extract_name(gz_path)
+            progress = f"[{file_idx}/{total}]"
 
-        if (
-            s
-            and not args.diff
-            and not args.overwrite
-            and _already_stored(s, short_path, name)
-        ):
-            logger.info("skipping %s (already stored)", short_path)
-            skipped += 1
-            continue
-
-        if is_extractor_diff:
-            left_mode, left_model = diff_left
-            right_mode, right_model = diff_right
-            debug_dir = args.debug_dir if args.dry_run else None
-            label = f"{left_mode} vs {right_mode}"
-
-            print(f"{_ts()} {progress} [{short_path}] running {left_mode} extractor...")
-            try:
-                left_mp = _run_extractor(
-                    left_mode, gz_path, model=left_model, debug_dir=debug_dir
-                )
-            except errors.ExtractionError as e:
-                logger.error("%s extractor failed for %s: %s", left_mode, short_path, e)
-                print(f"=== {short_path} ({label}) ===")
-                print(f"  {_DIM}({left_mode} extractor failed: {e}, skipping){_RESET}")
-                failed += 1
+            if (
+                s
+                and not args.diff
+                and not args.overwrite
+                and _already_stored(s, short_path, name)
+            ):
+                logger.info("skipping %s (already stored)", short_path)
+                skipped += 1
                 continue
 
-            right_label = (
-                right_mode if not right_model else f"{right_mode} ({right_model})"
+            result = _process_one_file(
+                gz_path, short_path, name, progress, mode, model,
+                is_extractor_diff, diff_left, diff_right, diff_kind,
+                args.dry_run, args.debug_dir, s,
             )
-            print(
-                f"{_ts()} {progress} [{short_path}] running {right_label} extractor..."
-            )
-            try:
-                right_mp = _run_extractor(
-                    right_mode, gz_path, model=right_model, debug_dir=debug_dir
-                )
-            except errors.ExtractionError as e:
-                logger.error(
-                    "%s extractor failed for %s: %s", right_mode, short_path, e
-                )
-                print(f"=== {short_path} ({label}) ===")
-                print(f"  {_DIM}({right_mode} extractor failed: {e}, skipping){_RESET}")
-                failed += 1
+            a, f = _handle_result(result)
+            added += a
+            failed += f
+    else:
+        # Parallel processing.
+        # Pre-filter: check _already_stored in main thread, build work list.
+        work_items = []
+        for file_idx, gz_path in enumerate(gz_files, 1):
+            short_path = config.source_from_path(gz_path)
+            name = _manpage.extract_name(gz_path)
+            progress = f"[{file_idx}/{total}]"
+
+            if (
+                s
+                and not args.diff
+                and not args.overwrite
+                and _already_stored(s, short_path, name)
+            ):
+                logger.info("skipping %s (already stored)", short_path)
+                skipped += 1
                 continue
 
-            print(f"=== {short_path} ({label}) ===")
-            _diff_manpage(left_mp, right_mp)
-            added += 1
-            continue
+            work_items.append((gz_path, short_path, name, progress))
 
-        file_t0 = time.monotonic()
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs)
         try:
-            if mode == "source":
-                print(f"{_ts()} {progress} [{short_path}] extracting (source)...")
-                mp = source_extractor.extract(gz_path)
-                mp.extractor = "source"
-                mp.extraction_meta = {}
-            elif mode == "mandoc":
-                print(f"{_ts()} {progress} [{short_path}] extracting (mandoc)...")
-                mp = mandoc_extractor.extract(gz_path)
-                mp.extractor = "mandoc"
-                mp.extraction_meta = {}
-            elif mode == "hybrid":
-                print(f"{_ts()} {progress} [{short_path}] extracting (hybrid)...")
-                try:
-                    mp = mandoc_extractor.extract(gz_path)
-                    mp.extractor = "mandoc"
-                    mp.extraction_meta = {}
-                except errors.LowConfidenceError as e:
-                    logger.warning(
-                        "hybrid: falling back to LLM for %s: %s", short_path, e
-                    )
-                    print(
-                        f"{_ts()} {progress} [{short_path}] tree parser {e}, falling back to LLM ({model})..."
-                    )
-                    debug_dir = args.debug_dir if args.dry_run else None
-                    mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
-                    mp.extractor = "llm"
-                    mp.extraction_meta = {
-                        "model": model,
-                        "fallback": True,
-                        "fallback_reason": str(e)[:256],
-                    }
-            else:
-                print(f"{_ts()} {progress} [{short_path}] extracting ({model})...")
-                debug_dir = args.debug_dir if args.dry_run else None
-                mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
-                mp.extractor = "llm"
-                mp.extraction_meta = {"model": model}
-            file_elapsed = _fmt_elapsed(time.monotonic() - file_t0)
-            if args.diff:
-                print(f"=== {short_path} ===")
-                try:
-                    results = s.find_man_page(name)
-                    stored_mp = results[0]
-                except errors.ProgramDoesNotExist:
-                    print("  (not in DB, nothing to diff)")
-                    added += 1
-                    continue
-                _diff_manpage(stored_mp, mp)
-                added += 1
-            elif s:
-                s.add_manpage(mp)
-                print(
-                    f"{_ts()} {progress} [{short_path}] done: {len(mp.options)} option(s) in {file_elapsed}"
-                )
-                added += 1
-            else:
-                print(
-                    f"=== {short_path} ({len(mp.options)} option(s), {file_elapsed}) ==="
-                )
-                print(f"  name: {mp.name}")
-                print(f"  synopsis: {mp.synopsis}")
-                print(f"  aliases: {mp.aliases}")
-                print(f"  nested_cmd: {mp.nested_cmd}")
-                print(f"  multi_cmd: {mp.multi_cmd}")
-                print(f"  dashless_opts: {mp.dashless_opts}")
-                print(f"  extractor: {mp.extractor}")
-                print(f"  extraction_meta: {mp.extraction_meta}")
-                print()
-                for i, opt in enumerate(mp.options):
-                    if i > 0:
-                        print()
-                    print(f"  [{i}]")
-                    print(f"      short: {opt.short}")
-                    print(f"      long: {opt.long}")
-                    print(f"      expects_arg: {opt.expects_arg}")
-                    if opt.argument:
-                        print(f"      argument: {opt.argument}")
-                    if opt.nested_cmd:
-                        print(f"      nested_cmd: {opt.nested_cmd}")
-                    # Print description, indented
-                    desc = opt.text.strip()
-                    lines = desc.split("\n")
-                    for line in lines:
-                        print(f"      {line}")
-                added += 1
-        except errors.ExtractionError as e:
-            logger.error("failed to process %s: %s", short_path, e)
-            failed += 1
+            futures = {
+                executor.submit(
+                    _process_one_file,
+                    gz_path, short_path, name, progress, mode, model,
+                    is_extractor_diff, diff_left, diff_right, diff_kind,
+                    args.dry_run, args.debug_dir, s,
+                ): short_path
+                for gz_path, short_path, name, progress in work_items
+            }
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
+                a, f = _handle_result(result)
+                added += a
+                failed += f
         except KeyboardInterrupt:
+            executor.shutdown(wait=False, cancel_futures=True)
             raise
-        except Exception as e:
-            logger.error("unexpected error processing %s: %s", short_path, e)
-            failed += 1
+        else:
+            executor.shutdown(wait=True)
 
     # update multi-cmd mappings (only when writing to DB)
     if s and added > 0 and not args.dry_run and not args.diff:
@@ -671,6 +763,13 @@ def _build_parser():
         "--debug-dir",
         default="debug-output",
         help="Directory for debug files in dry-run mode (default: debug-output)",
+    )
+    parser.add_argument(
+        "-j",
+        "--jobs",
+        type=int,
+        default=1,
+        help="Number of parallel workers (default: 1)",
     )
     parser.add_argument(
         "--log",
