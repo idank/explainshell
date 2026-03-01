@@ -274,14 +274,22 @@ class TestLlmOptionToStoreOption(unittest.TestCase):
 
 
 class TestDedupOptions(unittest.TestCase):
-    def test_duplicates_removed(self):
+    def test_duplicates_keep_longest_description(self):
         opts = [
-            {"short": ["-v"], "long": ["--verbose"], "description": "first"},
-            {"short": ["-v"], "long": ["--verbose"], "description": "duplicate"},
+            {"short": ["-v"], "long": ["--verbose"], "description": "short"},
+            {"short": ["-v"], "long": ["--verbose"], "description": "a much longer description wins"},
         ]
         result = _dedup_options(opts)
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["description"], "first")
+        self.assertEqual(result[0]["description"], "a much longer description wins")
+
+    def test_duplicates_same_length_keeps_one(self):
+        opts = [
+            {"short": ["-v"], "long": ["--verbose"], "description": "first"},
+            {"short": ["-v"], "long": ["--verbose"], "description": "second"},
+        ]
+        result = _dedup_options(opts)
+        self.assertEqual(len(result), 1)
 
     def test_different_options_kept(self):
         opts = [
