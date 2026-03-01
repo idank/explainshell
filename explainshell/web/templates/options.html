@@ -18,7 +18,7 @@
                         {% for desc in mp.options -%}
                         <tr>
                             <td>
-                                <pre>{{ desc|safe }}</pre>
+                                <div class="help-box">{{ desc|safe }}</div>
                             </td>
                         </tr>
                         {%- endfor %}

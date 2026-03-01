@@ -242,7 +242,7 @@ def explain_program(program, store, distro=None, release=None):
         "section": mp.section,
         "program": program,
         "synopsis": synopsis,
-        "options": [o.text for o in mp.options],
+        "options": [render_markdown(o.text) for o in mp.options],
         "url": url,
     }
 
