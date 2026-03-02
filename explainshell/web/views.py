@@ -200,10 +200,10 @@ def _handle_explain_program(section, program, url_distro, url_release):
         program = f"{program}.{section}"
 
     try:
-        mp, suggestions = explain_program(
+        mp, suggestions, raw_mp = explain_program(
             program, app.store, distro=distro, release=release
         )
-        return render_template("options.html", mp=mp, suggestions=suggestions)
+        return render_template("options.html", mp=mp, suggestions=suggestions, raw_mp=raw_mp)
     except errors.ProgramDoesNotExist as e:
         return render_template(
             "errors/missingmanpage.html", title="missing man page", e=e
@@ -230,21 +230,21 @@ def manpage_url(source):
 
 def explain_program(program, store, distro=None, release=None):
     mps = store.find_man_page(program, distro=distro, release=release)
-    mp = mps.pop(0)
-    program = mp.name_section
+    raw_mp = mps.pop(0)
+    program = raw_mp.name_section
 
-    synopsis = mp.synopsis
+    synopsis = raw_mp.synopsis
     if not synopsis:
         synopsis = None
 
-    url = manpage_url(mp.source)
+    url = manpage_url(raw_mp.source)
 
     mp = {
-        "source": os.path.basename(mp.source)[:-3],
-        "section": mp.section,
+        "source": os.path.basename(raw_mp.source)[:-3],
+        "section": raw_mp.section,
         "program": program,
         "synopsis": synopsis,
-        "options": [render_markdown(o.text) for o in mp.options],
+        "options": [render_markdown(o.text) for o in raw_mp.options],
         "url": url,
     }
 
@@ -256,7 +256,7 @@ def explain_program(program, store, distro=None, release=None):
         }
         suggestions.append(d)
     logger.info("suggestions: %s", suggestions)
-    return mp, suggestions
+    return mp, suggestions, raw_mp
 
 
 def _make_match(start, end, match, cmd_class, help_class):

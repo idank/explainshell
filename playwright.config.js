@@ -34,7 +34,7 @@ module.exports = defineConfig({
       ". .venv/bin/activate && DB_PATH=tests/e2e/e2e.db python runserver.py",
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,
-    env: { PORT: String(port) },
+    env: { PORT: String(port), DEBUG: "false" },
   },
   use: {
     baseURL: `http://127.0.0.1:${port}`,
