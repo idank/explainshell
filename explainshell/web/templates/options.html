@@ -25,4 +25,20 @@
                     </tbody>
                 </table>
             </div>
+{% if config.DEBUG and raw_mp %}
+            <div style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.85); color: #0f0; font-family: monospace; font-size: 11px; padding: 10px 14px; border-radius: 6px; z-index: 9999; max-width: 400px; line-height: 1.6;">
+                <div style="font-weight: bold; margin-bottom: 4px; color: #ff0; font-size: 12px;">Debug: ParsedManpage</div>
+                <div>source: {{ raw_mp.source }}</div>
+                <div>name: {{ raw_mp.name }}</div>
+                <div>section: {{ raw_mp.section }}</div>
+                <div>extractor: {{ raw_mp.extractor or 'None' }}</div>
+                <div>extraction_meta: {{ raw_mp.extraction_meta or '{}' }}</div>
+                <div>aliases: {{ raw_mp.aliases }}</div>
+                <div>dashless_opts: {{ raw_mp.dashless_opts }}</div>
+                <div>multi_cmd: {{ raw_mp.multi_cmd }}</div>
+                <div>nested_cmd: {{ raw_mp.nested_cmd }}</div>
+                <div>updated: {{ raw_mp.updated }}</div>
+                <div>options: {{ raw_mp.options|length }}</div>
+            </div>
+{% endif %}
 {% endblock %}
