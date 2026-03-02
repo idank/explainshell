@@ -623,6 +623,10 @@ def main(args):
         print("error: --mode is not allowed when using --diff A..B", file=sys.stderr)
         return 1
 
+    if is_extractor_diff and args.dry_run:
+        print("error: --dry-run is not allowed when using --diff A..B", file=sys.stderr)
+        return 1
+
     if not is_extractor_diff and args.diff is not None and not mode:
         # --diff db requires --mode
         print("error: --mode is required when using --diff db", file=sys.stderr)
@@ -630,6 +634,22 @@ def main(args):
 
     if not is_extractor_diff and not args.diff and not mode:
         print("error: --mode is required", file=sys.stderr)
+        return 1
+
+    if args.drop and args.dry_run:
+        print("error: --drop and --dry-run are mutually exclusive", file=sys.stderr)
+        return 1
+
+    if args.drop and args.diff is not None:
+        print("error: --drop and --diff are mutually exclusive", file=sys.stderr)
+        return 1
+
+    if args.overwrite and args.dry_run:
+        print("error: --overwrite and --dry-run are mutually exclusive", file=sys.stderr)
+        return 1
+
+    if args.overwrite and args.diff is not None:
+        print("error: --overwrite and --diff are mutually exclusive", file=sys.stderr)
         return 1
 
     db_path = args.db
