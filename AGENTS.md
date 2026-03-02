@@ -61,6 +61,9 @@ make parsing-update
 # Run all tests (unit + e2e + parsing regression)
 make tests-all
 
+# Run DB integrity checks
+make db-check
+
 # Run web server locally
 make serve
 
@@ -74,14 +77,23 @@ python -m explainshell.manager --mode source /path/to/manpage.1.gz
   - `manager.py` - CLI entry point for man page processing (`python -m explainshell.manager`)
   - `matcher.py` - Core logic: walks bash AST and matches tokens to help text
   - `store.py` - SQLite storage layer and data classes (ParsedManpage, Option)
+  - `errors.py` - Exception hierarchy (ProgramDoesNotExist, DuplicateManpage, InvalidSourcePath, ExtractionError, LowConfidenceError)
   - `llm_extractor.py` - LLM-based option extraction (via LiteLLM)
+  - `llm_ref_extractor.py` - Line-reference LLM extraction (returns line ranges, slices descriptions verbatim)
   - `source_extractor.py` - Direct roff parsing extractor
+  - `mandoc_extractor.py` - mandoc -T tree based extractor
+  - `tree_parser.py` - Mandoc tree parser with confidence assessment
   - `roff_parser.py` - Roff macro parser (man/mdoc dialects)
   - `manpage.py` - Man page reading and HTML conversion
-  - `web/views.py` - Flask routes
-  - `config.py` - Configuration (DB_PATH, HOST_IP, DEBUG)
+  - `help_constants.py` - Shell constant definitions for help text
+  - `util.py` - Shared utilities (group_continuous, Peekable, name_section)
+  - `web/views.py` - Flask routes with URL-based distro/release routing
+  - `config.py` - Configuration (DB_PATH, HOST_IP, DEBUG, MANPAGE_URLS)
+- `tools/` - Standalone scripts
+  - `db_check.py` - DB integrity checker (malformed paths, shadowed duplicates, orphans)
+  - `store_extraction.py` - Store LLM-ref extraction JSON into database
 - `tests/` - Unit tests (`test_*.py`), fixtures
-- `tests/e2e/` - Playwright e2e tests and snapshots
+- `tests/e2e/` - Playwright e2e tests, snapshots, and dedicated `e2e.db`
 - `tests/regression/` - Parsing regression tests and manpage .gz fixtures
 - `runserver.py` - Flask app entry point
 
@@ -95,9 +107,12 @@ Extraction modes controlled by `--mode`:
 - `--mode source` - Parses roff macros directly via `roff_parser.py` + `source_extractor.py`
 - `--mode mandoc` - Uses mandoc -T tree parser via `mandoc_extractor.py`
 - `--mode llm:<model>` - Sends man page text to an LLM via LiteLLM (e.g., `llm:gpt-4o`)
+- `--mode llm-ref:<model>` - LLM with line-reference extraction; LLM returns metadata + line ranges, descriptions sliced verbatim from source
 - `--mode hybrid:<model>` - Tries mandoc first, falls back to LLM on low confidence
 
-Manager key flags: `--overwrite`, `--dry-run`, `--diff [db|A..B]`, `--debug-dir`, `--drop`
+Manager key flags: `--overwrite`, `--dry-run`, `--diff [db|A..B]`, `--debug-dir`, `--drop`, `-j/--jobs <int>` (parallel extraction, default 1)
+
+Flag validation: `--mode` and `--dry-run` cannot be combined with `--diff A..B`; `--drop`, `--overwrite`, and `--diff` are mutually exclusive with each other and with `--dry-run`.
 
 ### Data Model (store.py)
 
@@ -116,3 +131,7 @@ Uses bashlex AST visitor pattern:
 - `visitcommand()` - looks up man page, handles multi-command (e.g., `git commit`)
 - `visitword()` - matches tokens to options (exact match, then fuzzy split for combined short flags like `-abc`)
 - Produces `MatchResult(start, end, text, match)` where start/end are character positions in the original string
+
+### E2E Tests
+
+Hermetic setup: uses a dedicated `tests/e2e/e2e.db` and random port selection. Server is started fresh per run (`reuseExistingServer: false`).
