@@ -22,6 +22,7 @@ from explainshell.llm_extractor import (
     LLM_TIMEOUT_SECONDS,
     _dedup_options,
     _parse_json_response,
+    _sanitize_option,
     _validate_llm_response,
     chunk_text,
     get_manpage_text,
@@ -48,6 +49,9 @@ Rules:
    - a list of strings → fixed set of values (e.g. --color=always|never|auto → ["always","never","auto"])
 4. If the option is a positional argument (not preceded by - or --), set "argument" to its
    name (e.g. "FILE"). Leave "short" and "long" as [].
+   IMPORTANT: NEVER set "argument" on options that have "short" or "long" flags.
+   For example, "-D debugopts" should have "argument": null (not "debugopts") because
+   it has short=["-D"]. The "argument" field is ONLY for standalone positional operands.
 5. Set "nested_cmd" to true only when the argument is itself a shell command
    (e.g. find -exec CMD ;).
 6. Do not invent options. Only include options explicitly documented in the text.
@@ -199,8 +203,9 @@ def _ref_option_to_store_option(raw, original_lines):
     start, end = int(lines[0]), int(lines[1])
     text = _extract_text_from_lines(original_lines, start, end)
 
-    if nested_cmd and not expects_arg:
-        expects_arg = True
+    short, long, expects_arg, argument, nested_cmd = _sanitize_option(
+        short, long, expects_arg, argument, nested_cmd
+    )
 
     return store.Option(
         text=text,

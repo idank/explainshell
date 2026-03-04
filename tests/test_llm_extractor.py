@@ -13,6 +13,7 @@ from explainshell.llm_extractor import (
     _dedup_options,
     _llm_option_to_store_option,
     _parse_json_response,
+    _sanitize_option,
     _validate_llm_response,
     chunk_text,
     extract,
@@ -266,6 +267,51 @@ class TestLlmOptionToStoreOption(unittest.TestCase):
         self.assertEqual(opt.argument, "FILE")
         self.assertEqual(opt.short, [])
         self.assertEqual(opt.long, [])
+
+
+# ---------------------------------------------------------------------------
+# TestSanitizeOption
+# ---------------------------------------------------------------------------
+
+
+class TestSanitizeOption(unittest.TestCase):
+    def test_argument_cleared_when_short_present(self):
+        short, long, ea, arg, nc = _sanitize_option(
+            ["-D"], [], True, "debugopts", False
+        )
+        self.assertIsNone(arg)
+
+    def test_argument_cleared_when_long_present(self):
+        short, long, ea, arg, nc = _sanitize_option(
+            [], ["--type"], True, "c", False
+        )
+        self.assertIsNone(arg)
+
+    def test_argument_kept_for_positional(self):
+        short, long, ea, arg, nc = _sanitize_option(
+            [], [], False, "FILE", False
+        )
+        self.assertEqual(arg, "FILE")
+
+    def test_nested_cmd_forces_expects_arg(self):
+        short, long, ea, arg, nc = _sanitize_option(
+            ["-exec"], [], False, None, True
+        )
+        self.assertTrue(ea)
+
+    def test_via_llm_option_to_store(self):
+        """argument is cleared when passed through full conversion."""
+        raw = {
+            "short": ["-D"],
+            "long": [],
+            "expects_arg": True,
+            "argument": "debugopts",
+            "nested_cmd": False,
+            "description": "-D debugopts desc",
+        }
+        opt = _llm_option_to_store_option(raw)
+        self.assertIsNone(opt.argument)
+        self.assertEqual(opt.short, ["-D"])
 
 
 # ---------------------------------------------------------------------------
