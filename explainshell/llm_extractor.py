@@ -408,6 +408,7 @@ def _llm_option_to_store_option(raw, original_lines):
         expects_arg=expects_arg,
         argument=argument,
         nested_cmd=nested_cmd,
+        meta={"lines": [start, end]},
     )
 
 
