@@ -11,7 +11,10 @@ from explainshell.llm_extractor import (
     CHUNK_SIZE_CHARS,
     CHUNK_OVERLAP_CHARS,
     _dedup_options,
+    _dedup_ref_options,
+    _extract_text_from_lines,
     _llm_option_to_store_option,
+    _number_lines,
     _parse_json_response,
     _sanitize_option,
     _validate_llm_response,
@@ -23,7 +26,7 @@ from explainshell.llm_extractor import (
 
 
 # ---------------------------------------------------------------------------
-# TestGetPlainText
+# TestGetManpageText
 # ---------------------------------------------------------------------------
 
 
@@ -57,7 +60,7 @@ class TestGetManpageText(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# TestGetPlainTextReal — exercises the actual mandoc binary
+# TestGetManpageTextReal — exercises the actual mandoc binary
 # ---------------------------------------------------------------------------
 
 _ECHO_GZ = os.path.join(
@@ -207,52 +210,146 @@ class TestValidateLlmResponse(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# TestNumberLines
+# ---------------------------------------------------------------------------
+
+
+class TestNumberLines(unittest.TestCase):
+    def test_basic(self):
+        text = "alpha\nbeta\ngamma"
+        numbered, orig = _number_lines(text)
+        self.assertEqual(orig[1], "alpha")
+        self.assertEqual(orig[2], "beta")
+        self.assertEqual(orig[3], "gamma")
+        self.assertIn("1| alpha", numbered)
+        self.assertIn("2| beta", numbered)
+        self.assertIn("3| gamma", numbered)
+
+    def test_single_line(self):
+        numbered, orig = _number_lines("hello")
+        self.assertEqual(orig[1], "hello")
+        self.assertEqual(numbered, "1| hello")
+
+    def test_preserves_empty_lines(self):
+        text = "a\n\nb"
+        numbered, orig = _number_lines(text)
+        self.assertEqual(orig[1], "a")
+        self.assertEqual(orig[2], "")
+        self.assertEqual(orig[3], "b")
+
+    def test_line_number_padding(self):
+        # 100 lines → 3-digit width
+        lines = [f"line{i}" for i in range(100)]
+        text = "\n".join(lines)
+        numbered, orig = _number_lines(text)
+        first_line = numbered.split("\n")[0]
+        # "  1| line0" — padded to 3 digits
+        self.assertTrue(first_line.startswith("  1| "))
+
+
+# ---------------------------------------------------------------------------
+# TestExtractTextFromLines
+# ---------------------------------------------------------------------------
+
+
+class TestExtractTextFromLines(unittest.TestCase):
+    def setUp(self):
+        self.orig = {
+            1: "**-v**, **--verbose**",
+            2: "",
+            3: "Enable verbose output.",
+            4: "Shows detailed information.",
+            5: "",
+        }
+
+    def test_basic_extraction(self):
+        text = _extract_text_from_lines(self.orig, 1, 4)
+        self.assertIn("**-v**, **--verbose**", text)
+        self.assertIn("Enable verbose output.", text)
+        self.assertIn("Shows detailed information.", text)
+
+    def test_flag_line_only(self):
+        text = _extract_text_from_lines(self.orig, 1, 1)
+        self.assertEqual(text, "**-v**, **--verbose**")
+
+    def test_strips_blockquote_prefix(self):
+        orig = {
+            1: "> **-n**",
+            2: "> ",
+            3: "> Do not output trailing newline.",
+        }
+        text = _extract_text_from_lines(orig, 1, 3)
+        self.assertIn("**-n**", text)
+        self.assertIn("Do not output trailing newline.", text)
+        self.assertNotIn("> ", text)
+
+    def test_invalid_range(self):
+        self.assertEqual(_extract_text_from_lines(self.orig, 0, 3), "")
+        self.assertEqual(_extract_text_from_lines(self.orig, 5, 3), "")
+
+    def test_skips_leading_blank_body_lines(self):
+        text = _extract_text_from_lines(self.orig, 1, 4)
+        # Should have flag line, then \n\n, then body — no leading blank line in body
+        parts = text.split("\n\n", 1)
+        self.assertEqual(len(parts), 2)
+        self.assertFalse(parts[1].startswith("\n"))
+
+
+# ---------------------------------------------------------------------------
 # TestLlmOptionToStoreOption
 # ---------------------------------------------------------------------------
 
 
 class TestLlmOptionToStoreOption(unittest.TestCase):
-    def test_short_and_long(self):
+    def setUp(self):
+        self.orig = {
+            10: "**-A**, **--catenate**",
+            11: "",
+            12: "Append files to an archive.",
+            13: "This is equivalent to --concatenate.",
+        }
+
+    def test_basic(self):
         raw = {
-            "short": ["-v"],
-            "long": ["--verbose"],
+            "short": ["-A"],
+            "long": ["--catenate"],
             "expects_arg": False,
-            "argument": None,
-            "nested_cmd": False,
-            "description": "Be verbose.",
+            "lines": [10, 13],
         }
-        opt = _llm_option_to_store_option(raw)
+        opt = _llm_option_to_store_option(raw, self.orig)
         self.assertIsInstance(opt, store.Option)
-        self.assertEqual(opt.short, ["-v"])
-        self.assertEqual(opt.long, ["--verbose"])
+        self.assertEqual(opt.short, ["-A"])
+        self.assertEqual(opt.long, ["--catenate"])
         self.assertFalse(opt.expects_arg)
-        self.assertIsNone(opt.argument)
-        self.assertFalse(opt.nested_cmd)
+        self.assertIn("**-A**, **--catenate**", opt.text)
+        self.assertIn("Append files to an archive.", opt.text)
 
-    def test_expects_arg_list(self):
-        raw = {
-            "short": [],
-            "long": ["--color"],
-            "expects_arg": ["always", "never", "auto"],
-            "argument": None,
-            "nested_cmd": False,
-            "description": "Colorize output.",
-        }
-        opt = _llm_option_to_store_option(raw)
-        self.assertEqual(opt.expects_arg, ["always", "never", "auto"])
+    def test_missing_lines_raises(self):
+        raw = {"short": ["-v"], "long": [], "expects_arg": False}
+        with self.assertRaises(ValueError):
+            _llm_option_to_store_option(raw, self.orig)
 
-    def test_nested_cmd_auto_corrects_expects_arg(self):
+    def test_invalid_lines_raises(self):
+        raw = {"short": ["-v"], "long": [], "expects_arg": False, "lines": [10]}
+        with self.assertRaises(ValueError):
+            _llm_option_to_store_option(raw, self.orig)
+
+    def test_bad_short_type_raises(self):
+        raw = {"short": "-v", "long": [], "expects_arg": False, "lines": [10, 13]}
+        with self.assertRaises(ValueError):
+            _llm_option_to_store_option(raw, self.orig)
+
+    def test_nested_cmd_auto_corrects(self):
         raw = {
             "short": [],
             "long": ["--exec"],
             "expects_arg": False,
-            "argument": None,
             "nested_cmd": True,
-            "description": "Execute command.",
+            "lines": [10, 13],
         }
-        opt = _llm_option_to_store_option(raw)
+        opt = _llm_option_to_store_option(raw, self.orig)
         self.assertTrue(opt.nested_cmd)
-        self.assertTrue(opt.expects_arg)  # auto-corrected
+        self.assertTrue(opt.expects_arg)
 
     def test_positional_arg(self):
         raw = {
@@ -260,13 +357,10 @@ class TestLlmOptionToStoreOption(unittest.TestCase):
             "long": [],
             "expects_arg": False,
             "argument": "FILE",
-            "nested_cmd": False,
-            "description": "Input file.",
+            "lines": [10, 13],
         }
-        opt = _llm_option_to_store_option(raw)
+        opt = _llm_option_to_store_option(raw, self.orig)
         self.assertEqual(opt.argument, "FILE")
-        self.assertEqual(opt.short, [])
-        self.assertEqual(opt.long, [])
 
 
 # ---------------------------------------------------------------------------
@@ -301,15 +395,16 @@ class TestSanitizeOption(unittest.TestCase):
 
     def test_via_llm_option_to_store(self):
         """argument is cleared when passed through full conversion."""
+        orig = {10: "-D debugopts desc", 11: "some desc"}
         raw = {
             "short": ["-D"],
             "long": [],
             "expects_arg": True,
             "argument": "debugopts",
             "nested_cmd": False,
-            "description": "-D debugopts desc",
+            "lines": [10, 11],
         }
-        opt = _llm_option_to_store_option(raw)
+        opt = _llm_option_to_store_option(raw, orig)
         self.assertIsNone(opt.argument)
         self.assertEqual(opt.short, ["-D"])
 
@@ -355,6 +450,22 @@ class TestDedupOptions(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# TestDedupRefOptions
+# ---------------------------------------------------------------------------
+
+
+class TestDedupRefOptions(unittest.TestCase):
+    def test_dedup_keeps_longest_span(self):
+        opts = [
+            {"short": ["-v"], "long": ["--verbose"], "lines": [1, 3]},
+            {"short": ["-v"], "long": ["--verbose"], "lines": [1, 10]},
+        ]
+        result = _dedup_ref_options(opts)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["lines"], [1, 10])
+
+
+# ---------------------------------------------------------------------------
 # TestExtractIntegration
 # ---------------------------------------------------------------------------
 
@@ -362,30 +473,17 @@ class TestDedupOptions(unittest.TestCase):
 class TestExtractIntegration(unittest.TestCase):
     @patch("explainshell.llm_extractor._call_llm")
     @patch("explainshell.llm_extractor.get_manpage_text")
-    @patch("explainshell.llm_extractor._get_synopsis_and_aliases")
-    def test_extract_returns_manpage(self, mock_synopsis, mock_plaintext, mock_llm):
+    @patch("explainshell.llm_extractor.manpage.get_synopsis_and_aliases")
+    def test_extract_returns_manpage(self, mock_synopsis, mock_text, mock_llm):
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
-        mock_plaintext.return_value = "dummy man page text"
+        mock_text.return_value = "**-n**\n\nDo not output trailing newline.\n\n**-e**\n\nEnable escapes."
+        # Lines: 1=**-n**, 2="", 3=Do not..., 4="", 5=**-e**, 6="", 7=Enable...
         mock_llm.return_value = (
             {
                 "dashless_opts": False,
                 "options": [
-                    {
-                        "short": ["-n"],
-                        "long": [],
-                        "expects_arg": False,
-                        "argument": None,
-                        "nested_cmd": False,
-                        "description": "Do not output trailing newline.",
-                    },
-                    {
-                        "short": ["-e"],
-                        "long": [],
-                        "expects_arg": False,
-                        "argument": None,
-                        "nested_cmd": False,
-                        "description": "Enable interpretation of backslash escapes.",
-                    },
+                    {"short": ["-n"], "long": [], "expects_arg": False, "lines": [1, 3]},
+                    {"short": ["-e"], "long": [], "expects_arg": False, "lines": [5, 7]},
                 ],
             },
             [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
@@ -397,60 +495,43 @@ class TestExtractIntegration(unittest.TestCase):
         flags = [opt.short[0] for opt in mp.options]
         self.assertIn("-n", flags)
         self.assertIn("-e", flags)
+        # Verify text comes from source, not LLM
+        n_opt = next(o for o in mp.options if "-n" in o.short)
+        self.assertIn("Do not output trailing newline.", n_opt.text)
 
     @patch("explainshell.llm_extractor._call_llm")
     @patch("explainshell.llm_extractor.get_manpage_text")
-    @patch("explainshell.llm_extractor._get_synopsis_and_aliases")
-    def test_malformed_options_skipped(self, mock_synopsis, mock_plaintext, mock_llm):
+    @patch("explainshell.llm_extractor.manpage.get_synopsis_and_aliases")
+    def test_malformed_options_skipped(self, mock_synopsis, mock_text, mock_llm):
         mock_synopsis.return_value = (None, [("dummy", 10)])
-        mock_plaintext.return_value = "some text"
+        mock_text.return_value = "**-v**\n\nVerbose."
         mock_llm.return_value = (
             {
                 "options": [
-                    {
-                        "short": "not-a-list",
-                        "long": [],
-                        "expects_arg": False,
-                        "description": "bad",
-                    },
-                    {
-                        "short": ["-v"],
-                        "long": [],
-                        "expects_arg": False,
-                        "argument": None,
-                        "nested_cmd": False,
-                        "description": "Verbose.",
-                    },
+                    {"short": "not-a-list", "long": [], "lines": [1, 3]},
+                    {"short": ["-v"], "long": [], "expects_arg": False, "lines": [1, 3]},
                 ],
             },
             [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
             '{"options": []}',
         )
         mp = extract("dummy.1.gz", "test-model")
-        # only the valid option should be kept
         self.assertEqual(len(mp.options), 1)
         self.assertEqual(mp.options[0].short, ["-v"])
 
     @patch("explainshell.llm_extractor._call_llm")
     @patch("explainshell.llm_extractor.get_manpage_text")
-    @patch("explainshell.llm_extractor._get_synopsis_and_aliases")
-    def test_debug_dir_writes_files(self, mock_synopsis, mock_plaintext, mock_llm):
+    @patch("explainshell.llm_extractor.manpage.get_synopsis_and_aliases")
+    def test_debug_dir_writes_files(self, mock_synopsis, mock_text, mock_llm):
         import tempfile
 
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
-        mock_plaintext.return_value = "dummy man page text"
-        raw_response = '{"options": [{"short": ["-v"], "long": [], "expects_arg": false, "argument": null, "nested_cmd": false, "description": "Verbose."}]}'
+        mock_text.return_value = "**-v**\n\nVerbose."
+        raw_response = '{"options": [{"short": ["-v"], "long": [], "expects_arg": false, "lines": [1, 3]}]}'
         mock_llm.return_value = (
             {
                 "options": [
-                    {
-                        "short": ["-v"],
-                        "long": [],
-                        "expects_arg": False,
-                        "argument": None,
-                        "nested_cmd": False,
-                        "description": "Verbose.",
-                    }
+                    {"short": ["-v"], "long": [], "expects_arg": False, "lines": [1, 3]},
                 ]
             },
             [{"role": "system", "content": "sys"}, {"role": "user", "content": "usr"}],
@@ -462,8 +543,6 @@ class TestExtractIntegration(unittest.TestCase):
             # Check markdown file
             md_path = os.path.join(tmpdir, "dummy.md")
             self.assertTrue(os.path.exists(md_path))
-            with open(md_path) as f:
-                self.assertEqual(f.read(), "dummy man page text")
             # Check prompt file
             prompt_path = os.path.join(tmpdir, "dummy.prompt.json")
             self.assertTrue(os.path.exists(prompt_path))

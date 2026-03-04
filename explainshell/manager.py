@@ -8,7 +8,6 @@ Modes:
     source              Use the roff parser
     mandoc              Use mandoc -T tree parser
     llm:<model>         Use an LLM via LiteLLM (e.g. llm:gpt-4o)
-    llm-ref:<model>     Use an LLM with line-reference extraction (e.g. llm-ref:gpt-4o)
     hybrid:<model>      Try tree parser first, fall back to LLM when confidence is low
 """
 
@@ -26,7 +25,6 @@ from explainshell import (
     config,
     errors,
     llm_extractor,
-    llm_ref_extractor,
     mandoc_extractor,
     source_extractor,
     store,
@@ -345,6 +343,7 @@ def _parse_mode(raw):
 
     Returns ("source", None), ("mandoc", None), ("llm", "<model>"),
     or ("hybrid", "<model>").
+
     Raises ValueError on invalid input.
     """
     if raw is None:
@@ -360,13 +359,6 @@ def _parse_mode(raw):
                 "--mode llm:<model> requires a model name (e.g. llm:gpt-4o)"
             )
         return "llm", model
-    if raw.startswith("llm-ref:"):
-        model = raw[8:]
-        if not model:
-            raise ValueError(
-                "--mode llm-ref:<model> requires a model name (e.g. llm-ref:gpt-4o)"
-            )
-        return "llm-ref", model
     if raw.startswith("hybrid:"):
         model = raw[7:]
         if not model:
@@ -376,7 +368,7 @@ def _parse_mode(raw):
         return "hybrid", model
     raise ValueError(
         f"invalid --mode value: {raw!r} "
-        f"(expected 'source', 'mandoc', 'llm:<model>', 'llm-ref:<model>', or 'hybrid:<model>')"
+        f"(expected 'source', 'mandoc', 'llm:<model>', or 'hybrid:<model>')"
     )
 
 
@@ -395,11 +387,6 @@ def _run_extractor(mode, gz_path, model=None, debug_dir=None):
     if mode == "llm":
         mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
         mp.extractor = "llm"
-        mp.extraction_meta = {"model": model}
-        return mp
-    if mode == "llm-ref":
-        mp = llm_ref_extractor.extract(gz_path, model, debug_dir=debug_dir)
-        mp.extractor = "llm-ref"
         mp.extraction_meta = {"model": model}
         return mp
     if mode == "hybrid":
@@ -511,12 +498,6 @@ def _process_one_file(
             mp = mandoc_extractor.extract(gz_path)
             mp.extractor = "mandoc"
             mp.extraction_meta = {}
-        elif mode == "llm-ref":
-            out(f"{_ts()} {progress} [{short_path}] extracting (llm-ref, {model})...")
-            _debug_dir = debug_dir if dry_run else None
-            mp = llm_ref_extractor.extract(gz_path, model, debug_dir=_debug_dir)
-            mp.extractor = "llm-ref"
-            mp.extraction_meta = {"model": model}
         elif mode == "hybrid":
             out(f"{_ts()} {progress} [{short_path}] extracting (hybrid)...")
             try:
@@ -775,7 +756,7 @@ def _build_parser():
     )
     parser.add_argument(
         "--mode",
-        help="Extraction mode: 'source', 'mandoc', 'llm:<model>', 'llm-ref:<model>', or 'hybrid:<model>'. Required unless --diff A..B.",
+        help="Extraction mode: 'source', 'mandoc', 'llm:<model>', or 'hybrid:<model>'. Required unless --diff A..B.",
     )
     parser.add_argument("--db", default=config.DB_PATH, help="SQLite DB path")
     parser.add_argument(
