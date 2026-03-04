@@ -35,6 +35,37 @@
                     </tbody>
                 </table>
             </div>
+{% if config.DEBUG and debug_info %}
+            <div id="debug-panel" style="display:none; position:fixed; top:10px; right:10px; background:rgba(0,0,0,0.85); color:#0f0; font-family:monospace; font-size:11px; padding:10px 14px; border-radius:6px; z-index:9999; max-width:400px; line-height:1.6;">
+                <div style="font-weight:bold; margin-bottom:4px; color:#ff0; font-size:12px;">Debug: <span id="debug-kind"></span></div>
+                <div id="debug-content"></div>
+            </div>
+            <script>
+            (function() {
+                var debugInfo = {{ debug_info|tojson }};
+                var panel = document.getElementById('debug-panel');
+                var kindEl = document.getElementById('debug-kind');
+                var content = document.getElementById('debug-content');
+                var boxes = document.querySelectorAll('.help-box[id]');
+                boxes.forEach(function(box) {
+                    box.addEventListener('mouseenter', function() {
+                        var data = debugInfo[box.id];
+                        if (!data) return;
+                        var html = '';
+                        Object.keys(data).forEach(function(k) {
+                            html += '<div>' + k + ': ' + JSON.stringify(data[k]) + '</div>';
+                        });
+                        kindEl.textContent = data.kind || '?';
+                        content.innerHTML = html;
+                        panel.style.display = 'block';
+                    });
+                    box.addEventListener('mouseleave', function() {
+                        panel.style.display = 'none';
+                    });
+                });
+            })();
+            </script>
+{% endif %}
 {% endblock %}
 {% block footer -%}
 <div class="push"></div><div class="text-center"><small>

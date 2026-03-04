@@ -28,14 +28,32 @@ class MatchGroup:
 
 @dataclass(frozen=True, slots=True)
 class MatchResult:
-    start: int
-    end: int
-    text: str | None
-    match: str | None
+    """A single matched token span in the input command line."""
+
+    start: int  # start position in the input string
+    end: int  # end position in the input string (exclusive)
+    text: str | None  # help text from the manpage option, or None if unknown
+    match: str | None  # the matched portion of the input string
+    # Debug metadata for the explain.html debug panel; excluded from
+    # equality/hashing.  Every creation site populates this with a dict
+    # whose "kind" key describes the match type.
+    debug_info: dict | None = field(default=None, compare=False, hash=False)
 
     @property
     def unknown(self):
         return self.text is None
+
+
+def _option_debug(option):
+    """Build a debug_info dict for an option-backed match."""
+    return {
+        "kind": "option",
+        "short": option.short,
+        "long": option.long,
+        "expects_arg": option.expects_arg,
+        "argument": option.argument,
+        "nested_cmd": option.nested_cmd,
+    }
 
 
 match_word_exp = collections.namedtuple("match_word_exp", "start end kind")
@@ -120,7 +138,7 @@ class Matcher(bashlex.ast.nodevisitor):
 
     def unknown(self, token, start, end):
         logger.debug("nothing to do with token %r", token)
-        return MatchResult(start, end, None, None)
+        return MatchResult(start, end, None, None, {"kind": "unknown"})
 
     def visitreservedword(self, node, word):
         # first try the compound reserved words
@@ -136,7 +154,7 @@ class Matcher(bashlex.ast.nodevisitor):
             helptext = help_constants.RESERVED_WORDS[word]
 
         self.groups[0].results.append(
-            MatchResult(node.pos[0], node.pos[1], helptext, None)
+            MatchResult(node.pos[0], node.pos[1], helptext, None, {"kind": "reserved_word"})
         )
 
     def visitoperator(self, node, op):
@@ -151,12 +169,12 @@ class Matcher(bashlex.ast.nodevisitor):
             helptext = help_constants.OPERATORS[op]
 
         self.groups[0].results.append(
-            MatchResult(node.pos[0], node.pos[1], helptext, None)
+            MatchResult(node.pos[0], node.pos[1], helptext, None, {"kind": "operator"})
         )
 
     def visitpipe(self, node, pipe):
         self.groups[0].results.append(
-            MatchResult(node.pos[0], node.pos[1], help_constants.PIPELINES, None)
+            MatchResult(node.pos[0], node.pos[1], help_constants.PIPELINES, None, {"kind": "pipe"})
         )
 
     def visitredirect(self, node, input, r_type, output, heredoc):
@@ -171,7 +189,7 @@ class Matcher(bashlex.ast.nodevisitor):
         logger.debug(helptext)
 
         self.groups[0].results.append(
-            MatchResult(node.pos[0], node.pos[1], "\n\n".join(helptext), None)
+            MatchResult(node.pos[0], node.pos[1], "\n\n".join(helptext), None, {"kind": "redirect"})
         )
 
         # the output might contain a wordnode, visiting it will confuse the
@@ -206,6 +224,7 @@ class Matcher(bashlex.ast.nodevisitor):
                 word_node.pos[1],
                 help_constants._function_call % word_node.word,
                 None,
+                {"kind": "function_call"},
             )
             self.matches.append(mr)
 
@@ -225,6 +244,7 @@ class Matcher(bashlex.ast.nodevisitor):
                             part.pos[1],
                             help_constants._functionarg % word_node.word,
                             None,
+                            {"kind": "function_arg"},
                         )
                         self.matches.append(mr)
 
@@ -247,7 +267,7 @@ class Matcher(bashlex.ast.nodevisitor):
             # don't visit words since they're not part of the current command,
             # instead consider them part of the for construct
             if part.kind == "word":
-                mr = MatchResult(part.pos[0], part.pos[1], help_constants._for, None)
+                mr = MatchResult(part.pos[0], part.pos[1], help_constants._for, None, {"kind": "for_word"})
                 self.groups[0].results.append(mr)
 
                 # but we do want to visit expansions
@@ -367,7 +387,8 @@ class Matcher(bashlex.ast.nodevisitor):
 
         self.matches.append(
             MatchResult(
-                startpos, endpos, manpage.synopsis or help_constants.NO_SYNOPSIS, None
+                startpos, endpos, manpage.synopsis or help_constants.NO_SYNOPSIS, None,
+                {"kind": "synopsis"},
             )
         )
         return True
@@ -405,7 +426,7 @@ class Matcher(bashlex.ast.nodevisitor):
     def visitassignment(self, node, word):
         helptext = help_constants.ASSIGNMENT
         self.groups[0].results.append(
-            MatchResult(node.pos[0], node.pos[1], helptext, None)
+            MatchResult(node.pos[0], node.pos[1], helptext, None, {"kind": "assignment"})
         )
 
     def visitword(self, node, word):
@@ -432,9 +453,9 @@ class Matcher(bashlex.ast.nodevisitor):
                         # this prevents the next word node to also consider itself
                         # as an argument
                         self._current_option = None
-                        return [MatchResult(pos, pos + len(chars), option.text, None)]
+                        return [MatchResult(pos, pos + len(chars), option.text, None, _option_debug(option))]
 
-                    mr = MatchResult(pos, pos + len(t), option.text, None)
+                    mr = MatchResult(pos, pos + len(t), option.text, None, _option_debug(option))
                     m.append(mr)
                 # if the previous option expected an argument and we couldn't
                 # match the current token, take the rest as its argument, this
@@ -443,7 +464,7 @@ class Matcher(bashlex.ast.nodevisitor):
                 elif consider_arg and prev_option and prev_option.expects_arg:
                     pmr = m[-1]
                     mr = MatchResult(
-                        pmr.start, pmr.end + (len(tokens) - i), pmr.text, None
+                        pmr.start, pmr.end + (len(tokens) - i), pmr.text, None, pmr.debug_info
                     )
                     m[-1] = mr
                     # reset the current option if we already took an argument,
@@ -471,7 +492,7 @@ class Matcher(bashlex.ast.nodevisitor):
             option = self.find_option(word)
             if option:
                 logger.info("found an exact match for %r: %r", word, option)
-                mr = MatchResult(node.pos[0], node.pos[1], option.text, None)
+                mr = MatchResult(node.pos[0], node.pos[1], option.text, None, _option_debug(option))
                 self.matches.append(mr)
 
                 # check if we splitted the word just above, if we did then reset
@@ -490,7 +511,8 @@ class Matcher(bashlex.ast.nodevisitor):
                     logger.info("token %r ends current nested command", word)
                     self.endcommand()
                     mr = MatchResult(
-                        node.pos[0], node.pos[1], self.matches[-1].text, None
+                        node.pos[0], node.pos[1], self.matches[-1].text, None,
+                        {"kind": "nested_end"},
                     )
                     self.matches.append(mr)
                 elif word != "-" and word.startswith("-") and not word.startswith("--"):
@@ -533,7 +555,7 @@ class Matcher(bashlex.ast.nodevisitor):
                                 return
 
                         pmr = self.matches[-1]
-                        mr = MatchResult(pmr.start, node.pos[1], pmr.text, None)
+                        mr = MatchResult(pmr.start, node.pos[1], pmr.text, None, pmr.debug_info)
                         self.matches[-1] = mr
                     else:
                         self.matches.append(
@@ -562,7 +584,7 @@ class Matcher(bashlex.ast.nodevisitor):
                         k = list(d.keys())[0]
                         logger.info("got arguments, using %r", k)
                         text = d[k]
-                        mr = MatchResult(node.pos[0], node.pos[1], text, None)
+                        mr = MatchResult(node.pos[0], node.pos[1], text, None, {"kind": "argument"})
                         self.matches.append(mr)
                         return
 
@@ -591,7 +613,8 @@ class Matcher(bashlex.ast.nodevisitor):
         if _iscompoundopenclosecurly(body):
             # create a matchresult until after the first {
             mr = MatchResult(
-                node.pos[0], body.list[0].pos[1], help_constants._function, None
+                node.pos[0], body.list[0].pos[1], help_constants._function, None,
+                {"kind": "function"},
             )
             self.groups[0].results.append(mr)
 
@@ -601,6 +624,7 @@ class Matcher(bashlex.ast.nodevisitor):
                 body.list[-1].pos[1],
                 help_constants._function,
                 None,
+                {"kind": "function"},
             )
             self.groups[0].results.append(mr)
 
@@ -614,7 +638,8 @@ class Matcher(bashlex.ast.nodevisitor):
 
             # create a matchresult ending at the node before body
             mr = MatchResult(
-                node.pos[0], beforebody.pos[1], help_constants._function, None
+                node.pos[0], beforebody.pos[1], help_constants._function, None,
+                {"kind": "function"},
             )
             self.groups[0].results.append(mr)
 
@@ -696,7 +721,7 @@ class Matcher(bashlex.ast.nodevisitor):
                     assert m.end <= len(self.s), f"{m.end} {len(self.s)}"
 
                     portion = self.s[m.start : m.end]
-                    group.results[i] = MatchResult(m.start, m.end, m.text, portion)
+                    group.results[i] = MatchResult(m.start, m.end, m.text, portion, m.debug_info)
 
         logger.debug("%r matches:\n%s", self.s, debug_match())
 
@@ -726,7 +751,7 @@ class Matcher(bashlex.ast.nodevisitor):
             # starts a comment and is beyond the ending index of the parsed
             # portion of the input
             if (not self.ast or i > self.ast.pos[1]) and c == "#":
-                comment = MatchResult(i, len(parsed), help_constants.COMMENT, None)
+                comment = MatchResult(i, len(parsed), help_constants.COMMENT, None, {"kind": "comment"})
                 self.groups[0].results.append(comment)
                 break
 
@@ -763,6 +788,6 @@ class Matcher(bashlex.ast.nodevisitor):
                     end_index = result_index[l_group[-1]]
                     for mr in l_group:
                         del result_index[mr]
-                    merged.append(MatchResult(start, end, text, None))
+                    merged.append(MatchResult(start, end, text, None, l_group[0].debug_info))
                     result_index[merged[-1]] = end_index
         return merged
