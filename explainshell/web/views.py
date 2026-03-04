@@ -161,10 +161,10 @@ def _handle_explain_cmd(url_distro, url_release):
     distro, release = _get_distro_release(url_distro, url_release)
     prefix = _explain_prefix(url_distro, url_release)
     try:
-        matches, helptext = explain_cmd(command, app.store, distro=distro, release=release, explain_prefix=prefix)
+        matches, helptext, debug_info = explain_cmd(command, app.store, distro=distro, release=release, explain_prefix=prefix)
         helptext = [(render_markdown(text), id_) for text, id_ in helptext]
         return render_template(
-            "explain.html", matches=matches, helptext=helptext, getargs=command
+            "explain.html", matches=matches, helptext=helptext, getargs=command, debug_info=debug_info
         )
 
     except errors.ProgramDoesNotExist as error_msg:
@@ -363,7 +363,15 @@ def explain_cmd(command, store, distro=None, release=None, explain_prefix="/expl
 
     helptext = sorted(text_ids.items(), key=lambda kv: id_start_pos[kv[1]])
 
-    return matches, helptext
+    debug_info = {}
+    if config.DEBUG:
+        for group in groups:
+            for m in group.results:
+                if m.debug_info and m.text in text_ids:
+                    help_class = text_ids[m.text]
+                    debug_info.setdefault(help_class, m.debug_info)
+
+    return matches, helptext, debug_info
 
 
 def format_match(d, m, expansions, explain_prefix="/explain"):
