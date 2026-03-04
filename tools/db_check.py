@@ -8,9 +8,11 @@ Checks:
     - Shadowed duplicates (same name+section+distro from different sources)
     - Orphaned mappings (mapping rows referencing non-existent manpage IDs)
     - Unreachable manpages (manpages with no mapping pointing to them)
+    - argument set on flagged options (argument should only be on positional operands)
 """
 
 import argparse
+import json
 import os
 import sqlite3
 import sys
@@ -76,7 +78,28 @@ def check(db_path):
             f"(manpage does not exist)",
         ))
 
-    # 4. Unreachable manpages: manpages with no mapping pointing to them.
+    # 4. argument set on flagged options.
+    for row in conn.execute("SELECT id, source, name, options FROM manpage"):
+        opts_json = row["options"]
+        if not opts_json:
+            continue
+        try:
+            opts = json.loads(opts_json)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        for o in opts:
+            short = o.get("short") or []
+            long = o.get("long") or []
+            argument = o.get("argument")
+            if argument and (short or long):
+                flags = short + long
+                issues.append((
+                    "warning",
+                    f"argument on flagged option: {row['name']!r} has "
+                    f"argument={argument!r} on option {flags}",
+                ))
+
+    # 5. Unreachable manpages: manpages with no mapping pointing to them.
     unreachable = conn.execute(
         "SELECT mp.id, mp.name, mp.source FROM manpage mp "
         "LEFT JOIN mapping m ON mp.id = m.dst WHERE m.id IS NULL"

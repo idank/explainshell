@@ -42,6 +42,9 @@ Rules:
    - a list of strings → fixed set of values (e.g. --color=always|never|auto → ["always","never","auto"])
 4. If the option is a positional argument (not preceded by - or --), set "argument" to its
    name (e.g. "FILE"). Leave "short" and "long" as [].
+   IMPORTANT: NEVER set "argument" on options that have "short" or "long" flags.
+   For example, "-D debugopts" should have "argument": null (not "debugopts") because
+   it has short=["-D"]. The "argument" field is ONLY for standalone positional operands.
 5. Set "nested_cmd" to true only when the argument is itself a shell command
    (e.g. find -exec CMD ;).
 6. Do not invent options. Only include options explicitly documented in the text.
@@ -273,6 +276,23 @@ def _dedup_options(raw_options: list) -> list:
     return [opt for _, opt in all_entries]
 
 
+def _sanitize_option(short, long, expects_arg, argument, nested_cmd):
+    """Fix common LLM mistakes in option fields.
+
+    Returns (short, long, expects_arg, argument, nested_cmd).
+    """
+    # argument is only for positional operands (no flags)
+    if argument and (short or long):
+        logger.debug("clearing argument=%r on flagged option %s/%s", argument, short, long)
+        argument = None
+
+    # nested_cmd requires expects_arg
+    if nested_cmd and not expects_arg:
+        expects_arg = True
+
+    return short, long, expects_arg, argument, nested_cmd
+
+
 def _llm_option_to_store_option(raw: dict) -> store.Option:
     """Convert one LLM option dict to a store.Option."""
     short = raw.get("short") or []
@@ -289,9 +309,9 @@ def _llm_option_to_store_option(raw: dict) -> store.Option:
     if not isinstance(description, str):
         raise ValueError(f"'description' must be a str, got {type(description)}")
 
-    # nested_cmd requires expects_arg
-    if nested_cmd and not expects_arg:
-        expects_arg = True
+    short, long, expects_arg, argument, nested_cmd = _sanitize_option(
+        short, long, expects_arg, argument, nested_cmd
+    )
 
     return store.Option(
         text=description,
