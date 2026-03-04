@@ -13,6 +13,8 @@ import subprocess
 import time
 
 import litellm
+from google import genai
+from google.genai import types
 
 from explainshell import config, manpage, store
 from explainshell.errors import ExtractionError
@@ -276,9 +278,29 @@ def _extract_text_from_lines(original_lines, start, end):
     return flag_line
 
 
-def _call_llm(chunk, chunk_info, model, litellm_kwargs):
-    """Call LiteLLM. Retries up to 3x on transient errors.
+def _call_gemini_native(user_content, model):
+    """Call Gemini using the native google-genai SDK.
 
+    Returns raw response text.
+    """
+    client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+    gemini_model = model.removeprefix("gemini/")
+    response = client.models.generate_content(
+        model=gemini_model,
+        contents=user_content,
+        config=types.GenerateContentConfig(
+            system_instruction=_SYSTEM_PROMPT,
+            response_mime_type="application/json",
+            http_options=types.HttpOptions(timeout=LLM_TIMEOUT_SECONDS * 1000),
+        ),
+    )
+    return response.text
+
+
+def _call_llm(chunk, chunk_info, model, litellm_kwargs):
+    """Call LLM. Uses native Gemini SDK for gemini/ models, litellm otherwise.
+
+    Retries up to 3x on transient errors.
     Returns (data_dict, messages, raw_response_content).
     """
     user_content = (
@@ -290,37 +312,57 @@ def _call_llm(chunk, chunk_info, model, litellm_kwargs):
         {"role": "user", "content": user_content},
     ]
 
-    kwargs = dict(litellm_kwargs)
-    try:
-        kwargs["response_format"] = {"type": "json_object"}
-    except Exception:
-        pass
+    use_native_gemini = model.startswith("gemini/")
 
-    retryable = (
-        litellm.RateLimitError,
-        litellm.Timeout,
-        litellm.ServiceUnavailableError,
-        litellm.APIConnectionError,
-        litellm.InternalServerError,
-    )
+    if use_native_gemini:
+        retryable = (Exception,)  # broad catch; filtered below
+    else:
+        retryable = (
+            litellm.RateLimitError,
+            litellm.Timeout,
+            litellm.ServiceUnavailableError,
+            litellm.APIConnectionError,
+            litellm.InternalServerError,
+        )
+
+    kwargs = dict(litellm_kwargs)
+    if not use_native_gemini:
+        try:
+            kwargs["response_format"] = {"type": "json_object"}
+        except Exception:
+            pass
 
     last_err = None
     for attempt in range(3):
         try:
-            response = litellm.completion(
-                model=model,
-                messages=messages,
-                timeout=LLM_TIMEOUT_SECONDS,
-                num_retries=0,
-                **kwargs,
-            )
-            content = response.choices[0].message.content
+            if use_native_gemini:
+                content = _call_gemini_native(user_content, model)
+            else:
+                response = litellm.completion(
+                    model=model,
+                    messages=messages,
+                    timeout=LLM_TIMEOUT_SECONDS,
+                    num_retries=0,
+                    **kwargs,
+                )
+                content = response.choices[0].message.content
             data = _parse_json_response(content)
             _validate_llm_response(data)
             return data, messages, content
         except ExtractionError:
             raise
         except retryable as e:
+            if use_native_gemini:
+                # Only retry on transient errors (rate limit, timeout, server errors)
+                err_name = type(e).__name__
+                status = getattr(e, "status_code", getattr(e, "code", 0)) or 0
+                is_transient = (
+                    status in (429, 500, 502, 503, 504)
+                    or "timeout" in err_name.lower()
+                    or "deadline" in str(e).lower()
+                )
+                if not is_transient:
+                    raise ExtractionError(f"LLM call failed: {e}") from e
             last_err = e
             wait = 2**attempt
             logger.warning(
