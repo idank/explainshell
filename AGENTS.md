@@ -79,7 +79,6 @@ python -m explainshell.manager --mode source /path/to/manpage.1.gz
   - `store.py` - SQLite storage layer and data classes (ParsedManpage, Option)
   - `errors.py` - Exception hierarchy (ProgramDoesNotExist, DuplicateManpage, InvalidSourcePath, ExtractionError, LowConfidenceError)
   - `llm_extractor.py` - LLM-based option extraction (via LiteLLM)
-  - `llm_ref_extractor.py` - Line-reference LLM extraction (returns line ranges, slices descriptions verbatim)
   - `source_extractor.py` - Direct roff parsing extractor
   - `mandoc_extractor.py` - mandoc -T tree based extractor
   - `tree_parser.py` - Mandoc tree parser with confidence assessment
@@ -107,7 +106,6 @@ Extraction modes controlled by `--mode`:
 - `--mode source` - Parses roff macros directly via `roff_parser.py` + `source_extractor.py`
 - `--mode mandoc` - Uses mandoc -T tree parser via `mandoc_extractor.py`
 - `--mode llm:<model>` - Sends man page text to an LLM via LiteLLM (e.g., `llm:gpt-4o`)
-- `--mode llm-ref:<model>` - LLM with line-reference extraction; LLM returns metadata + line ranges, descriptions sliced verbatim from source
 - `--mode hybrid:<model>` - Tries mandoc first, falls back to LLM on low confidence
 
 Manager key flags: `--overwrite`, `--dry-run`, `--diff [db|A..B]`, `--debug-dir`, `--drop`, `-j/--jobs <int>` (parallel extraction, default 1)
