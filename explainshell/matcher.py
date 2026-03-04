@@ -1,6 +1,7 @@
 import collections
 import logging
 import itertools
+from dataclasses import dataclass, field
 
 import bashlex.parser
 import bashlex.ast
@@ -8,21 +9,30 @@ import bashlex.ast
 from explainshell import errors, help_constants, util
 
 
+@dataclass
 class MatchGroup:
     """a class to group matchresults together
 
     we group all shell results in one group and create a new group for every
     command"""
 
-    def __init__(self, name):
-        self.name = name
-        self.results = []
+    name: str
+    results: list = field(default_factory=list)
+    manpage: object = None
+    suggestions: list | None = None
+    error: Exception | None = None
 
     def __repr__(self):
         return "<matchgroup %r with %d results>" % (self.name, len(self.results))
 
 
-class MatchResult(collections.namedtuple("MatchResult", "start end text match")):
+@dataclass(frozen=True, slots=True)
+class MatchResult:
+    start: int
+    end: int
+    text: str | None
+    match: str | None
+
     @property
     def unknown(self):
         return self.text is None
@@ -702,8 +712,8 @@ class Matcher(bashlex.ast.nodevisitor):
 
         # go over all existing matches to see if we've covered the
         # current position
-        for start, end, _, _ in self.all_matches:
-            for i in range(start, end):
+        for mr in self.all_matches:
+            for i in range(mr.start, mr.end):
                 parsed[i] = True
 
         for i, parsed_i in enumerate(parsed):
