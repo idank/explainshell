@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 CHUNK_SIZE_CHARS = 60_000
 CHUNK_OVERLAP_CHARS = 2_000
 LLM_TIMEOUT_SECONDS = 300
+MAX_MANPAGE_CHARS = 500_000
 
 _MANDOC_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "tools", "mandoc-with-markdown")
 
@@ -435,9 +436,18 @@ def prepare_extraction(gz_path):
     """
     synopsis, aliases = manpage.get_synopsis_and_aliases(gz_path)
     plain_text = get_manpage_text(gz_path)
+    basename = os.path.splitext(os.path.splitext(os.path.basename(gz_path))[0])[0]
+
+    if len(plain_text) > MAX_MANPAGE_CHARS:
+        logger.warning(
+            "%s: skipping, manpage too large for LLM extraction "
+            "(%s chars, limit %s)",
+            basename, f"{len(plain_text):,}", f"{MAX_MANPAGE_CHARS:,}",
+        )
+        return None
+
     numbered_text, original_lines = _number_lines(plain_text)
     chunks = chunk_text(numbered_text)
-    basename = os.path.splitext(os.path.splitext(os.path.basename(gz_path))[0])[0]
 
     return {
         "synopsis": synopsis,
@@ -528,6 +538,8 @@ def finalize_extraction(gz_path, prepared, all_chunk_data, debug_dir=None, debug
 def extract(gz_path, model, debug_dir=None, **litellm_kwargs):
     """LLM extraction pipeline: mandoc → numbered markdown → LLM → ParsedManpage."""
     prepared = prepare_extraction(gz_path)
+    if prepared is None:
+        return None
     basename = prepared["basename"]
     chunks = prepared["chunks"]
     n_chunks = prepared["n_chunks"]

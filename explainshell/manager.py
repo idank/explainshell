@@ -386,6 +386,8 @@ def _run_extractor(mode, gz_path, model=None, debug_dir=None):
         return mp
     if mode == "llm":
         mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
+        if mp is None:
+            return None
         mp.extractor = "llm"
         mp.extraction_meta = {"model": model}
         return mp
@@ -397,6 +399,8 @@ def _run_extractor(mode, gz_path, model=None, debug_dir=None):
             return mp
         except errors.LowConfidenceError as e:
             mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
+            if mp is None:
+                return None
             mp.extractor = "llm"
             mp.extraction_meta = {
                 "model": model,
@@ -462,6 +466,9 @@ def _process_one_file(
             out(f"  {_DIM}({left_mode} extractor failed: {e}, skipping){_RESET}")
             result.outcome = "failed"
             return result
+        if left_mp is None:
+            result.outcome = "skipped"
+            return result
 
         right_label = (
             right_mode if not right_model else f"{right_mode} ({right_model})"
@@ -480,6 +487,9 @@ def _process_one_file(
             out(f"=== {short_path} ({label}) ===")
             out(f"  {_DIM}({right_mode} extractor failed: {e}, skipping){_RESET}")
             result.outcome = "failed"
+            return result
+        if right_mp is None:
+            result.outcome = "skipped"
             return result
 
         out(f"=== {short_path} ({label}) ===")
@@ -513,6 +523,9 @@ def _process_one_file(
                 )
                 _debug_dir = debug_dir if dry_run else None
                 mp = llm_extractor.extract(gz_path, model, debug_dir=_debug_dir)
+                if mp is None:
+                    result.outcome = "skipped"
+                    return result
                 mp.extractor = "llm"
                 mp.extraction_meta = {
                     "model": model,
@@ -523,6 +536,9 @@ def _process_one_file(
             out(f"{_ts()} {progress} [{short_path}] extracting ({model})...")
             _debug_dir = debug_dir if dry_run else None
             mp = llm_extractor.extract(gz_path, model, debug_dir=_debug_dir)
+            if mp is None:
+                result.outcome = "skipped"
+                return result
             mp.extractor = "llm"
             mp.extraction_meta = {"model": model}
 
@@ -710,6 +726,9 @@ def main(args):
             except errors.ExtractionError as e:
                 logger.error("failed to prepare %s: %s", short_path, e)
                 failed += 1
+                continue
+            if prepared is None:
+                skipped += 1
                 continue
 
             work_items.append((file_idx, gz_path, short_path, prepared))
