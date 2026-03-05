@@ -633,6 +633,20 @@ def main(args):
         print("error: --overwrite and --diff are mutually exclusive", file=sys.stderr)
         return 1
 
+    if args.batch is not None:
+        if args.batch < 1:
+            print("error: --batch must be >= 1", file=sys.stderr)
+            return 1
+        if not model or not model.startswith("gemini/"):
+            print("error: --batch requires a gemini/ model in --mode", file=sys.stderr)
+            return 1
+        if mode != "llm":
+            print("error: --batch only works with --mode llm:gemini/<model>", file=sys.stderr)
+            return 1
+        if args.diff is not None:
+            print("error: --batch and --diff are mutually exclusive", file=sys.stderr)
+            return 1
+
     db_path = args.db
 
     if args.drop and not args.dry_run:
@@ -670,7 +684,143 @@ def main(args):
         return 0, 0
 
     total = len(gz_files)
-    if args.jobs == 1:
+    if args.batch is not None:
+        # Batch processing via Gemini Batch API.
+        from google import genai as _genai
+
+        _debug_dir = args.debug_dir if args.dry_run else None
+
+        # 1. Pre-filter files and prepare extractions.
+        work_items = []  # (file_idx, gz_path, short_path, prepared)
+        for file_idx, gz_path in enumerate(gz_files):
+            short_path = config.source_from_path(gz_path)
+            name = _manpage.extract_name(gz_path)
+
+            if (
+                s
+                and not args.overwrite
+                and _already_stored(s, short_path, name)
+            ):
+                logger.info("skipping %s (already stored)", short_path)
+                skipped += 1
+                continue
+
+            try:
+                prepared = llm_extractor.prepare_extraction(gz_path)
+            except errors.ExtractionError as e:
+                logger.error("failed to prepare %s: %s", short_path, e)
+                failed += 1
+                continue
+
+            work_items.append((file_idx, gz_path, short_path, prepared))
+
+        if not work_items:
+            print("No files to process after filtering.")
+        else:
+            # 2. Collect all (key, user_content) pairs.
+            all_requests = []  # (key_str, user_content)
+            # Track mapping: key_str -> (work_idx, chunk_idx)
+            key_to_location = {}
+            for work_idx, (file_idx, gz_path, short_path, prepared) in enumerate(work_items):
+                chunks = prepared["chunks"]
+                n_chunks = prepared["n_chunks"]
+                for chunk_idx, chunk in enumerate(chunks):
+                    chunk_info = f" (part {chunk_idx + 1} of {n_chunks})" if n_chunks > 1 else ""
+                    user_content = llm_extractor.build_user_content(chunk, chunk_info)
+                    key_str = f"{work_idx}:{chunk_idx}"
+                    all_requests.append((key_str, user_content))
+                    key_to_location[key_str] = (work_idx, chunk_idx)
+
+            print(f"{_ts()} collected {len(all_requests)} request(s) from {len(work_items)} file(s)")
+
+            # 3. Submit in batches of --batch size.
+            batch_size = args.batch
+            all_results = {}  # key_str -> response_text
+            client = _genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+
+            for batch_start in range(0, len(all_requests), batch_size):
+                batch_chunk = all_requests[batch_start : batch_start + batch_size]
+                batch_num = batch_start // batch_size + 1
+                total_batches = (len(all_requests) + batch_size - 1) // batch_size
+
+                print(f"{_ts()} submitting batch {batch_num}/{total_batches} ({len(batch_chunk)} requests)...")
+                try:
+                    job = llm_extractor.submit_batch(batch_chunk, model)
+                    job_name = job.name
+                    print(f"{_ts()} batch {batch_num}/{total_batches} submitted: {job_name}")
+
+                    completed_job = llm_extractor.poll_batch(client, job_name)
+                    batch_results = llm_extractor.collect_batch_results(completed_job)
+                    all_results.update(batch_results)
+                    print(f"{_ts()} batch {batch_num}/{total_batches} completed: {len(batch_results)} result(s)")
+                except errors.ExtractionError as e:
+                    logger.error("batch %d failed: %s", batch_num, e)
+                    # Mark all files in this batch as failed.
+                    batch_work_indices = set()
+                    for key_str, _ in batch_chunk:
+                        wi, _ = key_to_location[key_str]
+                        batch_work_indices.add(wi)
+                    failed += len(batch_work_indices)
+                    # Remove these work items so we don't try to finalize them.
+                    for wi in sorted(batch_work_indices, reverse=True):
+                        work_items[wi] = None
+                    continue
+
+            # 4. Map results back and finalize each file.
+            for work_idx, item in enumerate(work_items):
+                if item is None:
+                    continue  # failed batch
+                file_idx, gz_path, short_path, prepared = item
+                chunks = prepared["chunks"]
+                n_chunks = prepared["n_chunks"]
+
+                all_chunk_data = []
+                file_failed = False
+                for chunk_idx in range(n_chunks):
+                    key_str = f"{work_idx}:{chunk_idx}"
+                    response_text = all_results.get(key_str)
+                    if response_text is None:
+                        logger.error("missing batch result for %s chunk %d", short_path, chunk_idx)
+                        file_failed = True
+                        break
+
+                    try:
+                        chunk_data, raw = llm_extractor.process_llm_result(response_text)
+                    except errors.ExtractionError as e:
+                        logger.error("failed to parse batch result for %s chunk %d: %s", short_path, chunk_idx, e)
+                        file_failed = True
+                        break
+
+                    chunk_info = f" (part {chunk_idx + 1} of {n_chunks})" if n_chunks > 1 else ""
+                    user_content = llm_extractor.build_user_content(chunks[chunk_idx], chunk_info)
+                    messages = [
+                        {"role": "system", "content": llm_extractor._SYSTEM_PROMPT},
+                        {"role": "user", "content": user_content},
+                    ]
+                    all_chunk_data.append((chunk_data, messages, raw))
+
+                if file_failed:
+                    failed += 1
+                    continue
+
+                try:
+                    mp = llm_extractor.finalize_extraction(gz_path, prepared, all_chunk_data, debug_dir=_debug_dir)
+                    mp.extractor = "llm"
+                    mp.extraction_meta = {"model": model}
+
+                    result = _FileResult(outcome="added", output_lines=[])
+                    result.mp = mp
+                    result.output_lines.append(
+                        f"{_ts()} [{short_path}] done: {len(mp.options)} option(s)"
+                    )
+                    a, f = _handle_result(result)
+                    added += a
+                    failed += f
+                except Exception as e:
+                    logger.error("failed to finalize %s: %s", short_path, e)
+                    failed += 1
+
+    elif args.jobs == 1:
         # Sequential processing.
         for file_idx, gz_path in enumerate(gz_files, 1):
             short_path = config.source_from_path(gz_path)
@@ -795,6 +945,12 @@ def _build_parser():
         type=int,
         default=1,
         help="Number of parallel workers (default: 1)",
+    )
+    parser.add_argument(
+        "--batch",
+        type=int,
+        default=None,
+        help="Batch size for Gemini batch API (only works with gemini/ models)",
     )
     parser.add_argument(
         "--log",
