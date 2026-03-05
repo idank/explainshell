@@ -12,7 +12,7 @@ MANPAGES_DIR = os.path.join(_curr_dir, "manpages")
 # Mapping from source-path prefix to external URL template.
 # Templates may use {section} and {name} placeholders.
 MANPAGE_URLS = {
-    "ubuntu/25.10": "https://manpages.ubuntu.com/manpages/plucky/en/man{section}/{name}.{section}.html",
+    "ubuntu/25.10": "https://manpages.ubuntu.com/manpages/questing/en/man{section}/{name}.{section}.html",
     "ubuntu/12.04": "https://manpages.ubuntu.com/manpages/precise/en/man{section}/{name}.{section}.html",
 }
 
