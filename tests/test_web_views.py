@@ -128,7 +128,7 @@ class TestExplainProgram(unittest.TestCase):
         self.store = helpers.MockStore()
 
     def test_explain_program_returns_str_options(self):
-        mp, suggestions, _ = explain_program("bar", self.store)
+        mp, suggestions, *_ = explain_program("bar", self.store)
         self.assertEqual(mp["program"], "bar(1)")
         self.assertEqual(mp["synopsis"], "bar synopsis")
         self.assertEqual(mp["section"], "1")
@@ -141,11 +141,11 @@ class TestExplainProgram(unittest.TestCase):
             self.assertIsInstance(opt, str)
 
     def test_explain_program_no_synopsis(self):
-        mp, suggestions, _ = explain_program("nosynopsis", self.store)
+        mp, suggestions, *_ = explain_program("nosynopsis", self.store)
         self.assertIsNone(mp["synopsis"])
 
     def test_explain_program_with_suggestions(self):
-        mp, suggestions, _ = explain_program("dup", self.store)
+        mp, suggestions, *_ = explain_program("dup", self.store)
         self.assertEqual(len(suggestions), 1)
         self.assertEqual(suggestions[0]["text"], "dup(2)")
         self.assertEqual(suggestions[0]["link"], "2/dup")
