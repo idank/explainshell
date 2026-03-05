@@ -15,8 +15,8 @@ def _make_option(short=None, long=None, text="flag\ndescription"):
         text=text,
         short=short or [],
         long=long or [],
-        expects_arg=False,
-        argument=None,
+        has_argument=False,
+        positional=None,
         nested_cmd=False,
     )
 

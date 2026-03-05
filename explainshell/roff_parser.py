@@ -85,8 +85,8 @@ def parse_options(gz_path: str) -> list:
     for entry in raw:
         short = entry.get("short", [])
         long = entry.get("long", [])
-        expects_arg = entry.get("expects_arg", False)
-        argument = entry.get("argument") or None
+        has_argument = entry.get("has_argument", False)
+        argument = entry.get("positional") or None
         description = entry.get("description", "")
         nested_cmd = False
 
@@ -112,8 +112,8 @@ def parse_options(gz_path: str) -> list:
                 text=text,
                 short=short,
                 long=long,
-                expects_arg=expects_arg,
-                argument=argument,
+                has_argument=has_argument,
+                positional=argument,
                 nested_cmd=nested_cmd,
             )
         )
@@ -350,7 +350,7 @@ def _parse_flag_text(text: str) -> dict:
 
     short = []
     long = []
-    expects_arg = False
+    has_argument = False
     argument = None
 
     # Handle alternating-font macros (.BI, .BR, .IR, .RB, .RI)
@@ -397,7 +397,7 @@ def _parse_flag_text(text: str) -> dict:
             elif flag_part.startswith("-"):
                 short.append(flag_part)
             if arg_part:
-                expects_arg = True
+                has_argument = True
                 if not argument:
                     argument = arg_part
             continue
@@ -406,7 +406,7 @@ def _parse_flag_text(text: str) -> dict:
         m_glued = re.match(r"^(-[A-Za-z]+)<(.+)>$", flag)
         if m_glued:
             short.append(m_glued.group(1))
-            expects_arg = True
+            has_argument = True
             if not argument:
                 argument = f"<{m_glued.group(2)}>"
             continue
@@ -427,7 +427,7 @@ def _parse_flag_text(text: str) -> dict:
         if len(tokens) > 1:
             arg_text = tokens[1].strip().strip("[]")
             if arg_text and not arg_text.startswith("-"):
-                expects_arg = True
+                has_argument = True
                 if not argument:
                     argument = arg_text
 
@@ -440,8 +440,8 @@ def _parse_flag_text(text: str) -> dict:
     return {
         "short": short,
         "long": long,
-        "expects_arg": expects_arg,
-        "argument": argument,
+        "has_argument": has_argument,
+        "positional": argument,
     }
 
 
@@ -647,10 +647,10 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                         all_short.extend(parsed["short"])
                     if parsed.get("long"):
                         all_long.extend(parsed["long"])
-                    if parsed.get("expects_arg"):
+                    if parsed.get("has_argument"):
                         has_arg = True
-                    if parsed.get("argument") and not arg_name:
-                        arg_name = parsed["argument"]
+                    if parsed.get("positional") and not arg_name:
+                        arg_name = parsed["positional"]
 
                 # Skip if no flags found (e.g. escape sequence descriptions)
                 if not all_short and not all_long and not arg_name:
@@ -717,8 +717,8 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                     {
                         "short": all_short,
                         "long": all_long,
-                        "expects_arg": has_arg,
-                        "argument": arg_name,
+                        "has_argument": has_arg,
+                        "positional": arg_name,
                         "description": description,
                         "flag_text": flag_text,
                     }
@@ -752,7 +752,7 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                 if (
                     not parsed.get("short")
                     and not parsed.get("long")
-                    and not parsed.get("argument")
+                    and not parsed.get("positional")
                 ):
                     i += 1
                     continue
@@ -799,8 +799,8 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                     {
                         "short": parsed.get("short", []),
                         "long": parsed.get("long", []),
-                        "expects_arg": parsed.get("expects_arg", False),
-                        "argument": parsed.get("argument"),
+                        "has_argument": parsed.get("has_argument", False),
+                        "positional": parsed.get("positional"),
                         "description": description,
                         "flag_text": clean_roff(tag_text),
                     }
@@ -840,8 +840,8 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                     {
                         "short": parsed.get("short", []),
                         "long": parsed.get("long", []),
-                        "expects_arg": parsed.get("expects_arg", False),
-                        "argument": parsed.get("argument"),
+                        "has_argument": parsed.get("has_argument", False),
+                        "positional": parsed.get("positional"),
                         "description": description,
                         "flag_text": clean_roff(tag_line),
                     }
@@ -882,7 +882,7 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                 if (
                     not parsed.get("short")
                     and not parsed.get("long")
-                    and not parsed.get("argument")
+                    and not parsed.get("positional")
                 ):
                     i += 1
                     continue
@@ -918,8 +918,8 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                         {
                             "short": parsed.get("short", []),
                             "long": parsed.get("long", []),
-                            "expects_arg": parsed.get("expects_arg", False),
-                            "argument": parsed.get("argument"),
+                            "has_argument": parsed.get("has_argument", False),
+                            "positional": parsed.get("positional"),
                             "description": description,
                             "flag_text": clean_roff(flag_line),
                         }
@@ -961,8 +961,8 @@ def _parse_man_options(lines: list, scan_all_sections: bool = False) -> list:
                         {
                             "short": parsed.get("short", []),
                             "long": parsed.get("long", []),
-                            "expects_arg": parsed.get("expects_arg", False),
-                            "argument": parsed.get("argument"),
+                            "has_argument": parsed.get("has_argument", False),
+                            "positional": parsed.get("positional"),
                             "description": description,
                             "flag_text": clean_roff(flag_line),
                         }
@@ -1036,7 +1036,7 @@ def _parse_mdoc_it_line(line: str) -> dict:
 
     short = []
     long = []
-    expects_arg = False
+    has_argument = False
     argument = None
 
     # Tokenize the mdoc line
@@ -1083,7 +1083,7 @@ def _parse_mdoc_it_line(line: str) -> dict:
                 arg_parts.append(tokens[i])
                 i += 1
             if arg_parts:
-                expects_arg = True
+                has_argument = True
                 argument = " ".join(arg_parts)
             continue  # Don't increment i again
         elif tok in (",", "Ns", "|", "Cm"):
@@ -1104,8 +1104,8 @@ def _parse_mdoc_it_line(line: str) -> dict:
     return {
         "short": short,
         "long": long,
-        "expects_arg": expects_arg,
-        "argument": argument,
+        "has_argument": has_argument,
+        "positional": argument,
     }
 
 
@@ -1287,8 +1287,8 @@ def _parse_mdoc_options(lines: list) -> list:
                     {
                         "short": parsed.get("short", []),
                         "long": parsed.get("long", []),
-                        "expects_arg": parsed.get("expects_arg", False),
-                        "argument": parsed.get("argument"),
+                        "has_argument": parsed.get("has_argument", False),
+                        "positional": parsed.get("positional"),
                         "description": description,
                         "flag_text": _clean_mdoc_it_text(stripped),
                     }

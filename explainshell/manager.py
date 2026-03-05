@@ -38,17 +38,17 @@ _MP_FIELDS = (
     "synopsis",
     "aliases",
     "nested_cmd",
-    "multi_cmd",
+    "has_subcommands",
     "dashless_opts",
     "extractor",
     "extraction_meta",
 )
 
 # Per-option fields to compare in diff mode.
-_OPT_FIELDS = ("expects_arg", "argument", "nested_cmd", "text")
+_OPT_FIELDS = ("has_argument", "positional", "nested_cmd", "text")
 
 # Fields where None and False should be treated as equivalent.
-_FALSY_EQUIVALENT = {"nested_cmd", "argument"}
+_FALSY_EQUIVALENT = {"nested_cmd", "positional"}
 
 # ANSI color helpers.
 _RED = "\033[31m"
@@ -97,14 +97,14 @@ def _option_key(opt):
     if opt.short or opt.long:
         return (tuple(sorted(opt.short)), tuple(sorted(opt.long)))
     # Positional argument – match by argument name.
-    return ("positional", opt.argument)
+    return ("positional", opt.positional)
 
 
 def _fmt_flags(opt):
     """Human-readable flag label like [-a, --all]."""
     parts = list(opt.short) + list(opt.long)
     if not parts:
-        return f"(positional: {opt.argument})"
+        return f"(positional: {opt.positional})"
     return "[" + ", ".join(parts) + "]"
 
 
@@ -154,9 +154,9 @@ def _option_detail_lines(opt, prefix="", color=""):
     lines = []
     lines.append(f"{color}{prefix}    short: {opt.short}")
     lines.append(f"{prefix}    long: {opt.long}")
-    lines.append(f"{prefix}    expects_arg: {opt.expects_arg}")
-    if opt.argument:
-        lines.append(f"{prefix}    argument: {opt.argument}")
+    lines.append(f"{prefix}    has_argument: {opt.has_argument}")
+    if opt.positional:
+        lines.append(f"{prefix}    positional: {opt.positional}")
     if opt.nested_cmd:
         lines.append(f"{prefix}    nested_cmd: {opt.nested_cmd}")
     desc = opt.text.strip()
@@ -565,7 +565,7 @@ def _process_one_file(
             out(f"  synopsis: {mp.synopsis}")
             out(f"  aliases: {mp.aliases}")
             out(f"  nested_cmd: {mp.nested_cmd}")
-            out(f"  multi_cmd: {mp.multi_cmd}")
+            out(f"  has_subcommands: {mp.has_subcommands}")
             out(f"  dashless_opts: {mp.dashless_opts}")
             out(f"  extractor: {mp.extractor}")
             out(f"  extraction_meta: {mp.extraction_meta}")
@@ -576,9 +576,9 @@ def _process_one_file(
                 out(f"  [{i}]")
                 out(f"      short: {opt.short}")
                 out(f"      long: {opt.long}")
-                out(f"      expects_arg: {opt.expects_arg}")
-                if opt.argument:
-                    out(f"      argument: {opt.argument}")
+                out(f"      has_argument: {opt.has_argument}")
+                if opt.positional:
+                    out(f"      positional: {opt.positional}")
                 if opt.nested_cmd:
                     out(f"      nested_cmd: {opt.nested_cmd}")
                 desc = opt.text.strip()
@@ -909,7 +909,7 @@ def main(args):
 
     # update multi-cmd mappings (only when writing to DB)
     if s and added > 0 and not args.dry_run and not args.diff:
-        s.update_multi_cmd_mappings()
+        s.update_subcommand_mappings()
 
     elapsed = time.monotonic() - t0
     dry_run_note = " (dry run)" if args.dry_run else ""

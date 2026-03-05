@@ -705,13 +705,13 @@ def _merge_short_long_pairs(entries: list[dict]) -> list[dict]:
                 # Merge: take short from first, long+desc from second
                 m = dict(nxt)
                 m["short"] = e["short"]
-                if e.get("argument") and not m.get("argument"):
-                    m["argument"] = e["argument"]
-                    m["expects_arg"] = True
+                if e.get("positional") and not m.get("positional"):
+                    m["positional"] = e["positional"]
+                    m["has_argument"] = True
                 # Rebuild flag_text
                 flag = ", ".join(e["short"] + m["long"])
-                if m.get("argument"):
-                    flag += " " + m["argument"]
+                if m.get("positional"):
+                    flag += " " + m["positional"]
                 m["flag_text"] = flag
                 merged.append(m)
                 i += 2
@@ -948,7 +948,7 @@ def _extract_it_entry(node: Node) -> dict | None:
     # Build flag info from semantic mdoc elements in the head
     short = []
     long = []
-    expects_arg = False
+    has_argument = False
     argument = None
     flag_parts = []
 
@@ -967,7 +967,7 @@ def _extract_it_entry(node: Node) -> dict | None:
             # Argument element
             arg_val = child.get_text().strip()
             if arg_val:
-                expects_arg = True
+                has_argument = True
                 if not argument:
                     argument = arg_val
                 flag_parts.append(arg_val)
@@ -1006,8 +1006,8 @@ def _extract_it_entry(node: Node) -> dict | None:
             if parsed.get("short") or parsed.get("long"):
                 short = parsed.get("short", [])
                 long = parsed.get("long", [])
-                expects_arg = parsed.get("expects_arg", False)
-                argument = parsed.get("argument")
+                has_argument = parsed.get("has_argument", False)
+                argument = parsed.get("positional")
                 flag_parts = [clean_roff(raw)]
 
     if not short and not long and not flag_parts:
@@ -1022,8 +1022,8 @@ def _extract_it_entry(node: Node) -> dict | None:
     return {
         "short": short,
         "long": long,
-        "expects_arg": expects_arg,
-        "argument": argument,
+        "has_argument": has_argument,
+        "positional": argument,
         "flag_text": clean_roff(flag_text),
         "description": description,
     }
@@ -1128,8 +1128,8 @@ def parse_options(gz_path: str) -> ExtractionResult:
     for entry in raw:
         short = entry.get("short", [])
         long = entry.get("long", [])
-        expects_arg = entry.get("expects_arg", False)
-        argument = entry.get("argument") or None
+        has_argument = entry.get("has_argument", False)
+        argument = entry.get("positional") or None
         description = entry.get("description", "")
 
         if not short and not long and not argument:
@@ -1156,8 +1156,8 @@ def parse_options(gz_path: str) -> ExtractionResult:
                 text=text,
                 short=short,
                 long=long,
-                expects_arg=expects_arg,
-                argument=argument,
+                has_argument=has_argument,
+                positional=argument,
                 nested_cmd=False,
             )
         )

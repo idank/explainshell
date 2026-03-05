@@ -313,29 +313,29 @@ class TestLlmOptionToStoreOption(unittest.TestCase):
         raw = {
             "short": ["-A"],
             "long": ["--catenate"],
-            "expects_arg": False,
+            "has_argument": False,
             "lines": [10, 13],
         }
         opt = _llm_option_to_store_option(raw, self.orig)
         self.assertIsInstance(opt, store.Option)
         self.assertEqual(opt.short, ["-A"])
         self.assertEqual(opt.long, ["--catenate"])
-        self.assertFalse(opt.expects_arg)
+        self.assertFalse(opt.has_argument)
         self.assertIn("**-A**, **--catenate**", opt.text)
         self.assertIn("Append files to an archive.", opt.text)
 
     def test_missing_lines_raises(self):
-        raw = {"short": ["-v"], "long": [], "expects_arg": False}
+        raw = {"short": ["-v"], "long": [], "has_argument": False}
         with self.assertRaises(ValueError):
             _llm_option_to_store_option(raw, self.orig)
 
     def test_invalid_lines_raises(self):
-        raw = {"short": ["-v"], "long": [], "expects_arg": False, "lines": [10]}
+        raw = {"short": ["-v"], "long": [], "has_argument": False, "lines": [10]}
         with self.assertRaises(ValueError):
             _llm_option_to_store_option(raw, self.orig)
 
     def test_bad_short_type_raises(self):
-        raw = {"short": "-v", "long": [], "expects_arg": False, "lines": [10, 13]}
+        raw = {"short": "-v", "long": [], "has_argument": False, "lines": [10, 13]}
         with self.assertRaises(ValueError):
             _llm_option_to_store_option(raw, self.orig)
 
@@ -343,24 +343,24 @@ class TestLlmOptionToStoreOption(unittest.TestCase):
         raw = {
             "short": [],
             "long": ["--exec"],
-            "expects_arg": False,
+            "has_argument": False,
             "nested_cmd": True,
             "lines": [10, 13],
         }
         opt = _llm_option_to_store_option(raw, self.orig)
         self.assertTrue(opt.nested_cmd)
-        self.assertTrue(opt.expects_arg)
+        self.assertTrue(opt.has_argument)
 
     def test_positional_arg(self):
         raw = {
             "short": [],
             "long": [],
-            "expects_arg": False,
-            "argument": "FILE",
+            "has_argument": False,
+            "positional": "FILE",
             "lines": [10, 13],
         }
         opt = _llm_option_to_store_option(raw, self.orig)
-        self.assertEqual(opt.argument, "FILE")
+        self.assertEqual(opt.positional, "FILE")
 
 
 # ---------------------------------------------------------------------------
@@ -387,7 +387,7 @@ class TestSanitizeOption(unittest.TestCase):
         )
         self.assertEqual(arg, "FILE")
 
-    def test_nested_cmd_forces_expects_arg(self):
+    def test_nested_cmd_forces_has_argument(self):
         short, long, ea, arg, nc = _sanitize_option(
             ["-exec"], [], False, None, True
         )
@@ -399,13 +399,13 @@ class TestSanitizeOption(unittest.TestCase):
         raw = {
             "short": ["-D"],
             "long": [],
-            "expects_arg": True,
-            "argument": "debugopts",
+            "has_argument": True,
+            "positional": "debugopts",
             "nested_cmd": False,
             "lines": [10, 11],
         }
         opt = _llm_option_to_store_option(raw, orig)
-        self.assertIsNone(opt.argument)
+        self.assertIsNone(opt.positional)
         self.assertEqual(opt.short, ["-D"])
 
 
@@ -482,8 +482,8 @@ class TestExtractIntegration(unittest.TestCase):
             {
                 "dashless_opts": False,
                 "options": [
-                    {"short": ["-n"], "long": [], "expects_arg": False, "lines": [1, 3]},
-                    {"short": ["-e"], "long": [], "expects_arg": False, "lines": [5, 7]},
+                    {"short": ["-n"], "long": [], "has_argument": False, "lines": [1, 3]},
+                    {"short": ["-e"], "long": [], "has_argument": False, "lines": [5, 7]},
                 ],
             },
             [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
@@ -509,7 +509,7 @@ class TestExtractIntegration(unittest.TestCase):
             {
                 "options": [
                     {"short": "not-a-list", "long": [], "lines": [1, 3]},
-                    {"short": ["-v"], "long": [], "expects_arg": False, "lines": [1, 3]},
+                    {"short": ["-v"], "long": [], "has_argument": False, "lines": [1, 3]},
                 ],
             },
             [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
@@ -527,11 +527,11 @@ class TestExtractIntegration(unittest.TestCase):
 
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
         mock_text.return_value = "**-v**\n\nVerbose."
-        raw_response = '{"options": [{"short": ["-v"], "long": [], "expects_arg": false, "lines": [1, 3]}]}'
+        raw_response = '{"options": [{"short": ["-v"], "long": [], "has_argument": false, "lines": [1, 3]}]}'
         mock_llm.return_value = (
             {
                 "options": [
-                    {"short": ["-v"], "long": [], "expects_arg": False, "lines": [1, 3]},
+                    {"short": ["-v"], "long": [], "has_argument": False, "lines": [1, 3]},
                 ]
             },
             [{"role": "system", "content": "sys"}, {"role": "user", "content": "usr"}],

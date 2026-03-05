@@ -128,11 +128,11 @@ class TestXargs(unittest.TestCase):
         found = [o for o in self.options if "-n" in o.short or "--max-args" in o.long]
         self.assertTrue(found, "Expected -n/--max-args flag")
 
-    def test_arg_file_expects_arg(self):
+    def test_arg_file_has_argument(self):
         found = [o for o in self.options if "-a" in o.short or "--arg-file" in o.long]
         self.assertTrue(found, "Expected -a/--arg-file flag")
         if found:
-            self.assertTrue(found[0].expects_arg)
+            self.assertTrue(found[0].has_argument)
 
 
 class TestBsdtar(unittest.TestCase):
@@ -155,7 +155,7 @@ class TestBsdtar(unittest.TestCase):
         found = [o for o in self.options if "-f" in o.short]
         self.assertTrue(found, "Expected -f flag")
         if found:
-            self.assertTrue(found[0].expects_arg)
+            self.assertTrue(found[0].has_argument)
 
     def test_has_verbose_flag(self):
         found = [o for o in self.options if "-v" in o.short]
