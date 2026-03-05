@@ -79,7 +79,7 @@ class Option(BaseModel):
     text: str
     short: list[str] = []
     long: list[str] = []
-    expects_arg: bool | str | list[str] = False
+    expects_arg: bool | list[str] = False
     argument: str | bool | None = None
     nested_cmd: bool | list[str] = False
     meta: dict | None = None
