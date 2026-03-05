@@ -1,15 +1,15 @@
-FROM python:3.12
+FROM python:3.12-slim
 
-RUN apt update \
-  && apt install man-db mandoc -y \
-  && apt clean
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends wget \
+  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/webapp
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir --no-warn-script-location -r requirements.txt
+
 COPY . .
 
-RUN pip3 install --no-cache-dir --no-warn-script-location --upgrade pip setuptools wheel virtualenv \
-  && pip3 install --no-cache-dir --no-warn-script-location -r requirements.txt
+EXPOSE 8080
 
-EXPOSE 5000
-
-CMD ["python3", "runserver.py"]
+CMD ["./start.sh"]

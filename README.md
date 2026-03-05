@@ -40,38 +40,47 @@ possible to directly add a missing man page to the live site (it might be in the
 
 ## Running explainshell locally
 
-Setup a working environment that lets you run the web interface locally using docker:
-
-```ShellSession
-
-# download db dump
-$ curl -L -o /tmp/dump.gz https://github.com/idank/explainshell/releases/download/db-dump/dump.gz
-
-# Clone Repository
+```bash
+# Clone repository
 $ git clone https://github.com/idank/explainshell.git
+$ cd explainshell
 
-# start containers, load man pages from dump
-$ docker-compose build
-$ docker-compose up
+# Set up Python virtualenv
+$ python3 -m venv .venv
+$ source .venv/bin/activate
+$ pip install -r requirements.txt
 
-$ docker-compose exec -T db mongorestore --archive --gzip < /tmp/dump.gz
-
-# run tests
-$ docker-compose exec -T web make tests
-..SSSSSSSSS.....................................................................
-----------------------------------------------------------------------
-Ran 80 tests in 0.041s
-
-OK (SKIP=9)
-# open http://localhost:5001 to view the ui
+# Run the web server (requires explainshell.db in the repo root)
+$ make serve
+# open http://localhost:5000
 ```
 
 ### Processing a man page
 
 Use the manager to parse and save a gzipped man page in raw format:
 
-```ShellSession
+```bash
 $ python -m explainshell.manager --mode source /usr/share/man/man1/echo.1.gz
 ```
 
-Note that if you've setup using the docker instructions above, echo will already be in the database.
+### Deployment
+
+The app is deployed to [Fly.io](https://fly.io) with two machines for availability. The SQLite database is stored on persistent Fly volumes mounted at `/data`.
+
+**Deploy code changes:**
+
+```bash
+$ fly deploy
+```
+
+**Update the database:**
+
+```bash
+# Upload to each machine
+$ fly machines list
+$ fly ssh sftp shell -s <machine-id>
+# put explainshell.db /data/explainshell.db
+
+# Restart to pick up the new DB
+$ fly machines restart <machine-id>
+```
