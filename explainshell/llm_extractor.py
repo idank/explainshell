@@ -427,23 +427,58 @@ def _dedup_ref_options(raw_options):
     return _dedup_options(raw_options)
 
 
-def extract(gz_path, model, debug_dir=None, **litellm_kwargs):
-    """LLM extraction pipeline: mandoc → numbered markdown → LLM → ParsedManpage."""
-    synopsis, aliases = manpage.get_synopsis_and_aliases(gz_path)
+def prepare_extraction(gz_path):
+    """Pre-process a manpage without calling LLM.
 
+    Returns dict with synopsis, aliases, chunks, original_lines, basename,
+    numbered_text, and n_chunks.
+    """
+    synopsis, aliases = manpage.get_synopsis_and_aliases(gz_path)
     plain_text = get_manpage_text(gz_path)
     numbered_text, original_lines = _number_lines(plain_text)
     chunks = chunk_text(numbered_text)
-
     basename = os.path.splitext(os.path.splitext(os.path.basename(gz_path))[0])[0]
-    n_chunks = len(chunks)
-    logger.info("%s: %d chars, %d chunk(s)", basename, len(plain_text), n_chunks)
 
-    def _progress(msg):
-        ts = time.strftime("[%H:%M:%S]")
-        print(f"{ts} {basename}: {msg}")
-    if n_chunks > 1:
-        _progress(f"{len(numbered_text)} chars, {n_chunks} chunks")
+    return {
+        "synopsis": synopsis,
+        "aliases": aliases,
+        "chunks": chunks,
+        "original_lines": original_lines,
+        "basename": basename,
+        "numbered_text": numbered_text,
+        "n_chunks": len(chunks),
+        "plain_text_len": len(plain_text),
+    }
+
+
+def build_user_content(chunk, chunk_info):
+    """Build the user prompt string for a single chunk."""
+    return (
+        f"Extract all command-line options from this man page{chunk_info}.\n"
+        f"Return line numbers from the left margin for each option's range.\n\n{chunk}"
+    )
+
+
+def process_llm_result(content):
+    """Parse and validate a raw LLM response string.
+
+    Returns (data_dict, raw_content).
+    """
+    data = _parse_json_response(content)
+    _validate_llm_response(data)
+    return data, content
+
+
+def finalize_extraction(gz_path, prepared, all_chunk_data, debug_dir=None, debug_messages=None):
+    """Assemble a ParsedManpage from prepared data + list of (chunk_data, messages, raw_response) per chunk.
+
+    all_chunk_data: list of (data_dict, messages, raw_response) tuples, one per chunk.
+    debug_messages: ignored (kept for API compatibility).
+    """
+    basename = prepared["basename"]
+    original_lines = prepared["original_lines"]
+    n_chunks = prepared["n_chunks"]
+    numbered_text = prepared["numbered_text"]
 
     if debug_dir:
         os.makedirs(debug_dir, exist_ok=True)
@@ -452,27 +487,7 @@ def extract(gz_path, model, debug_dir=None, **litellm_kwargs):
 
     all_raw = []
     dashless_opts = False
-    for i, chunk in enumerate(chunks):
-        chunk_info = f" (part {i + 1} of {n_chunks})" if n_chunks > 1 else ""
-        chunk_label = f"chunk {i + 1}/{n_chunks}" if n_chunks > 1 else "single chunk"
-        logger.info(
-            "%s: calling LLM (%s, %d chars)...", basename, chunk_label, len(chunk)
-        )
-        _progress(f"calling LLM ({chunk_label}, {len(chunk)} chars)...")
-        t0 = time.monotonic()
-        chunk_data, messages, raw_response = _call_llm(
-            chunk, chunk_info, model, litellm_kwargs
-        )
-        elapsed = time.monotonic() - t0
-        n_opts = len(chunk_data["options"])
-        logger.info(
-            "%s: LLM returned %d option(s) for %s in %.1fs",
-            basename,
-            n_opts,
-            chunk_label,
-            elapsed,
-        )
-        _progress(f"LLM returned {n_opts} option(s) for {chunk_label} in {elapsed:.1f}s")
+    for i, (chunk_data, messages, raw_response) in enumerate(all_chunk_data):
         all_raw.extend(chunk_data["options"])
         if chunk_data.get("dashless_opts"):
             dashless_opts = True
@@ -503,8 +518,138 @@ def extract(gz_path, model, debug_dir=None, **litellm_kwargs):
     return store.ParsedManpage(
         source=config.source_from_path(gz_path),
         name=manpage.extract_name(gz_path),
-        synopsis=synopsis,
+        synopsis=prepared["synopsis"],
         options=options,
-        aliases=aliases,
+        aliases=prepared["aliases"],
         dashless_opts=dashless_opts,
     )
+
+
+def extract(gz_path, model, debug_dir=None, **litellm_kwargs):
+    """LLM extraction pipeline: mandoc → numbered markdown → LLM → ParsedManpage."""
+    prepared = prepare_extraction(gz_path)
+    basename = prepared["basename"]
+    chunks = prepared["chunks"]
+    n_chunks = prepared["n_chunks"]
+
+    logger.info("%s: %d chars, %d chunk(s)", basename, prepared["plain_text_len"], n_chunks)
+
+    def _progress(msg):
+        ts = time.strftime("[%H:%M:%S]")
+        print(f"{ts} {basename}: {msg}")
+    if n_chunks > 1:
+        _progress(f"{len(prepared['numbered_text'])} chars, {n_chunks} chunks")
+
+    all_chunk_data = []
+    for i, chunk in enumerate(chunks):
+        chunk_info = f" (part {i + 1} of {n_chunks})" if n_chunks > 1 else ""
+        chunk_label = f"chunk {i + 1}/{n_chunks}" if n_chunks > 1 else "single chunk"
+        logger.info(
+            "%s: calling LLM (%s, %d chars)...", basename, chunk_label, len(chunk)
+        )
+        _progress(f"calling LLM ({chunk_label}, {len(chunk)} chars)...")
+        t0 = time.monotonic()
+        chunk_data, messages, raw_response = _call_llm(
+            chunk, chunk_info, model, litellm_kwargs
+        )
+        elapsed = time.monotonic() - t0
+        n_opts = len(chunk_data["options"])
+        logger.info(
+            "%s: LLM returned %d option(s) for %s in %.1fs",
+            basename,
+            n_opts,
+            chunk_label,
+            elapsed,
+        )
+        _progress(f"LLM returned {n_opts} option(s) for {chunk_label} in {elapsed:.1f}s")
+        all_chunk_data.append((chunk_data, messages, raw_response))
+
+    return finalize_extraction(gz_path, prepared, all_chunk_data, debug_dir=debug_dir)
+
+
+def submit_batch(requests, model):
+    """Submit a list of (key, user_content) pairs as a Gemini batch job.
+
+    Uses inline requests (suitable for batches < 20MB).
+    Returns the batch job object.
+    """
+    client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+    gemini_model = model.removeprefix("gemini/")
+
+    inline_requests = []
+    for key, user_content in requests:
+        inline_requests.append(
+            types.InlinedRequest(
+                contents=user_content,
+                metadata={"key": key},
+                config=types.GenerateContentConfig(
+                    system_instruction=_SYSTEM_PROMPT,
+                    response_mime_type="application/json",
+                ),
+            )
+        )
+
+    job = client.batches.create(
+        model=gemini_model,
+        src=inline_requests,
+        config=types.CreateBatchJobConfig(display_name="explainshell-batch"),
+    )
+    return job
+
+
+def poll_batch(client, job_name, poll_interval=30):
+    """Poll a batch job until it reaches a terminal state.
+
+    Returns the completed job object.
+    Raises ExtractionError on failure/cancellation/expiry.
+    """
+    consecutive_errors = 0
+    max_consecutive_errors = 5
+    while True:
+        try:
+            job = client.batches.get(name=job_name)
+            consecutive_errors = 0
+        except Exception as e:
+            consecutive_errors += 1
+            ts = time.strftime("[%H:%M:%S]")
+            print(f"{ts} batch {job_name}: poll error ({consecutive_errors}/{max_consecutive_errors}): {e}")
+            if consecutive_errors >= max_consecutive_errors:
+                raise ExtractionError(
+                    f"Batch poll failed after {max_consecutive_errors} consecutive errors: {e}"
+                ) from e
+            time.sleep(poll_interval)
+            continue
+
+        state = job.state.name if hasattr(job.state, "name") else str(job.state)
+        logger.info("batch %s state: %s", job_name, state)
+
+        if state in ("JOB_STATE_SUCCEEDED", "SUCCEEDED"):
+            return job
+        if state in ("JOB_STATE_FAILED", "FAILED"):
+            raise ExtractionError(f"Batch job failed: {job_name}")
+        if state in ("JOB_STATE_CANCELLED", "CANCELLED"):
+            raise ExtractionError(f"Batch job cancelled: {job_name}")
+        if state in ("JOB_STATE_EXPIRED", "EXPIRED"):
+            raise ExtractionError(f"Batch job expired: {job_name}")
+
+        ts = time.strftime("[%H:%M:%S]")
+        print(f"{ts} batch {job_name}: state={state}, polling again in {poll_interval}s...")
+        time.sleep(poll_interval)
+
+
+def collect_batch_results(job):
+    """Extract results from a completed batch job.
+
+    Returns dict mapping request key → response text.
+    """
+    results = {}
+    if not job.dest or not job.dest.inlined_responses:
+        return results
+    for resp in job.dest.inlined_responses:
+        key = (resp.metadata or {}).get("key", "")
+        if resp.response and resp.response.candidates:
+            text = resp.response.candidates[0].content.parts[0].text
+            results[key] = text
+        else:
+            logger.warning("batch response for key %s has no content", key)
+    return results
