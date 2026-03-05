@@ -200,10 +200,10 @@ def _handle_explain_program(section, program, url_distro, url_release):
         program = f"{program}.{section}"
 
     try:
-        mp, suggestions, raw_mp = explain_program(
+        mp, suggestions, raw_mp, debug_info = explain_program(
             program, app.store, distro=distro, release=release
         )
-        return render_template("options.html", mp=mp, suggestions=suggestions, raw_mp=raw_mp)
+        return render_template("options.html", mp=mp, suggestions=suggestions, raw_mp=raw_mp, debug_info=debug_info)
     except errors.ProgramDoesNotExist as e:
         return render_template(
             "errors/missingmanpage.html", title="missing man page", e=e
@@ -248,6 +248,19 @@ def explain_program(program, store, distro=None, release=None):
         "url": url,
     }
 
+    debug_info = {}
+    if config.DEBUG:
+        for i, o in enumerate(raw_mp.options):
+            debug_info[f"option-{i}"] = {
+                "kind": "option",
+                "short": o.short,
+                "long": o.long,
+                "expects_arg": o.expects_arg,
+                "argument": o.argument,
+                "nested_cmd": o.nested_cmd,
+                "meta": o.meta,
+            }
+
     suggestions = []
     for other_mp in mps:
         d = {
@@ -256,7 +269,7 @@ def explain_program(program, store, distro=None, release=None):
         }
         suggestions.append(d)
     logger.info("suggestions: %s", suggestions)
-    return mp, suggestions, raw_mp
+    return mp, suggestions, raw_mp, debug_info
 
 
 def _make_match(start, end, match, cmd_class, help_class):
