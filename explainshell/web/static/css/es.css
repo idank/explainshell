@@ -161,6 +161,18 @@ a {
     line-height: inherit;
 }
 
+.help-box h1,
+.help-box h2,
+.help-box h3,
+.help-box h4,
+.help-box h5,
+.help-box h6 {
+    font-size: 15px;
+    line-height: inherit;
+    margin: 10px 0 5px;
+    font-weight: bold;
+}
+
 .help-synopsis {
     background-color: #f5f5f5;
 }
