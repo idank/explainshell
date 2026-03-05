@@ -85,14 +85,14 @@ class TestCheck:
         errors_list = [msg for sev, msg in issues if sev == "error"]
         assert any("shadowed duplicate" in msg for msg in errors_list)
 
-    def test_argument_on_flagged_option(self, store, db_path):
-        """Options with short/long flags should not have argument set."""
+    def test_positional_on_flagged_option(self, store, db_path):
+        """Options with short/long flags should not have positional set."""
         opts = json.dumps([{
             "text": "-D debugopts desc",
             "short": ["-D"],
             "long": [],
-            "expects_arg": True,
-            "argument": "debugopts",
+            "has_argument": True,
+            "positional": "debugopts",
             "nested_cmd": False,
         }])
         store._conn.execute(
@@ -103,16 +103,16 @@ class TestCheck:
         store._conn.commit()
         issues = db_check(db_path)
         warnings = [msg for sev, msg in issues if sev == "warning"]
-        assert any("argument on flagged option" in msg for msg in warnings)
+        assert any("positional on flagged option" in msg for msg in warnings)
 
-    def test_argument_on_positional_ok(self, store, db_path):
-        """Positional operands (no flags) with argument set should not warn."""
+    def test_positional_on_positional_ok(self, store, db_path):
+        """Positional operands (no flags) with positional set should not warn."""
         opts = json.dumps([{
             "text": "FILE desc",
             "short": [],
             "long": [],
-            "expects_arg": False,
-            "argument": "FILE",
+            "has_argument": False,
+            "positional": "FILE",
             "nested_cmd": False,
         }])
         store._conn.execute(

@@ -7,14 +7,14 @@ class MockStore:
         sm = store.ParsedManpage
 
         opts = [
-            so(text="-a desc", short=["-a"], long=["--a"], expects_arg=False),
-            so(text="-b <arg> desc", short=["-b"], long=["--b"], expects_arg=True),
-            so(text="-? help text", short=["-?"], long=[], expects_arg=False),
+            so(text="-a desc", short=["-a"], long=["--a"], has_argument=False),
+            so(text="-b <arg> desc", short=["-b"], long=["--b"], has_argument=True),
+            so(text="-? help text", short=["-?"], long=[], has_argument=False),
             so(
                 text="-c=one,two\ndesc",
                 short=["-c"],
                 long=[],
-                expects_arg=["one", "two"],
+                has_argument=["one", "two"],
             ),
         ]
         self.manpages = {
@@ -23,7 +23,7 @@ class MockStore:
                 name="bar",
                 synopsis="bar synopsis",
                 options=opts,
-                multi_cmd=True,
+                has_subcommands=True,
             ),
             "baz": sm(
                 source="ubuntu/25.10/1/baz.1.gz",
@@ -68,8 +68,8 @@ class MockStore:
                 text="FILE argument",
                 short=[],
                 long=[],
-                expects_arg=False,
-                argument="FILE",
+                has_argument=False,
+                positional="FILE",
             )
         )
         opts.append(
@@ -77,7 +77,7 @@ class MockStore:
                 text="-exec nest",
                 short=["-exec"],
                 long=[],
-                expects_arg=True,
+                has_argument=True,
                 nested_cmd=["EOF", ";"],
             )
         )

@@ -33,7 +33,7 @@ class TestExtract(unittest.TestCase):
                 text="Do not output trailing newline.",
                 short=["-n"],
                 long=[],
-                expects_arg=False,
+                has_argument=False,
             ),
         ]
         mock_roff.return_value = fake_opts

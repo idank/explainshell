@@ -50,8 +50,8 @@ def _option_debug(option):
         "kind": "option",
         "short": option.short,
         "long": option.long,
-        "expects_arg": option.expects_arg,
-        "argument": option.argument,
+        "has_argument": option.has_argument,
+        "positional": option.positional,
         "nested_cmd": option.nested_cmd,
     }
 
@@ -354,12 +354,12 @@ class Matcher(bashlex.ast.nodevisitor):
         manpage = mps[0]
         idx_next_word_node = bashlex.ast.findfirstkind(parts, "word")
 
-        # check the next word for a possible multi_cmd if:
+        # check the next word for a possible subcommand if:
         # - the matched manpage says so
         # - we have another word node
         # - the word node has no expansions in it
         if (
-            manpage.multi_cmd
+            manpage.has_subcommands
             and idx_next_word_node != -1
             and not parts[idx_next_word_node].parts
         ):
@@ -367,7 +367,7 @@ class Matcher(bashlex.ast.nodevisitor):
             try:
                 multi = f"{word_node.word} {next_word_node.word}"
                 logger.info(
-                    f"{manpage} is a multi_cmd, trying to get another token and look up {multi}"
+                    f"{manpage} has subcommands, trying to get another token and look up {multi}"
                 )
                 mps = self.find_man_pages(multi)
                 manpage = mps[0]
@@ -376,7 +376,7 @@ class Matcher(bashlex.ast.nodevisitor):
                 parts.pop(idx_next_word_node)
                 endpos = next_word_node.pos[1]
             except errors.ProgramDoesNotExist:
-                logger.info("no manpage %r for multi_cmd %r", multi, manpage)
+                logger.info("no manpage %r for subcommand of %r", multi, manpage)
 
         # create a new MatchGroup for the current command
         mg = MatchGroup(self._generate_cmd_group_name())
@@ -445,7 +445,7 @@ class Matcher(bashlex.ast.nodevisitor):
                 op = t if t[0] == "-" else "-" + t
                 option = self.find_option(op)
                 if option:
-                    if consider_arg and not m and option.expects_arg:
+                    if consider_arg and not m and option.has_argument:
                         logger.info(
                             "option %r expected an arg, taking the rest too", option
                         )
@@ -461,7 +461,7 @@ class Matcher(bashlex.ast.nodevisitor):
                 # match the current token, take the rest as its argument, this
                 # covers a series of short options where the last one has an argument
                 # with no space between it, such as 'xargs -r0n1'
-                elif consider_arg and prev_option and prev_option.expects_arg:
+                elif consider_arg and prev_option and prev_option.has_argument:
                     pmr = m[-1]
                     mr = MatchResult(
                         pmr.start, pmr.end + (len(tokens) - i), pmr.text, None, pmr.debug_info
@@ -524,12 +524,12 @@ class Matcher(bashlex.ast.nodevisitor):
                         self.matches.append(
                             self.unknown(word, node.pos[0], node.pos[1])
                         )
-                elif self._prev_option and self._prev_option.expects_arg:
+                elif self._prev_option and self._prev_option.has_argument:
                     logger.info(
                         "previous option possibly expected an arg, and we can't"
                         " find an option to match the current token, assuming it's an arg"
                     )
-                    ea = self._prev_option.expects_arg
+                    ea = self._prev_option.has_argument
                     possible_args = ea if isinstance(ea, list) else []
                     take = True
                     if possible_args and word not in possible_args:
@@ -571,7 +571,7 @@ class Matcher(bashlex.ast.nodevisitor):
                             self.matches.extend(m)
                             return
 
-                    if self.man_page.arguments:
+                    if self.man_page.positionals:
                         if self.man_page.nested_cmd:
                             logger.info("manpage %r can nest commands", self.man_page)
                             if self.startcommand(
@@ -580,7 +580,7 @@ class Matcher(bashlex.ast.nodevisitor):
                                 self._current_option = None
                                 return
 
-                        d = self.man_page.arguments
+                        d = self.man_page.positionals
                         k = list(d.keys())[0]
                         logger.info("got arguments, using %r", k)
                         text = d[k]

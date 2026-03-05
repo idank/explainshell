@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS manpage (
     paragraphs    TEXT    NOT NULL DEFAULT '[]',
     aliases       TEXT    NOT NULL DEFAULT '[]',
     dashless_opts INTEGER NOT NULL DEFAULT 0,
-    multi_cmd     INTEGER NOT NULL DEFAULT 0,
+    has_subcommands INTEGER NOT NULL DEFAULT 0,
     updated       INTEGER NOT NULL DEFAULT 0,
     nested_cmd    TEXT    NOT NULL DEFAULT 'false'
 );
@@ -115,7 +115,7 @@ def migrate(manpage_file, mapping_file, db_path):
         dashless_opts = _coerce_bool(
             doc.get("partial_match", doc.get("partialmatch")), False
         )
-        multi_cmd = _coerce_bool(doc.get("multi_cmd", doc.get("multicommand")), False)
+        has_subcommands = _coerce_bool(doc.get("multi_cmd", doc.get("multicommand")), False)
         nested_cmd = doc.get("nested_cmd", doc.get("nestedcmd", False))
         nested_cmd_json = json.dumps(nested_cmd)
 
@@ -123,7 +123,7 @@ def migrate(manpage_file, mapping_file, db_path):
             cur = conn.execute(
                 """INSERT INTO manpage
                        (source, name, synopsis, paragraphs, aliases,
-                        dashless_opts, multi_cmd, updated, nested_cmd)
+                        dashless_opts, has_subcommands, updated, nested_cmd)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     doc["source"],
@@ -132,7 +132,7 @@ def migrate(manpage_file, mapping_file, db_path):
                     json.dumps(paragraphs),
                     aliases_json,
                     int(dashless_opts),
-                    int(multi_cmd),
+                    int(has_subcommands),
                     int(_coerce_bool(doc.get("updated"), False)),
                     nested_cmd_json,
                 ),

@@ -41,15 +41,15 @@ Rules:
    flag/usage line and end is the line number of the last line of its description.
    Use the line numbers shown in the left margin. Include ALL description lines — do not
    stop early.
-3. Set "expects_arg":
+3. Set "has_argument":
    - false  → option takes no argument (e.g. -v, --verbose)
    - true   → option requires an argument (e.g. -f FILE, --file=FILE)
    - a list of strings → fixed set of values (e.g. --color=always|never|auto → ["always","never","auto"])
-4. If the option is a positional argument (not preceded by - or --), set "argument" to its
+4. If the option is a positional argument (not preceded by - or --), set "positional" to its
    name (e.g. "FILE"). Leave "short" and "long" as [].
-   IMPORTANT: NEVER set "argument" on options that have "short" or "long" flags.
-   For example, "-D debugopts" should have "argument": null (not "debugopts") because
-   it has short=["-D"]. The "argument" field is ONLY for standalone positional operands.
+   IMPORTANT: NEVER set "positional" on options that have "short" or "long" flags.
+   For example, "-D debugopts" should have "positional": null (not "debugopts") because
+   it has short=["-D"]. The "positional" field is ONLY for standalone positional operands.
 5. Set "nested_cmd" to true only when the argument is itself a shell command
    (e.g. find -exec CMD ;).
 6. Do not invent options. Only include options explicitly documented in the text.
@@ -65,8 +65,8 @@ JSON schema:
     {
       "short": ["-f"],
       "long": ["--file"],
-      "expects_arg": false,
-      "argument": null,
+      "has_argument": false,
+      "positional": null,
       "nested_cmd": false,
       "lines": [111, 115]
     }
@@ -214,21 +214,21 @@ def _dedup_options(raw_options: list) -> list:
     return [opt for _, opt in all_entries]
 
 
-def _sanitize_option(short, long, expects_arg, argument, nested_cmd):
+def _sanitize_option(short, long, has_argument, positional, nested_cmd):
     """Fix common LLM mistakes in option fields.
 
-    Returns (short, long, expects_arg, argument, nested_cmd).
+    Returns (short, long, has_argument, positional, nested_cmd).
     """
-    # argument is only for positional operands (no flags)
-    if argument and (short or long):
-        logger.debug("clearing argument=%r on flagged option %s/%s", argument, short, long)
-        argument = None
+    # positional is only for positional operands (no flags)
+    if positional and (short or long):
+        logger.debug("clearing positional=%r on flagged option %s/%s", positional, short, long)
+        positional = None
 
-    # nested_cmd requires expects_arg
-    if nested_cmd and not expects_arg:
-        expects_arg = True
+    # nested_cmd requires has_argument
+    if nested_cmd and not has_argument:
+        has_argument = True
 
-    return short, long, expects_arg, argument, nested_cmd
+    return short, long, has_argument, positional, nested_cmd
 
 
 def _number_lines(text):
@@ -383,8 +383,8 @@ def _llm_option_to_store_option(raw, original_lines):
     """
     short = raw.get("short") or []
     long = raw.get("long") or []
-    expects_arg = raw.get("expects_arg", False)
-    argument = raw.get("argument") or None
+    has_argument = raw.get("has_argument", False)
+    positional = raw.get("positional") or None
     nested_cmd = bool(raw.get("nested_cmd", False))
 
     if not isinstance(short, list):
@@ -398,16 +398,16 @@ def _llm_option_to_store_option(raw, original_lines):
     start, end = int(lines[0]), int(lines[1])
     text = _extract_text_from_lines(original_lines, start, end)
 
-    short, long, expects_arg, argument, nested_cmd = _sanitize_option(
-        short, long, expects_arg, argument, nested_cmd
+    short, long, has_argument, positional, nested_cmd = _sanitize_option(
+        short, long, has_argument, positional, nested_cmd
     )
 
     return store.Option(
         text=text,
         short=short,
         long=long,
-        expects_arg=expects_arg,
-        argument=argument,
+        has_argument=has_argument,
+        positional=positional,
         nested_cmd=nested_cmd,
         meta={"lines": [start, end]},
     )

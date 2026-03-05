@@ -255,8 +255,8 @@ def explain_program(program, store, distro=None, release=None):
                 "kind": "option",
                 "short": o.short,
                 "long": o.long,
-                "expects_arg": o.expects_arg,
-                "argument": o.argument,
+                "has_argument": o.has_argument,
+                "positional": o.positional,
                 "nested_cmd": o.nested_cmd,
                 "meta": o.meta,
             }

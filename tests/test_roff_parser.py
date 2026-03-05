@@ -306,7 +306,7 @@ class TestParseFlagText(unittest.TestCase):
         result = _parse_flag_text("-n")
         self.assertEqual(result["short"], ["-n"])
         self.assertEqual(result["long"], [])
-        self.assertFalse(result["expects_arg"])
+        self.assertFalse(result["has_argument"])
 
     def test_simple_long(self):
         result = _parse_flag_text("--verbose")
@@ -321,20 +321,20 @@ class TestParseFlagText(unittest.TestCase):
     def test_flag_with_arg(self):
         result = _parse_flag_text("-f FILE")
         self.assertEqual(result["short"], ["-f"])
-        self.assertTrue(result["expects_arg"])
-        self.assertEqual(result["argument"], "FILE")
+        self.assertTrue(result["has_argument"])
+        self.assertEqual(result["positional"], "FILE")
 
     def test_long_with_equals_arg(self):
         result = _parse_flag_text("--file=FILE")
         self.assertEqual(result["long"], ["--file"])
-        self.assertTrue(result["expects_arg"])
-        self.assertEqual(result["argument"], "FILE")
+        self.assertTrue(result["has_argument"])
+        self.assertEqual(result["positional"], "FILE")
 
     def test_combined_short_long_with_arg(self):
         result = _parse_flag_text("-f, --file=FILE")
         self.assertEqual(result["short"], ["-f"])
         self.assertEqual(result["long"], ["--file"])
-        self.assertTrue(result["expects_arg"])
+        self.assertTrue(result["has_argument"])
 
     def test_roff_bold_flag(self):
         result = _parse_flag_text(r"\fB-n\fR")
@@ -347,24 +347,24 @@ class TestParseFlagText(unittest.TestCase):
     def test_optional_arg_brackets(self):
         result = _parse_flag_text("--exec-path[=<path>]")
         self.assertEqual(result["long"], ["--exec-path"])
-        self.assertTrue(result["expects_arg"])
-        self.assertEqual(result["argument"], "<path>")
+        self.assertTrue(result["has_argument"])
+        self.assertEqual(result["positional"], "<path>")
 
     def test_flag_with_angle_arg(self):
         result = _parse_flag_text("-c <name>=<value>")
         self.assertEqual(result["short"], ["-c"])
-        self.assertTrue(result["expects_arg"])
-        self.assertEqual(result["argument"], "<name>=<value>")
+        self.assertTrue(result["has_argument"])
+        self.assertEqual(result["positional"], "<name>=<value>")
 
     def test_bi_macro_flag(self):
         result = _parse_flag_text('.BI "--file=" FILE')
         self.assertEqual(result["long"], ["--file"])
-        self.assertTrue(result["expects_arg"])
+        self.assertTrue(result["has_argument"])
 
     def test_bi_macro_short(self):
         result = _parse_flag_text('.BI "-a " file')
         self.assertEqual(result["short"], ["-a"])
-        self.assertTrue(result["expects_arg"])
+        self.assertTrue(result["has_argument"])
 
     def test_b_macro(self):
         result = _parse_flag_text(r".B \-\-null")
@@ -384,21 +384,21 @@ class TestParseFlagText(unittest.TestCase):
         result = _parse_flag_text(r"-s <strategy>, --strategy=<strategy>")
         self.assertEqual(result["short"], ["-s"])
         self.assertEqual(result["long"], ["--strategy"])
-        self.assertTrue(result["expects_arg"])
+        self.assertTrue(result["has_argument"])
 
     def test_short_flag_with_glued_angle_arg(self):
         """Single-char flag with angle-bracket arg glued on: -C<n>"""
         result = _parse_flag_text("-C<n>")
         self.assertEqual(result["short"], ["-C"])
-        self.assertTrue(result["expects_arg"])
-        self.assertEqual(result["argument"], "<n>")
+        self.assertTrue(result["has_argument"])
+        self.assertEqual(result["positional"], "<n>")
 
     def test_multichar_flag_with_glued_angle_arg(self):
         """Multi-char flag with angle-bracket arg glued on: -lf<logfile>"""
         result = _parse_flag_text("-lf<logfile>")
         self.assertEqual(result["short"], ["-lf"])
-        self.assertTrue(result["expects_arg"])
-        self.assertEqual(result["argument"], "<logfile>")
+        self.assertTrue(result["has_argument"])
+        self.assertEqual(result["positional"], "<logfile>")
 
 
 # ---------------------------------------------------------------------------
@@ -492,10 +492,10 @@ class TestParseTar(unittest.TestCase):
         shorts = {f for o in self.opts for f in o.short}
         self.assertIn("-f", shorts)
 
-    def test_file_expects_arg(self):
+    def test_file_has_argument(self):
         for opt in self.opts:
             if "-f" in opt.short or "--file" in opt.long:
-                self.assertTrue(opt.expects_arg)
+                self.assertTrue(opt.has_argument)
                 break
         else:
             self.fail("-f/--file option not found")
@@ -531,22 +531,22 @@ class TestParseGit(unittest.TestCase):
         shorts = {f for o in self.opts for f in o.short}
         self.assertIn("-c", shorts)
 
-    def test_c_expects_arg(self):
+    def test_c_has_argument(self):
         for opt in self.opts:
             if "-c" in opt.short:
-                self.assertTrue(opt.expects_arg)
+                self.assertTrue(opt.has_argument)
                 break
 
-    def test_exec_path_expects_arg(self):
+    def test_exec_path_has_argument(self):
         for opt in self.opts:
             if "--exec-path" in opt.long:
-                self.assertTrue(opt.expects_arg)
+                self.assertTrue(opt.has_argument)
                 break
 
     def test_bare_no_arg(self):
         for opt in self.opts:
             if "--bare" in opt.long:
-                self.assertFalse(opt.expects_arg)
+                self.assertFalse(opt.has_argument)
                 break
 
 
@@ -579,16 +579,16 @@ class TestParseFind(unittest.TestCase):
         shorts = {f for o in self.opts for f in o.short}
         self.assertIn("-exec", shorts)
 
-    def test_name_expects_arg(self):
+    def test_name_has_argument(self):
         for opt in self.opts:
             if "-name" in opt.short:
-                self.assertTrue(opt.expects_arg)
+                self.assertTrue(opt.has_argument)
                 break
 
-    def test_D_expects_arg(self):
+    def test_D_has_argument(self):
         for opt in self.opts:
             if "-D" in opt.short:
-                self.assertTrue(opt.expects_arg)
+                self.assertTrue(opt.has_argument)
                 break
 
     def test_nested_ip_not_top_level(self):
@@ -621,10 +621,10 @@ class TestParseBsdtar(unittest.TestCase):
         shorts = {f for o in self.opts for f in o.short}
         self.assertIn("-f", shorts)
 
-    def test_file_expects_arg(self):
+    def test_file_has_argument(self):
         for opt in self.opts:
             if "-f" in opt.short:
-                self.assertTrue(opt.expects_arg)
+                self.assertTrue(opt.has_argument)
                 break
 
 
@@ -650,16 +650,16 @@ class TestParseXargs(unittest.TestCase):
         longs = {f for o in self.opts for f in o.long}
         self.assertIn("--arg-file", longs)
 
-    def test_arg_file_expects_arg(self):
+    def test_arg_file_has_argument(self):
         for opt in self.opts:
             if "--arg-file" in opt.long:
-                self.assertTrue(opt.expects_arg)
+                self.assertTrue(opt.has_argument)
                 break
 
-    def test_max_args_expects_arg(self):
+    def test_max_args_has_argument(self):
         for opt in self.opts:
             if "--max-args" in opt.long or "-n" in opt.short:
-                self.assertTrue(opt.expects_arg)
+                self.assertTrue(opt.has_argument)
                 break
 
 
@@ -688,10 +688,10 @@ class TestParseGitRebase(unittest.TestCase):
         longs = {f for o in self.opts for f in o.long}
         self.assertIn("--strategy", longs)
 
-    def test_strategy_expects_arg(self):
+    def test_strategy_has_argument(self):
         for opt in self.opts:
             if "--strategy" in opt.long:
-                self.assertTrue(opt.expects_arg)
+                self.assertTrue(opt.has_argument)
                 break
 
     def test_merge_has_paragraph_breaks(self):
@@ -874,10 +874,10 @@ class TestParseSu(unittest.TestCase):
         longs = {f for o in self.opts for f in o.long}
         self.assertIn("--login", longs)
 
-    def test_command_expects_arg(self):
+    def test_command_has_argument(self):
         for opt in self.opts:
             if "--command" in opt.long:
-                self.assertTrue(opt.expects_arg)
+                self.assertTrue(opt.has_argument)
                 break
         else:
             self.fail("--command not found")

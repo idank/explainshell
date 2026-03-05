@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS manpage (
     options       TEXT    NOT NULL DEFAULT '[]',  -- JSON list of option dicts
     aliases       TEXT    NOT NULL DEFAULT '[]',  -- JSON list of [alias, score] pairs
     dashless_opts INTEGER NOT NULL DEFAULT 0,      -- allow matching options without leading '-'
-    multi_cmd     INTEGER NOT NULL DEFAULT 0,     -- command has sub-commands; matcher looks ahead for "git commit" -> git-commit manpage
+    has_subcommands INTEGER NOT NULL DEFAULT 0,   -- command has sub-commands; matcher looks ahead for "git commit" -> git-commit manpage
     updated       INTEGER NOT NULL DEFAULT 0,     -- manually edited, skip during bulk imports
     nested_cmd    TEXT    NOT NULL DEFAULT 'false', -- positional args start a nested command (e.g. sudo, xargs)
     extractor     TEXT,                            -- extractor mode: "source", "mandoc", "llm"
@@ -71,16 +71,16 @@ class Option(BaseModel):
 
     short - a list of short options (-a, -b, ..)
     long - a list of long options (--a, --b)
-    expects_arg - specifies if one of the short/long options expects an additional argument
-    argument - specifies if to consider this as positional arguments
+    has_argument - specifies if one of the short/long options expects an additional argument
+    positional - specifies if to consider this as positional arguments
     nested_cmd - specifies if the arguments to this option can start a nested command
     """
 
     text: str
     short: list[str] = []
     long: list[str] = []
-    expects_arg: bool | list[str] = False
-    argument: str | bool | None = None
+    has_argument: bool | list[str] = False
+    positional: str | bool | None = None
     nested_cmd: bool | list[str] = False
     meta: dict | None = None
 
@@ -104,7 +104,7 @@ class ParsedManpage(BaseModel):
     options - a list of options extracted from this man page
     aliases - a list of aliases found for this man page
     dashless_opts - allow interpreting options without a leading '-'
-    multi_cmd - command has sub-commands; when set, the matcher looks ahead for
+    has_subcommands - command has sub-commands; when set, the matcher looks ahead for
         e.g. "git commit" and resolves it to the git-commit manpage
     updated - whether this man page was manually updated
     nested_cmd - specifies if positional arguments to this program can start a nested command,
@@ -117,7 +117,7 @@ class ParsedManpage(BaseModel):
     options: list[Option] = []
     aliases: list[tuple[str, int]] = []
     dashless_opts: bool = False
-    multi_cmd: bool = False
+    has_subcommands: bool = False
     updated: bool = False
     nested_cmd: bool | str = False
     extractor: str | None = None
@@ -134,12 +134,12 @@ class ParsedManpage(BaseModel):
         return section
 
     @property
-    def arguments(self):
-        # go over all options and look for those with the same 'argument' field
+    def positionals(self):
+        # go over all options and look for those with the same 'positional' field
         groups = collections.OrderedDict()
         for opt in self.options:
-            if opt.argument:
-                groups.setdefault(opt.argument, []).append(opt)
+            if opt.positional:
+                groups.setdefault(opt.positional, []).append(opt)
 
         # merge all the options under the same argument to a single string
         for k, ln in groups.items():
@@ -165,7 +165,7 @@ class ParsedManpage(BaseModel):
             "options": json.dumps([o.model_dump() for o in self.options]),
             "aliases": json.dumps(self.aliases),
             "dashless_opts": int(bool(self.dashless_opts)),
-            "multi_cmd": int(bool(self.multi_cmd)),
+            "has_subcommands": int(bool(self.has_subcommands)),
             "updated": int(bool(self.updated)),
             "nested_cmd": json.dumps(self.nested_cmd),
             "extractor": self.extractor,
@@ -183,7 +183,7 @@ class ParsedManpage(BaseModel):
             synopsis = help_constants.NO_SYNOPSIS
 
         dashless_opts = bool(d["dashless_opts"])
-        multi_cmd = bool(d["multi_cmd"])
+        has_subcommands = bool(d["has_subcommands"])
         nested_cmd = json.loads(d["nested_cmd"])
 
         extraction_meta_raw = d["extraction_meta"]
@@ -196,7 +196,7 @@ class ParsedManpage(BaseModel):
             options=options,
             aliases=[tuple(x) for x in json.loads(d["aliases"])],
             dashless_opts=dashless_opts,
-            multi_cmd=multi_cmd,
+            has_subcommands=has_subcommands,
             updated=bool(d["updated"]),
             nested_cmd=nested_cmd,
             extractor=d["extractor"],
@@ -454,10 +454,10 @@ class Store:
         d = m.to_store()
         cursor = self._conn.execute(
             """INSERT INTO manpage(source, name, synopsis, options, aliases,
-                                   dashless_opts, multi_cmd, updated, nested_cmd,
+                                   dashless_opts, has_subcommands, updated, nested_cmd,
                                    extractor, extraction_meta)
                VALUES (:source, :name, :synopsis, :options, :aliases,
-                       :dashless_opts, :multi_cmd, :updated, :nested_cmd,
+                       :dashless_opts, :has_subcommands, :updated, :nested_cmd,
                        :extractor, :extraction_meta)""",
             d,
         )
@@ -490,7 +490,7 @@ class Store:
             """UPDATE manpage
                SET name=:name, synopsis=:synopsis, options=:options,
                    aliases=:aliases, dashless_opts=:dashless_opts,
-                   multi_cmd=:multi_cmd, updated=:updated, nested_cmd=:nested_cmd,
+                   has_subcommands=:has_subcommands, updated=:updated, nested_cmd=:nested_cmd,
                    extractor=:extractor, extraction_meta=:extraction_meta
                WHERE source=:source""",
             d,
@@ -562,19 +562,19 @@ class Store:
         for row in self._conn.execute("SELECT src, id FROM mapping"):
             yield row["src"], row["id"]
 
-    def set_multi_cmd(self, manpage_id):
+    def set_has_subcommands(self, manpage_id):
         self._conn.execute(
-            "UPDATE manpage SET multi_cmd = 1 WHERE id = ?", (manpage_id,)
+            "UPDATE manpage SET has_subcommands = 1 WHERE id = ?", (manpage_id,)
         )
         self._conn.commit()
 
-    def update_multi_cmd_mappings(self):
+    def update_subcommand_mappings(self):
         """Discover sub-command relationships and create mappings.
 
         For every man page whose name contains a hyphen (e.g. ``git-commit``),
         check whether the prefix (``git``) also exists as a man page.  If so,
         add a mapping ``git commit`` -> ``git-commit`` and mark the parent as
-        ``multi_cmd``.
+        ``has_subcommands``.
         """
         manpages = {}
         potential = []
@@ -586,7 +586,7 @@ class Store:
 
         existing_mappings = {src for src, _ in self.mappings()}
         mappings_to_add = []
-        multi_cmds = {}
+        parents = {}
 
         for parts, _id in potential:
             joined = " ".join(parts)
@@ -594,14 +594,14 @@ class Store:
                 continue
             if parts[0] in manpages:
                 mappings_to_add.append((joined, _id))
-                multi_cmds[parts[0]] = manpages[parts[0]]
+                parents[parts[0]] = manpages[parts[0]]
 
         for src, dst in mappings_to_add:
             self.add_mapping(src, dst, 1)
-            logger.info("inserting mapping (multi_cmd) %s -> %s", src, dst)
+            logger.info("inserting mapping (subcommand) %s -> %s", src, dst)
 
-        for name, _id in multi_cmds.items():
-            self.set_multi_cmd(_id)
-            logger.info("making %r a multi_cmd", name)
+        for name, _id in parents.items():
+            self.set_has_subcommands(_id)
+            logger.info("marking %r as has_subcommands", name)
 
-        return mappings_to_add, multi_cmds
+        return mappings_to_add, parents
