@@ -8,7 +8,7 @@ class MockStore:
 
         opts = [
             so(text="-a desc", short=["-a"], long=["--a"], expects_arg=False),
-            so(text="-b <arg> desc", short=["-b"], long=["--b"], expects_arg="<arg>"),
+            so(text="-b <arg> desc", short=["-b"], long=["--b"], expects_arg=True),
             so(text="-? help text", short=["-?"], long=[], expects_arg=False),
             so(
                 text="-c=one,two\ndesc",
