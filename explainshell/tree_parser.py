@@ -32,6 +32,7 @@ class ExtractionResult:
     """Result of tree-based option extraction with diagnostic metadata."""
 
     options: list = field(default_factory=list)  # list[store.Option]
+    tree_text: str = ""
     mandoc_stderr: str = ""
     option_sections_found: int = 0  # sections matching _is_option_section()
     option_sections_empty: int = 0  # matched sections that yielded 0 options
@@ -1047,6 +1048,7 @@ def parse_options(gz_path: str) -> ExtractionResult:
         logger.warning("mandoc -T tree failed for %s: %s", gz_path, e)
         return result
 
+    result.tree_text = tree_text
     result.mandoc_stderr = stderr
 
     root = parse_tree(tree_text)

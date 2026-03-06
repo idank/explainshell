@@ -4,10 +4,12 @@ Mandoc-based man page option extractor.
 Uses mandoc -T tree parsing to extract options from man pages.
 
 Public API:
-    extract(gz_path) -> store.ParsedManpage
+    extract(gz_path) -> (store.ParsedManpage, store.RawManpage)
     build_manpage(gz_path, options) -> store.ParsedManpage
 """
 
+import datetime
+import hashlib
 import logging
 import os
 
@@ -34,12 +36,22 @@ def build_manpage(gz_path: str, options: list) -> store.ParsedManpage:
     )
 
 
-def extract(gz_path: str) -> store.ParsedManpage:
+def _gz_sha256(gz_path):
+    h = hashlib.sha256()
+    with open(gz_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def extract(gz_path: str) -> tuple[store.ParsedManpage, store.RawManpage]:
     """Extract options using the mandoc -T tree parser.
 
     Raises errors.ExtractionError if the tree parser finds no options.
     Raises errors.LowConfidenceError if the result has low confidence
     (the partial manpage is attached to the exception).
+
+    Returns (ParsedManpage, RawManpage).
     """
     result = tree_parser.parse_options(gz_path)
     if not result.options:
@@ -56,4 +68,11 @@ def extract(gz_path: str) -> store.ParsedManpage:
     if not confidence.confident:
         raise errors.LowConfidenceError(str(confidence), manpage=mp)
 
-    return mp
+    raw = store.RawManpage(
+        source_text=result.tree_text,
+        generated_at=datetime.datetime.now(datetime.timezone.utc),
+        generator="mandoc -T tree",
+        source_gz_sha256=_gz_sha256(gz_path),
+    )
+
+    return mp, raw

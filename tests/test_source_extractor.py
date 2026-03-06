@@ -1,5 +1,6 @@
 """Tests for explainshell.source_extractor."""
 
+import io
 import os
 import unittest
 from unittest.mock import patch
@@ -26,7 +27,9 @@ class TestExtract(unittest.TestCase):
     @patch("explainshell.source_extractor.manpage.get_synopsis_and_aliases")
     @patch("explainshell.source_extractor.roff_parser.parse_options")
     @patch("explainshell.source_extractor.detect_dashless_opts")
-    def test_returns_manpage(self, mock_detect, mock_roff, mock_synopsis):
+    @patch("explainshell.source_extractor.gzip.open")
+    @patch("explainshell.source_extractor._gz_sha256", return_value="abc123")
+    def test_returns_manpage(self, mock_sha, mock_gzip, mock_detect, mock_roff, mock_synopsis):
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
         fake_opts = [
             store.Option(
@@ -38,11 +41,13 @@ class TestExtract(unittest.TestCase):
         ]
         mock_roff.return_value = fake_opts
         mock_detect.return_value = False
+        mock_gzip.return_value.__enter__ = lambda s: io.StringIO(".TH DUMMY 1\nfake roff")
+        mock_gzip.return_value.__exit__ = lambda s, *a: None
 
         gz_path = os.path.join(
             config.MANPAGES_DIR, "ubuntu", "25.10", "1", "dummy.1.gz"
         )
-        mp = extract(gz_path)
+        mp, raw = extract(gz_path)
 
         self.assertIsInstance(mp, store.ParsedManpage)
         self.assertEqual(mp.source, "ubuntu/25.10/1/dummy.1.gz")
@@ -80,7 +85,7 @@ class TestDetectDashlessOpts(unittest.TestCase):
 
     def test_extract_sets_dashless_opts_for_tar(self):
         """extract() wires detect_dashless_opts into the result."""
-        mp = extract(_gz("tar.1.gz"))
+        mp, raw = extract(_gz("tar.1.gz"))
         self.assertTrue(mp.dashless_opts)
 
 
@@ -107,7 +112,7 @@ class TestDetectNestedCmd(unittest.TestCase):
 
     def test_extract_sets_nested_cmd(self):
         """extract() wires detect_nested_cmd into the result."""
-        mp = extract(_gz("watch.1.gz"))
+        mp, raw = extract(_gz("watch.1.gz"))
         self.assertTrue(mp.nested_cmd)
 
 

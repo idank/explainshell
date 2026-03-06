@@ -63,7 +63,8 @@ _RESET = "\033[0m"
 class _FileResult:
     outcome: str  # "added", "skipped", "failed"
     output_lines: list  # collected print output
-    mp: object = None  # ParsedManpage for deferred DB write
+    mp: store.ParsedManpage | None = None
+    raw: store.RawManpage | None = None
 
 
 def _ts():
@@ -373,41 +374,41 @@ def _parse_mode(raw):
 
 
 def _run_extractor(mode, gz_path, model=None, debug_dir=None):
-    """Run a single extractor by mode name and return a ParsedManpage."""
+    """Run a single extractor by mode name and return (ParsedManpage, RawManpage)."""
     if mode == "source":
-        mp = source_extractor.extract(gz_path)
+        mp, raw = source_extractor.extract(gz_path)
         mp.extractor = "source"
         mp.extraction_meta = {}
-        return mp
+        return mp, raw
     if mode == "mandoc":
-        mp = mandoc_extractor.extract(gz_path)
+        mp, raw = mandoc_extractor.extract(gz_path)
         mp.extractor = "mandoc"
         mp.extraction_meta = {}
-        return mp
+        return mp, raw
     if mode == "llm":
-        mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
+        mp, raw = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
         if mp is None:
-            return None
+            return None, None
         mp.extractor = "llm"
         mp.extraction_meta = {"model": model}
-        return mp
+        return mp, raw
     if mode == "hybrid":
         try:
-            mp = mandoc_extractor.extract(gz_path)
+            mp, raw = mandoc_extractor.extract(gz_path)
             mp.extractor = "mandoc"
             mp.extraction_meta = {}
-            return mp
+            return mp, raw
         except errors.LowConfidenceError as e:
-            mp = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
+            mp, raw = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
             if mp is None:
-                return None
+                return None, None
             mp.extractor = "llm"
             mp.extraction_meta = {
                 "model": model,
                 "fallback": True,
                 "fallback_reason": str(e)[:256],
             }
-            return mp
+            return mp, raw
     raise ValueError(f"unknown extractor mode: {mode!r}")
 
 
@@ -457,7 +458,7 @@ def _process_one_file(
 
         out(f"{_ts()} {progress} [{short_path}] running {left_mode} extractor...")
         try:
-            left_mp = _run_extractor(
+            left_mp, _left_raw = _run_extractor(
                 left_mode, gz_path, model=left_model, debug_dir=_debug_dir
             )
         except errors.ExtractionError as e:
@@ -477,7 +478,7 @@ def _process_one_file(
             f"{_ts()} {progress} [{short_path}] running {right_label} extractor..."
         )
         try:
-            right_mp = _run_extractor(
+            right_mp, _right_raw = _run_extractor(
                 right_mode, gz_path, model=right_model, debug_dir=_debug_dir
             )
         except errors.ExtractionError as e:
@@ -497,21 +498,22 @@ def _process_one_file(
         return result
 
     file_t0 = time.monotonic()
+    raw = None
     try:
         if mode == "source":
             out(f"{_ts()} {progress} [{short_path}] extracting (source)...")
-            mp = source_extractor.extract(gz_path)
+            mp, raw = source_extractor.extract(gz_path)
             mp.extractor = "source"
             mp.extraction_meta = {}
         elif mode == "mandoc":
             out(f"{_ts()} {progress} [{short_path}] extracting (mandoc)...")
-            mp = mandoc_extractor.extract(gz_path)
+            mp, raw = mandoc_extractor.extract(gz_path)
             mp.extractor = "mandoc"
             mp.extraction_meta = {}
         elif mode == "hybrid":
             out(f"{_ts()} {progress} [{short_path}] extracting (hybrid)...")
             try:
-                mp = mandoc_extractor.extract(gz_path)
+                mp, raw = mandoc_extractor.extract(gz_path)
                 mp.extractor = "mandoc"
                 mp.extraction_meta = {}
             except errors.LowConfidenceError as e:
@@ -522,7 +524,7 @@ def _process_one_file(
                     f"{_ts()} {progress} [{short_path}] tree parser {e}, falling back to LLM ({model})..."
                 )
                 _debug_dir = debug_dir if dry_run else None
-                mp = llm_extractor.extract(gz_path, model, debug_dir=_debug_dir)
+                mp, raw = llm_extractor.extract(gz_path, model, debug_dir=_debug_dir)
                 if mp is None:
                     result.outcome = "skipped"
                     return result
@@ -535,7 +537,7 @@ def _process_one_file(
         else:
             out(f"{_ts()} {progress} [{short_path}] extracting ({model})...")
             _debug_dir = debug_dir if dry_run else None
-            mp = llm_extractor.extract(gz_path, model, debug_dir=_debug_dir)
+            mp, raw = llm_extractor.extract(gz_path, model, debug_dir=_debug_dir)
             if mp is None:
                 result.outcome = "skipped"
                 return result
@@ -554,6 +556,7 @@ def _process_one_file(
             result.output_lines.extend(_diff_manpage(stored_mp, mp))
         elif s:
             result.mp = mp
+            result.raw = raw
             out(
                 f"{_ts()} {progress} [{short_path}] done: {len(mp.options)} option(s) in {file_elapsed}"
             )
@@ -692,7 +695,7 @@ def main(args):
         for line in result.output_lines:
             print(line)
         if result.mp and s:
-            s.add_manpage(result.mp)
+            s.add_manpage(result.mp, result.raw)
         if result.outcome == "added":
             return 1, 0
         if result.outcome == "failed":
@@ -823,12 +826,13 @@ def main(args):
                     continue
 
                 try:
-                    mp = llm_extractor.finalize_extraction(gz_path, prepared, all_chunk_data, debug_dir=_debug_dir)
+                    mp, raw = llm_extractor.finalize_extraction(gz_path, prepared, all_chunk_data, debug_dir=_debug_dir)
                     mp.extractor = "llm"
                     mp.extraction_meta = {"model": model}
 
                     result = _FileResult(outcome="added", output_lines=[])
                     result.mp = mp
+                    result.raw = raw
                     result.output_lines.append(
                         f"{_ts()} [{short_path}] done: {len(mp.options)} option(s)"
                     )

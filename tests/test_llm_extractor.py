@@ -474,7 +474,8 @@ class TestExtractIntegration(unittest.TestCase):
     @patch("explainshell.llm_extractor._call_llm")
     @patch("explainshell.llm_extractor.get_manpage_text")
     @patch("explainshell.llm_extractor.manpage.get_synopsis_and_aliases")
-    def test_extract_returns_manpage(self, mock_synopsis, mock_text, mock_llm):
+    @patch("explainshell.llm_extractor._gz_sha256", return_value="abc123")
+    def test_extract_returns_manpage(self, mock_sha, mock_synopsis, mock_text, mock_llm):
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
         mock_text.return_value = "**-n**\n\nDo not output trailing newline.\n\n**-e**\n\nEnable escapes."
         # Lines: 1=**-n**, 2="", 3=Do not..., 4="", 5=**-e**, 6="", 7=Enable...
@@ -489,8 +490,9 @@ class TestExtractIntegration(unittest.TestCase):
             [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
             '{"options": []}',
         )
-        mp = extract("dummy.1.gz", "test-model")
+        mp, raw = extract("dummy.1.gz", "test-model")
         self.assertIsInstance(mp, store.ParsedManpage)
+        self.assertIsInstance(raw, store.RawManpage)
         self.assertEqual(len(mp.options), 2)
         flags = [opt.short[0] for opt in mp.options]
         self.assertIn("-n", flags)
@@ -498,11 +500,15 @@ class TestExtractIntegration(unittest.TestCase):
         # Verify text comes from source, not LLM
         n_opt = next(o for o in mp.options if "-n" in o.short)
         self.assertIn("Do not output trailing newline.", n_opt.text)
+        # Verify RawManpage
+        self.assertEqual(raw.generator, "mandoc -T markdown")
+        self.assertIn("-n", raw.source_text)
 
     @patch("explainshell.llm_extractor._call_llm")
     @patch("explainshell.llm_extractor.get_manpage_text")
     @patch("explainshell.llm_extractor.manpage.get_synopsis_and_aliases")
-    def test_malformed_options_skipped(self, mock_synopsis, mock_text, mock_llm):
+    @patch("explainshell.llm_extractor._gz_sha256", return_value="abc123")
+    def test_malformed_options_skipped(self, mock_sha, mock_synopsis, mock_text, mock_llm):
         mock_synopsis.return_value = (None, [("dummy", 10)])
         mock_text.return_value = "**-v**\n\nVerbose."
         mock_llm.return_value = (
@@ -515,14 +521,15 @@ class TestExtractIntegration(unittest.TestCase):
             [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
             '{"options": []}',
         )
-        mp = extract("dummy.1.gz", "test-model")
+        mp, raw = extract("dummy.1.gz", "test-model")
         self.assertEqual(len(mp.options), 1)
         self.assertEqual(mp.options[0].short, ["-v"])
 
     @patch("explainshell.llm_extractor._call_llm")
     @patch("explainshell.llm_extractor.get_manpage_text")
     @patch("explainshell.llm_extractor.manpage.get_synopsis_and_aliases")
-    def test_debug_dir_writes_files(self, mock_synopsis, mock_text, mock_llm):
+    @patch("explainshell.llm_extractor._gz_sha256", return_value="abc123")
+    def test_debug_dir_writes_files(self, mock_sha, mock_synopsis, mock_text, mock_llm):
         import tempfile
 
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
@@ -538,7 +545,7 @@ class TestExtractIntegration(unittest.TestCase):
             raw_response,
         )
         with tempfile.TemporaryDirectory() as tmpdir:
-            mp = extract("dummy.1.gz", "test-model", debug_dir=tmpdir)
+            mp, raw = extract("dummy.1.gz", "test-model", debug_dir=tmpdir)
             self.assertEqual(len(mp.options), 1)
             # Check markdown file
             md_path = os.path.join(tmpdir, "dummy.md")
@@ -592,7 +599,8 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_collect.return_value = ["/fake/echo.1.gz"]
         fake_mp = MagicMock()
         fake_mp.options = [MagicMock(), MagicMock()]
-        mock_extract.return_value = fake_mp
+        fake_raw = MagicMock()
+        mock_extract.return_value = (fake_mp, fake_raw)
 
         from explainshell.manager import main
 
@@ -615,7 +623,8 @@ class TestLlmManagerDryRun(unittest.TestCase):
         fake_mp = MagicMock()
         fake_mp.options = [MagicMock()]
         fake_mp.source = "echo.1.gz"
-        mock_extract.return_value = fake_mp
+        fake_raw = MagicMock()
+        mock_extract.return_value = (fake_mp, fake_raw)
 
         mock_store = MagicMock()
         mock_store_cls.return_value = mock_store
@@ -630,7 +639,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
         main(args)
 
         mock_extract.assert_called_once()
-        mock_store.add_manpage.assert_called_once_with(fake_mp)
+        mock_store.add_manpage.assert_called_once_with(fake_mp, fake_raw)
 
 
 # ---------------------------------------------------------------------------
@@ -682,7 +691,7 @@ class TestRealLlm(unittest.TestCase):
 
     def test_echo_manpage(self):
         model = os.environ.get("LLM_MODEL", _DEFAULT_LLM_MODEL)
-        mp = extract(self.ECHO_GZ, model)
+        mp, raw = extract(self.ECHO_GZ, model)
         flags = set()
         for opt in mp.options:
             flags.update(opt.short)
