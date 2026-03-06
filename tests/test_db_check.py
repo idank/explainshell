@@ -63,7 +63,7 @@ class TestCheck:
         store._conn.execute("PRAGMA foreign_keys = OFF")
         store._conn.execute(
             "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)",
-            ("ghost", 99999, 10),
+            ("ghost", "ubuntu/25.10/1/ghost.1.gz", 10),
         )
         store._conn.commit()
         store._conn.execute("PRAGMA foreign_keys = ON")
