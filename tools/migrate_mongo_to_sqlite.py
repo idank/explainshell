@@ -20,8 +20,7 @@ logger = logging.getLogger(__name__)
 
 _CREATE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS parsed_manpages (
-    id            INTEGER PRIMARY KEY,
-    source        TEXT    NOT NULL UNIQUE,
+    source        TEXT    PRIMARY KEY,
     name          TEXT    NOT NULL,
     synopsis      TEXT,
     paragraphs    TEXT    NOT NULL DEFAULT '[]',
@@ -35,7 +34,7 @@ CREATE TABLE IF NOT EXISTS parsed_manpages (
 CREATE TABLE IF NOT EXISTS mappings (
     id    INTEGER PRIMARY KEY,
     src   TEXT    NOT NULL,
-    dst   INTEGER NOT NULL REFERENCES parsed_manpages(id) ON DELETE CASCADE,
+    dst   TEXT    NOT NULL REFERENCES parsed_manpages(source) ON DELETE CASCADE,
     score INTEGER NOT NULL
 );
 
@@ -90,7 +89,7 @@ def migrate(manpage_file, mapping_file, db_path):
     # 1. manpages                                                          #
     # ------------------------------------------------------------------ #
     logger.info("Migrating manpages from %s …", manpage_file)
-    oid_to_id = {}  # mongo ObjectId string -> new sqlite rowid
+    oid_to_source = {}  # mongo ObjectId string -> source path
 
     with open(manpage_file) as fh:
         lines = fh.readlines()
@@ -120,7 +119,7 @@ def migrate(manpage_file, mapping_file, db_path):
         nested_cmd_json = json.dumps(nested_cmd)
 
         try:
-            cur = conn.execute(
+            conn.execute(
                 """INSERT INTO parsed_manpages
                        (source, name, synopsis, paragraphs, aliases,
                         dashless_opts, has_subcommands, updated, nested_cmd)
@@ -137,7 +136,7 @@ def migrate(manpage_file, mapping_file, db_path):
                     nested_cmd_json,
                 ),
             )
-            oid_to_id[oid] = cur.lastrowid
+            oid_to_source[oid] = doc["source"]
             inserted += 1
         except sqlite3.IntegrityError:
             # duplicate source — skip
@@ -160,7 +159,7 @@ def migrate(manpage_file, mapping_file, db_path):
             continue
         doc = json.loads(line)
         dst_oid = _oid(doc["dst"])
-        new_dst = oid_to_id.get(dst_oid)
+        new_dst = oid_to_source.get(dst_oid)
         if new_dst is None:
             logger.warning(
                 "mapping dst %s not found in manpage table — skipping", dst_oid

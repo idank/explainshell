@@ -6,7 +6,7 @@ Usage:
 Checks:
     - Malformed source paths (must be distro/release/section/name.section.gz)
     - Shadowed duplicates (same name+section+distro from different sources)
-    - Orphaned mappings (mapping rows referencing non-existent manpage IDs)
+    - Orphaned mappings (mapping rows referencing non-existent manpage sources)
     - Unreachable manpages (manpages with no mapping pointing to them)
     - positional set on flagged options (positional should only be on positional operands)
 """
@@ -35,18 +35,18 @@ def check(db_path):
     issues = []
 
     # 1. Malformed source paths.
-    for row in conn.execute("SELECT id, source, name FROM parsed_manpages"):
+    for row in conn.execute("SELECT source, name FROM parsed_manpages"):
         try:
             validate_source_path(row["source"])
         except errors.InvalidSourcePath:
             issues.append((
                 "error",
                 f"malformed source path: {row['source']!r} "
-                f"(manpage {row['name']!r}, id={row['id']})",
+                f"(manpage {row['name']!r})",
             ))
 
     # 2. Shadowed duplicates: same name+section+distro from different sources.
-    rows = conn.execute("SELECT id, source, name FROM parsed_manpages").fetchall()
+    rows = conn.execute("SELECT source, name FROM parsed_manpages").fetchall()
     seen = {}  # (name, section, distro, release) -> source
     for row in rows:
         source = row["source"]
@@ -66,20 +66,20 @@ def check(db_path):
         else:
             seen[key] = source
 
-    # 3. Orphaned mappings: mapping rows referencing non-existent manpage IDs.
+    # 3. Orphaned mappings: mapping rows referencing non-existent manpage sources.
     orphans = conn.execute(
         "SELECT m.id, m.src, m.dst FROM mappings m "
-        "LEFT JOIN parsed_manpages mp ON m.dst = mp.id WHERE mp.id IS NULL"
+        "LEFT JOIN parsed_manpages mp ON m.dst = mp.source WHERE mp.source IS NULL"
     ).fetchall()
     for row in orphans:
         issues.append((
             "error",
-            f"orphaned mapping: src={row['src']!r} -> dst={row['dst']} "
+            f"orphaned mapping: src={row['src']!r} -> dst={row['dst']!r} "
             f"(manpage does not exist)",
         ))
 
     # 4. positional set on flagged options.
-    for row in conn.execute("SELECT id, source, name, options FROM parsed_manpages"):
+    for row in conn.execute("SELECT source, name, options FROM parsed_manpages"):
         opts_json = row["options"]
         if not opts_json:
             continue
@@ -101,14 +101,14 @@ def check(db_path):
 
     # 5. Unreachable manpages: manpages with no mapping pointing to them.
     unreachable = conn.execute(
-        "SELECT mp.id, mp.name, mp.source FROM parsed_manpages mp "
-        "LEFT JOIN mappings m ON mp.id = m.dst WHERE m.id IS NULL"
+        "SELECT mp.name, mp.source FROM parsed_manpages mp "
+        "LEFT JOIN mappings m ON mp.source = m.dst WHERE m.id IS NULL"
     ).fetchall()
     for row in unreachable:
         issues.append((
             "warning",
-            f"unreachable manpage: {row['name']!r} ({row['source']!r}, "
-            f"id={row['id']}) has no mappings",
+            f"unreachable manpage: {row['name']!r} ({row['source']!r}) "
+            f"has no mappings",
         ))
 
     conn.close()
