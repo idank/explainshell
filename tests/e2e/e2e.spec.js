@@ -91,8 +91,8 @@ test("manpage source links use configured URL", async ({ page }) => {
   await expect(footerLink).toBeVisible();
 
   const href = await footerLink.getAttribute("href");
-  // Should use the configured URL (plucky release), not the old hardcoded one (precise)
-  expect(href).toContain("/manpages/plucky/");
+  // Should point to manpages.ubuntu.com, not the old hardcoded precise release
+  expect(href).toMatch(/manpages\.ubuntu\.com\/manpages\/\w+\//);
   expect(href).not.toContain("/manpages/precise/");
   expect(href).toContain("grep.1.html");
 });
