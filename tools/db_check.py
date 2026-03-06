@@ -35,7 +35,7 @@ def check(db_path):
     issues = []
 
     # 1. Malformed source paths.
-    for row in conn.execute("SELECT id, source, name FROM manpage"):
+    for row in conn.execute("SELECT id, source, name FROM parsed_manpages"):
         try:
             validate_source_path(row["source"])
         except errors.InvalidSourcePath:
@@ -46,7 +46,7 @@ def check(db_path):
             ))
 
     # 2. Shadowed duplicates: same name+section+distro from different sources.
-    rows = conn.execute("SELECT id, source, name FROM manpage").fetchall()
+    rows = conn.execute("SELECT id, source, name FROM parsed_manpages").fetchall()
     seen = {}  # (name, section, distro, release) -> source
     for row in rows:
         source = row["source"]
@@ -68,8 +68,8 @@ def check(db_path):
 
     # 3. Orphaned mappings: mapping rows referencing non-existent manpage IDs.
     orphans = conn.execute(
-        "SELECT m.id, m.src, m.dst FROM mapping m "
-        "LEFT JOIN manpage mp ON m.dst = mp.id WHERE mp.id IS NULL"
+        "SELECT m.id, m.src, m.dst FROM mappings m "
+        "LEFT JOIN parsed_manpages mp ON m.dst = mp.id WHERE mp.id IS NULL"
     ).fetchall()
     for row in orphans:
         issues.append((
@@ -79,7 +79,7 @@ def check(db_path):
         ))
 
     # 4. positional set on flagged options.
-    for row in conn.execute("SELECT id, source, name, options FROM manpage"):
+    for row in conn.execute("SELECT id, source, name, options FROM parsed_manpages"):
         opts_json = row["options"]
         if not opts_json:
             continue
@@ -101,8 +101,8 @@ def check(db_path):
 
     # 5. Unreachable manpages: manpages with no mapping pointing to them.
     unreachable = conn.execute(
-        "SELECT mp.id, mp.name, mp.source FROM manpage mp "
-        "LEFT JOIN mapping m ON mp.id = m.dst WHERE m.id IS NULL"
+        "SELECT mp.id, mp.name, mp.source FROM parsed_manpages mp "
+        "LEFT JOIN mappings m ON mp.id = m.dst WHERE m.id IS NULL"
     ).fetchall()
     for row in unreachable:
         issues.append((

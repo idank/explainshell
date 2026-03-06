@@ -1,8 +1,19 @@
+import datetime
+
 import pytest
 
 from explainshell import errors
 from explainshell.config import parse_distro_release
-from explainshell.store import Store, ParsedManpage, validate_source_path
+from explainshell.store import RawManpage, Store, ParsedManpage, validate_source_path
+
+
+def _make_raw():
+    """Build a minimal RawManpage for test use."""
+    return RawManpage(
+        source_text="test manpage content",
+        generated_at=datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc),
+        generator="test",
+    )
 
 
 @pytest.fixture
@@ -33,11 +44,11 @@ class TestFindManPageScoring:
         one where the lookup name is only an alias (score 1)."""
         # "grep" is an alias (score 1) pointing to grep_alias manpage
         grep_alias = _make_manpage("grep-extra", "1", aliases=[("grep", 1)])
-        store.add_manpage(grep_alias)
+        store.add_manpage(grep_alias, _make_raw())
 
         # "grep" is the primary name (score 10) for this manpage
         grep_primary = _make_manpage("grep", "1", aliases=[("grep", 10)])
-        store.add_manpage(grep_primary)
+        store.add_manpage(grep_primary, _make_raw())
 
         results = store.find_man_page("grep")
         assert results[0].name == "grep"
@@ -45,10 +56,10 @@ class TestFindManPageScoring:
     def test_higher_score_wins(self, store):
         """When multiple mappings exist for the same src, higher score wins."""
         low = _make_manpage("tool-low", "1", aliases=[("mytool", 1)])
-        store.add_manpage(low)
+        store.add_manpage(low, _make_raw())
 
         high = _make_manpage("tool-high", "1", aliases=[("mytool", 10)])
-        store.add_manpage(high)
+        store.add_manpage(high, _make_raw())
 
         results = store.find_man_page("mytool")
         assert results[0].name == "tool-high"
@@ -56,7 +67,7 @@ class TestFindManPageScoring:
     def test_alias_lookup_returns_manpage(self, store):
         """Looking up a name that is only an alias should still find the manpage."""
         mp = _make_manpage("gzip", "1", aliases=[("gzip", 10), ("gunzip", 1)])
-        store.add_manpage(mp)
+        store.add_manpage(mp, _make_raw())
 
         results = store.find_man_page("gunzip")
         assert results[0].name == "gzip"
@@ -65,8 +76,8 @@ class TestFindManPageScoring:
         """All manpages matching the lookup name should appear in results."""
         mp1 = _make_manpage("printf", "1", aliases=[("printf", 10)])
         mp2 = _make_manpage("printf", "3", aliases=[("printf", 10)])
-        store.add_manpage(mp1)
-        store.add_manpage(mp2)
+        store.add_manpage(mp1, _make_raw())
+        store.add_manpage(mp2, _make_raw())
 
         results = store.find_man_page("printf")
         sections = {r.section for r in results}
@@ -78,8 +89,8 @@ class TestFindManPageSection:
         """Specifying a section should return that section first."""
         mp1 = _make_manpage("printf", "1", aliases=[("printf", 10)])
         mp3 = _make_manpage("printf", "3", aliases=[("printf", 10)])
-        store.add_manpage(mp1)
-        store.add_manpage(mp3)
+        store.add_manpage(mp1, _make_raw())
+        store.add_manpage(mp3, _make_raw())
 
         results = store.find_man_page("printf.3")
         assert results[0].section == "3"
@@ -87,7 +98,7 @@ class TestFindManPageSection:
     def test_section_filter_first_result_fully_loaded(self, store):
         """The first result should be fully populated (have options data)."""
         mp = _make_manpage("printf", "1", aliases=[("printf", 10)])
-        store.add_manpage(mp)
+        store.add_manpage(mp, _make_raw())
 
         results = store.find_man_page("printf.1")
         assert results[0].synopsis is not None
@@ -95,7 +106,7 @@ class TestFindManPageSection:
     def test_nonexistent_section_raises(self, store):
         """Requesting a section that doesn't exist should raise ProgramDoesNotExist."""
         mp = _make_manpage("printf", "1", aliases=[("printf", 10)])
-        store.add_manpage(mp)
+        store.add_manpage(mp, _make_raw())
 
         with pytest.raises(errors.ProgramDoesNotExist):
             store.find_man_page("printf.9")
@@ -105,9 +116,9 @@ class TestFindManPageSection:
         mp1 = _make_manpage("open", "1", aliases=[("open", 10)])
         mp2 = _make_manpage("open", "2", aliases=[("open", 10)])
         mp3 = _make_manpage("open", "3", aliases=[("open", 10)])
-        store.add_manpage(mp1)
-        store.add_manpage(mp2)
-        store.add_manpage(mp3)
+        store.add_manpage(mp1, _make_raw())
+        store.add_manpage(mp2, _make_raw())
+        store.add_manpage(mp3, _make_raw())
 
         results = store.find_man_page("open.2")
         assert results[0].section == "2"
@@ -117,7 +128,7 @@ class TestFindManPageExactSource:
     def test_gz_lookup(self, store):
         """Looking up by .gz source path should return an exact match."""
         mp = _make_manpage("tar", "1")
-        store.add_manpage(mp)
+        store.add_manpage(mp, _make_raw())
 
         results = store.find_man_page("ubuntu/25.10/1/tar.1.gz")
         assert results[0].name == "tar"
@@ -140,7 +151,7 @@ class TestFindManPageNotFound:
             synopsis=". - source a file",
             aliases=[(".", 10)],
         )
-        store.add_manpage(mp)
+        store.add_manpage(mp, _make_raw())
 
         results = store.find_man_page(".")
         assert results[0].name == "."
@@ -158,8 +169,8 @@ class TestAddManpageDuplicatePrevention:
     def test_same_source_reimport_succeeds(self, store):
         """Re-importing the same source should replace the old entry."""
         mp = _make_manpage("ps", "1")
-        store.add_manpage(mp)
-        store.add_manpage(mp)  # should not raise
+        store.add_manpage(mp, _make_raw())
+        store.add_manpage(mp, _make_raw())  # should not raise
 
     def test_same_name_section_distro_different_source_raises(self, store):
         """Two manpages with same name+section+distro but different source should raise."""
@@ -175,23 +186,23 @@ class TestAddManpageDuplicatePrevention:
             synopsis="ps - report processes",
             aliases=[("ps", 10)],
         )
-        store.add_manpage(mp1)
+        store.add_manpage(mp1, _make_raw())
         with pytest.raises(errors.DuplicateManpage):
-            store.add_manpage(mp2)
+            store.add_manpage(mp2, _make_raw())
 
     def test_same_name_different_distro_succeeds(self, store):
         """Same name+section in different distros should be allowed."""
         mp1 = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
         mp2 = _make_manpage("ps", "1", distro="debian", release="12")
-        store.add_manpage(mp1)
-        store.add_manpage(mp2)  # should not raise
+        store.add_manpage(mp1, _make_raw())
+        store.add_manpage(mp2, _make_raw())  # should not raise
 
     def test_same_name_different_section_succeeds(self, store):
         """Same name in different sections within same distro should be allowed."""
         mp1 = _make_manpage("printf", "1")
         mp3 = _make_manpage("printf", "3")
-        store.add_manpage(mp1)
-        store.add_manpage(mp3)  # should not raise
+        store.add_manpage(mp1, _make_raw())
+        store.add_manpage(mp3, _make_raw())  # should not raise
 
 
 class TestFindManPageDistroScoping:
@@ -199,8 +210,8 @@ class TestFindManPageDistroScoping:
         """find_man_page with distro/release should only return matching manpages."""
         mp_ubuntu = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
         mp_debian = _make_manpage("ps", "1", distro="debian", release="12")
-        store.add_manpage(mp_ubuntu)
-        store.add_manpage(mp_debian)
+        store.add_manpage(mp_ubuntu, _make_raw())
+        store.add_manpage(mp_debian, _make_raw())
 
         results = store.find_man_page("ps", distro="ubuntu", release="25.10")
         assert len(results) == 1
@@ -209,7 +220,7 @@ class TestFindManPageDistroScoping:
     def test_no_results_raises(self, store):
         """Filtering by a distro that has no matching manpage should raise."""
         mp = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
-        store.add_manpage(mp)
+        store.add_manpage(mp, _make_raw())
 
         with pytest.raises(errors.ProgramDoesNotExist):
             store.find_man_page("ps", distro="debian", release="12")
@@ -218,8 +229,8 @@ class TestFindManPageDistroScoping:
         """Without distro/release, all matching manpages should be returned."""
         mp_ubuntu = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
         mp_debian = _make_manpage("ps", "1", distro="debian", release="12")
-        store.add_manpage(mp_ubuntu)
-        store.add_manpage(mp_debian)
+        store.add_manpage(mp_ubuntu, _make_raw())
+        store.add_manpage(mp_debian, _make_raw())
 
         results = store.find_man_page("ps")
         assert len(results) == 2
@@ -229,8 +240,8 @@ class TestDistros:
     def test_returns_distro_release_pairs(self, store):
         mp1 = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
         mp2 = _make_manpage("ls", "1", distro="debian", release="12")
-        store.add_manpage(mp1)
-        store.add_manpage(mp2)
+        store.add_manpage(mp1, _make_raw())
+        store.add_manpage(mp2, _make_raw())
 
         pairs = store.distros()
         assert ("ubuntu", "25.10") in pairs
@@ -239,8 +250,8 @@ class TestDistros:
     def test_no_duplicates(self, store):
         mp1 = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
         mp2 = _make_manpage("ls", "1", distro="ubuntu", release="25.10")
-        store.add_manpage(mp1)
-        store.add_manpage(mp2)
+        store.add_manpage(mp1, _make_raw())
+        store.add_manpage(mp2, _make_raw())
 
         pairs = store.distros()
         assert pairs.count(("ubuntu", "25.10")) == 1
@@ -269,4 +280,4 @@ class TestValidateSourcePath:
             aliases=[("tar", 10)],
         )
         with pytest.raises(errors.InvalidSourcePath):
-            store.add_manpage(mp)
+            store.add_manpage(mp, _make_raw())

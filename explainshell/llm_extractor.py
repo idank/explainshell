@@ -5,6 +5,8 @@ Public API:
     extract(gz_path, model, **litellm_kwargs) -> store.ParsedManpage
 """
 
+import datetime
+import hashlib
 import json
 import logging
 import os
@@ -458,6 +460,7 @@ def prepare_extraction(gz_path):
         "numbered_text": numbered_text,
         "n_chunks": len(chunks),
         "plain_text_len": len(plain_text),
+        "plain_text": plain_text,
     }
 
 
@@ -479,11 +482,22 @@ def process_llm_result(content):
     return data, content
 
 
+def _gz_sha256(gz_path):
+    """Compute hex SHA-256 digest of a .gz file."""
+    h = hashlib.sha256()
+    with open(gz_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def finalize_extraction(gz_path, prepared, all_chunk_data, debug_dir=None, debug_messages=None):
     """Assemble a ParsedManpage from prepared data + list of (chunk_data, messages, raw_response) per chunk.
 
     all_chunk_data: list of (data_dict, messages, raw_response) tuples, one per chunk.
     debug_messages: ignored (kept for API compatibility).
+
+    Returns (ParsedManpage, RawManpage).
     """
     basename = prepared["basename"]
     original_lines = prepared["original_lines"]
@@ -525,7 +539,7 @@ def finalize_extraction(gz_path, prepared, all_chunk_data, debug_dir=None, debug
 
     logger.info("%s: extracted %d option(s) total", basename, len(options))
 
-    return store.ParsedManpage(
+    mp = store.ParsedManpage(
         source=config.source_from_path(gz_path),
         name=manpage.extract_name(gz_path),
         synopsis=prepared["synopsis"],
@@ -534,12 +548,21 @@ def finalize_extraction(gz_path, prepared, all_chunk_data, debug_dir=None, debug
         dashless_opts=dashless_opts,
     )
 
+    raw_mp = store.RawManpage(
+        source_text=prepared["plain_text"],
+        generated_at=datetime.datetime.now(datetime.timezone.utc),
+        generator="mandoc -T markdown",
+        source_gz_sha256=_gz_sha256(gz_path),
+    )
+
+    return mp, raw_mp
+
 
 def extract(gz_path, model, debug_dir=None, **litellm_kwargs):
-    """LLM extraction pipeline: mandoc → numbered markdown → LLM → ParsedManpage."""
+    """LLM extraction pipeline: mandoc → numbered markdown → LLM → (ParsedManpage, RawManpage)."""
     prepared = prepare_extraction(gz_path)
     if prepared is None:
-        return None
+        return None, None
     basename = prepared["basename"]
     chunks = prepared["chunks"]
     n_chunks = prepared["n_chunks"]

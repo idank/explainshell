@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 _CREATE_SCHEMA = """
-CREATE TABLE IF NOT EXISTS manpage (
+CREATE TABLE IF NOT EXISTS parsed_manpages (
     id            INTEGER PRIMARY KEY,
     source        TEXT    NOT NULL UNIQUE,
     name          TEXT    NOT NULL,
@@ -32,15 +32,15 @@ CREATE TABLE IF NOT EXISTS manpage (
     nested_cmd    TEXT    NOT NULL DEFAULT 'false'
 );
 
-CREATE TABLE IF NOT EXISTS mapping (
+CREATE TABLE IF NOT EXISTS mappings (
     id    INTEGER PRIMARY KEY,
     src   TEXT    NOT NULL,
-    dst   INTEGER NOT NULL REFERENCES manpage(id) ON DELETE CASCADE,
+    dst   INTEGER NOT NULL REFERENCES parsed_manpages(id) ON DELETE CASCADE,
     score INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_mapping_src ON mapping(src);
-CREATE INDEX IF NOT EXISTS idx_mapping_dst ON mapping(dst);
+CREATE INDEX IF NOT EXISTS idx_mappings_src ON mappings(src);
+CREATE INDEX IF NOT EXISTS idx_mappings_dst ON mappings(dst);
 """
 
 
@@ -121,7 +121,7 @@ def migrate(manpage_file, mapping_file, db_path):
 
         try:
             cur = conn.execute(
-                """INSERT INTO manpage
+                """INSERT INTO parsed_manpages
                        (source, name, synopsis, paragraphs, aliases,
                         dashless_opts, has_subcommands, updated, nested_cmd)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -168,7 +168,7 @@ def migrate(manpage_file, mapping_file, db_path):
             skipped += 1
             continue
         conn.execute(
-            "INSERT INTO mapping(src, dst, score) VALUES (?, ?, ?)",
+            "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)",
             (doc["src"], new_dst, doc["score"]),
         )
         inserted += 1
@@ -179,10 +179,10 @@ def migrate(manpage_file, mapping_file, db_path):
     # ------------------------------------------------------------------ #
     # 3. verify                                                            #
     # ------------------------------------------------------------------ #
-    (mp_count,) = conn.execute("SELECT COUNT(*) FROM manpage").fetchone()
-    (map_count,) = conn.execute("SELECT COUNT(*) FROM mapping").fetchone()
+    (mp_count,) = conn.execute("SELECT COUNT(*) FROM parsed_manpages").fetchone()
+    (map_count,) = conn.execute("SELECT COUNT(*) FROM mappings").fetchone()
     logger.info(
-        "Final counts — manpage: %d, mapping: %d",
+        "Final counts — parsed_manpages: %d, mappings: %d",
         mp_count,
         map_count,
     )

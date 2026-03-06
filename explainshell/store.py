@@ -3,11 +3,14 @@ data objects to save processed man pages to sqlite
 """
 
 import collections
+import dataclasses
+import datetime
 import json
 import logging
 import os
 import re
 import sqlite3
+import zlib
 
 from pydantic import BaseModel
 
@@ -16,7 +19,16 @@ from explainshell import errors, help_constants, util, config
 logger = logging.getLogger(__name__)
 
 _CREATE_SCHEMA = """
-CREATE TABLE IF NOT EXISTS manpage (
+CREATE TABLE IF NOT EXISTS manpages (
+    source             TEXT    PRIMARY KEY,
+    data               BLOB   NOT NULL,
+    generated_at       TEXT   NOT NULL,
+    generator          TEXT   NOT NULL,
+    generator_version  TEXT,
+    source_gz_sha256   TEXT
+);
+
+CREATE TABLE IF NOT EXISTS parsed_manpages (
     id            INTEGER PRIMARY KEY,
     source        TEXT    NOT NULL UNIQUE,  -- basename of the .gz source file
     name          TEXT    NOT NULL,         -- command name (e.g. 'git')
@@ -28,24 +40,42 @@ CREATE TABLE IF NOT EXISTS manpage (
     updated       INTEGER NOT NULL DEFAULT 0,     -- manually edited, skip during bulk imports
     nested_cmd    TEXT    NOT NULL DEFAULT 'false', -- positional args start a nested command (e.g. sudo, xargs)
     extractor     TEXT,                            -- extractor mode: "source", "mandoc", "llm"
-    extraction_meta TEXT NOT NULL DEFAULT '{}'     -- JSON dict of additional extraction metadata
+    extraction_meta TEXT NOT NULL DEFAULT '{}',    -- JSON dict of additional extraction metadata
+    FOREIGN KEY (source) REFERENCES manpages(source) ON DELETE CASCADE
 );
 
--- Maps command names (and aliases) to manpage rows.
+-- Maps command names (and aliases) to parsed_manpages rows.
 -- A single manpage may have many mappings (one per alias).
 -- For multi-cmd parents, sub-command mappings are also stored here
 -- (e.g. src='git commit' -> dst=<git-commit manpage id>).
-CREATE TABLE IF NOT EXISTS mapping (
+CREATE TABLE IF NOT EXISTS mappings (
     id    INTEGER PRIMARY KEY,
     src   TEXT    NOT NULL,      -- lookup key (command name or 'cmd subcmd')
-    dst   INTEGER NOT NULL REFERENCES manpage(id) ON DELETE CASCADE,
+    dst   INTEGER NOT NULL REFERENCES parsed_manpages(id) ON DELETE CASCADE,
     score INTEGER NOT NULL       -- higher score = preferred match
 );
 
-CREATE INDEX IF NOT EXISTS idx_mapping_src ON mapping(src);
-CREATE INDEX IF NOT EXISTS idx_mapping_dst ON mapping(dst);
+CREATE INDEX IF NOT EXISTS idx_mappings_src ON mappings(src);
+CREATE INDEX IF NOT EXISTS idx_mappings_dst ON mappings(dst);
 
 """
+
+
+def _compress(text: str) -> bytes:
+    return zlib.compress(text.encode("utf-8"))
+
+
+def _decompress(data: bytes) -> str:
+    return zlib.decompress(data).decode("utf-8")
+
+
+@dataclasses.dataclass
+class RawManpage:
+    source_text: str
+    generated_at: datetime.datetime
+    generator: str
+    generator_version: str | None = None
+    source_gz_sha256: str | None = None
 
 
 _SOURCE_RE = re.compile(
@@ -231,21 +261,22 @@ class Store:
         if not confirm:
             return
 
-        logger.info("dropping mapping, manpage tables")
+        logger.info("dropping mappings, parsed_manpages, manpages tables")
         self._conn.executescript("""
-            DELETE FROM mapping;
-            DELETE FROM manpage;
+            DELETE FROM mappings;
+            DELETE FROM parsed_manpages;
+            DELETE FROM manpages;
         """)
         self._conn.commit()
 
     def __contains__(self, name):
         row = self._conn.execute(
-            "SELECT COUNT(*) FROM mapping WHERE src = ?", (name,)
+            "SELECT COUNT(*) FROM mappings WHERE src = ?", (name,)
         ).fetchone()
         return row[0] > 0
 
     def __iter__(self):
-        for row in self._conn.execute("SELECT * FROM manpage"):
+        for row in self._conn.execute("SELECT * FROM parsed_manpages"):
             yield ParsedManpage.from_store(dict(row))
 
     def find_man_page(self, name, distro=None, release=None):
@@ -261,7 +292,7 @@ class Store:
         if name.endswith(".gz"):
             logger.info("name ends with .gz, looking up an exact match by source")
             row = self._conn.execute(
-                "SELECT * FROM manpage WHERE source = ?", (name,)
+                "SELECT * FROM parsed_manpages WHERE source = ?", (name,)
             ).fetchone()
             if not row:
                 raise errors.ProgramDoesNotExist(name)
@@ -279,9 +310,9 @@ class Store:
             if len(splitted) > 1:
                 section = splitted[1]
 
-        logger.info("looking up manpage in mapping with src %r", name)
+        logger.info("looking up manpage in mappings with src %r", name)
         mapping_rows = self._conn.execute(
-            "SELECT dst, score FROM mapping WHERE src = ?", (name,)
+            "SELECT dst, score FROM mappings WHERE src = ?", (name,)
         ).fetchall()
 
         if not mapping_rows:
@@ -291,13 +322,13 @@ class Store:
 
         placeholders = ",".join("?" * len(dsts))
         manpage_rows = self._conn.execute(
-            f"SELECT id, name, source FROM manpage WHERE id IN ({placeholders})",
+            f"SELECT id, name, source FROM parsed_manpages WHERE id IN ({placeholders})",
             list(dsts.keys()),
         ).fetchall()
 
         if len(manpage_rows) != len(dsts):
             logger.error(
-                "one of %r mappings is missing in manpage table "
+                "one of %r mappings is missing in parsed_manpages table "
                 "(%d mappings, %d found)",
                 dsts,
                 len(dsts),
@@ -346,7 +377,7 @@ class Store:
         oid = results[0][0]
         results = [x[1] for x in results]
         row = self._conn.execute(
-            "SELECT * FROM manpage WHERE id = ?", (oid,)
+            "SELECT * FROM parsed_manpages WHERE id = ?", (oid,)
         ).fetchone()
         results[0] = ParsedManpage.from_store(dict(row))
         return results
@@ -362,7 +393,7 @@ class Store:
 
         # find all srcs that point to oid
         src_rows = self._conn.execute(
-            "SELECT src FROM mapping WHERE dst = ?", (oid,)
+            "SELECT src FROM mappings WHERE dst = ?", (oid,)
         ).fetchall()
         srcs = [row["src"] for row in src_rows]
         if not srcs:
@@ -371,7 +402,7 @@ class Store:
         # find all dsts of those srcs
         placeholders = ",".join("?" * len(srcs))
         dst_rows = self._conn.execute(
-            f"SELECT DISTINCT dst FROM mapping WHERE src IN ({placeholders})",
+            f"SELECT DISTINCT dst FROM mappings WHERE src IN ({placeholders})",
             srcs,
         ).fetchall()
         suggestion_ids = [row["dst"] for row in dst_rows if row["dst"] not in skip]
@@ -381,7 +412,7 @@ class Store:
         # get just the name and source of found suggestions
         placeholders = ",".join("?" * len(suggestion_ids))
         manpage_rows = self._conn.execute(
-            f"SELECT id, name, source FROM manpage WHERE id IN ({placeholders})",
+            f"SELECT id, name, source FROM parsed_manpages WHERE id IN ({placeholders})",
             suggestion_ids,
         ).fetchall()
 
@@ -404,30 +435,46 @@ class Store:
                 SUBSTR(source, 1, INSTR(source, '/') - 1) as distro,
                 SUBSTR(source, INSTR(source, '/') + 1,
                        INSTR(SUBSTR(source, INSTR(source, '/') + 1), '/') - 1) as release
-            FROM manpage
+            FROM parsed_manpages
         """).fetchall()
         return [(row["distro"], row["release"]) for row in rows]
 
     def add_mapping(self, src, dst, score):
         self._conn.execute(
-            "INSERT INTO mapping(src, dst, score) VALUES (?, ?, ?)", (src, dst, score)
+            "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)", (src, dst, score)
         )
         self._conn.commit()
 
-    def add_manpage(self, m):
+    def _upsert_raw_manpage(self, source, raw):
+        """Insert or replace a RawManpage into the manpages table."""
+        self._conn.execute(
+            """INSERT OR REPLACE INTO manpages(source, data, generated_at, generator,
+                                               generator_version, source_gz_sha256)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                source,
+                _compress(raw.source_text),
+                raw.generated_at.isoformat(),
+                raw.generator,
+                raw.generator_version,
+                raw.source_gz_sha256,
+            ),
+        )
+
+    def add_manpage(self, m, raw):
         """add `m` into the store, if it exists first remove it and its mappings
 
         each man page may have aliases besides the name determined by its
         basename"""
         validate_source_path(m.source)
         existing = self._conn.execute(
-            "SELECT id FROM manpage WHERE source = ?", (m.source,)
+            "SELECT id FROM parsed_manpages WHERE source = ?", (m.source,)
         ).fetchone()
         if existing:
             old_id = existing["id"]
             logger.info("removing old manpage %s (%s)", m.source, old_id)
-            # ON DELETE CASCADE removes all mapping rows for this manpage
-            self._conn.execute("DELETE FROM manpage WHERE id = ?", (old_id,))
+            # ON DELETE CASCADE removes all mappings rows for this manpage
+            self._conn.execute("DELETE FROM parsed_manpages WHERE id = ?", (old_id,))
             self._conn.commit()
             logger.info("removed manpage and its mappings for %s", m.source)
         else:
@@ -436,7 +483,7 @@ class Store:
             section = m.section
             prefix = f"{distro}/{release}/"
             conflict = self._conn.execute(
-                "SELECT source FROM manpage WHERE source LIKE ? AND source != ? AND name = ?",
+                "SELECT source FROM parsed_manpages WHERE source LIKE ? AND source != ? AND name = ?",
                 (prefix + "%", m.source, m.name),
             ).fetchone()
             if conflict:
@@ -450,9 +497,11 @@ class Store:
                         f"{conflict_source!r}, refusing to add duplicate from {m.source!r}"
                     )
 
+        self._upsert_raw_manpage(m.source, raw)
+
         d = m.to_store()
         cursor = self._conn.execute(
-            """INSERT INTO manpage(source, name, synopsis, options, aliases,
+            """INSERT INTO parsed_manpages(source, name, synopsis, options, aliases,
                                    dashless_opts, has_subcommands, updated, nested_cmd,
                                    extractor, extraction_meta)
                VALUES (:source, :name, :synopsis, :options, :aliases,
@@ -465,7 +514,7 @@ class Store:
 
         for alias, score in m.aliases:
             self._conn.execute(
-                "INSERT INTO mapping(src, dst, score) VALUES (?, ?, ?)",
+                "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)",
                 (alias, new_id, score),
             )
             logger.info(
@@ -478,15 +527,18 @@ class Store:
         self._conn.commit()
         return m
 
-    def update_man_page(self, m):
+    def update_man_page(self, m, raw):
         """update m and add new aliases if necessary
 
         change updated attribute so we don't overwrite this in the future"""
         logger.info("updating manpage %s", m.source)
         m.updated = True
+
+        self._upsert_raw_manpage(m.source, raw)
+
         d = m.to_store()
         self._conn.execute(
-            """UPDATE manpage
+            """UPDATE parsed_manpages
                SET name=:name, synopsis=:synopsis, options=:options,
                    aliases=:aliases, dashless_opts=:dashless_opts,
                    has_subcommands=:has_subcommands, updated=:updated, nested_cmd=:nested_cmd,
@@ -497,14 +549,14 @@ class Store:
         self._conn.commit()
 
         row = self._conn.execute(
-            "SELECT id FROM manpage WHERE source = ?", (m.source,)
+            "SELECT id FROM parsed_manpages WHERE source = ?", (m.source,)
         ).fetchone()
         manpage_id = row["id"]
 
         for alias, score in m.aliases:
             if alias not in self:
                 self._conn.execute(
-                    "INSERT INTO mapping(src, dst, score) VALUES (?, ?, ?)",
+                    "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)",
                     (alias, manpage_id, score),
                 )
                 self._conn.commit()
@@ -526,10 +578,10 @@ class Store:
 
     def verify(self):
         # check that everything in manpage is reachable
-        mapping_rows = self._conn.execute("SELECT dst FROM mapping").fetchall()
+        mapping_rows = self._conn.execute("SELECT dst FROM mappings").fetchall()
         reachable = {row["dst"] for row in mapping_rows}
 
-        manpage_rows = self._conn.execute("SELECT id FROM manpage").fetchall()
+        manpage_rows = self._conn.execute("SELECT id FROM parsed_manpages").fetchall()
         man_pages = {row["id"] for row in manpage_rows}
 
         ok = True
@@ -540,7 +592,7 @@ class Store:
             )
             placeholders = ",".join("?" * len(unreachable))
             name_rows = self._conn.execute(
-                f"SELECT name FROM manpage WHERE id IN ({placeholders})",
+                f"SELECT name FROM parsed_manpages WHERE id IN ({placeholders})",
                 list(unreachable),
             ).fetchall()
             unreachable = [row["name"] for row in name_rows]
@@ -554,16 +606,16 @@ class Store:
         return ok, unreachable, notfound
 
     def names(self):
-        for row in self._conn.execute("SELECT id, name FROM manpage"):
+        for row in self._conn.execute("SELECT id, name FROM parsed_manpages"):
             yield row["id"], row["name"]
 
     def mappings(self):
-        for row in self._conn.execute("SELECT src, id FROM mapping"):
+        for row in self._conn.execute("SELECT src, id FROM mappings"):
             yield row["src"], row["id"]
 
     def set_has_subcommands(self, manpage_id):
         self._conn.execute(
-            "UPDATE manpage SET has_subcommands = 1 WHERE id = ?", (manpage_id,)
+            "UPDATE parsed_manpages SET has_subcommands = 1 WHERE id = ?", (manpage_id,)
         )
         self._conn.commit()
 
@@ -604,3 +656,12 @@ class Store:
             logger.info("marking %r as has_subcommands", name)
 
         return mappings_to_add, parents
+
+    def get_manpage_source(self, source: str) -> str | None:
+        """Fetch and decompress the raw manpage source text, or None if not stored."""
+        row = self._conn.execute(
+            "SELECT data FROM manpages WHERE source = ?", (source,)
+        ).fetchone()
+        if row is None:
+            return None
+        return _decompress(row["data"])

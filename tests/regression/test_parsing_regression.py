@@ -70,9 +70,9 @@ def test_parsing_matches_db(gz_path, db_store, request):
 
     # Re-parse with selected extractor.
     if extractor == "mandoc":
-        fresh_mp = mandoc_extractor.extract(gz_path)
+        fresh_mp, _raw = mandoc_extractor.extract(gz_path)
     else:
-        fresh_mp = source_extractor.extract(gz_path)
+        fresh_mp, _raw = source_extractor.extract(gz_path)
 
     # has_subcommands is computed post-extraction by update_subcommand_mappings(),
     # not by the parser, so exclude it from comparison.
