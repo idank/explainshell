@@ -11,4 +11,4 @@ if [ -n "$DB_URL" ] && [ ! -f "$DB_PATH" ]; then
     echo "Database downloaded."
 fi
 
-exec gunicorn -w 4 -b 0.0.0.0:8080 explainshell.web:app
+exec gunicorn -w 4 -b 0.0.0.0:8080 "explainshell.web:create_app()"

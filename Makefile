@@ -39,7 +39,7 @@ format:
 	ruff format explainshell tests tools
 
 serve:
-	python runserver.py
+	DB_PATH=explainshell.db python runserver.py
 
 db-check:
 	python tools/db_check.py --db $(or $(DB_PATH),explainshell.db)
