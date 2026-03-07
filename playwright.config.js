@@ -1,6 +1,9 @@
 // @ts-check
 const net = require("net");
+const path = require("path");
 const { defineConfig } = require("@playwright/test");
+
+const E2E_DB = path.join(__dirname, "tests", "e2e", "e2e.db");
 
 function getFreePort() {
   const srv = net.createServer();
@@ -30,11 +33,10 @@ module.exports = defineConfig({
     },
   ],
   webServer: {
-    command:
-      ". .venv/bin/activate && DB_PATH=tests/e2e/e2e.db python runserver.py",
+    command: ". .venv/bin/activate && python runserver.py",
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,
-    env: { PORT: String(port), DEBUG: "false" },
+    env: { PORT: String(port), DEBUG: "false", DB_PATH: E2E_DB },
   },
   use: {
     baseURL: `http://127.0.0.1:${port}`,

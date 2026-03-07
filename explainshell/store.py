@@ -239,7 +239,7 @@ class ParsedManpage(BaseModel):
 class Store:
     """read/write processed man pages from sqlite"""
 
-    def __init__(self, db_path=config.DB_PATH):
+    def __init__(self, db_path):
         logger.info("creating store, db_path = %r", db_path)
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row

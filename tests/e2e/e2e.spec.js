@@ -1,5 +1,15 @@
 // @ts-check
+const fs = require("fs");
+const path = require("path");
 const { test, expect } = require("@playwright/test");
+
+// Dedicated database for e2e tests, built by `make e2e-db`.
+// The server is started with DB_PATH pointing here (see playwright.config.js).
+const E2E_DB = path.join(__dirname, "e2e.db");
+
+test("e2e database exists", () => {
+  expect(fs.existsSync(E2E_DB)).toBe(true);
+});
 
 test("homepage loads", async ({ page }) => {
   await page.goto("/");
