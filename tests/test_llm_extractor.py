@@ -9,7 +9,6 @@ from explainshell import store
 from explainshell.llm_extractor import (
     ExtractionError,
     CHUNK_SIZE_CHARS,
-    CHUNK_OVERLAP_CHARS,
     _dedup_options,
     _dedup_ref_options,
     _extract_text_from_lines,
@@ -120,40 +119,65 @@ class TestChunkText(unittest.TestCase):
     def test_small_text_no_split(self):
         text = "hello world\n\nfoo bar"
         chunks = chunk_text(text)
-        self.assertEqual(chunks, [text])
+        self.assertEqual(len(chunks), 1)
+        # Should contain numbered lines
+        self.assertIn("1| hello world", chunks[0])
+        self.assertIn("3| foo bar", chunks[0])
 
-    def test_large_text_splits(self):
-        # build text large enough to exceed CHUNK_SIZE_CHARS
-        para = "x" * 1000
-        paragraphs = [para] * (CHUNK_SIZE_CHARS // 1000 + 5)
-        text = "\n\n".join(paragraphs)
+    def test_large_text_splits_on_sections(self):
+        # Build text with multiple sections, large enough to exceed CHUNK_SIZE_CHARS
+        sections = []
+        for i in range(10):
+            body = ("x" * 80 + "\n") * 100  # ~8100 chars per section
+            sections.append(f"## Section {i}\n\n{body}")
+        text = "# NAME\n\ntest\n\n" + "\n".join(sections)
+        chunks = chunk_text(text)
+        self.assertGreater(len(chunks), 1)
+
+    def test_oversized_section_with_paragraphs_splits(self):
+        # Build one big section with paragraph breaks
+        paras = ["z" * 5000 for _ in range(20)]
+        text = "# BIG\n\n" + "\n\n".join(paras)
         chunks = chunk_text(text)
         self.assertGreater(len(chunks), 1)
         for chunk in chunks:
-            self.assertLessEqual(
-                len(chunk), CHUNK_SIZE_CHARS + 1000
-            )  # at most one para over
+            self.assertLessEqual(len(chunk), CHUNK_SIZE_CHARS)
 
-    def test_overlap_exists(self):
-        para = "y" * 1000
-        paragraphs = [para] * (CHUNK_SIZE_CHARS // 1000 + 5)
-        text = "\n\n".join(paragraphs)
-        chunks = chunk_text(text)
-        if len(chunks) >= 2:
-            # the end of chunk[0] and start of chunk[1] should share content
-            end_of_first = chunks[0][-CHUNK_OVERLAP_CHARS:]
-            start_of_second = chunks[1][:CHUNK_OVERLAP_CHARS]
-            # there should be some common paragraphs
-            self.assertTrue(
-                end_of_first in chunks[1] or start_of_second in chunks[0],
-                "No overlap detected between consecutive chunks",
-            )
-
-    def test_single_paragraph_larger_than_chunk(self):
+    def test_single_unsplittable_line(self):
+        # A single line with no breaks can't be split further — it stays as one oversized chunk
         text = "z" * (CHUNK_SIZE_CHARS + 1)
         chunks = chunk_text(text)
-        # single oversized paragraph → still one chunk
         self.assertEqual(len(chunks), 1)
+        self.assertGreater(len(chunks[0]), CHUNK_SIZE_CHARS)
+
+    def test_line_numbers_are_globally_correct(self):
+        # Build text that will split into 2 chunks
+        section_body = ("line\n") * 800  # ~4000 chars per section
+        sections = []
+        for i in range(20):
+            sections.append(f"## Section {i}\n\n{section_body}")
+        text = "# NAME\n\ntest\n\n" + "\n".join(sections)
+        chunks = chunk_text(text)
+        if len(chunks) >= 2:
+            # Last numbered line in chunk 0 + 1 == first numbered line in chunk 1
+            import re
+            last_match = list(re.finditer(r"^\s*(\d+)\|", chunks[0], re.MULTILINE))
+            first_match = list(re.finditer(r"^\s*(\d+)\|", chunks[1], re.MULTILINE))
+            if last_match and first_match:
+                last_line = int(last_match[-1].group(1))
+                first_line = int(first_match[0].group(1))
+                self.assertEqual(first_line, last_line + 1)
+
+    def test_preamble_on_later_chunks(self):
+        section_body = ("line\n") * 800
+        sections = []
+        for i in range(20):
+            sections.append(f"## Section {i}\n\n{section_body}")
+        text = "# NAME\n\ntest-cmd\n\n# SYNOPSIS\n\ntest-cmd [opts]\n\n" + "\n".join(sections)
+        chunks = chunk_text(text)
+        if len(chunks) >= 2:
+            self.assertIn("[Context", chunks[1])
+            self.assertIn("test-cmd", chunks[1])
 
 
 # ---------------------------------------------------------------------------
@@ -608,7 +632,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
         ret = main(args)
 
         mock_extract.assert_called_once_with(
-            "/fake/echo.1.gz", "test-model", debug_dir="debug-output"
+            "/fake/echo.1.gz", "test-model", debug_dir="debug-output", fail_dir="debug-output"
         )
         mock_store_cls.assert_not_called()
         self.assertEqual(ret, 0)

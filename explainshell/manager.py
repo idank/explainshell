@@ -373,7 +373,7 @@ def _parse_mode(raw):
     )
 
 
-def _run_extractor(mode, gz_path, model=None, debug_dir=None):
+def _run_extractor(mode, gz_path, model=None, debug_dir=None, fail_dir=None):
     """Run a single extractor by mode name and return (ParsedManpage, RawManpage)."""
     if mode == "source":
         mp, raw = source_extractor.extract(gz_path)
@@ -386,7 +386,7 @@ def _run_extractor(mode, gz_path, model=None, debug_dir=None):
         mp.extraction_meta = {}
         return mp, raw
     if mode == "llm":
-        mp, raw = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
+        mp, raw = llm_extractor.extract(gz_path, model, debug_dir=debug_dir, fail_dir=fail_dir)
         if mp is None:
             return None, None
         mp.extractor = "llm"
@@ -399,7 +399,7 @@ def _run_extractor(mode, gz_path, model=None, debug_dir=None):
             mp.extraction_meta = {}
             return mp, raw
         except errors.LowConfidenceError as e:
-            mp, raw = llm_extractor.extract(gz_path, model, debug_dir=debug_dir)
+            mp, raw = llm_extractor.extract(gz_path, model, debug_dir=debug_dir, fail_dir=fail_dir)
             if mp is None:
                 return None, None
             mp.extractor = "llm"
@@ -459,7 +459,7 @@ def _process_one_file(
         out(f"{_ts()} {progress} [{short_path}] running {left_mode} extractor...")
         try:
             left_mp, _left_raw = _run_extractor(
-                left_mode, gz_path, model=left_model, debug_dir=_debug_dir
+                left_mode, gz_path, model=left_model, debug_dir=_debug_dir, fail_dir=debug_dir
             )
         except errors.ExtractionError as e:
             logger.error("%s extractor failed for %s: %s", left_mode, short_path, e)
@@ -479,7 +479,7 @@ def _process_one_file(
         )
         try:
             right_mp, _right_raw = _run_extractor(
-                right_mode, gz_path, model=right_model, debug_dir=_debug_dir
+                right_mode, gz_path, model=right_model, debug_dir=_debug_dir, fail_dir=debug_dir
             )
         except errors.ExtractionError as e:
             logger.error(
@@ -524,7 +524,7 @@ def _process_one_file(
                     f"{_ts()} {progress} [{short_path}] tree parser {e}, falling back to LLM ({model})..."
                 )
                 _debug_dir = debug_dir if dry_run else None
-                mp, raw = llm_extractor.extract(gz_path, model, debug_dir=_debug_dir)
+                mp, raw = llm_extractor.extract(gz_path, model, debug_dir=_debug_dir, fail_dir=debug_dir)
                 if mp is None:
                     result.outcome = "skipped"
                     return result
@@ -537,7 +537,7 @@ def _process_one_file(
         else:
             out(f"{_ts()} {progress} [{short_path}] extracting ({model})...")
             _debug_dir = debug_dir if dry_run else None
-            mp, raw = llm_extractor.extract(gz_path, model, debug_dir=_debug_dir)
+            mp, raw = llm_extractor.extract(gz_path, model, debug_dir=_debug_dir, fail_dir=debug_dir)
             if mp is None:
                 result.outcome = "skipped"
                 return result
@@ -810,6 +810,10 @@ def main(args):
                         chunk_data, raw = llm_extractor.process_llm_result(response_text)
                     except errors.ExtractionError as e:
                         logger.error("failed to parse batch result for %s chunk %d: %s", short_path, chunk_idx, e)
+                        raw = getattr(e, "raw_response", None)
+                        if raw:
+                            basename = prepared["basename"]
+                            llm_extractor._dump_failed_response(args.debug_dir, basename, chunk_idx, raw)
                         file_failed = True
                         break
 
