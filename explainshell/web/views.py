@@ -6,14 +6,16 @@ import urllib
 import markupsafe
 
 import markdown as markdown_lib
-from flask import render_template, request, redirect
+from flask import Blueprint, current_app, render_template, request, redirect
 
 import bashlex.errors
 
 from explainshell import matcher, errors, util, config
-from explainshell.web import app, get_cached_distros, helpers
+from explainshell.web import get_cached_distros, helpers
 
 logger = logging.getLogger(__name__)
+
+bp = Blueprint("main", __name__)
 
 _md = markdown_lib.Markdown()
 
@@ -77,7 +79,7 @@ def render_markdown(text: str) -> str:
         return markupsafe.escape(text)
 
 
-@app.context_processor
+@bp.app_context_processor
 def inject_distros():
     url_distro, url_release = _get_current_url_distro_release()
     active_distro, active_release = _get_distro_release(url_distro, url_release)
@@ -89,18 +91,18 @@ def inject_distros():
     }
 
 
-@app.route("/")
+@bp.route("/")
 def index():
     return render_template("index.html")
 
 
-@app.route("/about")
+@bp.route("/about")
 def about():
     return render_template("about.html")
 
 
-@app.route("/explain", defaults={"path": ""})
-@app.route("/explain/<path:path>")
+@bp.route("/explain", defaults={"path": ""})
+@bp.route("/explain/<path:path>")
 def explain_router(path):
     """Unified router that handles all /explain/* URLs.
 
@@ -161,7 +163,7 @@ def _handle_explain_cmd(url_distro, url_release):
     distro, release = _get_distro_release(url_distro, url_release)
     prefix = _explain_prefix(url_distro, url_release)
     try:
-        matches, helptext, debug_info = explain_cmd(command, app.store, distro=distro, release=release, explain_prefix=prefix)
+        matches, helptext, debug_info = explain_cmd(command, current_app.store, distro=distro, release=release, explain_prefix=prefix)
         helptext = [(render_markdown(text), id_) for text, id_ in helptext]
         return render_template(
             "explain.html", matches=matches, helptext=helptext, getargs=command, debug_info=debug_info
@@ -201,7 +203,7 @@ def _handle_explain_program(section, program, url_distro, url_release):
 
     try:
         mp, suggestions, raw_mp, debug_info = explain_program(
-            program, app.store, distro=distro, release=release
+            program, current_app.store, distro=distro, release=release
         )
         return render_template("options.html", mp=mp, suggestions=suggestions, raw_mp=raw_mp, debug_info=debug_info)
     except errors.ProgramDoesNotExist as e:
