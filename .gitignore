@@ -9,12 +9,10 @@ tests/screenshots/*.png
 test-results/
 playwright-report/
 dump.gz
-*.db
 *.db-shm
 *.db-wal
-!tests/regression/regression.db
-!tests/e2e/e2e.db
 .claude/
 data/
 docs/
 manpages/ubuntu
+ignore/
