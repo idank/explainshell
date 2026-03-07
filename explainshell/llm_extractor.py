@@ -24,7 +24,6 @@ from explainshell.errors import ExtractionError
 logger = logging.getLogger(__name__)
 
 CHUNK_SIZE_CHARS = 60_000
-CHUNK_OVERLAP_CHARS = 2_000
 LLM_TIMEOUT_SECONDS = 300
 MAX_MANPAGE_CHARS = 500_000
 
@@ -94,38 +93,159 @@ def get_manpage_text(gz_path: str) -> str:
 get_plain_text = get_manpage_text
 
 
-def chunk_text(text: str) -> list:
-    """Split at paragraph boundaries if text exceeds CHUNK_SIZE_CHARS."""
-    if len(text) <= CHUNK_SIZE_CHARS:
-        return [text]
+def _split_sections(text: str) -> list:
+    """Split text into sections at markdown header lines (# or ##).
 
+    Returns a list of (start_line, section_text) tuples where start_line
+    is the 1-indexed line number of the first line in the section.
+    """
+    lines = text.split("\n")
+    sections = []
+    current_start = 1
+    current_lines = []
+
+    for i, line in enumerate(lines):
+        if re.match(r"^#{1,2} ", line) and current_lines:
+            sections.append((current_start, "\n".join(current_lines)))
+            current_start = i + 1  # 1-indexed
+            current_lines = [line]
+        else:
+            current_lines.append(line)
+
+    if current_lines:
+        sections.append((current_start, "\n".join(current_lines)))
+
+    return sections
+
+
+def _build_preamble(text: str) -> str:
+    """Extract NAME + SYNOPSIS + first paragraph of DESCRIPTION as preamble."""
+    sections = _split_sections(text)
+    preamble_headers = {"# NAME", "# SYNOPSIS", "# DESCRIPTION"}
+    parts = []
+    for _start, section_text in sections:
+        header_line = section_text.split("\n", 1)[0].strip()
+        if header_line in preamble_headers:
+            if header_line == "# DESCRIPTION":
+                # Only include the first paragraph of DESCRIPTION.
+                paras = section_text.split("\n\n", 2)
+                parts.append("\n\n".join(paras[:2]))
+            else:
+                parts.append(section_text)
+    return "\n\n".join(parts)
+
+
+def chunk_text(text: str) -> list:
+    """Split text into numbered chunks at section boundaries.
+
+    Each chunk gets line numbers corresponding to the original text.
+    If the text is small enough, returns a single chunk.
+    A preamble (NAME/SYNOPSIS/DESCRIPTION intro) is prepended to each
+    chunk beyond the first so the model has context.
+
+    When a single section exceeds the chunk size, it is sub-split at
+    paragraph (blank-line) boundaries.
+    """
+    numbered_full, _ = _number_lines(text)
+    if len(numbered_full) <= CHUNK_SIZE_CHARS:
+        return [numbered_full]
+
+    sections = _split_sections(text)
+    preamble = _build_preamble(text)
+    preamble_text = ""
+    if preamble:
+        preamble_text = (
+            "[Context — this is a continuation of the same man page]\n\n"
+            + preamble
+            + "\n\n---\n\n"
+        )
+    # Reserve space for preamble since any block might land in a non-first chunk
+    budget = CHUNK_SIZE_CHARS - len(preamble_text)
+
+    total_lines = text.count("\n") + 1
+    width = len(str(total_lines))
+
+    def _number_block(start_line, block_text):
+        lines = block_text.split("\n")
+        numbered = []
+        for j, line in enumerate(lines):
+            lineno = start_line + j
+            numbered.append(f"{lineno:>{width}}| {line}")
+        return "\n".join(numbered)
+
+    def _split_by_lines(start_line, block_text):
+        """Last-resort split: cut at line boundaries to fit budget."""
+        lines = block_text.split("\n")
+        result = []
+        cur_lines = []
+        cur_start = start_line
+        for line in lines:
+            candidate = "\n".join(cur_lines + [line])
+            if len(_number_block(cur_start, candidate)) > budget and cur_lines:
+                result.append((cur_start, "\n".join(cur_lines)))
+                cur_start += len(cur_lines)
+                cur_lines = []
+            cur_lines.append(line)
+        if cur_lines:
+            result.append((cur_start, "\n".join(cur_lines)))
+        return result
+
+    # Build a flat list of (start_line, text) blocks, sub-splitting
+    # oversized sections at paragraph boundaries, then by lines if needed.
+    blocks = []
+    for start_line, section_text in sections:
+        numbered = _number_block(start_line, section_text)
+        if len(numbered) <= budget:
+            blocks.append((start_line, section_text))
+        else:
+            # Sub-split at paragraph boundaries (\n\n)
+            paragraphs = section_text.split("\n\n")
+            cur_paras = []
+            cur_start = start_line
+            for para in paragraphs:
+                candidate = "\n\n".join(cur_paras + [para])
+                numbered_candidate = _number_block(cur_start, candidate)
+                if len(numbered_candidate) > budget and cur_paras:
+                    blocks.append((cur_start, "\n\n".join(cur_paras)))
+                    cur_start = cur_start + "\n\n".join(cur_paras).count("\n") + 2
+                    cur_paras = []
+                cur_paras.append(para)
+            if cur_paras:
+                blocks.append((cur_start, "\n\n".join(cur_paras)))
+
+    # Final pass: split any still-oversized blocks by lines.
+    final_blocks = []
+    for start_line, block_text in blocks:
+        if len(_number_block(start_line, block_text)) > budget:
+            final_blocks.extend(_split_by_lines(start_line, block_text))
+        else:
+            final_blocks.append((start_line, block_text))
+    blocks = final_blocks
+
+    # Group blocks into chunks
     chunks = []
-    paragraphs = text.split("\n\n")
-    current = []
+    current_parts = []
     current_len = 0
 
-    for para in paragraphs:
-        para_len = len(para) + 2  # +2 for the \n\n
-        if current_len + para_len > CHUNK_SIZE_CHARS and current:
-            chunk = "\n\n".join(current)
-            chunks.append(chunk)
-            # overlap: keep trailing paragraphs that fit in CHUNK_OVERLAP_CHARS
-            overlap = []
-            overlap_len = 0
-            for p in reversed(current):
-                plen = len(p) + 2
-                if overlap_len + plen > CHUNK_OVERLAP_CHARS:
-                    break
-                overlap.insert(0, p)
-                overlap_len += plen
-            current = overlap
-            current_len = overlap_len
+    for start_line, block_text in blocks:
+        numbered_block = _number_block(start_line, block_text)
+        block_len = len(numbered_block) + 1  # +1 for joining \n
 
-        current.append(para)
-        current_len += para_len
+        if current_len + block_len > budget and current_parts:
+            chunks.append("\n".join(current_parts))
+            current_parts = []
+            current_len = 0
 
-    if current:
-        chunks.append("\n\n".join(current))
+        current_parts.append(numbered_block)
+        current_len += block_len
+
+    if current_parts:
+        chunks.append("\n".join(current_parts))
+
+    # Prepend preamble to chunks after the first.
+    if len(chunks) > 1 and preamble_text:
+        for i in range(1, len(chunks)):
+            chunks[i] = preamble_text + chunks[i]
 
     return chunks
 
@@ -149,9 +269,11 @@ def _parse_json_response(content: str) -> dict:
     start = content.find("{")
     end = content.rfind("}")
     if start == -1 or end == -1 or end <= start:
-        raise ExtractionError(
+        err = ExtractionError(
             f"No JSON object found in LLM response: {content[:200]!r}"
         )
+        err.raw_response = content
+        raise err
 
     raw = content[start : end + 1]
     try:
@@ -163,7 +285,9 @@ def _parse_json_response(content: str) -> dict:
     try:
         return json.loads(_fix_invalid_escapes(raw))
     except json.JSONDecodeError as e:
-        raise ExtractionError(f"Invalid JSON from LLM: {e}") from e
+        err = ExtractionError(f"Invalid JSON from LLM: {e}")
+        err.raw_response = content
+        raise err from e
 
 
 def _validate_llm_response(data: dict) -> None:
@@ -334,6 +458,14 @@ def _call_llm(chunk, chunk_info, model, litellm_kwargs):
             kwargs["response_format"] = {"type": "json_object"}
         except Exception:
             pass
+        if "max_tokens" not in kwargs:
+            try:
+                info = litellm.get_model_info(model)
+                max_out = info.get("max_output_tokens")
+                if max_out:
+                    kwargs["max_tokens"] = max_out
+            except Exception:
+                pass
 
     last_err = None
     for attempt in range(3):
@@ -449,7 +581,7 @@ def prepare_extraction(gz_path):
         return None
 
     numbered_text, original_lines = _number_lines(plain_text)
-    chunks = chunk_text(numbered_text)
+    chunks = chunk_text(plain_text)
 
     return {
         "synopsis": synopsis,
@@ -558,7 +690,19 @@ def finalize_extraction(gz_path, prepared, all_chunk_data, debug_dir=None, debug
     return mp, raw_mp
 
 
-def extract(gz_path, model, debug_dir=None, **litellm_kwargs):
+def _dump_failed_response(fail_dir, basename, chunk_idx, raw_response):
+    """Write a failed LLM response to fail_dir for inspection."""
+    if not fail_dir:
+        return
+    os.makedirs(fail_dir, exist_ok=True)
+    name = f"{basename}.chunk-{chunk_idx}.failed-response.txt"
+    path = os.path.join(fail_dir, name)
+    with open(path, "w") as f:
+        f.write(raw_response)
+    logger.error("raw LLM response saved to %s", path)
+
+
+def extract(gz_path, model, debug_dir=None, fail_dir=None, **litellm_kwargs):
     """LLM extraction pipeline: mandoc → numbered markdown → LLM → (ParsedManpage, RawManpage)."""
     prepared = prepare_extraction(gz_path)
     if prepared is None:
@@ -584,9 +728,15 @@ def extract(gz_path, model, debug_dir=None, **litellm_kwargs):
         )
         _progress(f"calling LLM ({chunk_label}, {len(chunk)} chars)...")
         t0 = time.monotonic()
-        chunk_data, messages, raw_response = _call_llm(
-            chunk, chunk_info, model, litellm_kwargs
-        )
+        try:
+            chunk_data, messages, raw_response = _call_llm(
+                chunk, chunk_info, model, litellm_kwargs
+            )
+        except ExtractionError as e:
+            raw = getattr(e, "raw_response", None) or getattr(e.__cause__, "raw_response", None)
+            if raw:
+                _dump_failed_response(fail_dir, basename, i, raw)
+            raise
         elapsed = time.monotonic() - t0
         n_opts = len(chunk_data["options"])
         logger.info(
