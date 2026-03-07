@@ -1,14 +1,10 @@
 node_modules/
 *.pyc
 *.swp
-.coverage
-.vagrant
 *.log
 .env
-.env/
 .venv/
 __pycache__
-.mpypy_cache/
 tests/screenshots/*.png
 test-results/
 playwright-report/
