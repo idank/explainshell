@@ -1,6 +1,6 @@
 import unittest
 
-from explainshell.web import app
+from explainshell.web import create_app
 from explainshell.web.views import explain_program, manpage_url, render_markdown
 from tests import helpers
 
@@ -9,10 +9,10 @@ class TestExplainRouter(unittest.TestCase):
     """Route-level tests for the unified explain_router."""
 
     def setUp(self):
-        self.store = helpers.MockStore()
-        app.store = self.store
-        app.config["TESTING"] = True
-        self.client = app.test_client()
+        self.app = create_app()
+        self.app.store = helpers.MockStore()
+        self.app.config["TESTING"] = True
+        self.client = self.app.test_client()
 
     # -- Backwards-compatible routes (no distro in URL) --
 
