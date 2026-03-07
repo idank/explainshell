@@ -696,13 +696,14 @@ class Matcher(bashlex.ast.nodevisitor):
             logger.warning("no AST generated for %r", self.s)
 
         def debug_match():
-            s = "\n".join(
-                [
-                    f"{i}) {self.s[m.start : m.end]} = {m.text}"
-                    for i, m in enumerate(self.all_matches)
-                ]
-            )
-            return s
+            lines = []
+            for i, m in enumerate(self.all_matches):
+                portion = self.s[m.start : m.end]
+                text = m.text or ""
+                if len(text) > 40:
+                    text = text[:40] + "..."
+                lines.append(f"{i}) {portion} = {text}")
+            return "\n".join(lines)
 
         self._mark_unparsed_unknown()
 
