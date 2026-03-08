@@ -90,11 +90,10 @@
             navigation();
 
             $(document).ready(function() {
-                // set the query in the top search box from the url. assumes we
-                // take a single parameter.
-                if (window.location.search.split("&").length == 1) {
-                    var cmdquery = window.location.search.substr("?cmd=".length);
-                    $("#top-search").val(decodeURIComponent(cmdquery.replace(/\+/g, ' ')));
+                // set the query in the top search box from the url
+                var cmd = new URLSearchParams(window.location.search).get('cmd');
+                if (cmd) {
+                    $("#top-search").val(cmd);
                 }
 
                 // when #command-wrapper position is changed to fixed, it'll be removed

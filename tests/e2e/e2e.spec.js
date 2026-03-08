@@ -19,7 +19,7 @@ test("homepage loads", async ({ page }) => {
 });
 
 test("explain sample command", async ({ page }) => {
-  await page.goto("/explain?cmd=tar+xzvf+archive.tar.gz");
+  await page.goto("/explain?cmd=tar+xzvf+archive.tar.gz&deterministic");
   await page.waitForLoadState("networkidle");
 
   await expect(page).toHaveScreenshot("explain-sample.png", { fullPage: true });
@@ -54,7 +54,7 @@ test("man page not found", async ({ page }) => {
 });
 
 test("hover highlights help box", async ({ page }) => {
-  await page.goto("/explain?cmd=tar+xzvf+archive.tar.gz");
+  await page.goto("/explain?cmd=tar+xzvf+archive.tar.gz&deterministic");
   await page.waitForLoadState("networkidle");
 
   const helpBoxes = page.locator("#help .help-box");
@@ -70,7 +70,7 @@ test("hover highlights help box", async ({ page }) => {
 });
 
 test("unicode characters in echo command", async ({ page }) => {
-  await page.goto("/explain?cmd=echo+%22R%C3%A9sum%C3%A9+caf%C3%A9+cr%C3%A8me+br%C3%BBl%C3%A9e%22");
+  await page.goto("/explain?cmd=echo+%22R%C3%A9sum%C3%A9+caf%C3%A9+cr%C3%A8me+br%C3%BBl%C3%A9e%22&deterministic");
   await page.waitForLoadState("networkidle");
 
   // Verify the page rendered without errors
@@ -150,7 +150,7 @@ test("distro dropdown shows active distro as unclickable highlighted item", asyn
 
 test("long explanation scrolls with many help boxes", async ({ page }) => {
   await page.goto(
-    "/explain?cmd=tar+--create+--gzip+--verbose+--file+archive.tar.gz+--exclude+*.log+--anchored+--no-recursion+--keep-old-files+--one-file-system+--totals+--checkpoint+src/"
+    "/explain?cmd=tar+--create+--gzip+--verbose+--file+archive.tar.gz+--exclude+*.log+--anchored+--no-recursion+--keep-old-files+--one-file-system+--totals+--checkpoint+src/&deterministic"
   );
   await page.waitForLoadState("networkidle");
 
@@ -162,9 +162,7 @@ test("long explanation scrolls with many help boxes", async ({ page }) => {
   await page.evaluate(() => window.scrollBy(0, 600));
   await page.waitForTimeout(300);
 
-  await expect(page).toHaveScreenshot("explain-long-scrolled.png", {
-    maxDiffPixelRatio: 0.03,
-  });
+  await expect(page).toHaveScreenshot("explain-long-scrolled.png");
 });
 
 test("blockquotes in help boxes render as plain indented text", async ({ page }) => {

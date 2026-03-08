@@ -93,21 +93,13 @@ a {
 }
 
 .menu {
-    width: 460px; /* necessary for right:0 to work at #themeSelector */
     position: absolute;
     top: -30px;
-    left: 130px;
-    font-family: 'Berkshire Swash', cursive;
-    font-size: 24px;
+    left: 248px;
 }
 
 #top-search {
-   width: 260px;
-   -webkit-transition: all .5s ease;
-   -moz-transition: all .5s ease;
-   transition: all .5s ease;
-   position: relative;
-   left: 0;
+   width: 240px;
 }
 
 #prevnext {
