@@ -1174,7 +1174,7 @@ $(document).ready(function() {
         setTheme(selectedTheme); // to set the correct css file and data-theme
     }
 
-    $("#themeContainer .dropdown-menu a").click(function() {
+    $("#settingsContainer .dropdown-menu a").click(function() {
         setTheme($(this).attr('data-theme-name'));
     });
 

@@ -38,17 +38,19 @@
                 </div>
                 <div style="position: relative;">
                     <ul class="inline menu">
-                      <li><a href="https://github.com/idank/explainshell"><i class="icon-github"></i></a></li>
                       {% block menu %}<li><form action='{{ explain_prefix }}' method='get'><input id="top-search" name='cmd' type="text" autocapitalize="off" autocorrect="off" placeholder="explain..."></input></form></li>{% endblock %}
-                      <li id="themeContainer" class="dropdown">
-                        <span data-toggle="dropdown">theme</span>
-                        <b class="caret" data-toggle="dropdown"></b>
-                        <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu">
-                            <li><a tabindex="-1" href="#" data-theme-name="default">Light</a></li>
-                            <li><a tabindex="-1" href="#" data-theme-name="dark">Dark</a></li>
-                        </ul>
-                      </li>
                     </ul>
+                    <div class="menu-icons">
+                      <a href="https://github.com/idank/explainshell" title="GitHub"><i class="icon-github"></i></a>
+                      <div id="settingsContainer" class="dropdown">
+                        <a href="#" data-toggle="dropdown" title="Settings"><i class="icon-cog"></i></a>
+                        <ul class="dropdown-menu pull-right" role="menu">
+                          <li class="dropdown-header">Theme</li>
+                          <li><a tabindex="-1" href="#" data-theme-name="default">Light</a></li>
+                          <li><a tabindex="-1" href="#" data-theme-name="dark">Dark</a></li>
+                        </ul>
+                      </div>
+                    </div>
                 </div>
                 <div class="small-push"></div>
                 <div class="text-center">

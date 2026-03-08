@@ -181,14 +181,32 @@ a {
     max-width: 450px;
 }
 
-#themeContainer {
-    /* using a fixed margin-left doesn't work both
-       with and without the search bar in the menu */
+.menu-icons {
     position: absolute;
-    right: -110px;
-    margin-top: 5px;
-    font-family: "Courier New",Courier,Monaco,Menlo,Consolas,monospace;
-    font-size: 20px;
+    top: -30px;
+    right: 248px;
+    font-size: 22px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.menu-icons a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.menu-icons a:hover {
+    color: #5795f3;
+}
+
+#settingsContainer {
+    position: relative;
+}
+
+#settingsContainer .dropdown-menu {
+    right: 0;
+    left: auto;
 }
 
 .active-distro {
@@ -197,7 +215,7 @@ a {
 
 .dropdown-menu .dropdown-header {
     background-color: #eeeeee;
-    padding: 5px 0px;
+    padding: 5px 20px;
 }
 
 pre code.hljs {
@@ -244,6 +262,14 @@ body[data-theme='dark'] {
 [data-theme='dark'] .caret {
     /* this is probably a problem with the bootstrap theme */
     border-top: 4px solid #fff;
+}
+
+[data-theme='dark'] .menu-icons a {
+    color: #ccc;
+}
+
+[data-theme='dark'] .menu-icons a:hover {
+    color: #92b9f3;
 }
 
 [data-theme='dark'] .active-distro {
