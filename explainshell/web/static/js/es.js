@@ -240,21 +240,11 @@ class ESLink {
     }
 
     leftmost() {
-        for (let i = 0; i < this.group.links.length; i++) {
-            if (this.group.links[i].goingleft)
-                return this.group.links[i];
-        }
-
-        return null;
+        return this.group.links.find((l) => l.goingleft) ?? null;
     }
 
     rightmost() {
-        for (let i = this.group.links.length-1; i >= 0; i--) {
-            if (!this.group.links[i].goingleft)
-                return this.group.links[i];
-        }
-
-        return null;
+        return this.group.links.findLast((l) => !l.goingleft) ?? null;
     }
 
     // return true if this eslink is 'close' to other by looking at their bounding
