@@ -162,7 +162,152 @@ test("long explanation scrolls with many help boxes", async ({ page }) => {
   await page.evaluate(() => window.scrollBy(0, 600));
   await page.waitForTimeout(300);
 
+  // The command wrapper should remain visible (sticky/affix behavior)
+  await expect(page.locator("#command-wrapper")).toBeInViewport();
+
+  // SVG canvas should still have lines drawn for visible help boxes
+  await expect(page.locator("#canvas path").first()).toBeAttached();
+
   await expect(page).toHaveScreenshot("explain-long-scrolled.png");
+});
+
+test("multi-command navigation with prev/next buttons", async ({ page }) => {
+  // Piped command produces shell + command0 + command1 groups, enabling navigation
+  await page.goto("/explain?cmd=echo+hello+%7C+grep+hello&deterministic");
+  await page.waitForLoadState("networkidle");
+
+  // Navigation UI should appear with prev/next buttons
+  const prevNext = page.locator("#prevnext");
+  await expect(prevNext).toBeVisible();
+
+  // Should start on "all" view with both commands' help visible
+  const currentLabel = prevNext.locator("u");
+  await expect(currentLabel).toHaveText("all");
+
+  const helpBoxes = page.locator("#help .help-box");
+  const initialCount = await helpBoxes.filter({ has: page.locator(":visible") }).count();
+  expect(initialCount).toBeGreaterThan(0);
+
+  // Click next to navigate to first group
+  const nextBtn = prevNext.locator("li .icon-arrow-right").locator("..");
+  await nextBtn.click();
+  await page.waitForTimeout(200);
+
+  // Current label should change away from "all"
+  await expect(currentLabel).not.toHaveText("all");
+
+  // SVG lines should still be drawn
+  await expect(page.locator("#canvas path").first()).toBeAttached();
+
+  await expect(page).toHaveScreenshot("explain-piped-navigated.png", { fullPage: true });
+});
+
+test("keyboard navigation between command groups", async ({ page }) => {
+  await page.goto("/explain?cmd=echo+hello+%7C+grep+hello&deterministic");
+  await page.waitForLoadState("networkidle");
+
+  const currentLabel = page.locator("#prevnext u");
+  await expect(currentLabel).toHaveText("all");
+
+  // Press right arrow to navigate to next group
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(200);
+  const afterRight = await currentLabel.textContent();
+  expect(afterRight).not.toBe("all");
+
+  // Press right again to move forward one more group
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(200);
+  const afterSecondRight = await currentLabel.textContent();
+  expect(afterSecondRight).not.toBe(afterRight);
+
+  // Press left arrow to go back to the previous group
+  await page.keyboard.press("ArrowLeft");
+  await page.waitForTimeout(200);
+  await expect(currentLabel).toHaveText(afterRight);
+
+  // Keyboard nav should be disabled when search box is focused
+  await page.locator("#top-search").focus();
+  const beforeKey = await currentLabel.textContent();
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(200);
+  await expect(currentLabel).toHaveText(beforeKey);
+
+  await expect(page).toHaveScreenshot("explain-keyboard-nav.png", { fullPage: true });
+});
+
+test("theme switching via settings dropdown", async ({ page }) => {
+  await page.goto("/explain?cmd=tar+xzvf+archive.tar.gz&deterministic");
+  await page.waitForLoadState("networkidle");
+
+  // Should start with default theme
+  const body = page.locator("body");
+  await expect(body).toHaveAttribute("data-theme", "default");
+
+  // Open settings dropdown and click Dark
+  await page.locator("#settingsContainer > a").click();
+  await page.locator('a[data-theme-name="dark"]').click();
+
+  // Body should switch to dark theme
+  await expect(body).toHaveAttribute("data-theme", "dark");
+
+  // Theme should persist across reload (stored in cookie)
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  await expect(page.locator("body")).toHaveAttribute("data-theme", "dark");
+
+  await expect(page).toHaveScreenshot("explain-dark-theme.png", { fullPage: true });
+});
+
+test("unknown args show question mark circles", async ({ page }) => {
+  // grep -Q is not a valid flag, should show as unknown with a ? circle
+  await page.goto("/explain?cmd=grep+-Q+hello&deterministic");
+  await page.waitForLoadState("networkidle");
+
+  // The unknown span should exist in #command
+  const unknownSpan = page.locator("#command span.unknown");
+  await expect(unknownSpan).toBeVisible();
+  await expect(unknownSpan).toHaveText("-Q");
+  await expect(unknownSpan).toHaveAttribute("title", /no matching help text/i);
+
+  // SVG should contain a circle (the ? marker) for the unknown arg
+  const circles = page.locator("#canvas circle");
+  await expect(circles.first()).toBeAttached();
+
+  // The ? text should be rendered in the SVG
+  const questionMark = page.locator("#canvas text");
+  await expect(questionMark.first()).toHaveText("?");
+
+  await expect(page).toHaveScreenshot("explain-unknown-arg.png", { fullPage: true });
+});
+
+test("expansion popover on hover", async ({ page }) => {
+  // echo ~ triggers a tilde expansion span
+  await page.goto("/explain?cmd=echo+~&deterministic");
+  await page.waitForLoadState("networkidle");
+
+  // The expansion span should exist
+  const expansion = page.locator("#command span.expansion-tilde");
+  await expect(expansion).toBeVisible();
+
+  // Hover to trigger the Bootstrap popover
+  await expansion.hover();
+  await page.waitForTimeout(300);
+
+  // Popover should appear with the expansion title
+  const popover = page.locator(".popover");
+  await expect(popover).toBeVisible();
+  await expect(popover).toContainText("Tilde Expansion");
+
+  await expect(page).toHaveScreenshot("explain-expansion-popover.png", { fullPage: true });
+});
+
+test("search box is populated from URL query", async ({ page }) => {
+  await page.goto("/explain?cmd=echo+hello");
+  await page.waitForLoadState("networkidle");
+
+  const searchBox = page.locator("#top-search");
+  await expect(searchBox).toHaveValue("echo hello");
 });
 
 test("blockquotes in help boxes render as plain indented text", async ({ page }) => {
