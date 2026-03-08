@@ -3,31 +3,35 @@
     <head>
         <title>explainshell.com{% block title %}{% endblock %}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <!-- Bootstrap -->
+        <!-- Resolve theme before loading CSS to prevent flash -->
+        <script>
+          (function() {
+            var t = localStorage.getItem('theme')
+              || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default');
+            var dark = t === 'dark';
 {%- if config.DEBUG %}
-    {% if request.cookies.get('theme', 'default') == 'default' %}
-        <link href="/static/css/bootstrap.min.css" rel="stylesheet" media="screen" id="bootstrapCSS">
-        <link href="/static/css/highlight.default.min.css" rel="stylesheet" media="screen" id="hljsCSS">
-    {% else %}
-        <link href="/static/css/bootstrap-cyborg.min.css" rel="stylesheet" media="screen" id="bootstrapCSS">
-        <link href="/static/css/hljs-atom-one-dark.min.css" rel="stylesheet" media="screen" id="hljsCSS">
-    {% endif %}
+            var bs = dark ? '/static/css/bootstrap-cyborg.min.css' : '/static/css/bootstrap.min.css';
+            var hl = dark ? '/static/css/hljs-atom-one-dark.min.css' : '/static/css/highlight.default.min.css';
+{% else %}
+            var bs = dark ? '//maxcdn.bootstrapcdn.com/bootswatch/2.3.1/cyborg/bootstrap.min.css' : '//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/css/bootstrap.min.css';
+            var hl = dark ? '//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css' : '//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css';
+{%- endif %}
+            document.write('<link href="' + bs + '" rel="stylesheet" media="screen" id="bootstrapCSS">');
+            document.write('<link href="' + hl + '" rel="stylesheet" id="hljsCSS">');
+            document.documentElement.setAttribute('data-theme', t);
+          })();
+        </script>
+{%- if config.DEBUG %}
         <link href="/static/css/font-awesome.min.css" rel="stylesheet" media="screen">
 {% else %}
-    {% if request.cookies.get('theme', 'default') == 'default' %}
-        <link href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/css/bootstrap.min.css" rel="stylesheet" media="screen" id="bootstrapCSS">
-        <link href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css" rel="stylesheet">
-    {% else %}
-        <link href="//maxcdn.bootstrapcdn.com/bootswatch/2.3.1/cyborg/bootstrap.min.css" rel="stylesheet" media="screen" id="bootstrapCSS">
-        <link href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" rel="stylesheet">
-    {% endif %}
         <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/3.2.1/css/font-awesome.min.css" rel="stylesheet">
 {%- endif %}
         <link href="/static/css/es.css" rel="stylesheet" media="screen">
         <link href='//fonts.googleapis.com/css?family=Berkshire+Swash' rel='stylesheet' type='text/css'>
         {% block head %}{% endblock %}
     </head>
-    <body data-theme={{ request.cookies.get('theme', 'default') }}>
+    <body>
+        <script>document.body.setAttribute('data-theme', document.documentElement.getAttribute('data-theme') || 'default');</script>
         <div class="container">
             <div class="small-push"></div>
             <div class="header">
