@@ -194,86 +194,92 @@ the name of the mail file currently being checked.`
 };
 
 // a class that represents a group of eslink
-function eslinkgroup(clazz, options, mid) {
-    const color = assignedcolors[clazz];
-    this.links = options.map(function(option) { return new eslink(clazz, option, mid, color); });
-    this.options = _.pluck(this.links, 'option');
-    this.help = _.pluck(this.links, 'help');
+class ESLinkGroup {
+    constructor(clazz, options, mid) {
+        const color = assignedcolors[clazz];
+        this.links = options.map(function(option) { return new ESLink(clazz, option, mid, color); });
+        this.options = _.pluck(this.links, 'option');
+        this.help = _.pluck(this.links, 'help');
+    }
 }
 
 // this class represents a link (visualized by a line) between a span (option)
 // in .command that needs to be connected to a corresponding <pre> in .help
-function eslink(clazz, option, mid, color) {
-    this.option = option;       // a span from .command
-    this.color = color;         // the color chosen for this link
-    this.paths = [];            // a list of d3 paths to draw for this link
-    this.lines = [];            // a list of d3 lines to draw for this link
-    this.circle = null;         // circle data to draw, if any (used by unknowns)
-    this.text = null;           // the text to draw in the circle (always '?')
-    this.group = null;          // the group this link is a part of
+class ESLink {
+    constructor(clazz, option, mid, color) {
+        this.option = option;       // a span from .command
+        this.color = color;         // the color chosen for this link
+        this.paths = [];            // a list of d3 paths to draw for this link
+        this.lines = [];            // a list of d3 lines to draw for this link
+        this.circle = null;         // circle data to draw, if any (used by unknowns)
+        this.text = null;           // the text to draw in the circle (always '?')
+        this.group = null;          // the group this link is a part of
 
-    // unknown links have no corresponding <pre> in .help, they simply show up
-    // with a '?' connected to them
-    this.unknown = false;
+        // unknown links have no corresponding <pre> in .help, they simply show up
+        // with a '?' connected to them
+        this.unknown = false;
 
-    // unknown links can go either down or up
-    this.directiondown = true;
+        // unknown links can go either down or up
+        this.directiondown = true;
 
-    // clazz is the name of the current group (shell, command0, command1..)
-    if (clazz) {
-        // the matching <pre> in .help
-        this.help = $(`#${clazz}`)[0];
+        // clazz is the name of the current group (shell, command0, command1..)
+        if (clazz) {
+            // the matching <pre> in .help
+            this.help = $(`#${clazz}`)[0];
 
-        // each link can go either left or right, we decide where by
-        // calculating its middle and comparing it to the middle of .command
-        const rr = option.getBoundingClientRect();
-        const rrmid = rr.left + rr.width / 2;
-        this.goingleft = rrmid <= mid;
+            // each link can go either left or right, we decide where by
+            // calculating its middle and comparing it to the middle of .command
+            const rr = option.getBoundingClientRect();
+            const rrmid = rr.left + rr.width / 2;
+            this.goingleft = rrmid <= mid;
 
-        $(this.help).css("border-color", this.color);
-        
-        $(`#${clazz} b:first-of-type`).css("color", this.color);
+            $(this.help).css("border-color", this.color);
+
+            $(`#${clazz} b:first-of-type`).css("color", this.color);
+        }
+    }
+
+    leftmost() {
+        for (let i = 0; i < this.group.links.length; i++) {
+            if (this.group.links[i].goingleft)
+                return this.group.links[i];
+        }
+
+        return null;
+    }
+
+    rightmost() {
+        for (let i = this.group.links.length-1; i >= 0; i--) {
+            if (!this.group.links[i].goingleft)
+                return this.group.links[i];
+        }
+
+        return null;
+    }
+
+    // return true if this eslink is 'close' to other by looking at their bounding
+    // rects
+    //
+    // we use this when deciding which direction an 'unknown' link should go
+    nearby(other) {
+        const closeness = 5,
+            r = this.option.getBoundingClientRect(), rr = other.option.getBoundingClientRect();
+
+        return Math.abs(r.right - rr.left) <= closeness || Math.abs(r.left - rr.right) <= closeness;
     }
 }
-
-eslink.prototype.leftmost = function() {
-    for (let i = 0; i < this.group.links.length; i++) {
-        if (this.group.links[i].goingleft)
-            return this.group.links[i];
-    }
-
-    return null;
-};
-
-eslink.prototype.rightmost = function() {
-    for (let i = this.group.links.length-1; i >= 0; i--) {
-        if (!this.group.links[i].goingleft)
-            return this.group.links[i];
-    }
-
-    return null;
-};
-
-// return true if this eslink is 'close' to other by looking at their bounding
-// rects
-//
-// we use this when deciding which direction an 'unknown' link should go
-eslink.prototype.nearby = function(other) {
-    const closeness = 5,
-        r = this.option.getBoundingClientRect(), rr = other.option.getBoundingClientRect();
-
-    return Math.abs(r.right - rr.left) <= closeness || Math.abs(r.left - rr.right) <= closeness;
-};
 
 // a convenient wrapper around an array of points that allows to chain appends
-function espath() {
-    this.points = [];
-}
+class ESPath {
+    constructor() {
+        this.points = [];
+    }
 
-espath.prototype.addpoint = function(x, y) {
-    this.points.push({"x": d3.round(x), "y": d3.round(y)});
-    return this;
-};
+    addpoint(x, y) {
+        this.points.push({"x": d3.round(x), "y": d3.round(y)});
+        return this;
+    }
+}
 
 // swap the position of two nodes in the DOM
 function swapNodes(a, b) {
@@ -577,7 +583,7 @@ function drawgrouplines(commandselector, options) {
     // create an eslinkgroup for every group of <span>'s, these will be linked together to
     // the same <pre> in .help.
     const linkgroups = _.map(groupedoptions, function(spans, clazz) {
-            const esg = new eslinkgroup(clazz, spans, mid);
+            const esg = new ESLinkGroup(clazz, spans, mid);
             _.each(esg.links, function(l) {
                 l.group = esg;
             });
@@ -644,14 +650,14 @@ function drawgrouplines(commandselector, options) {
         const commandOffsetToCanvas = marginBetweenCommandAndCanvas - link.starty
 
         // points for marker under command
-        link.paths.push(new espath()
+        link.paths.push(new ESPath()
           .addpoint(commandRect.left, 0)
           .addpoint(commandRect.left, 5)
           .addpoint(commandRight, 5)
           .addpoint(commandRight, 0)
         );
 
-        const path = new espath();
+        const path = new ESPath();
         path.addpoint(spanmid, 5); // 3
 
         let topskip, y, p, pp;
@@ -719,7 +725,7 @@ function drawgrouplines(commandselector, options) {
     }
 
     // create a group for all the unknowns
-    const unknowngroup = new eslinkgroup(null, commandselector.filter(".unknown").toArray(), mid);
+    const unknowngroup = new ESLinkGroup(null, commandselector.filter(".unknown").toArray(), mid);
     const linkslengthnounknown = links.length;
 
     $.each(unknowngroup.links, function(i, link) {
@@ -740,21 +746,21 @@ function drawgrouplines(commandselector, options) {
         //if ((prevlink && prevlink.directiondown && link.nearby(prevlink)) || (nextlink && nextlink.directiondown && link.nearby(nextlink))) {
         //    link.directiondown = false;
 
-        //    link.paths.push(new espath().addpoint(rr.left, startytop).addpoint(rrright, startytop-5));
-        //    link.paths.push(new espath().addpoint(rrright, startytop-5).addpoint(rrright, startytop));
+        //    link.paths.push(new ESPath().addpoint(rr.left, startytop).addpoint(rrright, startytop-5));
+        //    link.paths.push(new ESPath().addpoint(rrright, startytop-5).addpoint(rrright, startytop));
         //    var rrmid = d3.round(rr.left + rr.width / 2);
         //    link.lines.push({x1: rrmid, y1: startytop-6, x2: rrmid, y2: startytop-5-unknownlinelength});
         //    link.circle = {x: rrmid, y: startytop-5-unknownlinelength-3, r: 8};
         //}
         //else {
-            link.paths.push(new espath()
+            link.paths.push(new ESPath()
                 .addpoint(rr.left, 0)
                 .addpoint(rr.left, 5)
                 .addpoint(rrright, 5)
                 .addpoint(rrright, 0)
             );
             const rrmid = d3.round(rr.left + rr.width / 2);
-            link.paths.push(new espath()
+            link.paths.push(new ESPath()
                 .addpoint(rrmid, 5 + strokewidth)
                 .addpoint(rrmid, 5 + strokewidth + unknownlinelength + commandOffsetToCanvas)
             );
