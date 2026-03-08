@@ -42,7 +42,7 @@ const changewait = 250;
 const docCookies = {
     getItem: function (sKey) {
       if (!sKey) { return null; }
-      return decodeURIComponent(document.cookie.replace(new RegExp("(?:(?:^|.*;)\\s*" + encodeURIComponent(sKey).replace(/[\-\.\+\*]/g, "\\$&") + "\\s*\\=\\s*([^;]*).*$)|^.*$"), "$1")) || null;
+      return decodeURIComponent(document.cookie.replace(new RegExp(`(?:(?:^|.*;)\\s*${encodeURIComponent(sKey).replace(/[\-\.\+\*]/g, "\\$&")}\\s*\\=\\s*([^;]*).*$)|^.*$`), "$1")) || null;
     },
     setItem: function (sKey, sValue, vEnd, sPath, sDomain, bSecure) {
       if (!sKey || /^(?:expires|max-age|path|domain|secure)$/i.test(sKey)) { return false; }
@@ -50,27 +50,27 @@ const docCookies = {
       if (vEnd) {
         switch (vEnd.constructor) {
           case Number:
-            sExpires = vEnd === Infinity ? "; expires=Fri, 31 Dec 9999 23:59:59 GMT" : "; max-age=" + vEnd;
+            sExpires = vEnd === Infinity ? "; expires=Fri, 31 Dec 9999 23:59:59 GMT" : `; max-age=${vEnd}`;
             break;
           case String:
-            sExpires = "; expires=" + vEnd;
+            sExpires = `; expires=${vEnd}`;
             break;
           case Date:
-            sExpires = "; expires=" + vEnd.toUTCString();
+            sExpires = `; expires=${vEnd.toUTCString()}`;
             break;
         }
       }
-      document.cookie = encodeURIComponent(sKey) + "=" + encodeURIComponent(sValue) + sExpires + (sDomain ? "; domain=" + sDomain : "") + (sPath ? "; path=" + sPath : "") + (bSecure ? "; secure" : "");
+      document.cookie = `${encodeURIComponent(sKey)}=${encodeURIComponent(sValue)}${sExpires}${sDomain ? `; domain=${sDomain}` : ""}${sPath ? `; path=${sPath}` : ""}${bSecure ? "; secure" : ""}`;
       return true;
     },
     removeItem: function (sKey, sPath, sDomain) {
       if (!this.hasItem(sKey)) { return false; }
-      document.cookie = encodeURIComponent(sKey) + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT" + (sDomain ? "; domain=" + sDomain : "") + (sPath ? "; path=" + sPath : "");
+      document.cookie = `${encodeURIComponent(sKey)}=; expires=Thu, 01 Jan 1970 00:00:00 GMT${sDomain ? `; domain=${sDomain}` : ""}${sPath ? `; path=${sPath}` : ""}`;
       return true;
     },
     hasItem: function (sKey) {
       if (!sKey || /^(?:expires|max\-age|path|domain|secure)$/i.test(sKey)) { return false; }
-      return (new RegExp("(?:^|;\\s*)" + encodeURIComponent(sKey).replace(/[\-\.\+\*]/g, "\\$&") + "\\s*\\=")).test(document.cookie);
+      return (new RegExp(`(?:^|;\\s*)${encodeURIComponent(sKey).replace(/[\-\.\+\*]/g, "\\$&")}\\s*\\=`)).test(document.cookie);
     },
     keys: function () {
       const aKeys = document.cookie.replace(/((?:^|\s*;)[^\=]+)(?=;|$)|^\s*|\s*(?:\=[^;]*)?(?:\1|$)/g, "").split(/\s*(?:\=[^;]*)?;\s*/);
@@ -83,114 +83,113 @@ function specialparam(text) {
     return {
         title: "Special Parameters",
         content:
-            '<p>The shell treats several parameters specially. These parameters ' +
-            'may only be referenced; assignment to them is not allowed.</p>' +
-            text
+            `<p>The shell treats several parameters specially. These parameters \
+may only be referenced; assignment to them is not allowed.</p>${text}`
     };
 }
 const expansions = {
     tilde: {
         title: "Tilde Expansion",
         content:
-            'If a word begins with an unquoted tilde character ' +
-            '(’<b>~</b>’), all of the characters preceding ' +
-            'the first unquoted slash (or all characters, if there is no ' +
-            'unquoted slash) are considered a <i>tilde-prefix</i>. If ' +
-            'none of the characters in the tilde-prefix are quoted, the ' +
-            'characters in the tilde-prefix following the tilde are ' +
-            'treated as a possible <i>login name</i>. If this login name ' +
-            'is the null string, the tilde is replaced with the value of ' +
-            'the shell parameter ' +
-            '<b><small>HOME</small></b><small>.</small> If ' +
-            '<b><small>HOME</small></b> is unset, the home directory of ' +
-            'the user executing the shell is substituted instead. ' +
-            'Otherwise, the tilde-prefix is replaced with the home ' +
-            'directory associated with the specified login name.'
+            `If a word begins with an unquoted tilde character \
+(\u2019<b>~</b>\u2019), all of the characters preceding \
+the first unquoted slash (or all characters, if there is no \
+unquoted slash) are considered a <i>tilde-prefix</i>. If \
+none of the characters in the tilde-prefix are quoted, the \
+characters in the tilde-prefix following the tilde are \
+treated as a possible <i>login name</i>. If this login name \
+is the null string, the tilde is replaced with the value of \
+the shell parameter \
+<b><small>HOME</small></b><small>.</small> If \
+<b><small>HOME</small></b> is unset, the home directory of \
+the user executing the shell is substituted instead. \
+Otherwise, the tilde-prefix is replaced with the home \
+directory associated with the specified login name.`
     },
     "parameter-param": {
         title: "Parameter Expansion",
         content:
-            'The ’<b>$</b>’ character introduces parameter expansion, command ' +
-            'substitution, or arithmetic expansion.  The parameter name or ' +
-            'symbol to be expanded may be enclosed in braces, which are optional ' +
-            'but serve to protect the variable to be expanded from characters ' +
-            'immediately following it which could be interpreted as part of the ' +
-            'name.'
+            `The \u2019<b>$</b>\u2019 character introduces parameter expansion, command \
+substitution, or arithmetic expansion.  The parameter name or \
+symbol to be expanded may be enclosed in braces, which are optional \
+but serve to protect the variable to be expanded from characters \
+immediately following it which could be interpreted as part of the \
+name.`
     },
     "parameter-digits": {
         title: "Positional Parameters",
         content:
-            'A <i>positional parameter</i> is a parameter denoted by one or more ' +
-            'digits, other than the single digit 0. Positional parameters are ' +
-            'assigned from the shell’s arguments when it is invoked, and may be ' +
-            'reassigned using the <b>set</b> builtin command. Positional ' +
-            'parameters may not be assigned to with assignment statements. The ' +
-            'positional parameters are temporarily replaced when a shell ' +
-            'function is executed (see <b><small>FUNCTIONS</small></b> below). '
+            `A <i>positional parameter</i> is a parameter denoted by one or more \
+digits, other than the single digit 0. Positional parameters are \
+assigned from the shell\u2019s arguments when it is invoked, and may be \
+reassigned using the <b>set</b> builtin command. Positional \
+parameters may not be assigned to with assignment statements. The \
+positional parameters are temporarily replaced when a shell \
+function is executed (see <b><small>FUNCTIONS</small></b> below). `
     },
     "parameter-star": specialparam(
-            'Expands to the positional parameters, starting from one. When the ' +
-            'expansion occurs within double quotes, it expands to a single word ' +
-            'with the value of each parameter separated by the first character ' +
-            'of the <b><small>IFS</small></b> special variable. That is, ' +
-            '"<b>$*</b>" is equivalent to ' +
-            '"<b>$1</b><i>c</i><b>$2</b><i>c</i><b>...</b>", where <i>c</i> is ' +
-            'the first character of the value of the <b><small>IFS</small></b> ' +
-            'variable. If <b><small>IFS</small></b> is unset, the parameters are ' +
-            'separated by spaces. If <b><small>IFS</small></b> is null, the ' +
-            'parameters are joined without intervening separators.'
+            `Expands to the positional parameters, starting from one. When the \
+expansion occurs within double quotes, it expands to a single word \
+with the value of each parameter separated by the first character \
+of the <b><small>IFS</small></b> special variable. That is, \
+"<b>$*</b>" is equivalent to \
+"<b>$1</b><i>c</i><b>$2</b><i>c</i><b>...</b>", where <i>c</i> is \
+the first character of the value of the <b><small>IFS</small></b> \
+variable. If <b><small>IFS</small></b> is unset, the parameters are \
+separated by spaces. If <b><small>IFS</small></b> is null, the \
+parameters are joined without intervening separators.`
     ),
     "parameter-at": specialparam(
-            'Expands to the positional parameters, starting from one. ' +
-            'When the expansion occurs within double quotes, each ' +
-            'parameter expands to a separate word. That is, ' +
-            '"<b>$@</b>" is equivalent to "<b>$1</b>" ' +
-            '"<b>$2</b>" ... If the double-quoted expansion ' +
-            'occurs within a word, the expansion of the first parameter ' +
-            'is joined with the beginning part of the original word, and ' +
-            'the expansion of the last parameter is joined with the last ' +
-            'part of the original word. When there are no positional ' +
-            'parameters, "<b>$@</b>" and <b>$@</b> expand to ' +
-            'nothing (i.e., they are removed).'
+            `Expands to the positional parameters, starting from one. \
+When the expansion occurs within double quotes, each \
+parameter expands to a separate word. That is, \
+"<b>$@</b>" is equivalent to "<b>$1</b>" \
+"<b>$2</b>" ... If the double-quoted expansion \
+occurs within a word, the expansion of the first parameter \
+is joined with the beginning part of the original word, and \
+the expansion of the last parameter is joined with the last \
+part of the original word. When there are no positional \
+parameters, "<b>$@</b>" and <b>$@</b> expand to \
+nothing (i.e., they are removed).`
     ),
     "parameter-pound": specialparam(
             'Expands to the number of positional parameters in'
     ),
     "parameter-question": specialparam(
-            'Expands to the exit status of the most recently executed ' +
-            'foreground pipeline.'
+            `Expands to the exit status of the most recently executed \
+foreground pipeline.`
     ),
     "parameter-hyphen": specialparam(
-            'Expands to the current option flags as specified upon invocation, ' +
-            'by the <b>set</b> builtin command, or those set by the shell ' +
-            'itself (such as the <b>−i</b> option).'
+            `Expands to the current option flags as specified upon invocation, \
+by the <b>set</b> builtin command, or those set by the shell \
+itself (such as the <b>\u2212i</b> option).`
     ),
     "parameter-dollar": specialparam(
-            'Expands to the process ID of the shell. In a () subshell, it '+
-            'expands to the process ID of the current shell, not the ' +
-            'subshell.'
+            `Expands to the process ID of the shell. In a () subshell, it \
+expands to the process ID of the current shell, not the \
+subshell.`
     ),
     "parameter-exclamation": specialparam(
-            'Expands to the process ID of the most recently executed background ' +
-            '(asynchronous) command.'
+            `Expands to the process ID of the most recently executed background \
+(asynchronous) command.`
     ),
     "parameter-zero": specialparam(
-            'Expands to the name of the shell or shell script. This is set at ' +
-            'shell initialization. If <b>bash</b> is invoked with a file of ' +
-            'commands, <b>$0</b> is set to the name of that file. If <b>bash</b> ' +
-            'is started with the <b>−c</b> option, then <b>$0</b> is set to the ' +
-            'first argument after the string to be executed, if one is present. ' +
-            'Otherwise, it is set to the file name used to invoke <b>bash</b>, ' +
-            'as given by argument zero.'
+            `Expands to the name of the shell or shell script. This is set at \
+shell initialization. If <b>bash</b> is invoked with a file of \
+commands, <b>$0</b> is set to the name of that file. If <b>bash</b> \
+is started with the <b>\u2212c</b> option, then <b>$0</b> is set to the \
+first argument after the string to be executed, if one is present. \
+Otherwise, it is set to the file name used to invoke <b>bash</b>, \
+as given by argument zero.`
     ),
     "parameter-underscore": specialparam(
-            'At shell startup, set to the absolute pathname used to invoke the ' +
-            'shell or shell script being executed as passed in the environment ' +
-            'or argument list. Subsequently, expands to the last argument to the ' +
-            'previous command, after expansion.  Also set to the full pathname ' +
-            'used to invoke each command executed and placed in the environment ' +
-            'exported to that command. When checking mail, this parameter holds ' +
-            'the name of the mail file currently being checked.'
+            `At shell startup, set to the absolute pathname used to invoke the \
+shell or shell script being executed as passed in the environment \
+or argument list. Subsequently, expands to the last argument to the \
+previous command, after expansion.  Also set to the full pathname \
+used to invoke each command executed and placed in the environment \
+exported to that command. When checking mail, this parameter holds \
+the name of the mail file currently being checked.`
     ),
 };
 
@@ -223,7 +222,7 @@ function eslink(clazz, option, mid, color) {
     // clazz is the name of the current group (shell, command0, command1..)
     if (clazz) {
         // the matching <pre> in .help
-        this.help = $("#" + clazz)[0];
+        this.help = $(`#${clazz}`)[0];
 
         // each link can go either left or right, we decide where by
         // calculating its middle and comparing it to the middle of .command
@@ -233,7 +232,7 @@ function eslink(clazz, option, mid, color) {
 
         $(this.help).css("border-color", this.color);
         
-        $("#" + clazz + " b:first-of-type").css("color", this.color);
+        $(`#${clazz} b:first-of-type`).css("color", this.color);
     }
 }
 
@@ -307,7 +306,7 @@ function reorder(lefteslinks) {
 // return the matching <pre> in .help for each item in commandselector
 function helpselector(commandselector) {
     return commandselector.map(function(span) {
-        return $("#" + $(this).attr('helpref'))[0];
+        return $(`#${$(this).attr('helpref')}`)[0];
     });
 }
 
@@ -318,7 +317,7 @@ function optionsselector(pres, spans) {
     });
 
     const s = $("#command span.unknown");
-    const r = _.reduce(ids, function(s, id) { return s.add("#command span[helpref^=" + id + "]"); }, s);
+    const r = _.reduce(ids, function(s, id) { return s.add(`#command span[helpref^=${id}]`); }, s);
 
     if (typeof spans == 'object') {
         return (r.filter(spans));
@@ -349,9 +348,9 @@ function initialize() {
     // construct a doubly linked list of previous/next groups. this is used
     // by the navigation buttons to move between groups
     let i = 0,
-        g = "command" + i;
+        g = `command${i}`;
 
-    s = $("#command span[class^=" + g + "]");
+    s = $(`#command span[class^=${g}]`);
 
     let unknownsselector = $();
 
@@ -370,8 +369,8 @@ function initialize() {
         }
 
         i++;
-        g = "command" + i;
-        s = $("#command span[class^=" + g + "]");
+        g = `command${i}`;
+        s = $(`#command span[class^=${g}]`);
     }
 
     if (groupcount == 1) {
@@ -789,7 +788,7 @@ function drawgrouplines(commandselector, options) {
         const g = d3.select(this);
 
         if (link.directiondown)
-            g.attr('transform', 'translate(0, ' + link.starty + ')');
+            g.attr('transform', `translate(0, ${link.starty})`);
 
         const paths = g.selectAll('path')
             .data(link.paths)
@@ -812,7 +811,7 @@ function drawgrouplines(commandselector, options) {
 
         if (link.circle) {
             const gg = g.append('g')
-                .attr("transform", "translate(" + link.circle.x + ", " + link.circle.y + ")");
+                .attr("transform", `translate(${link.circle.x}, ${link.circle.y})`);
 
             gg.append('circle')
                 .attr("r", link.circle.r)
@@ -949,8 +948,8 @@ function navigation() {
             return 'all';
         };
 
-        nextext.text(" explain " + grouptext(currentgroup.next));
-        prevtext.text(" explain " + grouptext(currentgroup.prev));
+        nextext.text(` explain ${grouptext(currentgroup.next)}`);
+        prevtext.text(` explain ${grouptext(currentgroup.prev)}`);
 
         prev.click(function() {
             if (affixon())
@@ -973,12 +972,12 @@ function navigation() {
                 else {
                     console.log("setting prev button text to new current group prev %s", currentgroup.prev.name);
 
-                    prevtext.text(" explain " + grouptext(currentgroup.prev));
+                    prevtext.text(` explain ${grouptext(currentgroup.prev)}`);
                 }
 
                 if (currentgroup.next) {
                     next.css({'display': ''});
-                    nextext.text(" explain " + grouptext(currentgroup.next));
+                    nextext.text(` explain ${grouptext(currentgroup.next)}`);
                     console.log("setting next button text to new current group next %s", currentgroup.next.name);
                 }
             }
@@ -1004,12 +1003,12 @@ function navigation() {
                 }
                 else {
                     console.log("setting next button text to new current group next %s", currentgroup.next.name);
-                    nextext.text(" explain " + grouptext(currentgroup.next));
+                    nextext.text(` explain ${grouptext(currentgroup.next)}`);
                 }
 
                 if (currentgroup.prev) {
                     prev.css({'display': ''});
-                    prevtext.text(" explain " + grouptext(currentgroup.prev));
+                    prevtext.text(` explain ${grouptext(currentgroup.prev)}`);
                     console.log("setting prev button text to new current group prev %s", currentgroup.prev.name);
                 }
             }
@@ -1146,7 +1145,7 @@ function currentExplainPrefix() {
         return $(this).attr('data-distro');
     }).get();
     if (parts.length >= 2 && knownDistros.indexOf(parts[0]) !== -1) {
-        return '/explain/' + parts[0] + '/' + parts[1];
+        return `/explain/${parts[0]}/${parts[1]}`;
     }
     return '/explain';
 }
@@ -1156,16 +1155,16 @@ function setDistro(distro, release) {
     docCookies.setItem('distro', distro, Infinity, '/');
     docCookies.setItem('release', release, Infinity, '/');
 
-    const newPrefix = '/explain/' + distro + '/' + release;
+    const newPrefix = `/explain/${distro}/${release}`;
     const path = window.location.pathname;
     const query = window.location.search;
     const oldPrefix = currentExplainPrefix();
 
     if (path.startsWith(oldPrefix)) {
         const rest = path.substring(oldPrefix.length);
-        window.location.href = newPrefix + rest + query;
+        window.location.href = `${newPrefix}${rest}${query}`;
     } else {
-        window.location.href = newPrefix + query;
+        window.location.href = `${newPrefix}${query}`;
     }
 }
 
