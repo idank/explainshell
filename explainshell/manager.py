@@ -679,7 +679,7 @@ def main(args):
         print("No .gz files found.", file=sys.stderr)
         return 1
 
-    s = store.Store(db_path) if not args.dry_run or diff_kind == "db" else None
+    s = store.Store.create(db_path) if not args.dry_run or diff_kind == "db" else None
     if s and args.drop:
         s.drop(confirm=True)
 

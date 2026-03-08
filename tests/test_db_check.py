@@ -35,7 +35,7 @@ def db_path(tmp_path):
 
 @pytest.fixture
 def store(db_path):
-    s = Store(db_path=db_path)
+    s = Store.create(db_path)
     yield s
     s.close()
 

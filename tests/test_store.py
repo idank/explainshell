@@ -20,7 +20,7 @@ def _make_raw():
 def store(tmp_path):
     """Create a Store backed by a temporary SQLite database."""
     db_path = str(tmp_path / "test.db")
-    s = Store(db_path=db_path)
+    s = Store.create(db_path)
     yield s
     s.close()
 

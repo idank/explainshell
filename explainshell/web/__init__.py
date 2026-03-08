@@ -25,7 +25,7 @@ def create_app(db_path=None):
 
     db = db_path or config.DB_PATH
     if db:
-        app.store = store.Store(db)
+        app.store = store.Store(db, read_only=True)
 
     from explainshell.web.views import bp
     app.register_blueprint(bp)

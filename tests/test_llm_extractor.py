@@ -615,10 +615,10 @@ class TestLlmManagerDryRun(unittest.TestCase):
         return args
 
     @patch("explainshell.manager.llm_extractor.extract")
-    @patch("explainshell.manager.store.Store")
+    @patch("explainshell.manager.store.Store.create")
     @patch("explainshell.manager._collect_gz_files")
     def test_dry_run_calls_llm_but_not_store(
-        self, mock_collect, mock_store_cls, mock_extract
+        self, mock_collect, mock_store_create, mock_extract
     ):
         mock_collect.return_value = ["/fake/echo.1.gz"]
         fake_mp = MagicMock()
@@ -634,14 +634,14 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_extract.assert_called_once_with(
             "/fake/echo.1.gz", "test-model", debug_dir="debug-output", fail_dir="debug-output"
         )
-        mock_store_cls.assert_not_called()
+        mock_store_create.assert_not_called()
         self.assertEqual(ret, 0)
 
     @patch("explainshell.manager.llm_extractor.extract")
-    @patch("explainshell.manager.store.Store")
+    @patch("explainshell.manager.store.Store.create")
     @patch("explainshell.manager._collect_gz_files")
     def test_normal_run_writes_to_store(
-        self, mock_collect, mock_store_cls, mock_extract
+        self, mock_collect, mock_store_create, mock_extract
     ):
         mock_collect.return_value = ["/fake/echo.1.gz"]
         fake_mp = MagicMock()
@@ -651,7 +651,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_extract.return_value = (fake_mp, fake_raw)
 
         mock_store = MagicMock()
-        mock_store_cls.return_value = mock_store
+        mock_store_create.return_value = mock_store
         # simulate page not already stored
         from explainshell import errors
 
