@@ -198,8 +198,8 @@ class ESLinkGroup {
     constructor(clazz, options, mid) {
         const color = assignedcolors[clazz];
         this.links = options.map(function(option) { return new ESLink(clazz, option, mid, color); });
-        this.options = _.pluck(this.links, 'option');
-        this.help = _.pluck(this.links, 'help');
+        this.options = this.links.map(l => l.option);
+        this.help = this.links.map(l => l.help);
     }
 }
 
@@ -291,7 +291,7 @@ function swapNodes(a, b) {
 
 // reorder the help <pre>'s of all links that go left
 function reorder(lefteslinks) {
-    const help = _.pluck(lefteslinks, 'help'),
+    const help = lefteslinks.map(l => l.help),
         visiblehelp = $("#help .help-box:visible");
 
     // check the indices of the first and last help boxes. if the first is
@@ -592,7 +592,7 @@ function drawgrouplines(commandselector, options) {
     });
 
     // an array of all the links we need to make, ungrouped
-    let links = _.flatten(_.pluck(linkgroups, 'links'), true);
+    let links = _.flatten(linkgroups.map(g => g.links), true);
     // the upper bounds of our drawing area
     const marginBetweenCommandAndCanvas = commandWrapperRect.bottom - canvasTop,
         startytop = commandWrapperRect.top - canvasTop;
