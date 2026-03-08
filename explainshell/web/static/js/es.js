@@ -250,7 +250,7 @@ function reorder(lefteslinks) {
     if (visiblehelp.index($(help[0])) >= visiblehelp.index($(help[help.length - 1])))
         return;
 
-    for (let i = 0, j = help.length - 1; i < Math.floor(help.length / 2) && i != j; i++, j = help.length - 1 - i) {
+    for (let i = 0, j = help.length - 1; i < Math.floor(help.length / 2) && i !== j; i++, j = help.length - 1 - i) {
         const h = help[i],
             hh = help[j];
 
@@ -274,7 +274,7 @@ function optionsselector(pres, spans) {
     const s = $("#command span.unknown");
     const r = _.reduce(ids, (s, id) => s.add(`#command span[helpref^=${id}]`), s);
 
-    if (typeof spans == 'object') {
+    if (typeof spans === 'object') {
         return (r.filter(spans));
     } else {
         return r;
@@ -328,7 +328,7 @@ function initialize() {
         s = $(`#command span[class^=${g}]`);
     }
 
-    if (groupcount == 1) {
+    if (groupcount === 1) {
         // if we have a single group, get rid of 'all' and remove the prev/next
         // links
         head = head.next;
@@ -339,7 +339,7 @@ function initialize() {
         // if we have 1 group and it's the shell, all other commands in there
         // are unknowns, add them to the selector so they show up as unknowns
         // in the UI
-        if (head.name == 'shell') {
+        if (head.name === 'shell') {
             head.commandselector = head.commandselector.add(unknownsselector);
         }
     }
@@ -360,7 +360,7 @@ function initialize() {
     // look for expansions in the groups we've created, for each one create
     // a popover with the help text
     while (curr) {
-        if (curr.name != 'all') {
+        if (curr.name !== 'all') {
             $("span[class^=expansion]", curr.commandselector).each(function() {
                 const kind = $(this).attr("class").slice(10);
 
@@ -464,7 +464,7 @@ function drawgrouplines(commandselector, options) {
         hidepres: true
     };
 
-    if (typeof options == 'object') {
+    if (typeof options === 'object') {
         options = $.extend(defaults, options);
     } else {
         options = defaults;
@@ -481,7 +481,7 @@ function drawgrouplines(commandselector, options) {
     // if the current group isn't 'all', hide the rest of the help <pre>'s, and show
     // the <pre>'s help of the current group
     if (options.hidepres) {
-        if (currentgroup.name != 'all') {
+        if (currentgroup.name !== 'all') {
             $("#help .help-box").not(helpselector(commandselector)).parent().parent().hide();
             helpselector(commandselector).parent().parent().show();
 
@@ -520,7 +520,7 @@ function drawgrouplines(commandselector, options) {
         right = helprect.right + sidepadding;
     let topheight = options.topheight;
 
-    if (topheight == -1) {
+    if (topheight === -1) {
         topheight = Math.abs(commandWrapperRect.bottom - top);
     }
 
@@ -619,7 +619,7 @@ function drawgrouplines(commandselector, options) {
             // those we add a line from the option to the help box. the rest of
             // the left going links in this group will connect to the top of
             // this line
-            if (link == leftmost) {
+            if (link === leftmost) {
                 topskip = topheight / goingleft;
                 y = topskip * goneleft + topskip + commandOffsetToCanvas;
                 path.addpoint(left - ((goingleft - goneleft) * sidespace), y); // 4
@@ -646,7 +646,7 @@ function drawgrouplines(commandselector, options) {
             // handle right going links, similarly to left
             const rightmost = link.rightmost();
 
-            if (link == rightmost) {
+            if (link === rightmost) {
                 topskip = topheight / goingright;
                 y = topskip * goneright + topskip + commandOffsetToCanvas;
                 path.addpoint(right + ((goingright - goneright) * sidespace), y); // 4
@@ -665,7 +665,7 @@ function drawgrouplines(commandselector, options) {
                 pp = rightmostpath.points[1];
 
                 // zero or minus to alight with the same flag
-                startyDifferace = leftmost.starty - link.starty
+                startyDifferace = rightmost.starty - link.starty
                 path.addpoint(p.x, pp.y + startyDifferace);
             }
         }
@@ -681,9 +681,9 @@ function drawgrouplines(commandselector, options) {
         const rr = link.option.getBoundingClientRect(),
             rrright = rr.right - strokewidth,
             nextspan = link.option.nextElementSibling,
-            nextlink = links.find((l) => l.option == nextspan),
+            nextlink = links.find((l) => l.option === nextspan),
             prevspan = link.option.previousElementSibling,
-            prevlink = links.find((l) => l.option == prevspan);
+            prevlink = links.find((l) => l.option === prevspan);
 
         link.starty = link.option.getBoundingClientRect().bottom - link.option.parentElement.getBoundingClientRect().top + 1;
         const commandOffsetToCanvas = marginBetweenCommandAndCanvas - link.starty
@@ -788,7 +788,7 @@ function drawgrouplines(commandselector, options) {
     if (linkslengthnounknown > 1) {
         const groupsnounknowns = groups.filter((g) => !g.links[0].unknown);
         groupsnounknowns.each(function(linkgroup) {
-            const othergroups = groups.filter((other) => linkgroup != other);
+            const othergroups = groups.filter((other) => linkgroup !== other);
 
             const s = $(linkgroup.help).add(linkgroup.options);
             console.log('s=', s);
@@ -812,7 +812,7 @@ function drawgrouplines(commandselector, options) {
 
                     // hide the lines of all other groups
                     groups.attr('visibility', (other) =>
-                        linkgroup != other ? 'hidden' : null);
+                        linkgroup !== other ? 'hidden' : null);
 
                     // and make their <span> and <pre>'s slightly transparent
                     othergroups.each((other) => {
@@ -830,7 +830,7 @@ function drawgrouplines(commandselector, options) {
                         $(linkgroup.options).css({'font-weight':'normal'});
 
                         groups.attr('visibility', (other) =>
-                            linkgroup != other ? 'visible' : null);
+                            linkgroup !== other ? 'visible' : null);
 
                         othergroups.each((other) => {
                             $(other.help).add(other.options).css({opacity: 1});
@@ -896,9 +896,9 @@ function navigation() {
             currentext = prevnext.find("u");
 
         const grouptext = (group) => {
-            if (group.name == 'shell')
+            if (group.name === 'shell')
                 return 'shell syntax';
-            else if (group.name != 'all')
+            else if (group.name !== 'all')
                 return group.commandselector.first().text();
             return 'all';
         };
