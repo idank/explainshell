@@ -454,7 +454,10 @@ function handlesynopsis() {
 }
 
 function assigncolors() {
-    var shuffledcolors = _.shuffle(colors);
+    // Skip color shuffle when &deterministic is in the URL, so e2e screenshot
+    // tests produce pixel-identical SVG lines across runs.
+    var params = new URLSearchParams(window.location.search);
+    var shuffledcolors = params.has('deterministic') ? colors.slice() : _.shuffle(colors);
 
     $("#help .help-box").each(function() {
         color = shuffledcolors.shift();

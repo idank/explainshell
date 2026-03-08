@@ -42,8 +42,6 @@ module.exports = defineConfig({
     baseURL: `http://127.0.0.1:${port}`,
   },
   expect: {
-    toHaveScreenshot: {
-      maxDiffPixelRatio: 0.01,
-    },
+    toHaveScreenshot: {},
   },
 });
