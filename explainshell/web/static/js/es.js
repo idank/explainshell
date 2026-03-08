@@ -6,7 +6,7 @@ const themeCookieName = 'theme';
 
 if (!debug) {
     console = console || {};
-    console.log = function(){};
+    console.log = () => {};
 }
 
 // a list of colors to use for the lines
@@ -197,7 +197,7 @@ the name of the mail file currently being checked.`
 class ESLinkGroup {
     constructor(clazz, options, mid) {
         const color = assignedcolors[clazz];
-        this.links = options.map(function(option) { return new ESLink(clazz, option, mid, color); });
+        this.links = options.map((option) => new ESLink(clazz, option, mid, color));
         this.options = this.links.map(l => l.option);
         this.help = this.links.map(l => l.help);
     }
@@ -323,7 +323,7 @@ function optionsselector(pres, spans) {
     });
 
     const s = $("#command span.unknown");
-    const r = _.reduce(ids, function(s, id) { return s.add(`#command span[helpref^=${id}]`); }, s);
+    const r = _.reduce(ids, (s, id) => s.add(`#command span[helpref^=${id}]`), s);
 
     if (typeof spans == 'object') {
         return (r.filter(spans));
@@ -578,13 +578,13 @@ function drawgrouplines(commandselector, options) {
     // select all spans in our commandselector, and group them by their class
     // attribute. different spans share the same class when they should be
     // linked to the same <pre> in .help
-    const groupedoptions = _.groupBy(commandselector.filter(":not(.unknown)"), function(span) { return $(span).attr('helpref'); });
+    const groupedoptions = _.groupBy(commandselector.filter(":not(.unknown)"), (span) => $(span).attr('helpref'));
 
     // create an eslinkgroup for every group of <span>'s, these will be linked together to
     // the same <pre> in .help.
-    const linkgroups = Object.entries(groupedoptions).map(function([clazz, spans]) {
+    const linkgroups = Object.entries(groupedoptions).map(([clazz, spans]) => {
             const esg = new ESLinkGroup(clazz, spans, mid);
-            esg.links.forEach(function(l) {
+            esg.links.forEach((l) => {
                 l.group = esg;
             });
 
@@ -599,8 +599,8 @@ function drawgrouplines(commandselector, options) {
 
     // links that are going left and right, in the order we'd like to process
     // them. we reverse right going links so we handle them right-to-left.
-    let l = links.filter(function(l) { return l.goingleft; }),
-        r = links.filter(function(l) { return !l.goingleft; }).reverse();
+    let l = links.filter((l) => l.goingleft),
+        r = links.filter((l) => !l.goingleft).reverse();
 
     // cheat a little: if all our links happen to go left, take half of them
     // to the right (this can happen if the last link happens to strech from
@@ -609,19 +609,19 @@ function drawgrouplines(commandselector, options) {
         const midarr = d3.round(l.length / 2);
         r = l.slice(midarr).reverse();
         l = l.slice(0, midarr);
-        r.forEach(function(l) { l.goingleft = false; });
+        r.forEach((l) => { l.goingleft = false; });
     }
 
     // we keep track of how many have gone right/left to calculate
     // the spacing distance between the lines
     let goingleft = 0, goingright = 0, goneleft = 0, goneright = 0;
 
-    linkgroups.forEach(function(esg) {
+    linkgroups.forEach((esg) => {
         // multiple links in a group count as one in the goingleft/right
-        if (esg.links.some(function(l) { return l.goingleft; }))
+        if (esg.links.some((l) => l.goingleft))
             goingleft++;
 
-        if (esg.links.some(function(l) { return !l.goingleft; }))
+        if (esg.links.some((l) => !l.goingleft))
             goingright++;
     });
 
@@ -728,13 +728,13 @@ function drawgrouplines(commandselector, options) {
     const unknowngroup = new ESLinkGroup(null, commandselector.filter(".unknown").toArray(), mid);
     const linkslengthnounknown = links.length;
 
-    $.each(unknowngroup.links, function(i, link) {
+    $.each(unknowngroup.links, (i, link) => {
         const rr = link.option.getBoundingClientRect(),
             rrright = rr.right - strokewidth,
             nextspan = link.option.nextElementSibling,
-            nextlink = links.find(function(l) { return l.option == nextspan; }),
+            nextlink = links.find((l) => l.option == nextspan),
             prevspan = link.option.previousElementSibling,
-            prevlink = links.find(function(l) { return l.option == prevspan; });
+            prevlink = links.find((l) => l.option == prevspan);
 
         link.starty = link.option.getBoundingClientRect().bottom - link.option.parentElement.getBoundingClientRect().top + 1;
         const commandOffsetToCanvas = marginBetweenCommandAndCanvas - link.starty
@@ -775,8 +775,8 @@ function drawgrouplines(commandselector, options) {
 
     // d3 magic starts here
     const fline = d3.svg.line()
-        .x(function(d) { return d.x; })
-        .y(function(d) { return d.y; })
+        .x((d) => d.x)
+        .y((d) => d.y)
         .interpolate("step-before");
 
     // create an svg <g> for every linkgroup
@@ -786,7 +786,7 @@ function drawgrouplines(commandselector, options) {
 
     // create an svg <g> for every link
     const moregroups = groups.selectAll("g")
-        .data(function(esg) { return esg.links; })
+        .data((esg) => esg.links)
         .enter().append("g");
 
     // actually draw the lines we defined above
@@ -799,7 +799,7 @@ function drawgrouplines(commandselector, options) {
         const paths = g.selectAll('path')
             .data(link.paths)
             .enter().append("path")
-                .attr("d", function(path) { return fline(path.points); })
+                .attr("d", (path) => fline(path.points))
                 .attr("stroke", link.color)
                 .attr("stroke-width", strokewidth)
                 .attr("fill", "none");
@@ -807,10 +807,10 @@ function drawgrouplines(commandselector, options) {
         const lines = g.selectAll('line')
             .data(link.lines)
             .enter().append('line')
-            .attr("x1", function(line) { return line.x1; })
-            .attr("y1", function(line) { return line.y1; })
-            .attr("x2", function(line) { return line.x2; })
-            .attr("y2", function(line) { return line.y2; })
+            .attr("x1", (line) => line.x1)
+            .attr("y1", (line) => line.y1)
+            .attr("x2", (line) => line.x2)
+            .attr("y2", (line) => line.y2)
             .attr("stroke", link.color)
             .attr("stroke-width", strokewidth)
             .attr("fill", "none");
@@ -837,14 +837,14 @@ function drawgrouplines(commandselector, options) {
     // add hover effects for the linkgroups, if we have at least one line that
     // isn't unknown
     if (linkslengthnounknown > 1) {
-        const groupsnounknowns = groups.filter(function(g) { return !g.links[0].unknown; });
+        const groupsnounknowns = groups.filter((g) => !g.links[0].unknown);
         groupsnounknowns.each(function(linkgroup) {
-            const othergroups = groups.filter(function(other) { return linkgroup != other; });
+            const othergroups = groups.filter((other) => linkgroup != other);
 
             const s = $(linkgroup.help).add(linkgroup.options);
             console.log('s=', s);
             s.hover(
-                function() {
+                () => {
                     /*
                      * we're highlighting a new block,
                      * disable timeout to make all blocks visible
@@ -862,28 +862,28 @@ function drawgrouplines(commandselector, options) {
                     $(linkgroup.help).add(linkgroup.options).css({opacity: 1.0});
 
                     // hide the lines of all other groups
-                    groups.attr('visibility', function(other) {
-                        return linkgroup != other ? 'hidden' : null; });
+                    groups.attr('visibility', (other) =>
+                        linkgroup != other ? 'hidden' : null);
 
                     // and make their <span> and <pre>'s slightly transparent
-                    othergroups.each(function(other) {
+                    othergroups.each((other) => {
                         $(other.help).add(other.options).css({opacity: 0.4});
                         $(other.help).add(other.options).css({'font-weight':'normal'});
                     });
                 },
-                function() {
+                () => {
                     /*
                      * we're leaving a block,
                      * make all blocks visible unless we enter a
                      * new block within changewait ms
                      **/
-                    vtimeout = setTimeout(function(){
+                    vtimeout = setTimeout(() => {
                         $(linkgroup.options).css({'font-weight':'normal'});
 
-                        groups.attr('visibility', function(other) {
-                            return linkgroup != other ? 'visible' : null; });
+                        groups.attr('visibility', (other) =>
+                            linkgroup != other ? 'visible' : null);
 
-                        othergroups.each(function(other) {
+                        othergroups.each((other) => {
                             $(other.help).add(other.options).css({opacity: 1});
                         });
                     }, changewait);
@@ -946,7 +946,7 @@ function navigation() {
             prevtext = prev.find("span"),
             currentext = prevnext.find("u");
 
-        const grouptext = function(group) {
+        const grouptext = (group) => {
             if (group.name == 'shell')
                 return 'shell syntax';
             else if (group.name != 'all')
@@ -957,7 +957,7 @@ function navigation() {
         nextext.text(` explain ${grouptext(currentgroup.next)}`);
         prevtext.text(` explain ${grouptext(currentgroup.prev)}`);
 
-        prev.click(function() {
+        prev.click(() => {
             if (affixon())
                 return;
             if (currentgroup.prev) {
@@ -989,7 +989,7 @@ function navigation() {
             }
         });
 
-        next.click(function() {
+        next.click(() => {
             if (affixon())
                 return;
             if (currentgroup.next) {
@@ -1021,16 +1021,16 @@ function navigation() {
         });
 
 		// disable key navigation when the user focuses on the search box
-		$("#top-search").focus(function() {
+		$("#top-search").focus(() => {
 			ignorekeydown = true;
 		});
 
-		$("#top-search").blur(function() {
+		$("#top-search").blur(() => {
 			ignorekeydown = false;
 		});
 
         // bind left/right arrows as well
-        $(document).keydown(function(e) {
+        $(document).keydown((e) => {
 			if (!ignorekeydown) {
 				switch(e.which) {
 					case 37: // left
@@ -1176,7 +1176,7 @@ function setDistro(distro, release) {
 
 
 // Theme-related stuff
-$(document).ready(function() {
+$(document).ready(() => {
     // use theme from local storage or auto-detect otherwise
     const selectedTheme = localStorage.getItem('theme')
         || (window.matchMedia("(prefers-color-scheme: dark)").matches ? 'dark' : 'default')
