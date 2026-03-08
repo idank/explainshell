@@ -56,12 +56,6 @@ a {
     box-shadow: 0 0 15px 5px #ffffff;
 }
 
-#about {
-	text-align: justify;
-    width: 700px;
-    margin: 0 auto;
-}
-
 .btn, #explain {
 	font-family: Courier;
 }
