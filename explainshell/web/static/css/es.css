@@ -264,6 +264,10 @@ body[data-theme='dark'] {
     color: #92b9f3;
 }
 
+[data-theme='dark'] .dropdown-menu a:hover {
+    color: #fff;
+}
+
 [data-theme='dark'] .active-distro {
     background-color: #333;
 }

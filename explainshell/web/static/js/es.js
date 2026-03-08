@@ -38,47 +38,6 @@ let vtimeout;
 const changewait = 250;
 
 
-// From MDN's Library
-const docCookies = {
-    getItem: function (sKey) {
-      if (!sKey) { return null; }
-      return decodeURIComponent(document.cookie.replace(new RegExp(`(?:(?:^|.*;)\\s*${encodeURIComponent(sKey).replace(/[\-\.\+\*]/g, "\\$&")}\\s*\\=\\s*([^;]*).*$)|^.*$`), "$1")) || null;
-    },
-    setItem: function (sKey, sValue, vEnd, sPath, sDomain, bSecure) {
-      if (!sKey || /^(?:expires|max-age|path|domain|secure)$/i.test(sKey)) { return false; }
-      let sExpires = "";
-      if (vEnd) {
-        switch (vEnd.constructor) {
-          case Number:
-            sExpires = vEnd === Infinity ? "; expires=Fri, 31 Dec 9999 23:59:59 GMT" : `; max-age=${vEnd}`;
-            break;
-          case String:
-            sExpires = `; expires=${vEnd}`;
-            break;
-          case Date:
-            sExpires = `; expires=${vEnd.toUTCString()}`;
-            break;
-        }
-      }
-      document.cookie = `${encodeURIComponent(sKey)}=${encodeURIComponent(sValue)}${sExpires}${sDomain ? `; domain=${sDomain}` : ""}${sPath ? `; path=${sPath}` : ""}${bSecure ? "; secure" : ""}`;
-      return true;
-    },
-    removeItem: function (sKey, sPath, sDomain) {
-      if (!this.hasItem(sKey)) { return false; }
-      document.cookie = `${encodeURIComponent(sKey)}=; expires=Thu, 01 Jan 1970 00:00:00 GMT${sDomain ? `; domain=${sDomain}` : ""}${sPath ? `; path=${sPath}` : ""}`;
-      return true;
-    },
-    hasItem: function (sKey) {
-      if (!sKey || /^(?:expires|max\-age|path|domain|secure)$/i.test(sKey)) { return false; }
-      return (new RegExp(`(?:^|;\\s*)${encodeURIComponent(sKey).replace(/[\-\.\+\*]/g, "\\$&")}\\s*\\=`)).test(document.cookie);
-    },
-    keys: function () {
-      const aKeys = document.cookie.replace(/((?:^|\s*;)[^\=]+)(?=;|$)|^\s*|\s*(?:\=[^;]*)?(?:\1|$)/g, "").split(/\s*(?:\=[^;]*)?;\s*/);
-      for (let nLen = aKeys.length, nIdx = 0; nIdx < nLen; nIdx++) { aKeys[nIdx] = decodeURIComponent(aKeys[nIdx]); }
-      return aKeys;
-    }
-  };
-
 function specialparam(text) {
     return {
         title: "Special Parameters",
@@ -1127,8 +1086,9 @@ function setTheme(theme) {
     $("#bootstrapCSS").attr('href', themes[theme]);
     $("#hljsCSS").attr('href', hljs_themes[theme]);
 
+    document.documentElement.setAttribute('data-theme', theme);
     $(document.body).attr('data-theme', theme);
-    docCookies.setItem(themeCookieName, theme, Infinity, '/');
+    localStorage.setItem(themeCookieName, theme);
 }
 
 function currentExplainPrefix() {
@@ -1148,8 +1108,8 @@ function currentExplainPrefix() {
 
 function setDistro(distro, release) {
     console.log('setting distro to', distro, release);
-    docCookies.setItem('distro', distro, Infinity, '/');
-    docCookies.setItem('release', release, Infinity, '/');
+    localStorage.setItem('distro', distro);
+    localStorage.setItem('release', release);
 
     const newPrefix = `/explain/${distro}/${release}`;
     const path = window.location.pathname;
@@ -1167,12 +1127,6 @@ function setDistro(distro, release) {
 
 // Theme-related stuff
 $(document).ready(() => {
-    // use theme from local storage or auto-detect otherwise
-    const selectedTheme = localStorage.getItem('theme')
-        || (window.matchMedia("(prefers-color-scheme: dark)").matches ? 'dark' : 'default')
-        || 'default';
-  
-
     $("#settingsContainer .dropdown-menu a").click(function() {
         setTheme($(this).attr('data-theme-name'));
     });

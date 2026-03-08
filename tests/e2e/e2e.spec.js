@@ -259,6 +259,25 @@ test("theme switching via settings dropdown", async ({ page }) => {
   await expect(page).toHaveScreenshot("explain-dark-theme.png", { fullPage: true });
 });
 
+test("switching from dark back to light removes all dark styles", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForLoadState("networkidle");
+
+  // Switch to dark
+  await page.locator("#settingsContainer > a").click();
+  await page.locator('a[data-theme-name="dark"]').click();
+  await expect(page.locator("body")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+  // Switch back to light
+  await page.locator("#settingsContainer > a").click();
+  await page.locator('a[data-theme-name="default"]').click();
+  await expect(page.locator("body")).toHaveAttribute("data-theme", "default");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "default");
+
+  await expect(page).toHaveScreenshot("home-dark-to-light.png", { fullPage: true });
+});
+
 test("unknown args show question mark circles", async ({ page }) => {
   // grep -Q is not a valid flag, should show as unknown with a ? circle
   await page.goto("/explain?cmd=grep+-Q+hello&deterministic");
