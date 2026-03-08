@@ -415,7 +415,7 @@ function initialize() {
             $("span[class^=expansion]", curr.commandselector).each(function() {
                 const kind = $(this).attr("class").slice(10);
 
-                if (_.has(expansions, kind)) {
+                if (kind in expansions) {
                     console.log("adding", kind, "popover to", $(this));
 
                     const expansion = expansions[kind];
@@ -582,9 +582,9 @@ function drawgrouplines(commandselector, options) {
 
     // create an eslinkgroup for every group of <span>'s, these will be linked together to
     // the same <pre> in .help.
-    const linkgroups = _.map(groupedoptions, function(spans, clazz) {
+    const linkgroups = Object.entries(groupedoptions).map(function([clazz, spans]) {
             const esg = new ESLinkGroup(clazz, spans, mid);
-            _.each(esg.links, function(l) {
+            esg.links.forEach(function(l) {
                 l.group = esg;
             });
 
@@ -592,15 +592,15 @@ function drawgrouplines(commandselector, options) {
     });
 
     // an array of all the links we need to make, ungrouped
-    let links = _.flatten(linkgroups.map(g => g.links), true);
+    let links = linkgroups.map(g => g.links).flat();
     // the upper bounds of our drawing area
     const marginBetweenCommandAndCanvas = commandWrapperRect.bottom - canvasTop,
         startytop = commandWrapperRect.top - canvasTop;
 
     // links that are going left and right, in the order we'd like to process
     // them. we reverse right going links so we handle them right-to-left.
-    let l = _.filter(links, function(l) { return l.goingleft; }),
-        r = _.filter(links, function(l) { return !l.goingleft; }).reverse();
+    let l = links.filter(function(l) { return l.goingleft; }),
+        r = links.filter(function(l) { return !l.goingleft; }).reverse();
 
     // cheat a little: if all our links happen to go left, take half of them
     // to the right (this can happen if the last link happens to strech from
@@ -609,19 +609,19 @@ function drawgrouplines(commandselector, options) {
         const midarr = d3.round(l.length / 2);
         r = l.slice(midarr).reverse();
         l = l.slice(0, midarr);
-        _.each(r, function(l) { l.goingleft = false; });
+        r.forEach(function(l) { l.goingleft = false; });
     }
 
     // we keep track of how many have gone right/left to calculate
     // the spacing distance between the lines
     let goingleft = 0, goingright = 0, goneleft = 0, goneright = 0;
 
-    _.each(linkgroups, function(esg) {
+    linkgroups.forEach(function(esg) {
         // multiple links in a group count as one in the goingleft/right
-        if (_.some(esg.links, function(l) { return l.goingleft; }))
+        if (esg.links.some(function(l) { return l.goingleft; }))
             goingleft++;
 
-        if (_.some(esg.links, function(l) { return !l.goingleft; }))
+        if (esg.links.some(function(l) { return !l.goingleft; }))
             goingright++;
     });
 
@@ -732,9 +732,9 @@ function drawgrouplines(commandselector, options) {
         const rr = link.option.getBoundingClientRect(),
             rrright = rr.right - strokewidth,
             nextspan = link.option.nextElementSibling,
-            nextlink = _.find(links, function(l) { return l.option == nextspan; }),
+            nextlink = links.find(function(l) { return l.option == nextspan; }),
             prevspan = link.option.previousElementSibling,
-            prevlink = _.find(links, function(l) { return l.option == prevspan; });
+            prevlink = links.find(function(l) { return l.option == prevspan; });
 
         link.starty = link.option.getBoundingClientRect().bottom - link.option.parentElement.getBoundingClientRect().top + 1;
         const commandOffsetToCanvas = marginBetweenCommandAndCanvas - link.starty
