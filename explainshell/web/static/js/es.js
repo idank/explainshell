@@ -1175,7 +1175,7 @@ $(document).ready(function() {
         || 'default';
   
 
-    $("#themeContainer .dropdown-menu a").click(function() {
+    $("#settingsContainer .dropdown-menu a").click(function() {
         setTheme($(this).attr('data-theme-name'));
     });
 
