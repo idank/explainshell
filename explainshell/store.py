@@ -239,12 +239,28 @@ class ParsedManpage(BaseModel):
 class Store:
     """read/write processed man pages from sqlite"""
 
-    def __init__(self, db_path):
-        logger.info("creating store, db_path = %r", db_path)
-        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+    def __init__(self, db_path, read_only=False):
+        logger.info("creating store, db_path = %r, read_only = %s", db_path, read_only)
+        # check_same_thread=False: the default sqlite3 driver raises if a
+        # connection is used from a thread other than the one that created it.
+        # Flask serves requests from multiple threads sharing a single Store,
+        # but each request does independent read-only queries so this is safe.
+        if read_only:
+            self._conn = sqlite3.connect(
+                f"file:{db_path}?mode=ro", uri=True, check_same_thread=False
+            )
+        else:
+            self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
-        self._conn.executescript(_CREATE_SCHEMA)
+
+    @classmethod
+    def create(cls, db_path):
+        """Create a new (or open an existing) writable database and return a Store."""
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        conn.executescript(_CREATE_SCHEMA)
+        conn.close()
+        return cls(db_path)
 
     def close(self):
         if self._conn:
