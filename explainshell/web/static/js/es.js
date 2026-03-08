@@ -1,8 +1,8 @@
 jQuery.fn.reverse = [].reverse;
 
-var debug = false;
+const debug = false;
 
-var themeCookieName = 'theme';
+const themeCookieName = 'theme';
 
 if (!debug) {
     console = console || {};
@@ -10,14 +10,14 @@ if (!debug) {
 }
 
 // a list of colors to use for the lines
-var colors = ['#3182bd', '#6baed6', '#9ecae1', '#c6dbef', '#e6550d', '#fd8d3c', '#fdae6b', '#fdd0a2', '#31a354', '#74c476', '#a1d99b', '#c7e9c0', '#756bb1', '#9e9ac8', '#bcbddc', '#dadaeb', '#636363', '#969696', '#bdbdbd', '#d9d9d9'];
+const colors = ['#3182bd', '#6baed6', '#9ecae1', '#c6dbef', '#e6550d', '#fd8d3c', '#fdae6b', '#fdd0a2', '#31a354', '#74c476', '#a1d99b', '#c7e9c0', '#756bb1', '#9e9ac8', '#bcbddc', '#dadaeb', '#636363', '#969696', '#bdbdbd', '#d9d9d9'];
 
 // the urls of the themes
-var themes = {
+let themes = {
     default: '//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.1/css/bootstrap.min.css',
     dark: '//maxcdn.bootstrapcdn.com/bootswatch/2.3.1/cyborg/bootstrap.min.css'
 };
-var hljs_themes = {
+let hljs_themes = {
     default: '//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css',
     dark: '//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css'
 }
@@ -32,21 +32,21 @@ if (debug){
     };
 }
 
-var assignedcolors = {};
+const assignedcolors = {};
 
-var vtimeout,
-    changewait = 250;
+let vtimeout;
+const changewait = 250;
 
 
 // From MDN's Library
-var docCookies = {
+const docCookies = {
     getItem: function (sKey) {
       if (!sKey) { return null; }
       return decodeURIComponent(document.cookie.replace(new RegExp("(?:(?:^|.*;)\\s*" + encodeURIComponent(sKey).replace(/[\-\.\+\*]/g, "\\$&") + "\\s*\\=\\s*([^;]*).*$)|^.*$"), "$1")) || null;
     },
     setItem: function (sKey, sValue, vEnd, sPath, sDomain, bSecure) {
       if (!sKey || /^(?:expires|max-age|path|domain|secure)$/i.test(sKey)) { return false; }
-      var sExpires = "";
+      let sExpires = "";
       if (vEnd) {
         switch (vEnd.constructor) {
           case Number:
@@ -73,8 +73,8 @@ var docCookies = {
       return (new RegExp("(?:^|;\\s*)" + encodeURIComponent(sKey).replace(/[\-\.\+\*]/g, "\\$&") + "\\s*\\=")).test(document.cookie);
     },
     keys: function () {
-      var aKeys = document.cookie.replace(/((?:^|\s*;)[^\=]+)(?=;|$)|^\s*|\s*(?:\=[^;]*)?(?:\1|$)/g, "").split(/\s*(?:\=[^;]*)?;\s*/);
-      for (var nLen = aKeys.length, nIdx = 0; nIdx < nLen; nIdx++) { aKeys[nIdx] = decodeURIComponent(aKeys[nIdx]); }
+      const aKeys = document.cookie.replace(/((?:^|\s*;)[^\=]+)(?=;|$)|^\s*|\s*(?:\=[^;]*)?(?:\1|$)/g, "").split(/\s*(?:\=[^;]*)?;\s*/);
+      for (let nLen = aKeys.length, nIdx = 0; nIdx < nLen; nIdx++) { aKeys[nIdx] = decodeURIComponent(aKeys[nIdx]); }
       return aKeys;
     }
   };
@@ -88,7 +88,7 @@ function specialparam(text) {
             text
     };
 }
-var expansions = {
+const expansions = {
     tilde: {
         title: "Tilde Expansion",
         content:
@@ -196,7 +196,7 @@ var expansions = {
 
 // a class that represents a group of eslink
 function eslinkgroup(clazz, options, mid) {
-    var color = assignedcolors[clazz];
+    const color = assignedcolors[clazz];
     this.links = options.map(function(option) { return new eslink(clazz, option, mid, color); });
     this.options = _.pluck(this.links, 'option');
     this.help = _.pluck(this.links, 'help');
@@ -227,8 +227,8 @@ function eslink(clazz, option, mid, color) {
 
         // each link can go either left or right, we decide where by
         // calculating its middle and comparing it to the middle of .command
-        var rr = option.getBoundingClientRect();
-        var rrmid = rr.left + rr.width / 2;
+        const rr = option.getBoundingClientRect();
+        const rrmid = rr.left + rr.width / 2;
         this.goingleft = rrmid <= mid;
 
         $(this.help).css("border-color", this.color);
@@ -238,7 +238,7 @@ function eslink(clazz, option, mid, color) {
 }
 
 eslink.prototype.leftmost = function() {
-    for (var i = 0; i < this.group.links.length; i++) {
+    for (let i = 0; i < this.group.links.length; i++) {
         if (this.group.links[i].goingleft)
             return this.group.links[i];
     }
@@ -247,7 +247,7 @@ eslink.prototype.leftmost = function() {
 };
 
 eslink.prototype.rightmost = function() {
-    for (var i = this.group.links.length-1; i >= 0; i--) {
+    for (let i = this.group.links.length-1; i >= 0; i--) {
         if (!this.group.links[i].goingleft)
             return this.group.links[i];
     }
@@ -260,7 +260,7 @@ eslink.prototype.rightmost = function() {
 //
 // we use this when deciding which direction an 'unknown' link should go
 eslink.prototype.nearby = function(other) {
-    var closeness = 5,
+    const closeness = 5,
         r = this.option.getBoundingClientRect(), rr = other.option.getBoundingClientRect();
 
     return Math.abs(r.right - rr.left) <= closeness || Math.abs(r.left - rr.right) <= closeness;
@@ -278,15 +278,15 @@ espath.prototype.addpoint = function(x, y) {
 
 // swap the position of two nodes in the DOM
 function swapNodes(a, b) {
-    var aparent = a.parentNode;
-    var asibling = a.nextSibling === b ? a : a.nextSibling;
+    const aparent = a.parentNode;
+    const asibling = a.nextSibling === b ? a : a.nextSibling;
     b.parentNode.insertBefore(a, b);
     aparent.insertBefore(b, asibling);
 }
 
 // reorder the help <pre>'s of all links that go left
 function reorder(lefteslinks) {
-    var help = _.pluck(lefteslinks, 'help'),
+    const help = _.pluck(lefteslinks, 'help'),
         visiblehelp = $("#help .help-box:visible");
 
     // check the indices of the first and last help boxes. if the first is
@@ -296,8 +296,8 @@ function reorder(lefteslinks) {
     if (visiblehelp.index($(help[0])) >= visiblehelp.index($(help[help.length - 1])))
         return;
 
-    for (var i = 0, j = help.length - 1; i < Math.floor(help.length / 2) && i != j; i++, j = help.length - 1 - i) {
-        var h = help[i],
+    for (let i = 0, j = help.length - 1; i < Math.floor(help.length / 2) && i != j; i++, j = help.length - 1 - i) {
+        const h = help[i],
             hh = help[j];
 
         swapNodes(h, hh);
@@ -313,12 +313,12 @@ function helpselector(commandselector) {
 
 // return the <span>'s in #command that are linked to each <pre> in pres
 function optionsselector(pres, spans) {
-    var ids = pres.map(function() {
+    const ids = pres.map(function() {
         return $(this).attr('id');
     });
 
-    var s = $("#command span.unknown");
-    var r = _.reduce(ids, function(s, id) { return s.add("#command span[helpref^=" + id + "]"); }, s);
+    const s = $("#command span.unknown");
+    const r = _.reduce(ids, function(s, id) { return s.add("#command span[helpref^=" + id + "]"); }, s);
 
     if (typeof spans == 'object') {
         return (r.filter(spans));
@@ -333,14 +333,14 @@ function optionsselector(pres, spans) {
 // selectors: one selects which spans in .command and the other selects their
 // matching help text in .help
 function initialize() {
-    var head = {'name' : 'all'},
+    let head = {'name' : 'all'},
         prev = head,
         groupcount = 0,
         s = $("#command span[class^=shell]"),
         curr;
 
     if (s.length) {
-        var shell = {'name' : 'shell', 'commandselector' : s, 'prev' : head};
+        const shell = {'name' : 'shell', 'commandselector' : s, 'prev' : head};
         head.next = shell;
         prev = shell;
         groupcount += 1;
@@ -348,12 +348,12 @@ function initialize() {
 
     // construct a doubly linked list of previous/next groups. this is used
     // by the navigation buttons to move between groups
-    var i = 0,
+    let i = 0,
         g = "command" + i;
 
     s = $("#command span[class^=" + g + "]");
 
-    var unknownsselector = $();
+    let unknownsselector = $();
 
     while (s.length > 0) {
         curr = {'name' : g, 'commandselector' : s};
@@ -408,12 +408,12 @@ function initialize() {
     while (curr) {
         if (curr.name != 'all') {
             $("span[class^=expansion]", curr.commandselector).each(function() {
-                var kind = $(this).attr("class").slice(10);
+                const kind = $(this).attr("class").slice(10);
 
                 if (_.has(expansions, kind)) {
                     console.log("adding", kind, "popover to", $(this));
 
-                    var expansion = expansions[kind];
+                    const expansion = expansions[kind];
 
                     $(this).popover({
                         html: true,
@@ -456,8 +456,8 @@ function handlesynopsis() {
 function assigncolors() {
     // Skip color shuffle when &deterministic is in the URL, so e2e screenshot
     // tests produce pixel-identical SVG lines across runs.
-    var params = new URLSearchParams(window.location.search);
-    var shuffledcolors = params.has('deterministic') ? colors.slice() : _.shuffle(colors);
+    const params = new URLSearchParams(window.location.search);
+    const shuffledcolors = params.has('deterministic') ? colors.slice() : _.shuffle(colors);
 
     $("#help .help-box").each(function() {
         color = shuffledcolors.shift();
@@ -505,7 +505,7 @@ function drawgrouplines(commandselector, options) {
         clear();
     }
 
-    var defaults = {
+    const defaults = {
         topheight: -1,
         hidepres: true
     };
@@ -518,11 +518,11 @@ function drawgrouplines(commandselector, options) {
 
     // define a couple of parameters that control the spacing/padding
     // of various areas in the links
-    var sidespace = 20, toppadding = 25, sidepadding = 15, edgedistance = 5,
+    const sidespace = 20, toppadding = 25, sidepadding = 15, edgedistance = 5,
         unknownlinelength = 15, strokewidth = 1;
 
-    var canvas = d3.select("#canvas"),
-        canvasTop = $("#canvas")[0].getBoundingClientRect().top;
+    const canvas = d3.select("#canvas");
+    let canvasTop = $("#canvas")[0].getBoundingClientRect().top;
 
     // if the current group isn't 'all', hide the rest of the help <pre>'s, and show
     // the <pre>'s help of the current group
@@ -556,15 +556,15 @@ function drawgrouplines(commandselector, options) {
         canvasTop = $("#canvas")[0].getBoundingClientRect().top;
     }
 
-    var commandWrapperRect = $("#command")[0].getBoundingClientRect(),
-        mid = commandWrapperRect.left + commandWrapperRect.width / 2,
-        helprect = $("#help")[0].getBoundingClientRect();
+    const commandWrapperRect = $("#command")[0].getBoundingClientRect(),
+        mid = commandWrapperRect.left + commandWrapperRect.width / 2;
+    let helprect = $("#help")[0].getBoundingClientRect();
 
     // the bounds of the area we plan to draw lines in .help
-    var top = helprect.top - toppadding,
+    const top = helprect.top - toppadding,
         left = helprect.left - sidepadding,
-        right = helprect.right + sidepadding,
-        topheight = options.topheight;
+        right = helprect.right + sidepadding;
+    let topheight = options.topheight;
 
     if (topheight == -1) {
         topheight = Math.abs(commandWrapperRect.bottom - top);
@@ -573,12 +573,12 @@ function drawgrouplines(commandselector, options) {
     // select all spans in our commandselector, and group them by their class
     // attribute. different spans share the same class when they should be
     // linked to the same <pre> in .help
-    var groupedoptions = _.groupBy(commandselector.filter(":not(.unknown)"), function(span) { return $(span).attr('helpref'); });
+    const groupedoptions = _.groupBy(commandselector.filter(":not(.unknown)"), function(span) { return $(span).attr('helpref'); });
 
     // create an eslinkgroup for every group of <span>'s, these will be linked together to
     // the same <pre> in .help.
-    var linkgroups = _.map(groupedoptions, function(spans, clazz) {
-            var esg = new eslinkgroup(clazz, spans, mid);
+    const linkgroups = _.map(groupedoptions, function(spans, clazz) {
+            const esg = new eslinkgroup(clazz, spans, mid);
             _.each(esg.links, function(l) {
                 l.group = esg;
             });
@@ -587,21 +587,21 @@ function drawgrouplines(commandselector, options) {
     });
 
     // an array of all the links we need to make, ungrouped
-    var links = _.flatten(_.pluck(linkgroups, 'links'), true),
-        // the upper bounds of our drawing area
-        marginBetweenCommandAndCanvas = commandWrapperRect.bottom - canvasTop,
+    let links = _.flatten(_.pluck(linkgroups, 'links'), true);
+    // the upper bounds of our drawing area
+    const marginBetweenCommandAndCanvas = commandWrapperRect.bottom - canvasTop,
         startytop = commandWrapperRect.top - canvasTop;
 
     // links that are going left and right, in the order we'd like to process
     // them. we reverse right going links so we handle them right-to-left.
-    var l = _.filter(links, function(l) { return l.goingleft; }),
+    let l = _.filter(links, function(l) { return l.goingleft; }),
         r = _.filter(links, function(l) { return !l.goingleft; }).reverse();
 
     // cheat a little: if all our links happen to go left, take half of them
     // to the right (this can happen if the last link happens to strech from
     // before the cutting point all the way to the end)
     if (r.length === 0) {
-        var midarr = d3.round(l.length / 2);
+        const midarr = d3.round(l.length / 2);
         r = l.slice(midarr).reverse();
         l = l.slice(0, midarr);
         _.each(r, function(l) { l.goingleft = false; });
@@ -609,7 +609,7 @@ function drawgrouplines(commandselector, options) {
 
     // we keep track of how many have gone right/left to calculate
     // the spacing distance between the lines
-    var goingleft = 0, goingright = 0, goneleft = 0, goneright = 0;
+    let goingleft = 0, goingright = 0, goneleft = 0, goneright = 0;
 
     _.each(linkgroups, function(esg) {
         // multiple links in a group count as one in the goingleft/right
@@ -633,16 +633,16 @@ function drawgrouplines(commandselector, options) {
     // handle all links that are not unknowns (have a <pre> in .help)
     //
     // this is hard to explain without an accompanying drawing (TODO)
-    for (var i = 0; i < links.length; i++) {
-        var link = links[i];
+    for (let i = 0; i < links.length; i++) {
+        const link = links[i];
 
         console.log('handling', $(link.option).text());
-        var commandRect = link.option.getBoundingClientRect(),
+        const commandRect = link.option.getBoundingClientRect(),
             spanmid = commandRect.left + commandRect.width / 2,
             commandRight = commandRect.right - strokewidth;
 
         link.starty = commandRect.bottom - commandWrapperRect.top + 1;
-        var commandOffsetToCanvas = marginBetweenCommandAndCanvas - link.starty
+        const commandOffsetToCanvas = marginBetweenCommandAndCanvas - link.starty
 
         // points for marker under command
         link.paths.push(new espath()
@@ -652,14 +652,14 @@ function drawgrouplines(commandselector, options) {
           .addpoint(commandRight, 0)
         );
 
-        var path = new espath();
+        const path = new espath();
         path.addpoint(spanmid, 5); // 3
 
-        var topskip, y, p, pp;
+        let topskip, y, p, pp;
 
 
         if (link.goingleft) {
-            var leftmost = link.leftmost();
+            const leftmost = link.leftmost();
 
             // check if this is the leftmost link of the current group; for
             // those we add a line from the option to the help box. the rest of
@@ -678,7 +678,7 @@ function drawgrouplines(commandselector, options) {
                 goneleft++;
             }
             else {
-                var leftmostpath = leftmost.paths[leftmost.paths.length-1];
+                const leftmostpath = leftmost.paths[leftmost.paths.length-1];
 
                 p = leftmostpath.points[0];
                 pp = leftmostpath.points[1];
@@ -690,7 +690,7 @@ function drawgrouplines(commandselector, options) {
         }
         else {
             // handle right going links, similarly to left
-            var rightmost = link.rightmost();
+            const rightmost = link.rightmost();
 
             if (link == rightmost) {
                 topskip = topheight / goingright;
@@ -705,7 +705,7 @@ function drawgrouplines(commandselector, options) {
                 goneright++;
             }
             else {
-                var rightmostpath = rightmost.paths[rightmost.paths.length-1];
+                const rightmostpath = rightmost.paths[rightmost.paths.length-1];
 
                 p = rightmostpath.points[0];
                 pp = rightmostpath.points[1];
@@ -720,11 +720,11 @@ function drawgrouplines(commandselector, options) {
     }
 
     // create a group for all the unknowns
-    var unknowngroup = new eslinkgroup(null, commandselector.filter(".unknown").toArray(), mid);
-    var linkslengthnounknown = links.length;
+    const unknowngroup = new eslinkgroup(null, commandselector.filter(".unknown").toArray(), mid);
+    const linkslengthnounknown = links.length;
 
     $.each(unknowngroup.links, function(i, link) {
-        var rr = link.option.getBoundingClientRect(),
+        const rr = link.option.getBoundingClientRect(),
             rrright = rr.right - strokewidth,
             nextspan = link.option.nextElementSibling,
             nextlink = _.find(links, function(l) { return l.option == nextspan; }),
@@ -732,7 +732,7 @@ function drawgrouplines(commandselector, options) {
             prevlink = _.find(links, function(l) { return l.option == prevspan; });
 
         link.starty = link.option.getBoundingClientRect().bottom - link.option.parentElement.getBoundingClientRect().top + 1;
-        var commandOffsetToCanvas = marginBetweenCommandAndCanvas - link.starty
+        const commandOffsetToCanvas = marginBetweenCommandAndCanvas - link.starty
         link.unknown = true;
         link.text = "?";
 
@@ -754,7 +754,7 @@ function drawgrouplines(commandselector, options) {
                 .addpoint(rrright, 5)
                 .addpoint(rrright, 0)
             );
-            var rrmid = d3.round(rr.left + rr.width / 2);
+            const rrmid = d3.round(rr.left + rr.width / 2);
             link.paths.push(new espath()
                 .addpoint(rrmid, 5 + strokewidth)
                 .addpoint(rrmid, 5 + strokewidth + unknownlinelength + commandOffsetToCanvas)
@@ -769,29 +769,29 @@ function drawgrouplines(commandselector, options) {
         linkgroups.push(unknowngroup);
 
     // d3 magic starts here
-    var fline = d3.svg.line()
+    const fline = d3.svg.line()
         .x(function(d) { return d.x; })
         .y(function(d) { return d.y; })
         .interpolate("step-before");
 
     // create an svg <g> for every linkgroup
-    var groups = canvas.selectAll("g")
+    const groups = canvas.selectAll("g")
         .data(linkgroups)
         .enter().append("g");
 
     // create an svg <g> for every link
-    var moregroups = groups.selectAll("g")
+    const moregroups = groups.selectAll("g")
         .data(function(esg) { return esg.links; })
         .enter().append("g");
 
     // actually draw the lines we defined above
     moregroups.each(function(link) {
-        var g = d3.select(this);
+        const g = d3.select(this);
 
         if (link.directiondown)
             g.attr('transform', 'translate(0, ' + link.starty + ')');
 
-        var paths = g.selectAll('path')
+        const paths = g.selectAll('path')
             .data(link.paths)
             .enter().append("path")
                 .attr("d", function(path) { return fline(path.points); })
@@ -799,7 +799,7 @@ function drawgrouplines(commandselector, options) {
                 .attr("stroke-width", strokewidth)
                 .attr("fill", "none");
 
-        var lines = g.selectAll('line')
+        const lines = g.selectAll('line')
             .data(link.lines)
             .enter().append('line')
             .attr("x1", function(line) { return line.x1; })
@@ -811,7 +811,7 @@ function drawgrouplines(commandselector, options) {
             .attr("fill", "none");
 
         if (link.circle) {
-            var gg = g.append('g')
+            const gg = g.append('g')
                 .attr("transform", "translate(" + link.circle.x + ", " + link.circle.y + ")");
 
             gg.append('circle')
@@ -832,11 +832,11 @@ function drawgrouplines(commandselector, options) {
     // add hover effects for the linkgroups, if we have at least one line that
     // isn't unknown
     if (linkslengthnounknown > 1) {
-        var groupsnounknowns = groups.filter(function(g) { return !g.links[0].unknown; });
+        const groupsnounknowns = groups.filter(function(g) { return !g.links[0].unknown; });
         groupsnounknowns.each(function(linkgroup) {
-            var othergroups = groups.filter(function(other) { return linkgroup != other; });
+            const othergroups = groups.filter(function(other) { return linkgroup != other; });
 
-            var s = $(linkgroup.help).add(linkgroup.options);
+            const s = $(linkgroup.help).add(linkgroup.options);
             console.log('s=', s);
             s.hover(
                 function() {
@@ -892,7 +892,7 @@ function drawgrouplines(commandselector, options) {
     prevselector = commandselector;
 }
 
-var prevselector = null;
+let prevselector = null;
 
 // clear the canvas of all lines and unbind any hover events
 // previously set for oldgroup
@@ -908,8 +908,8 @@ function clear() {
 
 // very simple adjustment of the command div font size so it doesn't overflow
 function adjustcommandfontsize() {
-    var commandlength = $.trim($("#command span[class^=command]").add("#command span[class^=shell]").text()).length,
-        commandfontsize;
+    const commandlength = $.trim($("#command span[class^=command]").add("#command span[class^=shell]").text()).length;
+    let commandfontsize;
 
     if (commandlength > 105)
         commandfontsize = '10px';
@@ -926,22 +926,22 @@ function adjustcommandfontsize() {
     }
 }
 
-var ignorekeydown = false;
+let ignorekeydown = false;
 
 function navigation() {
     // if we have more groups, show the prev/next buttons
     if (currentgroup.next) {
-        var prev = $('<li><i class="icon-arrow-left icon-2"></i><span></span></li>');
-        var next = $('<li><i class="icon-arrow-right icon-2"></i><span></span></li>');
-        var prevnext = $('<ul class="inline" id="prevnext"><li>showing <u>all</u>, navigate:</li></ul>');
+        const prev = $('<li><i class="icon-arrow-left icon-2"></i><span></span></li>');
+        const next = $('<li><i class="icon-arrow-right icon-2"></i><span></span></li>');
+        const prevnext = $('<ul class="inline" id="prevnext"><li>showing <u>all</u>, navigate:</li></ul>');
         prevnext.append(prev).append(next);
         $("#navigate").css('height', 'auto').append(prevnext);
 
-        var nextext = next.find("span"),
+        const nextext = next.find("span"),
             prevtext = prev.find("span"),
             currentext = prevnext.find("u");
 
-        var grouptext = function(group) {
+        const grouptext = function(group) {
             if (group.name == 'shell')
                 return 'shell syntax';
             else if (group.name != 'all')
@@ -957,7 +957,7 @@ function navigation() {
                 return;
             if (currentgroup.prev) {
                 console.log('moving to the previous group (%s), current group is %s', currentgroup.prev.name, currentgroup.name);
-                var oldgroup = currentgroup;
+                const oldgroup = currentgroup;
                 currentgroup = currentgroup.prev;
                 currentext.text(grouptext(currentgroup));
 
@@ -989,7 +989,7 @@ function navigation() {
                 return;
             if (currentgroup.next) {
                 console.log('moving to the next group (%s), current group is %s', currentgroup.next.name, currentgroup.name);
-                var oldgroup = currentgroup;
+                const oldgroup = currentgroup;
                 currentgroup = currentgroup.next;
                 currentext.text(grouptext(currentgroup));
 
@@ -1044,7 +1044,7 @@ function navigation() {
 }
 
 function inview(viewtop, viewbottom, $el) {
-    var elemtop = $el.offset().top,
+    const elemtop = $el.offset().top,
         elembottom = elemtop + $el.height(),
         elemmiddle = elemtop + ($el.height() / 2),
         elemarea = $el.width() * $el.height(),
@@ -1095,13 +1095,13 @@ function inview(viewtop, viewbottom, $el) {
 }
 
 function drawvisible() {
-    var viewtop = $window.scrollTop(),
-        viewbottom = viewtop + $window.height(),
+    let viewtop = $window.scrollTop();
+    const viewbottom = viewtop + $window.height(),
         topspace = 80;
 
     viewtop += topspace;
 
-    var visible = $("#help .help-box:visible").filter(function() {
+    const visible = $("#help .help-box:visible").filter(function() {
         return (inview(viewtop, viewbottom, $(this)));
     });
 
@@ -1109,7 +1109,7 @@ function drawvisible() {
         //var ids = visible.map(function() { return $(this).attr('id'); });
         //$('#scroller').html(ids.toArray().join(','));
 
-        var commandselector = optionsselector(visible, currentgroup.commandselector);
+        const commandselector = optionsselector(visible, currentgroup.commandselector);
         drawgrouplines(commandselector, {topheight: 50, hidepres: false});
     }
     else {
@@ -1137,12 +1137,12 @@ function setTheme(theme) {
 }
 
 function currentExplainPrefix() {
-    var path = window.location.pathname;
+    const path = window.location.pathname;
     if (!path.startsWith('/explain/')) return '/explain';
-    var rest = path.substring('/explain/'.length);
-    var parts = rest.split('/');
+    const rest = path.substring('/explain/'.length);
+    const parts = rest.split('/');
     // Check if first segment is a known distro from the dropdown
-    var knownDistros = $('a[data-distro]').map(function() {
+    const knownDistros = $('a[data-distro]').map(function() {
         return $(this).attr('data-distro');
     }).get();
     if (parts.length >= 2 && knownDistros.indexOf(parts[0]) !== -1) {
@@ -1156,13 +1156,13 @@ function setDistro(distro, release) {
     docCookies.setItem('distro', distro, Infinity, '/');
     docCookies.setItem('release', release, Infinity, '/');
 
-    var newPrefix = '/explain/' + distro + '/' + release;
-    var path = window.location.pathname;
-    var query = window.location.search;
-    var oldPrefix = currentExplainPrefix();
+    const newPrefix = '/explain/' + distro + '/' + release;
+    const path = window.location.pathname;
+    const query = window.location.search;
+    const oldPrefix = currentExplainPrefix();
 
     if (path.startsWith(oldPrefix)) {
-        var rest = path.substring(oldPrefix.length);
+        const rest = path.substring(oldPrefix.length);
         window.location.href = newPrefix + rest + query;
     } else {
         window.location.href = newPrefix + query;
@@ -1172,10 +1172,10 @@ function setDistro(distro, release) {
 
 // Theme-related stuff
 $(document).ready(function() {
-    if (!docCookies.getItem(themeCookieName)) {
-        var selectedTheme = 'default';
-        setTheme(selectedTheme); // to set the correct css file and data-theme
-    }
+    // use theme from local storage or auto-detect otherwise
+    const selectedTheme = localStorage.getItem('theme')
+        || (window.matchMedia("(prefers-color-scheme: dark)").matches ? 'dark' : 'default')
+        || 'default';
 
     $("#settingsContainer .dropdown-menu a").click(function() {
         setTheme($(this).attr('data-theme-name'));
