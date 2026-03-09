@@ -1,5 +1,3 @@
-jQuery.fn.reverse = [].reverse;
-
 const debug = false;
 
 const themeCookieName = 'theme';
@@ -190,7 +188,7 @@ class ESLink {
         // clazz is the name of the current group (shell, command0, command1..)
         if (clazz) {
             // the matching <pre> in .help
-            this.help = $(`#${clazz}`)[0];
+            this.help = document.getElementById(clazz);
 
             // each link can go either left or right, we decide where by
             // calculating its middle and comparing it to the middle of .command
@@ -198,7 +196,7 @@ class ESLink {
             const rrmid = rr.left + rr.width / 2;
             this.goingleft = rrmid <= mid;
 
-            $(this.help).css("border-color", this.color);
+            this.help.style.borderColor = this.color;
         }
     }
 
@@ -245,13 +243,13 @@ function swapNodes(a, b) {
 // reorder the help <pre>'s of all links that go left
 function reorder(lefteslinks) {
     const help = lefteslinks.map(l => l.help),
-        visiblehelp = $("#help .help-box:visible");
+        visiblehelp = Array.from(document.querySelectorAll("#help .help-box")).filter(el => el.offsetParent !== null);
 
     // check the indices of the first and last help boxes. if the first is
     // greater than the last, then it appears later in the DOM which means
     // we've already reordered this set of boxes and they're in the correct
     // order
-    if (visiblehelp.index($(help[0])) >= visiblehelp.index($(help[help.length - 1])))
+    if (visiblehelp.indexOf(help[0]) >= visiblehelp.indexOf(help[help.length - 1]))
         return;
 
     for (let i = 0, j = help.length - 1; i < Math.floor(help.length / 2) && i !== j; i++, j = help.length - 1 - i) {
@@ -265,14 +263,14 @@ function reorder(lefteslinks) {
 // return the matching <pre> in .help for each item in commandselector
 function helpselector(commandselector) {
     return commandselector.map(function(span) {
-        return $(`#${$(this).attr('helpref')}`)[0];
+        return document.getElementById(this.getAttribute('helpref'));
     });
 }
 
 // return the <span>'s in #command that are linked to each <pre> in pres
 function optionsselector(pres, spans) {
     const ids = pres.map(function() {
-        return $(this).attr('id');
+        return this.id;
     });
 
     const s = $("#command span.unknown");
@@ -366,10 +364,10 @@ function initialize() {
     while (curr) {
         if (curr.name !== 'all') {
             $("span[class^=expansion]", curr.commandselector).each(function() {
-                const kind = $(this).attr("class").slice(10);
+                const kind = this.className.slice(10);
 
                 if (kind in expansions) {
-                    log("adding", kind, "popover to", $(this));
+                    log("adding", kind, "popover to", this);
 
                     const expansion = expansions[kind];
 
@@ -406,7 +404,7 @@ function handlesynopsis() {
         const spans = optionsselector($(this)).not(".unknown");
 
         if (spans.is(".simplecommandstart")) {
-            $(this).addClass("help-synopsis");
+            this.classList.add("help-synopsis");
         }
     });
 }
@@ -417,11 +415,11 @@ function assigncolors() {
     const params = new URLSearchParams(window.location.search);
     const shuffledcolors = params.has('deterministic') ? colors.slice() : shuffle(colors);
 
-    $("#help .help-box").each(function() {
+    document.querySelectorAll("#help .help-box").forEach(function(el) {
         const color = shuffledcolors.shift();
         shuffledcolors.push(color);
 
-        assignedcolors[$(this).attr('id')] = color;
+        assignedcolors[el.id] = color;
     });
 
     assignedcolors[null] = shuffledcolors.shift();
@@ -429,29 +427,28 @@ function assigncolors() {
 
 // handle unknowns in #command
 function commandunknowns() {
-    $("#command span.unknown").each(function(span) {
-        const $this = $(this);
-
+    document.querySelectorAll("#command span.unknown").forEach(function(el) {
         // add tooltips
-        if ($this.hasClass('simplecommandstart')) {
-            this.title = "This man page seems to be missing...";
+        if (el.classList.contains('simplecommandstart')) {
+            el.title = "This man page seems to be missing...";
 
             // only add the link to the missing man page issue if we haven't
             // had any expansions in this group (since those might already contain
             // links)
-            // if (!$this.hasClass('hasexpansion')) {
-            //     var link = $("<a/>").text($this.text())
-            //                         .attr('href', 'https://github.com/idank/explainshell/issues/1');
-            //     $this.html(link);
+            // if (!el.classList.contains('hasexpansion')) {
+            //     const link = document.createElement('a');
+            //     link.textContent = el.textContent;
+            //     link.href = 'https://github.com/idank/explainshell/issues/1';
+            //     el.replaceChildren(link);
             // }
         }
         else
-            this.title = "No matching help text found for this argument";
+            el.title = "No matching help text found for this argument";
     });
 }
 
 function affixon() {
-    return $("#command-wrapper").hasClass("affix");
+    return document.getElementById("command-wrapper").classList.contains("affix");
 }
 
 // this is where the magic happens!  we create a connecting line between each
@@ -469,7 +466,7 @@ function drawgrouplines(commandselector, options) {
     };
 
     if (typeof options === 'object') {
-        options = $.extend(defaults, options);
+        options = Object.assign(defaults, options);
     } else {
         options = defaults;
     }
@@ -480,7 +477,7 @@ function drawgrouplines(commandselector, options) {
         unknownlinelength = 15, strokewidth = 1;
 
     const canvas = d3.select("#canvas");
-    let canvasTop = $("#canvas")[0].getBoundingClientRect().top;
+    let canvasTop = document.getElementById("canvas").getBoundingClientRect().top;
 
     // if the current group isn't 'all', hide the rest of the help <pre>'s, and show
     // the <pre>'s help of the current group
@@ -498,15 +495,16 @@ function drawgrouplines(commandselector, options) {
     if (helpselector(commandselector).length > 0) {
         // the height of the canvas is determined by the bottom of the last visible <pre>
         // in #help
-        $("#canvas").height($("#help .help-box:visible").last()[0].getBoundingClientRect().bottom - canvasTop);
+        const visibleHelpBoxes = Array.from(document.querySelectorAll("#help .help-box")).filter(el => el.offsetParent !== null);
+        document.getElementById("canvas").style.height = (visibleHelpBoxes[visibleHelpBoxes.length - 1].getBoundingClientRect().bottom - canvasTop) + 'px';
 
         // need to recompute the top of the canvas after height change
-        canvasTop = $("#canvas")[0].getBoundingClientRect().top;
+        canvasTop = document.getElementById("canvas").getBoundingClientRect().top;
     }
 
-    const commandWrapperRect = $("#command")[0].getBoundingClientRect(),
+    const commandWrapperRect = document.getElementById("command").getBoundingClientRect(),
         mid = commandWrapperRect.left + commandWrapperRect.width / 2;
-    let helprect = $("#help")[0].getBoundingClientRect();
+    let helprect = document.getElementById("help").getBoundingClientRect();
 
     // the bounds of the area we plan to draw lines in .help
     const top = helprect.top - toppadding,
@@ -579,7 +577,7 @@ function drawgrouplines(commandselector, options) {
     for (let i = 0; i < links.length; i++) {
         const link = links[i];
 
-        log('handling', $(link.option).text());
+        log('handling', link.option.textContent);
         const commandRect = link.option.getBoundingClientRect(),
             spanmid = commandRect.left + commandRect.width / 2,
             commandRight = commandRect.right - strokewidth;
@@ -666,7 +664,7 @@ function drawgrouplines(commandselector, options) {
     const unknowngroup = new ESLinkGroup(null, commandselector.filter(".unknown").toArray(), mid);
     const linkslengthnounknown = links.length;
 
-    $.each(unknowngroup.links, (i, link) => {
+    unknowngroup.links.forEach((link, i) => {
         const rr = link.option.getBoundingClientRect(),
             rrright = rr.right - strokewidth,
             nextspan = link.option.nextElementSibling,
@@ -827,7 +825,7 @@ let prevselector = null;
 // clear the canvas of all lines and unbind any hover events
 // previously set for oldgroup
 function clear() {
-    $("#canvas").empty();
+    document.getElementById("canvas").innerHTML = '';
 
     if (prevselector) {
         prevselector.add(helpselector(prevselector)).unbind('mouseenter mouseleave');
@@ -838,7 +836,7 @@ function clear() {
 
 // very simple adjustment of the command div font size so it doesn't overflow
 function adjustcommandfontsize() {
-    const commandlength = $.trim($("#command span[class^=command]").add("#command span[class^=shell]").text()).length;
+    const commandlength = Array.from(document.querySelectorAll('#command span[class^=command], #command span[class^=shell]')).reduce((acc, el) => acc + el.textContent, '').trim().length;
     let commandfontsize;
 
     if (commandlength > 105)
@@ -852,7 +850,7 @@ function adjustcommandfontsize() {
 
     if (commandfontsize) {
         log('command length', commandlength, ', adjusting font size to', commandfontsize);
-        $("#command").css('font-size', commandfontsize);
+        document.getElementById("command").style.fontSize = commandfontsize;
     }
 }
 
@@ -946,11 +944,11 @@ function navigation() {
         });
 
 		// disable key navigation when the user focuses on the search box
-		$("#top-search").focus(() => {
+		document.getElementById("top-search").addEventListener('focus', () => {
 			ignorekeydown = true;
 		});
 
-		$("#top-search").blur(() => {
+		document.getElementById("top-search").addEventListener('blur', () => {
 			ignorekeydown = false;
 		});
 
@@ -1012,11 +1010,11 @@ function draw() {
 function setTheme(theme) {
     log('setting theme to', theme);
 
-    $("#bootstrapCSS").attr('href', themes[theme]);
-    $("#hljsCSS").attr('href', hljs_themes[theme]);
+    document.getElementById("bootstrapCSS").setAttribute('href', themes[theme]);
+    document.getElementById("hljsCSS").setAttribute('href', hljs_themes[theme]);
 
     document.documentElement.setAttribute('data-theme', theme);
-    $(document.body).attr('data-theme', theme);
+    document.body.dataset.theme = theme;
     localStorage.setItem(themeCookieName, theme);
 }
 
@@ -1026,9 +1024,7 @@ function currentExplainPrefix() {
     const rest = path.substring('/explain/'.length);
     const parts = rest.split('/');
     // Check if first segment is a known distro from the dropdown
-    const knownDistros = $('a[data-distro]').map(function() {
-        return $(this).attr('data-distro');
-    }).get();
+    const knownDistros = Array.from(document.querySelectorAll('a[data-distro]'), el => el.dataset.distro);
     if (parts.length >= 2 && knownDistros.indexOf(parts[0]) !== -1) {
         return `/explain/${parts[0]}/${parts[1]}`;
     }

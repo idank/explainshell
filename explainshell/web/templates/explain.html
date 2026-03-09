@@ -93,13 +93,13 @@
                 // set the query in the top search box from the url
                 var cmd = new URLSearchParams(window.location.search).get('cmd');
                 if (cmd) {
-                    $("#top-search").val(cmd);
+                    document.getElementById("top-search").value = cmd;
                 }
 
                 // when #command-wrapper position is changed to fixed, it'll be removed
                 // from the normal flow, and everything below it will up. we use this div
                 // to prevent that.
-                $('#bump-fixer').height($("#command-wrapper").height());
+                document.getElementById('bump-fixer').style.height = document.getElementById("command-wrapper").offsetHeight + 'px';
 
                 $('#command-wrapper').affix({
                     offset: { top: $('#command-wrapper').offset().top-10 }
