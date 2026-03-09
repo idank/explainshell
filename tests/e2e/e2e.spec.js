@@ -329,6 +329,14 @@ test("search box is populated from URL query", async ({ page }) => {
   await expect(searchBox).toHaveValue("echo hello");
 });
 
+test("right-going SVG links do not overlap", async ({ page }) => {
+  await page.goto("/explain?cmd=echo+hello+%7C+grep+foo&deterministic");
+  await page.waitForLoadState("networkidle");
+
+  await expect(page.locator("#command")).toBeVisible();
+  await expect(page).toHaveScreenshot("explain-no-overlap-links.png", { fullPage: true });
+});
+
 test("blockquotes in help boxes render as plain indented text", async ({ page }) => {
   await page.goto("/explain/1/git-rebase");
   await page.waitForLoadState("networkidle");
