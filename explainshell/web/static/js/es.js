@@ -36,6 +36,16 @@ function shuffle(arr) {
     return a;
 }
 
+function setStyles(els, styles) {
+    for (const el of els) Object.assign(el.style, styles);
+}
+
+function htmlToElement(html) {
+    const template = document.createElement('template');
+    template.innerHTML = html.trim();
+    return template.content.firstChild;
+}
+
 const assignedcolors = {};
 
 let vtimeout;
@@ -364,6 +374,7 @@ function initialize() {
     while (curr) {
         if (curr.name !== 'all') {
             $("span[class^=expansion]", curr.commandselector).each(function() {
+                this.style.color = 'red';
                 const kind = this.className.slice(10);
 
                 if (kind in expansions) {
@@ -382,7 +393,7 @@ function initialize() {
                 else {
                     log("kind", kind, "has no help text!");
                 }
-            }).css('color', 'red');
+            });
         }
 
         curr = curr.next;
@@ -776,13 +787,16 @@ function drawgrouplines(commandselector, options) {
                     clearTimeout(vtimeout);
 
                     // highlight all the <span>'s of the current group
-                    $(linkgroup.options).css({'font-weight':'bold'});
+                    setStyles(linkgroup.options, {fontWeight: 'bold'});
 
                     // and disable highlighting for substitutions that might
                     // be in there
-                    $("span[class$=substitution]", linkgroup.options).css({'font-weight':'normal'});
+                    const subs = linkgroup.options.flatMap(el =>
+                        Array.from(el.querySelectorAll('span[class$=substitution]'))
+                    );
+                    setStyles(subs, {fontWeight: 'normal'});
                     // and disable transparency
-                    $(linkgroup.help).add(linkgroup.options).css({opacity: 1.0});
+                    setStyles([...linkgroup.help, ...linkgroup.options], {opacity: '1'});
 
                     // hide the lines of all other groups
                     groups.attr('visibility', (other) =>
@@ -790,8 +804,7 @@ function drawgrouplines(commandselector, options) {
 
                     // and make their <span> and <pre>'s slightly transparent
                     othergroups.each((other) => {
-                        $(other.help).add(other.options).css({opacity: 0.4});
-                        $(other.help).add(other.options).css({'font-weight':'normal'});
+                        setStyles([...other.help, ...other.options], {opacity: '0.4', fontWeight: 'normal'});
                     });
                 },
                 () => {
@@ -801,13 +814,13 @@ function drawgrouplines(commandselector, options) {
                      * new block within changewait ms
                      **/
                     vtimeout = setTimeout(() => {
-                        $(linkgroup.options).css({'font-weight':'normal'});
+                        setStyles(linkgroup.options, {fontWeight: 'normal'});
 
                         groups.attr('visibility', (other) =>
                             linkgroup !== other ? 'visible' : null);
 
                         othergroups.each((other) => {
-                            $(other.help).add(other.options).css({opacity: 1});
+                            setStyles([...other.help, ...other.options], {opacity: '1'});
                         });
                     }, changewait);
 
@@ -859,35 +872,38 @@ let ignorekeydown = false;
 function navigation() {
     // if we have more groups, show the prev/next buttons
     if (currentgroup.next) {
-        const prev = $('<li><i class="icon-arrow-left icon-2"></i><span></span></li>');
-        const next = $('<li><i class="icon-arrow-right icon-2"></i><span></span></li>');
-        const prevnext = $('<ul class="inline" id="prevnext"><li>showing <u>all</u>, navigate:</li></ul>');
-        prevnext.append(prev).append(next);
-        $("#navigate").css('height', 'auto').append(prevnext);
+        const prev = htmlToElement('<li><i class="icon-arrow-left icon-2"></i><span></span></li>');
+        const next = htmlToElement('<li><i class="icon-arrow-right icon-2"></i><span></span></li>');
+        const prevnext = htmlToElement('<ul class="inline" id="prevnext"><li>showing <u>all</u>, navigate:</li></ul>');
+        prevnext.appendChild(prev);
+        prevnext.appendChild(next);
+        const navigate = document.getElementById("navigate");
+        navigate.style.height = 'auto';
+        navigate.appendChild(prevnext);
 
-        const nextext = next.find("span"),
-            prevtext = prev.find("span"),
-            currentext = prevnext.find("u");
+        const nextext = next.querySelector("span"),
+            prevtext = prev.querySelector("span"),
+            currentext = prevnext.querySelector("u");
 
         const grouptext = (group) => {
             if (group.name === 'shell')
                 return 'shell syntax';
             else if (group.name !== 'all')
-                return group.commandselector.first().text();
+                return group.commandselector[0].textContent;
             return 'all';
         };
 
-        nextext.text(` explain ${grouptext(currentgroup.next)}`);
-        prevtext.text(` explain ${grouptext(currentgroup.prev)}`);
+        nextext.textContent = ` explain ${grouptext(currentgroup.next)}`;
+        prevtext.textContent = ` explain ${grouptext(currentgroup.prev)}`;
 
-        prev.click(() => {
+        prev.addEventListener('click', () => {
             if (affixon())
                 return;
             if (currentgroup.prev) {
                 log('moving to the previous group (%s), current group is %s', currentgroup.prev.name, currentgroup.name);
                 const oldgroup = currentgroup;
                 currentgroup = currentgroup.prev;
-                currentext.text(grouptext(currentgroup));
+                currentext.textContent = grouptext(currentgroup);
 
                 // no need to potentically call drawvisible() here since for now
                 // we don't allow clicking when scrolling
@@ -895,31 +911,31 @@ function navigation() {
 
                 if (!currentgroup.prev) {
                     log("new current group is the first group, disabling prev button");
-                    prev.css({'display': 'none'});
-                    prevtext.text('');
+                    prev.style.display = 'none';
+                    prevtext.textContent = '';
                 }
                 else {
                     log("setting prev button text to new current group prev %s", currentgroup.prev.name);
 
-                    prevtext.text(` explain ${grouptext(currentgroup.prev)}`);
+                    prevtext.textContent = ` explain ${grouptext(currentgroup.prev)}`;
                 }
 
                 if (currentgroup.next) {
-                    next.css({'display': ''});
-                    nextext.text(` explain ${grouptext(currentgroup.next)}`);
+                    next.style.display = '';
+                    nextext.textContent = ` explain ${grouptext(currentgroup.next)}`;
                     log("setting next button text to new current group next %s", currentgroup.next.name);
                 }
             }
         });
 
-        next.click(() => {
+        next.addEventListener('click', () => {
             if (affixon())
                 return;
             if (currentgroup.next) {
                 log('moving to the next group (%s), current group is %s', currentgroup.next.name, currentgroup.name);
                 const oldgroup = currentgroup;
                 currentgroup = currentgroup.next;
-                currentext.text(grouptext(currentgroup));
+                currentext.textContent = grouptext(currentgroup);
 
                 // no need to potentically call drawvisible() here since for now
                 // we don't allow clicking when scrolling
@@ -927,52 +943,53 @@ function navigation() {
 
                 if (!currentgroup.next) {
                     log("new current group is the last group, disabling next button");
-                    next.css({'display': 'none'});
-                    nextext.text('');
+                    next.style.display = 'none';
+                    nextext.textContent = '';
                 }
                 else {
                     log("setting next button text to new current group next %s", currentgroup.next.name);
-                    nextext.text(` explain ${grouptext(currentgroup.next)}`);
+                    nextext.textContent = ` explain ${grouptext(currentgroup.next)}`;
                 }
 
                 if (currentgroup.prev) {
-                    prev.css({'display': ''});
-                    prevtext.text(` explain ${grouptext(currentgroup.prev)}`);
+                    prev.style.display = '';
+                    prevtext.textContent = ` explain ${grouptext(currentgroup.prev)}`;
                     log("setting prev button text to new current group prev %s", currentgroup.prev.name);
                 }
             }
         });
 
-		// disable key navigation when the user focuses on the search box
-		document.getElementById("top-search").addEventListener('focus', () => {
-			ignorekeydown = true;
-		});
+        // disable key navigation when the user focuses on the search box
+        document.getElementById("top-search").addEventListener('focus', () => {
+            ignorekeydown = true;
+        });
 
-		document.getElementById("top-search").addEventListener('blur', () => {
-			ignorekeydown = false;
-		});
+        document.getElementById("top-search").addEventListener('blur', () => {
+            ignorekeydown = false;
+        });
 
         // bind left/right arrows as well
-        $(document).keydown((e) => {
-			if (!ignorekeydown) {
-				switch(e.which) {
-					case 37: // left
-						prev.click();
-						break;
-					case 39: // right
-						next.click();
-						break;
-					default: return;
-				}
+        document.addEventListener('keydown', (e) => {
+            if (!ignorekeydown) {
+                switch(e.which) {
+                    case 37: // left
+                        prev.click();
+                        break;
+                    case 39: // right
+                        next.click();
+                        break;
+                    default: return;
+                }
 
-				e.preventDefault();
-			}
+                e.preventDefault();
+            }
         });
     }
 }
 
-function inview(viewtop, viewbottom, $el) {
-    const elemmiddle = $el.offset().top + ($el.height() / 2);
+function inview(viewtop, viewbottom, el) {
+    const rect = el.getBoundingClientRect();
+    const elemmiddle = rect.top + window.scrollY + (rect.height / 2);
 
     // we consider the element to be in view when its middle is
     // within the viewport
@@ -980,18 +997,18 @@ function inview(viewtop, viewbottom, $el) {
 }
 
 function drawvisible() {
-    let viewtop = $window.scrollTop();
-    const viewbottom = viewtop + $window.height(),
+    let viewtop = window.scrollY;
+    const viewbottom = viewtop + window.innerHeight,
         topspace = 80;
 
     viewtop += topspace;
 
-    const visible = $("#help .help-box:visible").filter(function() {
-        return (inview(viewtop, viewbottom, $(this)));
-    });
+    const visible = Array.from(document.querySelectorAll("#help .help-box")).filter(el =>
+        el.offsetParent !== null && inview(viewtop, viewbottom, el)
+    );
 
     if (visible.length > 0) {
-        const commandselector = optionsselector(visible, currentgroup.commandselector);
+        const commandselector = optionsselector($(visible), currentgroup.commandselector);
         drawgrouplines(commandselector, {topheight: 50, hidepres: false});
     }
     else {
@@ -1053,10 +1070,10 @@ function setDistro(distro, release) {
 // Theme-related stuff
 $(document).ready(() => {
     $("#settingsContainer .dropdown-menu a").click(function() {
-        setTheme($(this).attr('data-theme-name'));
+        setTheme(this.dataset.themeName);
     });
 
     $(document).on('click', 'a[data-distro]', function() {
-        setDistro($(this).attr('data-distro'), $(this).attr('data-release'));
+        setDistro(this.dataset.distro, this.dataset.release);
     });
 });
