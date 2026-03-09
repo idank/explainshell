@@ -4,10 +4,7 @@ const debug = false;
 
 const themeCookieName = 'theme';
 
-if (!debug) {
-    console = console || {};
-    console.log = () => {};
-}
+const log = debug ? console.log.bind(console) : () => {};
 
 // a list of colors to use for the lines
 const colors = ['#3182bd', '#6baed6', '#9ecae1', '#c6dbef', '#e6550d', '#fd8d3c', '#fdae6b', '#fdd0a2', '#31a354', '#74c476', '#a1d99b', '#c7e9c0', '#756bb1', '#9e9ac8', '#bcbddc', '#dadaeb', '#636363', '#969696', '#bdbdbd', '#d9d9d9'];
@@ -365,7 +362,7 @@ function initialize() {
                 const kind = $(this).attr("class").slice(10);
 
                 if (kind in expansions) {
-                    console.log("adding", kind, "popover to", $(this));
+                    log("adding", kind, "popover to", $(this));
 
                     const expansion = expansions[kind];
 
@@ -378,7 +375,7 @@ function initialize() {
                     });
                 }
                 else {
-                    console.log("kind", kind, "has no help text!");
+                    log("kind", kind, "has no help text!");
                 }
             }).css('color', 'red');
         }
@@ -399,7 +396,7 @@ function initialize() {
 // connected to a .simplecommandstart <span>
 function handlesynopsis() {
     helppres.each(function() {
-        spans = optionsselector($(this)).not(".unknown");
+        const spans = optionsselector($(this)).not(".unknown");
 
         if (spans.is(".simplecommandstart")) {
             $(this).addClass("help-synopsis");
@@ -414,7 +411,7 @@ function assigncolors() {
     const shuffledcolors = params.has('deterministic') ? colors.slice() : _.shuffle(colors);
 
     $("#help .help-box").each(function() {
-        color = shuffledcolors.shift();
+        const color = shuffledcolors.shift();
         shuffledcolors.push(color);
 
         assignedcolors[$(this).attr('id')] = color;
@@ -426,7 +423,7 @@ function assigncolors() {
 // handle unknowns in #command
 function commandunknowns() {
     $("#command span.unknown").each(function(span) {
-        $this = $(this);
+        const $this = $(this);
 
         // add tooltips
         if ($this.hasClass('simplecommandstart')) {
@@ -484,16 +481,6 @@ function drawgrouplines(commandselector, options) {
         if (currentgroup.name !== 'all') {
             $("#help .help-box").not(helpselector(commandselector)).parent().parent().hide();
             helpselector(commandselector).parent().parent().show();
-
-            // the first item in a non-shell group is always the synopsis of the
-            // command (unless it's unknown). we display it at the top without a
-            // connecting line, so remove it from the selectors (unless it's the
-            // only one)
-            //if (currentgroup.name != 'shell' && !$(commandselector[0]).hasClass('unknown') &&
-            //    commandselector.filter(':not(.unknown)').length > 1) {
-            //    console.log('slicing command selector');
-            //    commandselector = commandselector.slice(1);
-            //}
         }
         else {
             // 'all' group, show everything
@@ -576,21 +563,13 @@ function drawgrouplines(commandselector, options) {
 
     links = l.concat(r);
 
-    // the left going links have their <pre>'s help ordered in the order the
-    // <span>'s appear in .command, so the first <span> goes to
-    // the first <pre>, and so on. but that means that the links are going to
-    // cross each other. swapping the first and last <pre>'s will prevent that
-    // (note that links can still cross each other since multiple <span>'s can
-    // be linked to the same <pre>).
-    //reorder(l);
-
     // handle all links that are not unknowns (have a <pre> in .help)
     //
     // this is hard to explain without an accompanying drawing (TODO)
     for (let i = 0; i < links.length; i++) {
         const link = links[i];
 
-        console.log('handling', $(link.option).text());
+        log('handling', $(link.option).text());
         const commandRect = link.option.getBoundingClientRect(),
             spanmid = commandRect.left + commandRect.width / 2,
             commandRight = commandRect.right - strokewidth;
@@ -638,8 +617,8 @@ function drawgrouplines(commandselector, options) {
                 pp = leftmostpath.points[1];
 
                 // zero or minus to alight with the same flag
-                startyDifferace = leftmost.starty - link.starty
-                path.addpoint(p.x, pp.y + startyDifferace);
+                const startyDifference = leftmost.starty - link.starty
+                path.addpoint(p.x, pp.y + startyDifference);
             }
         }
         else {
@@ -665,8 +644,8 @@ function drawgrouplines(commandselector, options) {
                 pp = rightmostpath.points[1];
 
                 // zero or minus to alight with the same flag
-                startyDifferace = rightmost.starty - link.starty
-                path.addpoint(p.x, pp.y + startyDifferace);
+                const startyDifference = rightmost.starty - link.starty
+                path.addpoint(p.x, pp.y + startyDifference);
             }
         }
 
@@ -690,19 +669,7 @@ function drawgrouplines(commandselector, options) {
         link.unknown = true;
         link.text = "?";
 
-        // if there's a close link nearby to this one and it's going down, we
-        // draw the this link facing up
-        //if ((prevlink && prevlink.directiondown && link.nearby(prevlink)) || (nextlink && nextlink.directiondown && link.nearby(nextlink))) {
-        //    link.directiondown = false;
-
-        //    link.paths.push(new ESPath().addpoint(rr.left, startytop).addpoint(rrright, startytop-5));
-        //    link.paths.push(new ESPath().addpoint(rrright, startytop-5).addpoint(rrright, startytop));
-        //    var rrmid = d3.round(rr.left + rr.width / 2);
-        //    link.lines.push({x1: rrmid, y1: startytop-6, x2: rrmid, y2: startytop-5-unknownlinelength});
-        //    link.circle = {x: rrmid, y: startytop-5-unknownlinelength-3, r: 8};
-        //}
-        //else {
-            link.paths.push(new ESPath()
+        link.paths.push(new ESPath()
                 .addpoint(rr.left, 0)
                 .addpoint(rr.left, 5)
                 .addpoint(rrright, 5)
@@ -714,7 +681,6 @@ function drawgrouplines(commandselector, options) {
                 .addpoint(rrmid, 5 + strokewidth + unknownlinelength + commandOffsetToCanvas)
             );
             link.circle = {x: rrmid, y: 5+unknownlinelength+3+commandOffsetToCanvas, r: 8};
-        //}
 
         links.push(link);
     });
@@ -791,14 +757,14 @@ function drawgrouplines(commandselector, options) {
             const othergroups = groups.filter((other) => linkgroup !== other);
 
             const s = $(linkgroup.help).add(linkgroup.options);
-            console.log('s=', s);
+            log('s=', s);
             s.hover(
                 () => {
                     /*
                      * we're highlighting a new block,
                      * disable timeout to make all blocks visible
                      **/
-                    console.log('entering link group =', linkgroup, 'clearTimeout =', vtimeout);
+                    log('entering link group =', linkgroup, 'clearTimeout =', vtimeout);
                     clearTimeout(vtimeout);
 
                     // highlight all the <span>'s of the current group
@@ -837,7 +803,7 @@ function drawgrouplines(commandselector, options) {
                         });
                     }, changewait);
 
-                    console.log('leaving link group =', linkgroup, 'setTimeout =', vtimeout);
+                    log('leaving link group =', linkgroup, 'setTimeout =', vtimeout);
                 }
             );
         });
@@ -875,7 +841,7 @@ function adjustcommandfontsize() {
         commandfontsize = '16px';
 
     if (commandfontsize) {
-        console.log('command length', commandlength, ', adjusting font size to', commandfontsize);
+        log('command length', commandlength, ', adjusting font size to', commandfontsize);
         $("#command").css('font-size', commandfontsize);
     }
 }
@@ -910,7 +876,7 @@ function navigation() {
             if (affixon())
                 return;
             if (currentgroup.prev) {
-                console.log('moving to the previous group (%s), current group is %s', currentgroup.prev.name, currentgroup.name);
+                log('moving to the previous group (%s), current group is %s', currentgroup.prev.name, currentgroup.name);
                 const oldgroup = currentgroup;
                 currentgroup = currentgroup.prev;
                 currentext.text(grouptext(currentgroup));
@@ -920,12 +886,12 @@ function navigation() {
                 drawgrouplines(currentgroup.commandselector);
 
                 if (!currentgroup.prev) {
-                    console.log("new current group is the first group, disabling prev button");
+                    log("new current group is the first group, disabling prev button");
                     prev.css({'display': 'none'});
                     prevtext.text('');
                 }
                 else {
-                    console.log("setting prev button text to new current group prev %s", currentgroup.prev.name);
+                    log("setting prev button text to new current group prev %s", currentgroup.prev.name);
 
                     prevtext.text(` explain ${grouptext(currentgroup.prev)}`);
                 }
@@ -933,7 +899,7 @@ function navigation() {
                 if (currentgroup.next) {
                     next.css({'display': ''});
                     nextext.text(` explain ${grouptext(currentgroup.next)}`);
-                    console.log("setting next button text to new current group next %s", currentgroup.next.name);
+                    log("setting next button text to new current group next %s", currentgroup.next.name);
                 }
             }
         });
@@ -942,7 +908,7 @@ function navigation() {
             if (affixon())
                 return;
             if (currentgroup.next) {
-                console.log('moving to the next group (%s), current group is %s', currentgroup.next.name, currentgroup.name);
+                log('moving to the next group (%s), current group is %s', currentgroup.next.name, currentgroup.name);
                 const oldgroup = currentgroup;
                 currentgroup = currentgroup.next;
                 currentext.text(grouptext(currentgroup));
@@ -952,19 +918,19 @@ function navigation() {
                 drawgrouplines(currentgroup.commandselector);
 
                 if (!currentgroup.next) {
-                    console.log("new current group is the last group, disabling next button");
+                    log("new current group is the last group, disabling next button");
                     next.css({'display': 'none'});
                     nextext.text('');
                 }
                 else {
-                    console.log("setting next button text to new current group next %s", currentgroup.next.name);
+                    log("setting next button text to new current group next %s", currentgroup.next.name);
                     nextext.text(` explain ${grouptext(currentgroup.next)}`);
                 }
 
                 if (currentgroup.prev) {
                     prev.css({'display': ''});
                     prevtext.text(` explain ${grouptext(currentgroup.prev)}`);
-                    console.log("setting prev button text to new current group prev %s", currentgroup.prev.name);
+                    log("setting prev button text to new current group prev %s", currentgroup.prev.name);
                 }
             }
         });
@@ -998,54 +964,11 @@ function navigation() {
 }
 
 function inview(viewtop, viewbottom, $el) {
-    const elemtop = $el.offset().top,
-        elembottom = elemtop + $el.height(),
-        elemmiddle = elemtop + ($el.height() / 2),
-        elemarea = $el.width() * $el.height(),
-        overlaparea = 0;
+    const elemmiddle = $el.offset().top + ($el.height() / 2);
 
     // we consider the element to be in view when its middle is
     // within the viewport
     return (viewtop < elemmiddle && viewbottom > elemmiddle);
-
-    /*
-    // is the element completely outside the viewport?
-    if (elembottom < viewtop || elemtop > viewbottom) {
-        overlaparea = 0;
-    }
-    else {
-        var w = $el.width(),
-            h;
-
-        // check for complete overlap
-        if ((elembottom >= viewtop) && (elemtop <= viewbottom)
-            && (elembottom <= viewbottom) && (elemtop >= viewtop)) {
-            h = $el.height();
-        }
-        // check if the viewport is entirely within the element
-        else if (viewtop > elemtop && viewbottom < elembottom) {
-            // is the middle of the element visible?
-            return (viewtop < elemmiddle && viewbottom > elemmiddle);
-        }
-        // check if the bottom of the element is below the viewport bottom
-        else if (elembottom > viewbottom) {
-            h = viewbottom - elemtop;
-        }
-        // the top of the element is above the viewport top
-        else {
-            h = elembottom - viewtop;
-        }
-
-        overlaparea = w * h;
-    }
-
-    var ratio = overlaparea / elemarea;
-
-    //$("#coords").html("top=" + viewtop + " bottom="+viewbottom);
-    //console.log($el, "top="+elemtop+" bottom="+elembottom+" area="+elemarea+" overlap="+overlaparea+" ratio="+ratio+" i="+i);
-    //$("#coords").html(i+" top="+elemtop+" bottom="+elembottom+" area="+elemarea+" overlap="+overlaparea+" ratio="+ratio.toFixed(2));
-
-    return (ratio >= 0.5)*/
 }
 
 function drawvisible() {
@@ -1060,14 +983,10 @@ function drawvisible() {
     });
 
     if (visible.length > 0) {
-        //var ids = visible.map(function() { return $(this).attr('id'); });
-        //$('#scroller').html(ids.toArray().join(','));
-
         const commandselector = optionsselector(visible, currentgroup.commandselector);
         drawgrouplines(commandselector, {topheight: 50, hidepres: false});
     }
     else {
-        //$('#scroller').html("nothing visible");
         clear();
     }
 }
@@ -1081,7 +1000,7 @@ function draw() {
 }
 
 function setTheme(theme) {
-    console.log('setting theme to', theme);
+    log('setting theme to', theme);
 
     $("#bootstrapCSS").attr('href', themes[theme]);
     $("#hljsCSS").attr('href', hljs_themes[theme]);
@@ -1107,7 +1026,7 @@ function currentExplainPrefix() {
 }
 
 function setDistro(distro, release) {
-    console.log('setting distro to', distro, release);
+    log('setting distro to', distro, release);
     localStorage.setItem('distro', distro);
     localStorage.setItem('release', release);
 
