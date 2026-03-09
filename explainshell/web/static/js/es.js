@@ -199,8 +199,6 @@ class ESLink {
             this.goingleft = rrmid <= mid;
 
             $(this.help).css("border-color", this.color);
-
-            $(`#${clazz} b:first-of-type`).css("color", this.color);
         }
     }
 
