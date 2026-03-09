@@ -107,7 +107,14 @@
 
                 drawgrouplines(currentgroup.commandselector);
 
-                var throttled = _.throttle(function() {
+                function throttle(fn, ms) {
+                    var last = 0;
+                    return function() {
+                        var now = Date.now();
+                        if (now - last >= ms) { last = now; fn(); }
+                    };
+                }
+                var throttled = throttle(function() {
                     draw()
                 }, 10);
 

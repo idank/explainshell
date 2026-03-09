@@ -29,6 +29,15 @@ if (debug){
     };
 }
 
+function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
 const assignedcolors = {};
 
 let vtimeout;
@@ -269,7 +278,7 @@ function optionsselector(pres, spans) {
     });
 
     const s = $("#command span.unknown");
-    const r = _.reduce(ids, (s, id) => s.add(`#command span[helpref^=${id}]`), s);
+    const r = Array.from(ids).reduce((s, id) => s.add(`#command span[helpref^=${id}]`), s);
 
     if (typeof spans === 'object') {
         return (r.filter(spans));
@@ -408,7 +417,7 @@ function assigncolors() {
     // Skip color shuffle when &deterministic is in the URL, so e2e screenshot
     // tests produce pixel-identical SVG lines across runs.
     const params = new URLSearchParams(window.location.search);
-    const shuffledcolors = params.has('deterministic') ? colors.slice() : _.shuffle(colors);
+    const shuffledcolors = params.has('deterministic') ? colors.slice() : shuffle(colors);
 
     $("#help .help-box").each(function() {
         const color = shuffledcolors.shift();
@@ -514,7 +523,10 @@ function drawgrouplines(commandselector, options) {
     // select all spans in our commandselector, and group them by their class
     // attribute. different spans share the same class when they should be
     // linked to the same <pre> in .help
-    const groupedoptions = _.groupBy(commandselector.filter(":not(.unknown)"), (span) => $(span).attr('helpref'));
+    const groupedoptions = Object.groupBy(
+        Array.from(commandselector.filter(":not(.unknown)")),
+        (span) => span.getAttribute('helpref')
+    );
 
     // create an eslinkgroup for every group of <span>'s, these will be linked together to
     // the same <pre> in .help.
