@@ -1,0 +1,3 @@
+[submodule "manpages"]
+	path = manpages
+	url = git@github.com:idank/explainshell-manpages.git
