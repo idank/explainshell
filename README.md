@@ -27,16 +27,16 @@ When querying explainshell, it:
 
 ## Manpages
 
-> [!IMPORTANT]  
->
-> explainshell is actively maintained in terms of keeping it healthy and functional -- issues are addressed, and the core remains stable.
-> 
-> However, please note that the **manpages are outdated**. The previous system for generating them was unsustainable, and they haven’t been updated in some time. There are currently **no active plans** to revise this mechanism.
-> 
-> If you're relying on manpages, be aware that they may not reflect the latest behavior. Contributions in this area are welcome but would require rethinking the documentation pipeline.
+explainshell.com contains manpages from the [Ubuntu archive](https://manpages.ubuntu.com/). The manpage archive is generated using a Go pipeline in the `manpages/ubuntu-manpages-operator` submodule, which fetches Ubuntu packages, extracts manpages, and converts them to markdown.
 
-Right now explainshell.com contains the entire [archive of Ubuntu](https://manpages.ubuntu.com/). It's not
-possible to directly add a missing man page to the live site (it might be in the future).
+To generate the archive locally:
+
+```bash
+$ git submodule update --init --recursive
+$ make ubuntu-archive RELEASES=questing
+```
+
+This outputs markdown and gzipped manpages under `manpages/ubuntu-manpages-operator/output/`.
 
 ## Running explainshell locally
 

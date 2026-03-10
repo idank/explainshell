@@ -67,6 +67,9 @@ make db-check
 # Run web server locally
 make serve
 
+# Generate Ubuntu manpage archive (requires Go, RELEASES is required)
+make ubuntu-archive RELEASES=questing
+
 # Process a man page into the database
 python -m explainshell.manager --mode source /path/to/manpage.1.gz
 ```
@@ -95,6 +98,8 @@ python -m explainshell.manager --mode source /path/to/manpage.1.gz
 - `tests/e2e/` - Playwright e2e tests, snapshots, and dedicated `e2e.db`
 - `tests/regression/` - Parsing regression tests and manpage .gz fixtures
 - `runserver.py` - Flask app entry point
+- `manpages/` - Git submodule ([explainshell-manpages](https://github.com/idank/explainshell-manpages))
+  - `ubuntu-manpages-operator/` - Go pipeline that fetches Ubuntu `.deb` packages, extracts manpages, and converts them to markdown
 
 ## Architecture
 

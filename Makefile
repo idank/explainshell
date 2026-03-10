@@ -46,4 +46,19 @@ serve:
 db-check:
 	python tools/db_check.py --db $(or $(DB_PATH),explainshell.db)
 
-.PHONY: tests e2e e2e-db e2e-update test-llm tests-all lint serve parsing-regression parsing-update db-check
+UBUNTU_ARCHIVE_DIR := manpages/ubuntu-manpages-operator
+UBUNTU_ARCHIVE_OUTPUT := $(UBUNTU_ARCHIVE_DIR)/output
+
+ubuntu-archive:
+	@test -n "$(RELEASES)" || (echo "RELEASES is required. Example: make ubuntu-archive RELEASES=noble"; exit 1)
+	cd $(UBUNTU_ARCHIVE_DIR) && go build -o ingest ./cmd/ingest
+	MANPAGES_PUBLIC_HTML_DIR=$(UBUNTU_ARCHIVE_OUTPUT) \
+	MANPAGES_RELEASES=$(RELEASES) \
+	MANPAGES_GZ_ONLY=true \
+		$(UBUNTU_ARCHIVE_DIR)/ingest
+	mkdir -p manpages/output/ubuntu
+	cp -r $(UBUNTU_ARCHIVE_OUTPUT)/manpages.gz/* manpages/output/ubuntu/
+	find manpages/output/ubuntu -mindepth 2 -maxdepth 2 ! -name man1 ! -name man8 -exec rm -rf {} +
+	find manpages/output/ubuntu -mindepth 2 -maxdepth 2 -type d -name 'man*' | while read d; do mv "$$d" "$$(dirname "$$d")/$$(echo "$$(basename "$$d")" | sed 's/^man//')"; done
+
+.PHONY: tests e2e e2e-db e2e-update test-llm tests-all lint serve parsing-regression parsing-update db-check ubuntu-archive
