@@ -5,7 +5,7 @@ A web tool that parses man pages and explains command-line arguments by matching
 ## Tech Stack
 
 - Python 3.12, Flask, SQLite, bashlex, LiteLLM
-- Linting: ruff
+- Linting: ruff (Python), biome (JS)
 - Testing: pytest (unit + doctests + parsing regression), JS Playwright Test (e2e)
 - Dependencies: `requirements.txt` (main), `package.json` (Playwright e2e)
 
