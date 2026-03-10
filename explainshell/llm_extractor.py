@@ -2,7 +2,7 @@
 LLM-based man page option extractor.
 
 Public API:
-    extract(gz_path, model, **litellm_kwargs) -> store.ParsedManpage
+    extract(gz_path, model) -> store.ParsedManpage
 """
 
 import datetime
@@ -14,12 +14,17 @@ import re
 import subprocess
 import time
 
+import dotenv
 import litellm
+import openai
 from google import genai
 from google.genai import types
 
 from explainshell import config, manpage, store
 from explainshell.errors import ExtractionError
+
+# Load .env file if present (API keys, etc.). Won't override existing env vars.
+dotenv.load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -424,8 +429,60 @@ def _call_gemini_native(user_content, model):
     return response.text
 
 
-def _call_llm(chunk, chunk_info, model, litellm_kwargs):
-    """Call LLM. Uses native Gemini SDK for gemini/ models, litellm otherwise.
+def _is_openai_model(model):
+    """Return True if model should use the native OpenAI SDK."""
+    return model.startswith("openai/")
+
+
+def _call_openai(messages, model):
+    """Call OpenAI using the native SDK.
+
+    Strips the 'openai/' prefix if present.
+    Returns raw response text.
+    """
+    openai_model = model.removeprefix("openai/")
+    client = openai.OpenAI(timeout=LLM_TIMEOUT_SECONDS)
+    response = client.chat.completions.create(
+        model=openai_model,
+        messages=messages,
+        response_format={"type": "json_object"},
+    )
+    return response.choices[0].message.content
+
+
+def _call_litellm(messages, model):
+    """Call any model via litellm (fallback for non-Gemini, non-OpenAI models).
+
+    Returns raw response text.
+    """
+    kwargs = {}
+    try:
+        kwargs["response_format"] = {"type": "json_object"}
+    except Exception:
+        pass
+    try:
+        info = litellm.get_model_info(model)
+        max_out = info.get("max_output_tokens")
+        if max_out:
+            kwargs["max_tokens"] = max_out
+    except Exception:
+        pass
+
+    response = litellm.completion(
+        model=model,
+        messages=messages,
+        timeout=LLM_TIMEOUT_SECONDS,
+        num_retries=0,
+        **kwargs,
+    )
+    return response.choices[0].message.content
+
+
+def _call_llm(chunk, chunk_info, model):
+    """Call LLM via the appropriate SDK.
+
+    Routing: gemini/ → native Gemini SDK, openai/ → native OpenAI SDK,
+    everything else → litellm.
 
     Retries up to 3x on transient errors.
     Returns (data_dict, messages, raw_response_content).
@@ -439,10 +496,18 @@ def _call_llm(chunk, chunk_info, model, litellm_kwargs):
         {"role": "user", "content": user_content},
     ]
 
-    use_native_gemini = model.startswith("gemini/")
+    use_gemini = model.startswith("gemini/")
+    use_openai = not use_gemini and _is_openai_model(model)
 
-    if use_native_gemini:
+    if use_gemini:
         retryable = (Exception,)  # broad catch; filtered below
+    elif use_openai:
+        retryable = (
+            openai.RateLimitError,
+            openai.APITimeoutError,
+            openai.APIConnectionError,
+            openai.InternalServerError,
+        )
     else:
         retryable = (
             litellm.RateLimitError,
@@ -452,42 +517,22 @@ def _call_llm(chunk, chunk_info, model, litellm_kwargs):
             litellm.InternalServerError,
         )
 
-    kwargs = dict(litellm_kwargs)
-    if not use_native_gemini:
-        try:
-            kwargs["response_format"] = {"type": "json_object"}
-        except Exception:
-            pass
-        if "max_tokens" not in kwargs:
-            try:
-                info = litellm.get_model_info(model)
-                max_out = info.get("max_output_tokens")
-                if max_out:
-                    kwargs["max_tokens"] = max_out
-            except Exception:
-                pass
-
     last_err = None
     for attempt in range(3):
         try:
-            if use_native_gemini:
+            if use_gemini:
                 content = _call_gemini_native(user_content, model)
+            elif use_openai:
+                content = _call_openai(messages, model)
             else:
-                response = litellm.completion(
-                    model=model,
-                    messages=messages,
-                    timeout=LLM_TIMEOUT_SECONDS,
-                    num_retries=0,
-                    **kwargs,
-                )
-                content = response.choices[0].message.content
+                content = _call_litellm(messages, model)
             data = _parse_json_response(content)
             _validate_llm_response(data)
             return data, messages, content
         except ExtractionError:
             raise
         except retryable as e:
-            if use_native_gemini:
+            if use_gemini:
                 # Only retry on transient errors (rate limit, timeout, server errors)
                 err_name = type(e).__name__
                 status = getattr(e, "status_code", getattr(e, "code", 0)) or 0
@@ -702,7 +747,7 @@ def _dump_failed_response(fail_dir, basename, chunk_idx, raw_response):
     logger.error("raw LLM response saved to %s", path)
 
 
-def extract(gz_path, model, debug_dir=None, fail_dir=None, **litellm_kwargs):
+def extract(gz_path, model, debug_dir=None, fail_dir=None):
     """LLM extraction pipeline: mandoc → numbered markdown → LLM → (ParsedManpage, RawManpage)."""
     prepared = prepare_extraction(gz_path)
     if prepared is None:
@@ -730,7 +775,7 @@ def extract(gz_path, model, debug_dir=None, fail_dir=None, **litellm_kwargs):
         t0 = time.monotonic()
         try:
             chunk_data, messages, raw_response = _call_llm(
-                chunk, chunk_info, model, litellm_kwargs
+                chunk, chunk_info, model
             )
         except ExtractionError as e:
             raw = getattr(e, "raw_response", None) or getattr(e.__cause__, "raw_response", None)
@@ -752,12 +797,13 @@ def extract(gz_path, model, debug_dir=None, fail_dir=None, **litellm_kwargs):
     return finalize_extraction(gz_path, prepared, all_chunk_data, debug_dir=debug_dir)
 
 
-def submit_batch(requests, model):
-    """Submit a list of (key, user_content) pairs as a Gemini batch job.
+# ---------------------------------------------------------------------------
+# Batch API — Gemini
+# ---------------------------------------------------------------------------
 
-    Uses inline requests (suitable for batches < 20MB).
-    Returns the batch job object.
-    """
+
+def _submit_batch_gemini(requests, model):
+    """Submit a Gemini batch job with inline requests."""
     client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
     gemini_model = model.removeprefix("gemini/")
 
@@ -782,12 +828,8 @@ def submit_batch(requests, model):
     return job
 
 
-def poll_batch(client, job_name, poll_interval=30):
-    """Poll a batch job until it reaches a terminal state.
-
-    Returns the completed job object.
-    Raises ExtractionError on failure/cancellation/expiry.
-    """
+def _poll_batch_gemini(client, job_name, poll_interval=30):
+    """Poll a Gemini batch job until terminal state."""
     consecutive_errors = 0
     max_consecutive_errors = 5
     while True:
@@ -822,11 +864,8 @@ def poll_batch(client, job_name, poll_interval=30):
         time.sleep(poll_interval)
 
 
-def collect_batch_results(job):
-    """Extract results from a completed batch job.
-
-    Returns dict mapping request key → response text.
-    """
+def _collect_batch_results_gemini(job):
+    """Extract results from a completed Gemini batch job."""
     results = {}
     if not job.dest or not job.dest.inlined_responses:
         return results
@@ -838,3 +877,171 @@ def collect_batch_results(job):
         else:
             logger.warning("batch response for key %s has no content", key)
     return results
+
+
+# ---------------------------------------------------------------------------
+# Batch API — OpenAI
+# ---------------------------------------------------------------------------
+
+
+def _submit_batch_openai(requests, model):
+    """Submit an OpenAI batch job.
+
+    Builds a JSONL file, uploads it, and creates a batch.
+    Returns the batch object.
+    """
+    import io
+
+    openai_model = model.removeprefix("openai/")
+    client = openai.OpenAI(timeout=LLM_TIMEOUT_SECONDS)
+
+    # Build JSONL in memory
+    buf = io.BytesIO()
+    for key, user_content in requests:
+        line = json.dumps({
+            "custom_id": key,
+            "method": "POST",
+            "url": "/v1/chat/completions",
+            "body": {
+                "model": openai_model,
+                "messages": [
+                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "user", "content": user_content},
+                ],
+                "response_format": {"type": "json_object"},
+            },
+        })
+        buf.write(line.encode("utf-8"))
+        buf.write(b"\n")
+    buf.seek(0)
+
+    # Upload
+    file_obj = client.files.create(file=("batch_input.jsonl", buf), purpose="batch")
+    logger.info("uploaded batch input file: %s", file_obj.id)
+
+    # Create batch
+    batch = client.batches.create(
+        input_file_id=file_obj.id,
+        endpoint="/v1/chat/completions",
+        completion_window="24h",
+        metadata={"source": "explainshell"},
+    )
+    return batch
+
+
+def _poll_batch_openai(client, batch_id, poll_interval=30):
+    """Poll an OpenAI batch until terminal state."""
+    consecutive_errors = 0
+    max_consecutive_errors = 5
+    while True:
+        try:
+            batch = client.batches.retrieve(batch_id)
+            consecutive_errors = 0
+        except Exception as e:
+            consecutive_errors += 1
+            ts = time.strftime("[%H:%M:%S]")
+            print(f"{ts} batch {batch_id}: poll error ({consecutive_errors}/{max_consecutive_errors}): {e}")
+            if consecutive_errors >= max_consecutive_errors:
+                raise ExtractionError(
+                    f"Batch poll failed after {max_consecutive_errors} consecutive errors: {e}"
+                ) from e
+            time.sleep(poll_interval)
+            continue
+
+        status = batch.status
+        logger.info("batch %s status: %s", batch_id, status)
+
+        counts = batch.request_counts
+        counts_str = ""
+        if counts:
+            counts_str = f" (completed={counts.completed}, failed={counts.failed}, total={counts.total})"
+
+        if status == "completed":
+            return batch
+        if status == "failed":
+            raise ExtractionError(f"Batch job failed: {batch_id}")
+        if status == "cancelled":
+            raise ExtractionError(f"Batch job cancelled: {batch_id}")
+        if status == "expired":
+            raise ExtractionError(f"Batch job expired: {batch_id}")
+
+        ts = time.strftime("[%H:%M:%S]")
+        print(f"{ts} batch {batch_id}: status={status}{counts_str}, polling again in {poll_interval}s...")
+        time.sleep(poll_interval)
+
+
+def _collect_batch_results_openai(batch):
+    """Download and parse results from a completed OpenAI batch."""
+    results = {}
+    if not batch.output_file_id:
+        return results
+
+    client = openai.OpenAI(timeout=LLM_TIMEOUT_SECONDS)
+    content = client.files.content(batch.output_file_id)
+
+    for line in content.text.splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        key = row.get("custom_id", "")
+        response = row.get("response", {})
+        body = response.get("body", {})
+        choices = body.get("choices", [])
+        if choices:
+            text = choices[0].get("message", {}).get("content", "")
+            results[key] = text
+        else:
+            error = row.get("error")
+            logger.warning("batch response for key %s has no content (error=%s)", key, error)
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Batch API — unified interface
+# ---------------------------------------------------------------------------
+
+
+def submit_batch(requests, model):
+    """Submit a batch job to the appropriate provider.
+
+    Returns a provider-specific batch/job object.
+    """
+    if model.startswith("gemini/"):
+        return _submit_batch_gemini(requests, model)
+    if _is_openai_model(model):
+        return _submit_batch_openai(requests, model)
+    raise ValueError(f"Batch mode is not supported for model: {model}")
+
+
+def make_batch_client(model):
+    """Create a provider-specific client for polling batch jobs."""
+    if model.startswith("gemini/"):
+        return genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+    if _is_openai_model(model):
+        return openai.OpenAI(timeout=LLM_TIMEOUT_SECONDS)
+    raise ValueError(f"Batch mode is not supported for model: {model}")
+
+
+def poll_batch(client, job_id, model, poll_interval=30):
+    """Poll a batch job until it reaches a terminal state.
+
+    Returns the completed job/batch object.
+    """
+    if model.startswith("gemini/"):
+        return _poll_batch_gemini(client, job_id, poll_interval)
+    if _is_openai_model(model):
+        return _poll_batch_openai(client, job_id, poll_interval)
+    raise ValueError(f"Batch mode is not supported for model: {model}")
+
+
+def collect_batch_results(job, model):
+    """Extract results from a completed batch job.
+
+    Returns dict mapping request key → response text.
+    """
+    if model.startswith("gemini/"):
+        return _collect_batch_results_gemini(job)
+    if _is_openai_model(model):
+        return _collect_batch_results_openai(job)
+    raise ValueError(f"Batch mode is not supported for model: {model}")
