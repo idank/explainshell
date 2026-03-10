@@ -434,20 +434,21 @@ def _is_openai_model(model):
     return model.startswith("openai/")
 
 
-def _call_openai(messages, model):
-    """Call OpenAI using the native SDK.
+def _call_openai(user_content, model):
+    """Call OpenAI using the native Responses API.
 
     Strips the 'openai/' prefix if present.
     Returns raw response text.
     """
     openai_model = model.removeprefix("openai/")
     client = openai.OpenAI(timeout=LLM_TIMEOUT_SECONDS)
-    response = client.chat.completions.create(
+    response = client.responses.create(
         model=openai_model,
-        messages=messages,
-        response_format={"type": "json_object"},
+        instructions=_SYSTEM_PROMPT,
+        input=user_content,
+        text={"format": {"type": "json_object"}},
     )
-    return response.choices[0].message.content
+    return response.output_text
 
 
 def _call_litellm(messages, model):
@@ -523,7 +524,7 @@ def _call_llm(chunk, chunk_info, model):
             if use_gemini:
                 content = _call_gemini_native(user_content, model)
             elif use_openai:
-                content = _call_openai(messages, model)
+                content = _call_openai(user_content, model)
             else:
                 content = _call_litellm(messages, model)
             data = _parse_json_response(content)
