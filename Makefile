@@ -34,9 +34,11 @@ tests-all: lint tests e2e parsing-regression
 
 lint:
 	ruff check explainshell tests tools
+	npx biome check
 
 format:
 	ruff format explainshell tests tools
+	npx biome check --fix
 
 serve:
 	DB_PATH=$(or $(DB_PATH),explainshell.db) python runserver.py
