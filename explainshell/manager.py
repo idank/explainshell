@@ -7,7 +7,7 @@ Usage:
 Modes:
     source              Use the roff parser
     mandoc              Use mandoc -T tree parser
-    llm:<model>         Use an LLM via LiteLLM (e.g. llm:gpt-4o)
+    llm:<model>         Use an LLM (e.g. llm:openai/gpt-4o)
     hybrid:<model>      Try tree parser first, fall back to LLM when confidence is low
 """
 
@@ -656,11 +656,14 @@ def main(args):
         if args.batch < 1:
             print("error: --batch must be >= 1", file=sys.stderr)
             return 1
-        if not model or not model.startswith("gemini/"):
-            print("error: --batch requires a gemini/ model in --mode", file=sys.stderr)
+        if not model:
+            print("error: --batch requires a model in --mode (e.g. llm:gemini/<model> or llm:openai/<model>)", file=sys.stderr)
+            return 1
+        if not model.startswith(("gemini/", "openai/")):
+            print("error: --batch only supports gemini/ and openai/ models", file=sys.stderr)
             return 1
         if mode != "llm":
-            print("error: --batch only works with --mode llm:gemini/<model>", file=sys.stderr)
+            print("error: --batch only works with --mode llm:<model>", file=sys.stderr)
             return 1
         if args.diff is not None:
             print("error: --batch and --diff are mutually exclusive", file=sys.stderr)
@@ -704,9 +707,7 @@ def main(args):
 
     total = len(gz_files)
     if args.batch is not None:
-        # Batch processing via Gemini Batch API.
-        from google import genai as _genai
-
+        # Batch processing via provider Batch API.
         _debug_dir = args.debug_dir if args.dry_run else None
 
         # 1. Pre-filter files and prepare extractions.
@@ -758,7 +759,7 @@ def main(args):
             # 3. Submit in batches of --batch size.
             batch_size = args.batch
             all_results = {}  # key_str -> response_text
-            client = _genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+            client = llm_extractor.make_batch_client(model)
 
             for batch_start in range(0, len(all_requests), batch_size):
                 batch_chunk = all_requests[batch_start : batch_start + batch_size]
@@ -768,11 +769,11 @@ def main(args):
                 print(f"{_ts()} submitting batch {batch_num}/{total_batches} ({len(batch_chunk)} requests)...")
                 try:
                     job = llm_extractor.submit_batch(batch_chunk, model)
-                    job_name = job.name
-                    print(f"{_ts()} batch {batch_num}/{total_batches} submitted: {job_name}")
+                    job_id = job.name if hasattr(job, "name") else job.id
+                    print(f"{_ts()} batch {batch_num}/{total_batches} submitted: {job_id}")
 
-                    completed_job = llm_extractor.poll_batch(client, job_name)
-                    batch_results = llm_extractor.collect_batch_results(completed_job)
+                    completed_job = llm_extractor.poll_batch(client, job_id, model)
+                    batch_results = llm_extractor.collect_batch_results(completed_job, model)
                     all_results.update(batch_results)
                     print(f"{_ts()} batch {batch_num}/{total_batches} completed: {len(batch_results)} result(s)")
                 except errors.ExtractionError as e:
@@ -977,7 +978,7 @@ def _build_parser():
         "--batch",
         type=int,
         default=None,
-        help="Batch size for Gemini batch API (only works with gemini/ models)",
+        help="Batch size for provider batch API (works with gemini/ and openai/ models)",
     )
     parser.add_argument(
         "--log",

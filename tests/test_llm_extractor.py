@@ -670,12 +670,10 @@ class TestLlmManagerDryRun(unittest.TestCase):
 # Real-LLM integration test (skipped unless RUN_LLM_TESTS=1)
 # ---------------------------------------------------------------------------
 
-# Map LiteLLM model prefixes to the environment variable they need.
+# Map model prefixes to the environment variable they need.
 _MODEL_KEY_ENV = {
     "gemini/": "GEMINI_API_KEY",
-    "gpt-": "OPENAI_API_KEY",
-    "o1": "OPENAI_API_KEY",
-    "claude-": "ANTHROPIC_API_KEY",
+    "openai/": "OPENAI_API_KEY",
 }
 
 _DEFAULT_LLM_MODEL = "gemini/gemini-3-flash-preview"
