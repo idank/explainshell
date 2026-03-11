@@ -490,7 +490,7 @@ def _call_llm(chunk, chunk_info, model):
     """
     user_content = (
         f"Extract all command-line options from this man page{chunk_info}.\n"
-        f"Return line numbers from the left margin for each option's range.\n\n{chunk}"
+        f"Return a JSON object with line numbers from the left margin for each option's range.\n\n{chunk}"
     )
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
@@ -646,7 +646,7 @@ def build_user_content(chunk, chunk_info):
     """Build the user prompt string for a single chunk."""
     return (
         f"Extract all command-line options from this man page{chunk_info}.\n"
-        f"Return line numbers from the left margin for each option's range.\n\n{chunk}"
+        f"Return a JSON object with line numbers from the left margin for each option's range.\n\n{chunk}"
     )
 
 
