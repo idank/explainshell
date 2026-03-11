@@ -12,6 +12,5 @@ dump.gz
 *.db-shm
 *.db-wal
 .claude/
-data/
 docs/
 ignore/

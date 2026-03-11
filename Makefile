@@ -48,17 +48,27 @@ db-check:
 
 UBUNTU_ARCHIVE_DIR := manpages/ubuntu-manpages-operator
 UBUNTU_ARCHIVE_OUTPUT := $(UBUNTU_ARCHIVE_DIR)/output
+UBUNTU_RELEASE ?= 25.10
 
 ubuntu-archive:
-	@test -n "$(RELEASES)" || (echo "RELEASES is required. Example: make ubuntu-archive RELEASES=noble"; exit 1)
+	@test ! -d manpages/ubuntu/$(UBUNTU_RELEASE) || (echo "manpages/ubuntu/$(UBUNTU_RELEASE) already exists, delete it first"; exit 1)
 	cd $(UBUNTU_ARCHIVE_DIR) && go build -o ingest ./cmd/ingest
 	MANPAGES_PUBLIC_HTML_DIR=$(UBUNTU_ARCHIVE_OUTPUT) \
-	MANPAGES_RELEASES=$(RELEASES) \
+	MANPAGES_RELEASES=$(UBUNTU_RELEASE) \
 	MANPAGES_GZ_ONLY=true \
 		$(UBUNTU_ARCHIVE_DIR)/ingest
-	mkdir -p manpages/output/ubuntu
-	cp -r $(UBUNTU_ARCHIVE_OUTPUT)/manpages.gz/* manpages/output/ubuntu/
-	find manpages/output/ubuntu -mindepth 2 -maxdepth 2 ! -name man1 ! -name man8 -exec rm -rf {} +
-	find manpages/output/ubuntu -mindepth 2 -maxdepth 2 -type d -name 'man*' | while read d; do mv "$$d" "$$(dirname "$$d")/$$(echo "$$(basename "$$d")" | sed 's/^man//')"; done
+	mkdir -p manpages/ubuntu
+	cp -r $(UBUNTU_ARCHIVE_OUTPUT)/manpages.gz/* manpages/ubuntu/
+	find manpages/ubuntu -mindepth 2 -maxdepth 2 ! -name man1 ! -name man8 -exec rm -rf {} +
+	find manpages/ubuntu -mindepth 2 -maxdepth 2 -type d -name 'man*' | while read d; do mv "$$d" "$$(dirname "$$d")/$$(echo "$$(basename "$$d")" | sed 's/^man//')"; done
+	find manpages/ubuntu -mindepth 3 -maxdepth 3 -type d -exec rm -rf {} +
 
-.PHONY: tests e2e e2e-db e2e-update test-llm tests-all lint serve parsing-regression parsing-update db-check ubuntu-archive
+MANNED_DATA_DIR := ignore/manned
+
+arch-archive:
+	@test ! -d manpages/arch || (echo "manpages/arch already exists, delete it first"; exit 1)
+	@test -d $(MANNED_DATA_DIR) || (echo "Manned.org dump not found. Download it first with:"; echo "  python tools/fetch_manned.py download --data-dir $(MANNED_DATA_DIR)"; exit 1)
+	python tools/fetch_manned.py --log INFO extract --data-dir $(MANNED_DATA_DIR) \
+		--distro arch --sections 1,8 --output-dir manpages
+
+.PHONY: tests e2e e2e-db e2e-update test-llm tests-all lint serve parsing-regression parsing-update db-check ubuntu-archive arch-archive

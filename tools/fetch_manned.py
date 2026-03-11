@@ -41,7 +41,7 @@ def parse_version(version_str):
 
 
 DEFAULT_DUMP_BASE = "https://dl.manned.org"
-DEFAULT_DATA_DIR = "data/manned"
+DEFAULT_DATA_DIR = "ignore/manned"
 
 ALL_FILES = [
     "systems.tsv.zst",
