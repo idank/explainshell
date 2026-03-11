@@ -176,10 +176,12 @@ def cmd_extract(args):
         # Pick the latest release by sorting version strings
         releases = set(r for _, r, _ in distro_systems.values() if r)
         if not releases:
-            logger.error("No release info found for distro '%s'", distro)
-            sys.exit(1)
-        release = sorted(releases, key=parse_version)[-1]
-        logger.info("Auto-selected latest release: %s", release)
+            # Rolling-release distro (e.g. Arch Linux) — no versioned releases
+            release = ""
+            logger.info("Rolling-release distro, no version to select")
+        else:
+            release = sorted(releases, key=parse_version)[-1]
+            logger.info("Auto-selected latest release: %s", release)
 
     matching_sys_ids = set()
     for sys_id, (name, r, short) in distro_systems.items():
@@ -230,6 +232,11 @@ def load_metadata(data_dir):
         name = row[1]
         release = row[2] if len(row) > 2 else ""
         short = row[3] if len(row) > 3 else ""
+        # Normalize PostgreSQL COPY NULL marker
+        if release == "\\N":
+            release = ""
+        if short == "\\N":
+            short = ""
         systems[sys_id] = (name, release, short)
     logger.info("Loaded %d systems", len(systems))
 
@@ -344,6 +351,11 @@ def select_content_ids(
         if man_id not in mans:
             continue
         name, section = mans[man_id]
+
+        # Skip non-standard sections (must start with a digit, e.g. 1, 3p, 5ssl)
+        if not section or not section[0].isdigit():
+            skipped_section += 1
+            continue
 
         # Filter by requested sections
         if sections and section not in sections:
