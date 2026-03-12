@@ -32,6 +32,28 @@ CHUNK_SIZE_CHARS = 60_000
 LLM_TIMEOUT_SECONDS = 300
 MAX_MANPAGE_CHARS = 500_000
 
+# Top-level sections that almost never contain option documentation.
+# Only exact matches (case-insensitive, after stripping the # prefix) are removed.
+_BLACKLISTED_SECTIONS = frozenset(
+    s.upper()
+    for s in [
+        "AUTHOR",
+        "AUTHORS",
+        "AVAILABILITY",
+        "BUGS",
+        "COLOPHON",
+        "COPYING",
+        "COPYRIGHT",
+        "COPYRIGHT AND LICENSE",
+        "EXIT STATUS",
+        "HISTORY",
+        "LICENSE",
+        "REPORTING BUGS",
+        "SEE ALSO",
+        "VERSION",
+    ]
+)
+
 
 _MANDOC_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "tools", "mandoc-with-markdown"
@@ -110,6 +132,47 @@ def _split_sections(text: str) -> list:
         sections.append((current_start, "\n".join(current_lines)))
 
     return sections
+
+
+def filter_sections(text: str) -> tuple:
+    """Remove blacklisted top-level sections from manpage text.
+
+    Returns (filtered_text, removal_counts) where removal_counts is a dict
+    mapping removed heading names to a count of 1 (for instrumentation).
+    Only top-level sections (``# HEADING``) are candidates; sub-sections
+    (``## ...``) nested under a blacklisted top-level section are removed
+    together with their parent.
+    """
+    sections = _split_sections(text)
+    kept = []
+    removal_counts = {}
+    skip_until_top = False
+
+    for _start, section_text in sections:
+        header_line = section_text.split("\n", 1)[0].strip()
+
+        # Determine if this is a top-level (# ) or sub-level (## ) heading.
+        is_top_level = header_line.startswith("# ") and not header_line.startswith(
+            "## "
+        )
+
+        if is_top_level:
+            heading_name = header_line.split(" ", 1)[1].strip().upper()
+            if heading_name in _BLACKLISTED_SECTIONS:
+                removal_counts[heading_name] = removal_counts.get(heading_name, 0) + 1
+                skip_until_top = True
+                continue
+            else:
+                skip_until_top = False
+
+        # If we're inside a blacklisted top-level section, skip sub-sections too.
+        if skip_until_top:
+            continue
+
+        kept.append(section_text)
+
+    filtered_text = "\n".join(kept)
+    return filtered_text, removal_counts
 
 
 def _build_preamble(text: str) -> str:
@@ -611,8 +674,17 @@ def prepare_extraction(gz_path):
         )
         return None
 
-    numbered_text, original_lines = _number_lines(plain_text)
-    chunks = chunk_text(plain_text)
+    filtered_text, removal_counts = filter_sections(plain_text)
+    if removal_counts:
+        logger.info(
+            "%s: filtered sections: %s (saved %d chars)",
+            basename,
+            ", ".join(f"{k} ({v})" for k, v in sorted(removal_counts.items())),
+            len(plain_text) - len(filtered_text),
+        )
+
+    numbered_text, original_lines = _number_lines(filtered_text)
+    chunks = chunk_text(filtered_text)
 
     return {
         "synopsis": synopsis,
