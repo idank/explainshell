@@ -442,7 +442,12 @@ def run_extractor(mode, gz_path, model=None, debug_dir=None, fail_dir=None):
 
 
 def batch_extract_files(
-    gz_files, model, batch_size=50, debug_dir=None, fail_dir=None, on_extracted=None
+    gz_files,
+    model,
+    batch_size=50,
+    debug_dir=None,
+    fail_dir=None,
+    on_extracted=None,
 ):
     """Batch-extract manpages via provider batch API.
 
@@ -562,7 +567,7 @@ def batch_extract_files(
 
                     try:
                         chunk_data, raw = llm_extractor.process_llm_result(
-                            response_text
+                            response_text,
                         )
                     except errors.ExtractionError as e:
                         logger.error(
@@ -587,7 +592,8 @@ def batch_extract_files(
                         f" (part {chunk_idx + 1} of {n_chunks})" if n_chunks > 1 else ""
                     )
                     user_content = llm_extractor.build_user_content(
-                        chunks[chunk_idx], chunk_info
+                        chunks[chunk_idx],
+                        chunk_info,
                     )
                     messages = [
                         {"role": "system", "content": llm_extractor._SYSTEM_PROMPT},

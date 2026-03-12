@@ -32,51 +32,38 @@ CHUNK_SIZE_CHARS = 60_000
 LLM_TIMEOUT_SECONDS = 300
 MAX_MANPAGE_CHARS = 500_000
 
+
 _MANDOC_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "tools", "mandoc-with-markdown"
 )
 
 _SYSTEM_PROMPT = """\
 You are an expert at parsing Unix man pages. You will be given a markdown-formatted man page
-with line numbers in the format "  42| content here". Your task is to extract ALL command-line
-options documented in this man page and return them as a JSON object.
+with line numbers in the format "  42| content here". Extract ALL command-line options and
+return a JSON object. Only include options explicitly documented in the text — do not invent
+options. Return ONLY the JSON object, no markdown fences, no explanation.
 
-Rules:
-1. Extract every option a user can pass on the command line. Include both short options
-   (e.g. -v) and long options (e.g. --verbose). If multiple flags share one description,
-   include them all in the same entry.
-2. For each option, provide "lines": [start, end] where start is the line number of the
-   flag/usage line and end is the line number of the last line of its description.
-   Use the line numbers shown in the left margin. Include ALL description lines — do not
-   stop early.
-3. Set "has_argument":
-   - false  → option takes no argument (e.g. -v, --verbose)
-   - true   → option requires an argument (e.g. -f FILE, --file=FILE)
-   - a list of strings → fixed set of values (e.g. --color=always|never|auto → ["always","never","auto"])
-4. If the option is a positional argument (not preceded by - or --), set "positional" to its
-   name (e.g. "FILE"). Leave "short" and "long" as [].
-   IMPORTANT: NEVER set "positional" on options that have "short" or "long" flags.
-   For example, "-D debugopts" should have "positional": null (not "debugopts") because
-   it has short=["-D"]. The "positional" field is ONLY for standalone positional operands.
-5. Set "nested_cmd" to true only when the argument is itself a shell command
-   (e.g. find -exec CMD ;).
-6. Do not invent options. Only include options explicitly documented in the text.
-7. Return ONLY the JSON object. No markdown fences, no explanation.
-8. Set "dashless_opts" to true if the man page documents that options can be
-   specified without a leading dash (e.g., "traditional usage", "BSD-style
-   options", or usage examples like `tar xzvf`). Otherwise set it to false.
+If multiple flags share one description, group them in the same entry.
 
 JSON schema:
 {
-  "dashless_opts": false,
+  "dashless_opts": true if the page documents options without a leading dash (e.g. BSD-style
+                   "tar xzvf"), false otherwise,
   "options": [
     {
-      "short": ["-f"],
-      "long": ["--file"],
-      "has_argument": false,
-      "positional": null,
-      "nested_cmd": false,
-      "lines": [111, 115]
+      "short": ["-f"],           // short flags (e.g. ["-v"]). Bare names only — no argument
+                                 // placeholders (use "-f", not "-f FILE").
+      "long": ["--file"],        // long flags (e.g. ["--verbose"]). Same bare-name rule.
+      "has_argument": false,     // true if the option takes an argument; or a list of allowed
+                                 // values (e.g. ["always","never","auto"]). Omit if false.
+      "positional": null,        // name string for positional operands with no flags (e.g.
+                                 // "FILE"). NEVER set this if the option has short or long
+                                 // flags. Omit if null.
+      "nested_cmd": false,       // true only when the argument is itself a shell command
+                                 // (e.g. find -exec CMD ;). Omit if false.
+      "lines": [111, 115]        // [start, end] line range from the left margin, covering the
+                                 // flag line through the LAST description line — do not stop
+                                 // early.
     }
   ]
 }"""
@@ -492,10 +479,7 @@ def _call_llm(chunk, chunk_info, model):
     Retries up to 3x on transient errors.
     Returns (data_dict, messages, raw_response_content).
     """
-    user_content = (
-        f"Extract all command-line options from this man page{chunk_info}.\n"
-        f"Return a JSON object with line numbers from the left margin for each option's range.\n\n{chunk}"
-    )
+    user_content = build_user_content(chunk, chunk_info)
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user", "content": user_content},
@@ -649,10 +633,9 @@ def prepare_extraction(gz_path):
 
 def build_user_content(chunk, chunk_info):
     """Build the user prompt string for a single chunk."""
-    return (
-        f"Extract all command-line options from this man page{chunk_info}.\n"
-        f"Return a JSON object with line numbers from the left margin for each option's range.\n\n{chunk}"
-    )
+    if chunk_info:
+        return f"Man page{chunk_info}:\n\n{chunk}"
+    return chunk
 
 
 def process_llm_result(content):

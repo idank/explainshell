@@ -16,6 +16,7 @@ from explainshell.llm_extractor import (
     _parse_json_response,
     _sanitize_option,
     _validate_llm_response,
+    build_user_content,
     chunk_text,
     extract,
     get_manpage_text,
@@ -616,6 +617,21 @@ class TestExtractIntegration(unittest.TestCase):
             self.assertTrue(os.path.exists(response_path))
             with open(response_path) as f:
                 self.assertEqual(f.read(), raw_response)
+
+
+# ---------------------------------------------------------------------------
+# TestBuildUserContent
+# ---------------------------------------------------------------------------
+
+
+class TestBuildUserContent(unittest.TestCase):
+    def test_includes_chunk_text(self):
+        content = build_user_content("chunk text", "")
+        self.assertIn("chunk text", content)
+
+    def test_chunk_info_included(self):
+        content = build_user_content("chunk", " (part 1 of 3)")
+        self.assertIn("(part 1 of 3)", content)
 
 
 # ---------------------------------------------------------------------------
