@@ -62,14 +62,8 @@ _RESET = "\033[0m"
 @dataclass
 class _FileResult:
     outcome: str  # "added", "skipped", "failed"
-    output_lines: list  # collected print output
     mp: store.ParsedManpage | None = None
     raw: store.RawManpage | None = None
-
-
-def _ts():
-    """Return a bracketed timestamp string, e.g. [14:05:23]."""
-    return time.strftime("[%H:%M:%S]")
 
 
 def _fmt_elapsed(seconds):
@@ -467,11 +461,10 @@ def _process_one_file(
 ):
     """Process a single gz file and return a _FileResult.
 
-    Output is collected in result.output_lines instead of printed directly.
     DB writes are deferred via result.mp (written by the caller).
     """
-    result = _FileResult(outcome="added", output_lines=[])
-    out = result.output_lines.append
+    result = _FileResult(outcome="added")
+    tag = f"[{short_path}]"
 
     if is_extractor_diff:
         left_mode, left_model = diff_left
@@ -479,7 +472,7 @@ def _process_one_file(
         _debug_dir = debug_dir if dry_run else None
         label = f"{left_mode} vs {right_mode}"
 
-        out(f"{_ts()} {progress} [{short_path}] running {left_mode} extractor...")
+        logger.info("%s %s running %s extractor...", progress, tag, left_mode)
         try:
             left_mp, _left_raw = _run_extractor(
                 left_mode,
@@ -490,8 +483,10 @@ def _process_one_file(
             )
         except errors.ExtractionError as e:
             logger.error("%s extractor failed for %s: %s", left_mode, short_path, e)
-            out(f"=== {short_path} ({label}) ===")
-            out(f"  {_DIM}({left_mode} extractor failed: {e}, skipping){_RESET}")
+            logger.info("=== %s (%s) ===", short_path, label)
+            logger.info(
+                "  %s(%s extractor failed: %s, skipping)%s", _DIM, left_mode, e, _RESET
+            )
             result.outcome = "failed"
             return result
         if left_mp is None:
@@ -499,7 +494,7 @@ def _process_one_file(
             return result
 
         right_label = right_mode if not right_model else f"{right_mode} ({right_model})"
-        out(f"{_ts()} {progress} [{short_path}] running {right_label} extractor...")
+        logger.info("%s %s running %s extractor...", progress, tag, right_label)
         try:
             right_mp, _right_raw = _run_extractor(
                 right_mode,
@@ -510,41 +505,48 @@ def _process_one_file(
             )
         except errors.ExtractionError as e:
             logger.error("%s extractor failed for %s: %s", right_mode, short_path, e)
-            out(f"=== {short_path} ({label}) ===")
-            out(f"  {_DIM}({right_mode} extractor failed: {e}, skipping){_RESET}")
+            logger.info("=== %s (%s) ===", short_path, label)
+            logger.info(
+                "  %s(%s extractor failed: %s, skipping)%s", _DIM, right_mode, e, _RESET
+            )
             result.outcome = "failed"
             return result
         if right_mp is None:
             result.outcome = "skipped"
             return result
 
-        out(f"=== {short_path} ({label}) ===")
-        result.output_lines.extend(_diff_manpage(left_mp, right_mp))
+        logger.info("=== %s (%s) ===", short_path, label)
+        for line in _diff_manpage(left_mp, right_mp):
+            logger.info(line)
         return result
 
     file_t0 = time.monotonic()
     raw = None
     try:
         if mode == "source":
-            out(f"{_ts()} {progress} [{short_path}] extracting (source)...")
+            logger.info("%s %s extracting (source)...", progress, tag)
             mp, raw = source_extractor.extract(gz_path)
             mp.extractor = "source"
             mp.extraction_meta = {}
         elif mode == "mandoc":
-            out(f"{_ts()} {progress} [{short_path}] extracting (mandoc)...")
+            logger.info("%s %s extracting (mandoc)...", progress, tag)
             mp, raw = mandoc_extractor.extract(gz_path)
             mp.extractor = "mandoc"
             mp.extraction_meta = {}
         elif mode == "hybrid":
-            out(f"{_ts()} {progress} [{short_path}] extracting (hybrid)...")
+            logger.info("%s %s extracting (hybrid)...", progress, tag)
             try:
                 mp, raw = mandoc_extractor.extract(gz_path)
                 mp.extractor = "mandoc"
                 mp.extraction_meta = {}
             except errors.LowConfidenceError as e:
                 logger.warning("hybrid: falling back to LLM for %s: %s", short_path, e)
-                out(
-                    f"{_ts()} {progress} [{short_path}] tree parser {e}, falling back to LLM ({model})..."
+                logger.info(
+                    "%s %s tree parser %s, falling back to LLM (%s)...",
+                    progress,
+                    tag,
+                    e,
+                    model,
                 )
                 _debug_dir = debug_dir if dry_run else None
                 mp, raw = llm_extractor.extract(
@@ -560,7 +562,7 @@ def _process_one_file(
                     "fallback_reason": str(e)[:256],
                 }
         else:
-            out(f"{_ts()} {progress} [{short_path}] extracting ({model})...")
+            logger.info("%s %s extracting (%s)...", progress, tag, model)
             _debug_dir = debug_dir if dry_run else None
             mp, raw = llm_extractor.extract(
                 gz_path, model, debug_dir=_debug_dir, fail_dir=debug_dir
@@ -573,46 +575,55 @@ def _process_one_file(
 
         file_elapsed = _fmt_elapsed(time.monotonic() - file_t0)
         if diff_kind == "db":
-            out(f"=== {short_path} ===")
+            logger.info("=== %s ===", short_path)
             try:
                 results = s.find_man_page(name)
                 stored_mp = results[0]
             except errors.ProgramDoesNotExist:
-                out("  (not in DB, nothing to diff)")
+                logger.info("  (not in DB, nothing to diff)")
                 return result
-            result.output_lines.extend(_diff_manpage(stored_mp, mp))
+            for line in _diff_manpage(stored_mp, mp):
+                logger.info(line)
         elif s:
             result.mp = mp
             result.raw = raw
-            out(
-                f"{_ts()} {progress} [{short_path}] done: {len(mp.options)} option(s) in {file_elapsed}"
+            logger.info(
+                "%s %s done: %d option(s) in %s",
+                progress,
+                tag,
+                len(mp.options),
+                file_elapsed,
             )
         else:
-            out(f"=== {short_path} ({len(mp.options)} option(s), {file_elapsed}) ===")
-            out(f"  name: {mp.name}")
-            out(f"  synopsis: {mp.synopsis}")
-            out(f"  aliases: {mp.aliases}")
-            out(f"  nested_cmd: {mp.nested_cmd}")
-            out(f"  has_subcommands: {mp.has_subcommands}")
-            out(f"  dashless_opts: {mp.dashless_opts}")
-            out(f"  extractor: {mp.extractor}")
-            out(f"  extraction_meta: {mp.extraction_meta}")
-            out("")
+            logger.info(
+                "=== %s (%d option(s), %s) ===",
+                short_path,
+                len(mp.options),
+                file_elapsed,
+            )
+            logger.info("  name: %s", mp.name)
+            logger.info("  synopsis: %s", mp.synopsis)
+            logger.info("  aliases: %s", mp.aliases)
+            logger.info("  nested_cmd: %s", mp.nested_cmd)
+            logger.info("  has_subcommands: %s", mp.has_subcommands)
+            logger.info("  dashless_opts: %s", mp.dashless_opts)
+            logger.info("  extractor: %s", mp.extractor)
+            logger.info("  extraction_meta: %s", mp.extraction_meta)
+            logger.info("")
             for i, opt in enumerate(mp.options):
                 if i > 0:
-                    out("")
-                out(f"  [{i}]")
-                out(f"      short: {opt.short}")
-                out(f"      long: {opt.long}")
-                out(f"      has_argument: {opt.has_argument}")
+                    logger.info("")
+                logger.info("  [%d]", i)
+                logger.info("      short: %s", opt.short)
+                logger.info("      long: %s", opt.long)
+                logger.info("      has_argument: %s", opt.has_argument)
                 if opt.positional:
-                    out(f"      positional: {opt.positional}")
+                    logger.info("      positional: %s", opt.positional)
                 if opt.nested_cmd:
-                    out(f"      nested_cmd: {opt.nested_cmd}")
+                    logger.info("      nested_cmd: %s", opt.nested_cmd)
                 desc = opt.text.strip()
-                lines = desc.split("\n")
-                for line in lines:
-                    out(f"      {line}")
+                for line in desc.split("\n"):
+                    logger.info("      %s", line)
     except errors.ExtractionError as e:
         logger.error("failed to process %s: %s", short_path, e)
         result.outcome = "failed"
@@ -627,7 +638,8 @@ def main(args):
     logging.basicConfig(
         level=getattr(logging, args.log.upper()),
         stream=sys.stdout,
-        format="%(message)s",
+        format="[%(asctime)s] %(message)s",
+        datefmt="%H:%M:%S",
     )
 
     if args.jobs < 1:
@@ -731,9 +743,7 @@ def main(args):
     from explainshell import manpage as _manpage
 
     def _handle_result(result):
-        """Log output lines and write to DB. Returns (added_delta, failed_delta)."""
-        for line in result.output_lines:
-            logger.info(line)
+        """Write to DB if needed. Returns (added_delta, failed_delta)."""
         if result.mp and s:
             s.add_manpage(result.mp, result.raw)
         if result.outcome == "added":
@@ -792,8 +802,7 @@ def main(args):
                     key_to_location[key_str] = (work_idx, chunk_idx)
 
             logger.info(
-                "%s collected %d request(s) from %d file(s)",
-                _ts(),
+                "collected %d request(s) from %d file(s)",
                 len(all_requests),
                 len(work_items),
             )
@@ -815,8 +824,7 @@ def main(args):
 
                 total_chars = sum(len(uc) for _, uc in batch_chunk)
                 logger.info(
-                    "%s submitting batch %d/%d (%d requests, %s chars)...",
-                    _ts(),
+                    "submitting batch %d/%d (%d requests, %s chars)...",
                     batch_num,
                     total_batches,
                     len(batch_chunk),
@@ -826,8 +834,7 @@ def main(args):
                     job = llm_extractor.submit_batch(batch_chunk, model)
                     job_id = job.name if hasattr(job, "name") else job.id
                     logger.info(
-                        "%s batch %d/%d submitted: %s",
-                        _ts(),
+                        "batch %d/%d submitted: %s",
                         batch_num,
                         total_batches,
                         job_id,
@@ -844,9 +851,8 @@ def main(args):
                     cumulative_requests += len(batch_results)
 
                     logger.info(
-                        "%s batch %d/%d completed: %d result(s), "
+                        "batch %d/%d completed: %d result(s), "
                         "input=%s tokens, output=%s tokens",
-                        _ts(),
                         batch_num,
                         total_batches,
                         len(batch_results),
@@ -933,12 +939,13 @@ def main(args):
                             mp.extractor = "llm"
                             mp.extraction_meta = {"model": model}
 
-                            result = _FileResult(outcome="added", output_lines=[])
+                            result = _FileResult(outcome="added")
                             result.mp = mp
                             result.raw = raw
-                            result.output_lines.append(
-                                f"{_ts()} [{short_path}] done: "
-                                f"{len(mp.options)} option(s)"
+                            logger.info(
+                                "[%s] done: %d option(s)",
+                                short_path,
+                                len(mp.options),
                             )
                             a, f = _handle_result(result)
                             added += a
@@ -952,9 +959,8 @@ def main(args):
                     # Cumulative progress summary.
                     elapsed_m = int((time.time() - batch_start_time) / 60)
                     logger.info(
-                        "%s progress: %d/%d requests done, %d files extracted, "
+                        "progress: %d/%d requests done, %d files extracted, "
                         "input=%s tokens, output=%s tokens, elapsed=%dm",
-                        _ts(),
                         cumulative_requests,
                         len(all_requests),
                         files_extracted,
