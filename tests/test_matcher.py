@@ -350,7 +350,10 @@ class test_matcher(unittest.TestCase):
         cmd = "withargs -exec bar -a -u"
 
         matchedresult = [
-            [MR(0, 8, "withargs synopsis", "withargs"), MR(9, 14, "-exec nest", "-exec")],
+            [
+                MR(0, 8, "withargs synopsis", "withargs"),
+                MR(9, 14, "-exec nest", "-exec"),
+            ],
             [
                 MR(15, 18, "bar synopsis", "bar"),
                 MR(19, 21, "-a desc", "-a"),

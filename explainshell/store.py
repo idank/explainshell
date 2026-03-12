@@ -77,9 +77,7 @@ class RawManpage:
     source_gz_sha256: str | None = None
 
 
-_SOURCE_RE = re.compile(
-    r"^[a-zA-Z][a-zA-Z0-9_-]*/[^/]+/[^/]+/[^/]+\.\d\w*\.gz$"
-)
+_SOURCE_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]*/[^/]+/[^/]+/[^/]+\.\d\w*\.gz$")
 
 
 def validate_source_path(source):
@@ -392,7 +390,9 @@ class Store:
         results[0] = ParsedManpage.from_store(dict(row))
         return results
 
-    def _discover_manpage_suggestions(self, source, existing, distro=None, release=None):
+    def _discover_manpage_suggestions(
+        self, source, existing, distro=None, release=None
+    ):
         """find suggestions for a given man page
 
         source is the source path of the man page in question,
@@ -483,7 +483,9 @@ class Store:
         if existing:
             logger.info("removing old manpage %s", m.source)
             # ON DELETE CASCADE removes all mappings rows for this manpage
-            self._conn.execute("DELETE FROM parsed_manpages WHERE source = ?", (m.source,))
+            self._conn.execute(
+                "DELETE FROM parsed_manpages WHERE source = ?", (m.source,)
+            )
             self._conn.commit()
             logger.info("removed manpage and its mappings for %s", m.source)
         else:
@@ -581,14 +583,17 @@ class Store:
         mapping_rows = self._conn.execute("SELECT dst FROM mappings").fetchall()
         reachable = {row["dst"] for row in mapping_rows}
 
-        manpage_rows = self._conn.execute("SELECT source FROM parsed_manpages").fetchall()
+        manpage_rows = self._conn.execute(
+            "SELECT source FROM parsed_manpages"
+        ).fetchall()
         man_pages = {row["source"] for row in manpage_rows}
 
         ok = True
         unreachable_sources = man_pages - reachable
         if unreachable_sources:
             logger.error(
-                "manpages %r are unreachable (nothing maps to them)", unreachable_sources
+                "manpages %r are unreachable (nothing maps to them)",
+                unreachable_sources,
             )
             placeholders = ",".join("?" * len(unreachable_sources))
             name_rows = self._conn.execute(

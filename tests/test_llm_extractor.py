@@ -32,7 +32,9 @@ from explainshell.llm_extractor import (
 class TestGetManpageText(unittest.TestCase):
     @patch("explainshell.llm_extractor.subprocess.run")
     def test_success_returns_markdown(self, mock_run):
-        md_output = "# NAME\n\ngrep - search for patterns\n\n**-v**, **--invert-match**\n"
+        md_output = (
+            "# NAME\n\ngrep - search for patterns\n\n**-v**, **--invert-match**\n"
+        )
         mock_run.return_value = MagicMock(returncode=0, stdout=md_output, stderr="")
         result = get_manpage_text("dummy.1.gz")
         mock_run.assert_called_once()
@@ -161,6 +163,7 @@ class TestChunkText(unittest.TestCase):
         if len(chunks) >= 2:
             # Last numbered line in chunk 0 + 1 == first numbered line in chunk 1
             import re
+
             last_match = list(re.finditer(r"^\s*(\d+)\|", chunks[0], re.MULTILINE))
             first_match = list(re.finditer(r"^\s*(\d+)\|", chunks[1], re.MULTILINE))
             if last_match and first_match:
@@ -173,7 +176,9 @@ class TestChunkText(unittest.TestCase):
         sections = []
         for i in range(20):
             sections.append(f"## Section {i}\n\n{section_body}")
-        text = "# NAME\n\ntest-cmd\n\n# SYNOPSIS\n\ntest-cmd [opts]\n\n" + "\n".join(sections)
+        text = "# NAME\n\ntest-cmd\n\n# SYNOPSIS\n\ntest-cmd [opts]\n\n" + "\n".join(
+            sections
+        )
         chunks = chunk_text(text)
         if len(chunks) >= 2:
             self.assertIn("[Context", chunks[1])
@@ -400,21 +405,15 @@ class TestSanitizeOption(unittest.TestCase):
         self.assertIsNone(arg)
 
     def test_argument_cleared_when_long_present(self):
-        short, long, ea, arg, nc = _sanitize_option(
-            [], ["--type"], True, "c", False
-        )
+        short, long, ea, arg, nc = _sanitize_option([], ["--type"], True, "c", False)
         self.assertIsNone(arg)
 
     def test_argument_kept_for_positional(self):
-        short, long, ea, arg, nc = _sanitize_option(
-            [], [], False, "FILE", False
-        )
+        short, long, ea, arg, nc = _sanitize_option([], [], False, "FILE", False)
         self.assertEqual(arg, "FILE")
 
     def test_nested_cmd_forces_has_argument(self):
-        short, long, ea, arg, nc = _sanitize_option(
-            ["-exec"], [], False, None, True
-        )
+        short, long, ea, arg, nc = _sanitize_option(["-exec"], [], False, None, True)
         self.assertTrue(ea)
 
     def test_via_llm_option_to_store(self):
@@ -442,7 +441,11 @@ class TestDedupOptions(unittest.TestCase):
     def test_duplicates_keep_longest_description(self):
         opts = [
             {"short": ["-v"], "long": ["--verbose"], "description": "short"},
-            {"short": ["-v"], "long": ["--verbose"], "description": "a much longer description wins"},
+            {
+                "short": ["-v"],
+                "long": ["--verbose"],
+                "description": "a much longer description wins",
+            },
         ]
         result = _dedup_options(opts)
         self.assertEqual(len(result), 1)
@@ -499,16 +502,30 @@ class TestExtractIntegration(unittest.TestCase):
     @patch("explainshell.llm_extractor.get_manpage_text")
     @patch("explainshell.llm_extractor.manpage.get_synopsis_and_aliases")
     @patch("explainshell.llm_extractor._gz_sha256", return_value="abc123")
-    def test_extract_returns_manpage(self, mock_sha, mock_synopsis, mock_text, mock_llm):
+    def test_extract_returns_manpage(
+        self, mock_sha, mock_synopsis, mock_text, mock_llm
+    ):
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
-        mock_text.return_value = "**-n**\n\nDo not output trailing newline.\n\n**-e**\n\nEnable escapes."
+        mock_text.return_value = (
+            "**-n**\n\nDo not output trailing newline.\n\n**-e**\n\nEnable escapes."
+        )
         # Lines: 1=**-n**, 2="", 3=Do not..., 4="", 5=**-e**, 6="", 7=Enable...
         mock_llm.return_value = (
             {
                 "dashless_opts": False,
                 "options": [
-                    {"short": ["-n"], "long": [], "has_argument": False, "lines": [1, 3]},
-                    {"short": ["-e"], "long": [], "has_argument": False, "lines": [5, 7]},
+                    {
+                        "short": ["-n"],
+                        "long": [],
+                        "has_argument": False,
+                        "lines": [1, 3],
+                    },
+                    {
+                        "short": ["-e"],
+                        "long": [],
+                        "has_argument": False,
+                        "lines": [5, 7],
+                    },
                 ],
             },
             [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
@@ -532,14 +549,21 @@ class TestExtractIntegration(unittest.TestCase):
     @patch("explainshell.llm_extractor.get_manpage_text")
     @patch("explainshell.llm_extractor.manpage.get_synopsis_and_aliases")
     @patch("explainshell.llm_extractor._gz_sha256", return_value="abc123")
-    def test_malformed_options_skipped(self, mock_sha, mock_synopsis, mock_text, mock_llm):
+    def test_malformed_options_skipped(
+        self, mock_sha, mock_synopsis, mock_text, mock_llm
+    ):
         mock_synopsis.return_value = (None, [("dummy", 10)])
         mock_text.return_value = "**-v**\n\nVerbose."
         mock_llm.return_value = (
             {
                 "options": [
                     {"short": "not-a-list", "long": [], "lines": [1, 3]},
-                    {"short": ["-v"], "long": [], "has_argument": False, "lines": [1, 3]},
+                    {
+                        "short": ["-v"],
+                        "long": [],
+                        "has_argument": False,
+                        "lines": [1, 3],
+                    },
                 ],
             },
             [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
@@ -562,7 +586,12 @@ class TestExtractIntegration(unittest.TestCase):
         mock_llm.return_value = (
             {
                 "options": [
-                    {"short": ["-v"], "long": [], "has_argument": False, "lines": [1, 3]},
+                    {
+                        "short": ["-v"],
+                        "long": [],
+                        "has_argument": False,
+                        "lines": [1, 3],
+                    },
                 ]
             },
             [{"role": "system", "content": "sys"}, {"role": "user", "content": "usr"}],
@@ -632,7 +661,10 @@ class TestLlmManagerDryRun(unittest.TestCase):
         ret = main(args)
 
         mock_extract.assert_called_once_with(
-            "/fake/echo.1.gz", "test-model", debug_dir="debug-output", fail_dir="debug-output"
+            "/fake/echo.1.gz",
+            "test-model",
+            debug_dir="debug-output",
+            fail_dir="debug-output",
         )
         mock_store_create.assert_not_called()
         self.assertEqual(ret, 0)

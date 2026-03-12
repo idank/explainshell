@@ -386,7 +386,9 @@ def _run_extractor(mode, gz_path, model=None, debug_dir=None, fail_dir=None):
         mp.extraction_meta = {}
         return mp, raw
     if mode == "llm":
-        mp, raw = llm_extractor.extract(gz_path, model, debug_dir=debug_dir, fail_dir=fail_dir)
+        mp, raw = llm_extractor.extract(
+            gz_path, model, debug_dir=debug_dir, fail_dir=fail_dir
+        )
         if mp is None:
             return None, None
         mp.extractor = "llm"
@@ -399,7 +401,9 @@ def _run_extractor(mode, gz_path, model=None, debug_dir=None, fail_dir=None):
             mp.extraction_meta = {}
             return mp, raw
         except errors.LowConfidenceError as e:
-            mp, raw = llm_extractor.extract(gz_path, model, debug_dir=debug_dir, fail_dir=fail_dir)
+            mp, raw = llm_extractor.extract(
+                gz_path, model, debug_dir=debug_dir, fail_dir=fail_dir
+            )
             if mp is None:
                 return None, None
             mp.extractor = "llm"
@@ -438,9 +442,19 @@ def _parse_diff(raw):
 
 
 def _process_one_file(
-    gz_path, short_path, name, progress, mode, model,
-    is_extractor_diff, diff_left, diff_right, diff_kind,
-    dry_run, debug_dir, s,
+    gz_path,
+    short_path,
+    name,
+    progress,
+    mode,
+    model,
+    is_extractor_diff,
+    diff_left,
+    diff_right,
+    diff_kind,
+    dry_run,
+    debug_dir,
+    s,
 ):
     """Process a single gz file and return a _FileResult.
 
@@ -459,7 +473,11 @@ def _process_one_file(
         out(f"{_ts()} {progress} [{short_path}] running {left_mode} extractor...")
         try:
             left_mp, _left_raw = _run_extractor(
-                left_mode, gz_path, model=left_model, debug_dir=_debug_dir, fail_dir=debug_dir
+                left_mode,
+                gz_path,
+                model=left_model,
+                debug_dir=_debug_dir,
+                fail_dir=debug_dir,
             )
         except errors.ExtractionError as e:
             logger.error("%s extractor failed for %s: %s", left_mode, short_path, e)
@@ -471,20 +489,18 @@ def _process_one_file(
             result.outcome = "skipped"
             return result
 
-        right_label = (
-            right_mode if not right_model else f"{right_mode} ({right_model})"
-        )
-        out(
-            f"{_ts()} {progress} [{short_path}] running {right_label} extractor..."
-        )
+        right_label = right_mode if not right_model else f"{right_mode} ({right_model})"
+        out(f"{_ts()} {progress} [{short_path}] running {right_label} extractor...")
         try:
             right_mp, _right_raw = _run_extractor(
-                right_mode, gz_path, model=right_model, debug_dir=_debug_dir, fail_dir=debug_dir
+                right_mode,
+                gz_path,
+                model=right_model,
+                debug_dir=_debug_dir,
+                fail_dir=debug_dir,
             )
         except errors.ExtractionError as e:
-            logger.error(
-                "%s extractor failed for %s: %s", right_mode, short_path, e
-            )
+            logger.error("%s extractor failed for %s: %s", right_mode, short_path, e)
             out(f"=== {short_path} ({label}) ===")
             out(f"  {_DIM}({right_mode} extractor failed: {e}, skipping){_RESET}")
             result.outcome = "failed"
@@ -517,14 +533,14 @@ def _process_one_file(
                 mp.extractor = "mandoc"
                 mp.extraction_meta = {}
             except errors.LowConfidenceError as e:
-                logger.warning(
-                    "hybrid: falling back to LLM for %s: %s", short_path, e
-                )
+                logger.warning("hybrid: falling back to LLM for %s: %s", short_path, e)
                 out(
                     f"{_ts()} {progress} [{short_path}] tree parser {e}, falling back to LLM ({model})..."
                 )
                 _debug_dir = debug_dir if dry_run else None
-                mp, raw = llm_extractor.extract(gz_path, model, debug_dir=_debug_dir, fail_dir=debug_dir)
+                mp, raw = llm_extractor.extract(
+                    gz_path, model, debug_dir=_debug_dir, fail_dir=debug_dir
+                )
                 if mp is None:
                     result.outcome = "skipped"
                     return result
@@ -537,7 +553,9 @@ def _process_one_file(
         else:
             out(f"{_ts()} {progress} [{short_path}] extracting ({model})...")
             _debug_dir = debug_dir if dry_run else None
-            mp, raw = llm_extractor.extract(gz_path, model, debug_dir=_debug_dir, fail_dir=debug_dir)
+            mp, raw = llm_extractor.extract(
+                gz_path, model, debug_dir=_debug_dir, fail_dir=debug_dir
+            )
             if mp is None:
                 result.outcome = "skipped"
                 return result
@@ -561,9 +579,7 @@ def _process_one_file(
                 f"{_ts()} {progress} [{short_path}] done: {len(mp.options)} option(s) in {file_elapsed}"
             )
         else:
-            out(
-                f"=== {short_path} ({len(mp.options)} option(s), {file_elapsed}) ==="
-            )
+            out(f"=== {short_path} ({len(mp.options)} option(s), {file_elapsed}) ===")
             out(f"  name: {mp.name}")
             out(f"  synopsis: {mp.synopsis}")
             out(f"  aliases: {mp.aliases}")
@@ -645,7 +661,9 @@ def main(args):
         return 1
 
     if args.overwrite and args.dry_run:
-        print("error: --overwrite and --dry-run are mutually exclusive", file=sys.stderr)
+        print(
+            "error: --overwrite and --dry-run are mutually exclusive", file=sys.stderr
+        )
         return 1
 
     if args.overwrite and args.diff is not None:
@@ -657,10 +675,16 @@ def main(args):
             print("error: --batch must be >= 1", file=sys.stderr)
             return 1
         if not model:
-            print("error: --batch requires a model in --mode (e.g. llm:gemini/<model> or llm:openai/<model>)", file=sys.stderr)
+            print(
+                "error: --batch requires a model in --mode (e.g. llm:gemini/<model> or llm:openai/<model>)",
+                file=sys.stderr,
+            )
             return 1
         if not model.startswith(("gemini/", "openai/")):
-            print("error: --batch only supports gemini/ and openai/ models", file=sys.stderr)
+            print(
+                "error: --batch only supports gemini/ and openai/ models",
+                file=sys.stderr,
+            )
             return 1
         if mode != "llm":
             print("error: --batch only works with --mode llm:<model>", file=sys.stderr)
@@ -716,11 +740,7 @@ def main(args):
             short_path = config.source_from_path(gz_path)
             name = _manpage.extract_name(gz_path)
 
-            if (
-                s
-                and not args.overwrite
-                and _already_stored(s, short_path, name)
-            ):
+            if s and not args.overwrite and _already_stored(s, short_path, name):
                 logger.info("skipping %s (already stored)", short_path)
                 skipped += 1
                 continue
@@ -744,17 +764,23 @@ def main(args):
             all_requests = []  # (key_str, user_content)
             # Track mapping: key_str -> (work_idx, chunk_idx)
             key_to_location = {}
-            for work_idx, (file_idx, gz_path, short_path, prepared) in enumerate(work_items):
+            for work_idx, (file_idx, gz_path, short_path, prepared) in enumerate(
+                work_items
+            ):
                 chunks = prepared["chunks"]
                 n_chunks = prepared["n_chunks"]
                 for chunk_idx, chunk in enumerate(chunks):
-                    chunk_info = f" (part {chunk_idx + 1} of {n_chunks})" if n_chunks > 1 else ""
+                    chunk_info = (
+                        f" (part {chunk_idx + 1} of {n_chunks})" if n_chunks > 1 else ""
+                    )
                     user_content = llm_extractor.build_user_content(chunk, chunk_info)
                     key_str = f"{work_idx}:{chunk_idx}"
                     all_requests.append((key_str, user_content))
                     key_to_location[key_str] = (work_idx, chunk_idx)
 
-            print(f"{_ts()} collected {len(all_requests)} request(s) from {len(work_items)} file(s)")
+            print(
+                f"{_ts()} collected {len(all_requests)} request(s) from {len(work_items)} file(s)"
+            )
 
             # 3. Submit in batches of --batch size.
             batch_size = args.batch
@@ -766,16 +792,24 @@ def main(args):
                 batch_num = batch_start // batch_size + 1
                 total_batches = (len(all_requests) + batch_size - 1) // batch_size
 
-                print(f"{_ts()} submitting batch {batch_num}/{total_batches} ({len(batch_chunk)} requests)...")
+                print(
+                    f"{_ts()} submitting batch {batch_num}/{total_batches} ({len(batch_chunk)} requests)..."
+                )
                 try:
                     job = llm_extractor.submit_batch(batch_chunk, model)
                     job_id = job.name if hasattr(job, "name") else job.id
-                    print(f"{_ts()} batch {batch_num}/{total_batches} submitted: {job_id}")
+                    print(
+                        f"{_ts()} batch {batch_num}/{total_batches} submitted: {job_id}"
+                    )
 
                     completed_job = llm_extractor.poll_batch(client, job_id, model)
-                    batch_results = llm_extractor.collect_batch_results(completed_job, model)
+                    batch_results = llm_extractor.collect_batch_results(
+                        completed_job, model
+                    )
                     all_results.update(batch_results)
-                    print(f"{_ts()} batch {batch_num}/{total_batches} completed: {len(batch_results)} result(s)")
+                    print(
+                        f"{_ts()} batch {batch_num}/{total_batches} completed: {len(batch_results)} result(s)"
+                    )
                 except errors.ExtractionError as e:
                     logger.error("batch %d failed: %s", batch_num, e)
                     # Mark all files in this batch as failed.
@@ -803,23 +837,40 @@ def main(args):
                     key_str = f"{work_idx}:{chunk_idx}"
                     response_text = all_results.get(key_str)
                     if response_text is None:
-                        logger.error("missing batch result for %s chunk %d", short_path, chunk_idx)
+                        logger.error(
+                            "missing batch result for %s chunk %d",
+                            short_path,
+                            chunk_idx,
+                        )
                         file_failed = True
                         break
 
                     try:
-                        chunk_data, raw = llm_extractor.process_llm_result(response_text)
+                        chunk_data, raw = llm_extractor.process_llm_result(
+                            response_text
+                        )
                     except errors.ExtractionError as e:
-                        logger.error("failed to parse batch result for %s chunk %d: %s", short_path, chunk_idx, e)
+                        logger.error(
+                            "failed to parse batch result for %s chunk %d: %s",
+                            short_path,
+                            chunk_idx,
+                            e,
+                        )
                         raw = getattr(e, "raw_response", None)
                         if raw:
                             basename = prepared["basename"]
-                            llm_extractor._dump_failed_response(args.debug_dir, basename, chunk_idx, raw)
+                            llm_extractor._dump_failed_response(
+                                args.debug_dir, basename, chunk_idx, raw
+                            )
                         file_failed = True
                         break
 
-                    chunk_info = f" (part {chunk_idx + 1} of {n_chunks})" if n_chunks > 1 else ""
-                    user_content = llm_extractor.build_user_content(chunks[chunk_idx], chunk_info)
+                    chunk_info = (
+                        f" (part {chunk_idx + 1} of {n_chunks})" if n_chunks > 1 else ""
+                    )
+                    user_content = llm_extractor.build_user_content(
+                        chunks[chunk_idx], chunk_info
+                    )
                     messages = [
                         {"role": "system", "content": llm_extractor._SYSTEM_PROMPT},
                         {"role": "user", "content": user_content},
@@ -831,7 +882,9 @@ def main(args):
                     continue
 
                 try:
-                    mp, raw = llm_extractor.finalize_extraction(gz_path, prepared, all_chunk_data, debug_dir=_debug_dir)
+                    mp, raw = llm_extractor.finalize_extraction(
+                        gz_path, prepared, all_chunk_data, debug_dir=_debug_dir
+                    )
                     mp.extractor = "llm"
                     mp.extraction_meta = {"model": model}
 
@@ -866,9 +919,19 @@ def main(args):
                 continue
 
             result = _process_one_file(
-                gz_path, short_path, name, progress, mode, model,
-                is_extractor_diff, diff_left, diff_right, diff_kind,
-                args.dry_run, args.debug_dir, s,
+                gz_path,
+                short_path,
+                name,
+                progress,
+                mode,
+                model,
+                is_extractor_diff,
+                diff_left,
+                diff_right,
+                diff_kind,
+                args.dry_run,
+                args.debug_dir,
+                s,
             )
             a, f = _handle_result(result)
             added += a
@@ -899,9 +962,19 @@ def main(args):
             futures = {
                 executor.submit(
                     _process_one_file,
-                    gz_path, short_path, name, progress, mode, model,
-                    is_extractor_diff, diff_left, diff_right, diff_kind,
-                    args.dry_run, args.debug_dir, s,
+                    gz_path,
+                    short_path,
+                    name,
+                    progress,
+                    mode,
+                    model,
+                    is_extractor_diff,
+                    diff_left,
+                    diff_right,
+                    diff_kind,
+                    args.dry_run,
+                    args.debug_dir,
+                    s,
                 ): short_path
                 for gz_path, short_path, name, progress in work_items
             }

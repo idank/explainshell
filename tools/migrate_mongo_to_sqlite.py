@@ -114,7 +114,9 @@ def migrate(manpage_file, mapping_file, db_path):
         dashless_opts = _coerce_bool(
             doc.get("partial_match", doc.get("partialmatch")), False
         )
-        has_subcommands = _coerce_bool(doc.get("multi_cmd", doc.get("multicommand")), False)
+        has_subcommands = _coerce_bool(
+            doc.get("multi_cmd", doc.get("multicommand")), False
+        )
         nested_cmd = doc.get("nested_cmd", doc.get("nestedcmd", False))
         nested_cmd_json = json.dumps(nested_cmd)
 

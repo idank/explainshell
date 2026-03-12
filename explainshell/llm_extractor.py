@@ -32,7 +32,9 @@ CHUNK_SIZE_CHARS = 60_000
 LLM_TIMEOUT_SECONDS = 300
 MAX_MANPAGE_CHARS = 500_000
 
-_MANDOC_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "tools", "mandoc-with-markdown")
+_MANDOC_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)), "tools", "mandoc-with-markdown"
+)
 
 _SYSTEM_PROMPT = """\
 You are an expert at parsing Unix man pages. You will be given a markdown-formatted man page
@@ -261,7 +263,7 @@ def _fix_invalid_escapes(s: str) -> str:
     JSON only allows: \\", \\\\, \\/, \\b, \\f, \\n, \\r, \\t, \\uXXXX.
     LLMs sometimes produce things like \\p or \\a which are invalid.
     """
-    return re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', s)
+    return re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", s)
 
 
 def _parse_json_response(content: str) -> dict:
@@ -352,7 +354,9 @@ def _sanitize_option(short, long, has_argument, positional, nested_cmd):
     """
     # positional is only for positional operands (no flags)
     if positional and (short or long):
-        logger.debug("clearing positional=%r on flagged option %s/%s", positional, short, long)
+        logger.debug(
+            "clearing positional=%r on flagged option %s/%s", positional, short, long
+        )
         positional = None
 
     # nested_cmd requires has_argument
@@ -620,9 +624,10 @@ def prepare_extraction(gz_path):
 
     if len(plain_text) > MAX_MANPAGE_CHARS:
         logger.warning(
-            "%s: skipping, manpage too large for LLM extraction "
-            "(%s chars, limit %s)",
-            basename, f"{len(plain_text):,}", f"{MAX_MANPAGE_CHARS:,}",
+            "%s: skipping, manpage too large for LLM extraction (%s chars, limit %s)",
+            basename,
+            f"{len(plain_text):,}",
+            f"{MAX_MANPAGE_CHARS:,}",
         )
         return None
 
@@ -669,7 +674,9 @@ def _gz_sha256(gz_path):
     return h.hexdigest()
 
 
-def finalize_extraction(gz_path, prepared, all_chunk_data, debug_dir=None, debug_messages=None):
+def finalize_extraction(
+    gz_path, prepared, all_chunk_data, debug_dir=None, debug_messages=None
+):
     """Assemble a ParsedManpage from prepared data + list of (chunk_data, messages, raw_response) per chunk.
 
     all_chunk_data: list of (data_dict, messages, raw_response) tuples, one per chunk.
@@ -757,11 +764,14 @@ def extract(gz_path, model, debug_dir=None, fail_dir=None):
     chunks = prepared["chunks"]
     n_chunks = prepared["n_chunks"]
 
-    logger.info("%s: %d chars, %d chunk(s)", basename, prepared["plain_text_len"], n_chunks)
+    logger.info(
+        "%s: %d chars, %d chunk(s)", basename, prepared["plain_text_len"], n_chunks
+    )
 
     def _progress(msg):
         ts = time.strftime("[%H:%M:%S]")
         print(f"{ts} {basename}: {msg}")
+
     if n_chunks > 1:
         _progress(f"{len(prepared['numbered_text'])} chars, {n_chunks} chunks")
 
@@ -775,11 +785,11 @@ def extract(gz_path, model, debug_dir=None, fail_dir=None):
         _progress(f"calling LLM ({chunk_label}, {len(chunk)} chars)...")
         t0 = time.monotonic()
         try:
-            chunk_data, messages, raw_response = _call_llm(
-                chunk, chunk_info, model
-            )
+            chunk_data, messages, raw_response = _call_llm(chunk, chunk_info, model)
         except ExtractionError as e:
-            raw = getattr(e, "raw_response", None) or getattr(e.__cause__, "raw_response", None)
+            raw = getattr(e, "raw_response", None) or getattr(
+                e.__cause__, "raw_response", None
+            )
             if raw:
                 _dump_failed_response(fail_dir, basename, i, raw)
             raise
@@ -792,7 +802,9 @@ def extract(gz_path, model, debug_dir=None, fail_dir=None):
             chunk_label,
             elapsed,
         )
-        _progress(f"LLM returned {n_opts} option(s) for {chunk_label} in {elapsed:.1f}s")
+        _progress(
+            f"LLM returned {n_opts} option(s) for {chunk_label} in {elapsed:.1f}s"
+        )
         all_chunk_data.append((chunk_data, messages, raw_response))
 
     return finalize_extraction(gz_path, prepared, all_chunk_data, debug_dir=debug_dir)
@@ -840,7 +852,9 @@ def _poll_batch_gemini(client, job_name, poll_interval=30):
         except Exception as e:
             consecutive_errors += 1
             ts = time.strftime("[%H:%M:%S]")
-            print(f"{ts} batch {job_name}: poll error ({consecutive_errors}/{max_consecutive_errors}): {e}")
+            print(
+                f"{ts} batch {job_name}: poll error ({consecutive_errors}/{max_consecutive_errors}): {e}"
+            )
             if consecutive_errors >= max_consecutive_errors:
                 raise ExtractionError(
                     f"Batch poll failed after {max_consecutive_errors} consecutive errors: {e}"
@@ -861,7 +875,9 @@ def _poll_batch_gemini(client, job_name, poll_interval=30):
             raise ExtractionError(f"Batch job expired: {job_name}")
 
         ts = time.strftime("[%H:%M:%S]")
-        print(f"{ts} batch {job_name}: state={state}, polling again in {poll_interval}s...")
+        print(
+            f"{ts} batch {job_name}: state={state}, polling again in {poll_interval}s..."
+        )
         time.sleep(poll_interval)
 
 
@@ -899,19 +915,21 @@ def _submit_batch_openai(requests, model):
     # Build JSONL in memory
     buf = io.BytesIO()
     for key, user_content in requests:
-        line = json.dumps({
-            "custom_id": key,
-            "method": "POST",
-            "url": "/v1/chat/completions",
-            "body": {
-                "model": openai_model,
-                "messages": [
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    {"role": "user", "content": user_content},
-                ],
-                "response_format": {"type": "json_object"},
-            },
-        })
+        line = json.dumps(
+            {
+                "custom_id": key,
+                "method": "POST",
+                "url": "/v1/chat/completions",
+                "body": {
+                    "model": openai_model,
+                    "messages": [
+                        {"role": "system", "content": _SYSTEM_PROMPT},
+                        {"role": "user", "content": user_content},
+                    ],
+                    "response_format": {"type": "json_object"},
+                },
+            }
+        )
         buf.write(line.encode("utf-8"))
         buf.write(b"\n")
     buf.seek(0)
@@ -941,7 +959,9 @@ def _poll_batch_openai(client, batch_id, poll_interval=30):
         except Exception as e:
             consecutive_errors += 1
             ts = time.strftime("[%H:%M:%S]")
-            print(f"{ts} batch {batch_id}: poll error ({consecutive_errors}/{max_consecutive_errors}): {e}")
+            print(
+                f"{ts} batch {batch_id}: poll error ({consecutive_errors}/{max_consecutive_errors}): {e}"
+            )
             if consecutive_errors >= max_consecutive_errors:
                 raise ExtractionError(
                     f"Batch poll failed after {max_consecutive_errors} consecutive errors: {e}"
@@ -967,7 +987,9 @@ def _poll_batch_openai(client, batch_id, poll_interval=30):
             raise ExtractionError(f"Batch job expired: {batch_id}")
 
         ts = time.strftime("[%H:%M:%S]")
-        print(f"{ts} batch {batch_id}: status={status}{counts_str}, polling again in {poll_interval}s...")
+        print(
+            f"{ts} batch {batch_id}: status={status}{counts_str}, polling again in {poll_interval}s..."
+        )
         time.sleep(poll_interval)
 
 
@@ -993,7 +1015,9 @@ def _collect_batch_results_openai(batch):
             results[key] = text
         else:
             error = row.get("error")
-            logger.warning("batch response for key %s has no content (error=%s)", key, error)
+            logger.warning(
+                "batch response for key %s has no content (error=%s)", key, error
+            )
 
     return results
 
