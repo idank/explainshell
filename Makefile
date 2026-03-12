@@ -34,20 +34,10 @@ parsing-update:
 	rm -f tests/regression/regression.db
 	python -m explainshell.manager --mode source --db tests/regression/regression.db tests/regression/manpages/
 
-REGRESSION_LLM_MANPAGES := tests/regression/manpages/ubuntu/25.10/1
-REGRESSION_LLM_CORPUS := \
-	$(REGRESSION_LLM_MANPAGES)/sed.1.gz \
-	$(REGRESSION_LLM_MANPAGES)/grep.1.gz \
-	$(REGRESSION_LLM_MANPAGES)/docker.1.gz \
-	$(REGRESSION_LLM_MANPAGES)/ps.1.gz \
-	$(REGRESSION_LLM_MANPAGES)/ssh.1.gz \
-	$(REGRESSION_LLM_MANPAGES)/tar.1.gz \
-	$(REGRESSION_LLM_MANPAGES)/find.1.gz \
-	$(REGRESSION_LLM_MANPAGES)/curl.1.gz
-
 parsing-update-llm:
 	rm -f tests/regression/regression-llm.db
-	python -m explainshell.manager --mode llm:$(or $(MODEL),openai/gpt-5-mini) --db tests/regression/regression-llm.db $(REGRESSION_LLM_CORPUS)
+	python -m explainshell.manager --mode llm:$(or $(MODEL),openai/gpt-5-mini) --batch 50 --db tests/regression/regression-llm.db \
+		$$(python -c "from tests.regression.test_parsing_regression import _LLM_CORPUS, _REGRESSION_DIR; import glob, os; print(' '.join(p for p in sorted(glob.glob(os.path.join(_REGRESSION_DIR, '**', '*.gz'), recursive=True)) if os.path.basename(p) in _LLM_CORPUS))")
 
 tests-all: lint tests e2e parsing-regression
 
