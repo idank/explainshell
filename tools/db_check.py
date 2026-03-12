@@ -39,11 +39,13 @@ def check(db_path):
         try:
             validate_source_path(row["source"])
         except errors.InvalidSourcePath:
-            issues.append((
-                "error",
-                f"malformed source path: {row['source']!r} "
-                f"(manpage {row['name']!r})",
-            ))
+            issues.append(
+                (
+                    "error",
+                    f"malformed source path: {row['source']!r} "
+                    f"(manpage {row['name']!r})",
+                )
+            )
 
     # 2. Shadowed duplicates: same name+section+distro from different sources.
     rows = conn.execute("SELECT source, name FROM parsed_manpages").fetchall()
@@ -58,11 +60,13 @@ def check(db_path):
         _, section = util.name_section(os.path.basename(source)[:-3])
         key = (name, section, distro, release)
         if key in seen:
-            issues.append((
-                "error",
-                f"shadowed duplicate: {name}({section}) in {distro}/{release} "
-                f"from both {seen[key]!r} and {source!r}",
-            ))
+            issues.append(
+                (
+                    "error",
+                    f"shadowed duplicate: {name}({section}) in {distro}/{release} "
+                    f"from both {seen[key]!r} and {source!r}",
+                )
+            )
         else:
             seen[key] = source
 
@@ -72,11 +76,13 @@ def check(db_path):
         "LEFT JOIN parsed_manpages mp ON m.dst = mp.source WHERE mp.source IS NULL"
     ).fetchall()
     for row in orphans:
-        issues.append((
-            "error",
-            f"orphaned mapping: src={row['src']!r} -> dst={row['dst']!r} "
-            f"(manpage does not exist)",
-        ))
+        issues.append(
+            (
+                "error",
+                f"orphaned mapping: src={row['src']!r} -> dst={row['dst']!r} "
+                f"(manpage does not exist)",
+            )
+        )
 
     # 4. positional set on flagged options.
     for row in conn.execute("SELECT source, name, options FROM parsed_manpages"):
@@ -93,11 +99,13 @@ def check(db_path):
             positional = o.get("positional")
             if positional and (short or long):
                 flags = short + long
-                issues.append((
-                    "warning",
-                    f"positional on flagged option: {row['name']!r} has "
-                    f"positional={positional!r} on option {flags}",
-                ))
+                issues.append(
+                    (
+                        "warning",
+                        f"positional on flagged option: {row['name']!r} has "
+                        f"positional={positional!r} on option {flags}",
+                    )
+                )
 
     # 5. Unreachable manpages: manpages with no mapping pointing to them.
     unreachable = conn.execute(
@@ -105,11 +113,13 @@ def check(db_path):
         "LEFT JOIN mappings m ON mp.source = m.dst WHERE m.id IS NULL"
     ).fetchall()
     for row in unreachable:
-        issues.append((
-            "warning",
-            f"unreachable manpage: {row['name']!r} ({row['source']!r}) "
-            f"has no mappings",
-        ))
+        issues.append(
+            (
+                "warning",
+                f"unreachable manpage: {row['name']!r} ({row['source']!r}) "
+                f"has no mappings",
+            )
+        )
 
     conn.close()
     return issues
@@ -130,7 +140,9 @@ def main():
     errors_count = sum(1 for sev, _ in issues if sev == "error")
     warnings_count = sum(1 for sev, _ in issues if sev == "warning")
     for severity, msg in issues:
-        label = f"{_RED}ERROR{_RESET}" if severity == "error" else f"{_CYAN}WARNING{_RESET}"
+        label = (
+            f"{_RED}ERROR{_RESET}" if severity == "error" else f"{_CYAN}WARNING{_RESET}"
+        )
         print(f"  {label}: {msg}")
     print(f"\n{errors_count} error(s), {warnings_count} warning(s)")
     return 1 if errors_count else 0

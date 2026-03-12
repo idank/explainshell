@@ -59,7 +59,7 @@ def _get_current_url_distro_release():
     path = request.path
     if not path.startswith("/explain/"):
         return None, None
-    rest = path[len("/explain/"):]
+    rest = path[len("/explain/") :]
     parts = rest.split("/")
     if len(parts) >= 2 and _is_known_distro(parts[0]):
         return parts[0], parts[1]
@@ -94,7 +94,6 @@ def inject_distros():
 @bp.route("/")
 def index():
     return render_template("index.html")
-
 
 
 @bp.route("/explain", defaults={"path": ""})
@@ -136,7 +135,12 @@ def explain_router(path):
         elif len(parts) == 3 and _is_known_distro(parts[0]):
             url_distro, url_release, program = parts[0], parts[1], parts[2]
         elif len(parts) == 4 and _is_known_distro(parts[0]):
-            url_distro, url_release, section, program = parts[0], parts[1], parts[2], parts[3]
+            url_distro, url_release, section, program = (
+                parts[0],
+                parts[1],
+                parts[2],
+                parts[3],
+            )
         else:
             return redirect("/")
 
@@ -159,10 +163,20 @@ def _handle_explain_cmd(url_distro, url_release):
     distro, release = _get_distro_release(url_distro, url_release)
     prefix = _explain_prefix(url_distro, url_release)
     try:
-        matches, helptext, debug_info = explain_cmd(command, current_app.store, distro=distro, release=release, explain_prefix=prefix)
+        matches, helptext, debug_info = explain_cmd(
+            command,
+            current_app.store,
+            distro=distro,
+            release=release,
+            explain_prefix=prefix,
+        )
         helptext = [(render_markdown(text), id_) for text, id_ in helptext]
         return render_template(
-            "explain.html", matches=matches, helptext=helptext, getargs=command, debug_info=debug_info
+            "explain.html",
+            matches=matches,
+            helptext=helptext,
+            getargs=command,
+            debug_info=debug_info,
         )
 
     except errors.ProgramDoesNotExist as error_msg:
@@ -191,7 +205,13 @@ def _handle_explain_cmd(url_distro, url_release):
 
 
 def _handle_explain_program(section, program, url_distro, url_release):
-    logger.info("/explain section=%r program=%r distro=%r release=%r", section, program, url_distro, url_release)
+    logger.info(
+        "/explain section=%r program=%r distro=%r release=%r",
+        section,
+        program,
+        url_distro,
+        url_release,
+    )
 
     distro, release = _get_distro_release(url_distro, url_release)
     if section is not None:
@@ -201,7 +221,13 @@ def _handle_explain_program(section, program, url_distro, url_release):
         mp, suggestions, raw_mp, debug_info = explain_program(
             program, current_app.store, distro=distro, release=release
         )
-        return render_template("options.html", mp=mp, suggestions=suggestions, raw_mp=raw_mp, debug_info=debug_info)
+        return render_template(
+            "options.html",
+            mp=mp,
+            suggestions=suggestions,
+            raw_mp=raw_mp,
+            debug_info=debug_info,
+        )
     except errors.ProgramDoesNotExist as e:
         return render_template(
             "errors/missingmanpage.html", title="missing man page", e=e

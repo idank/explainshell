@@ -29,7 +29,9 @@ class TestExtract(unittest.TestCase):
     @patch("explainshell.source_extractor.detect_dashless_opts")
     @patch("explainshell.source_extractor.gzip.open")
     @patch("explainshell.source_extractor._gz_sha256", return_value="abc123")
-    def test_returns_manpage(self, mock_sha, mock_gzip, mock_detect, mock_roff, mock_synopsis):
+    def test_returns_manpage(
+        self, mock_sha, mock_gzip, mock_detect, mock_roff, mock_synopsis
+    ):
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
         fake_opts = [
             store.Option(
@@ -41,7 +43,9 @@ class TestExtract(unittest.TestCase):
         ]
         mock_roff.return_value = fake_opts
         mock_detect.return_value = False
-        mock_gzip.return_value.__enter__ = lambda s: io.StringIO(".TH DUMMY 1\nfake roff")
+        mock_gzip.return_value.__enter__ = lambda s: io.StringIO(
+            ".TH DUMMY 1\nfake roff"
+        )
         mock_gzip.return_value.__exit__ = lambda s, *a: None
 
         gz_path = os.path.join(

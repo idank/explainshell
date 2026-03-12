@@ -28,6 +28,7 @@ def create_app(db_path=None):
         app.store = store.Store(db, read_only=True)
 
     from explainshell.web.views import bp
+
     app.register_blueprint(bp)
 
     return app

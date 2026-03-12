@@ -103,14 +103,18 @@ class TestCheck:
 
     def test_positional_on_flagged_option(self, store, db_path):
         """Options with short/long flags should not have positional set."""
-        opts = json.dumps([{
-            "text": "-D debugopts desc",
-            "short": ["-D"],
-            "long": [],
-            "has_argument": True,
-            "positional": "debugopts",
-            "nested_cmd": False,
-        }])
+        opts = json.dumps(
+            [
+                {
+                    "text": "-D debugopts desc",
+                    "short": ["-D"],
+                    "long": [],
+                    "has_argument": True,
+                    "positional": "debugopts",
+                    "nested_cmd": False,
+                }
+            ]
+        )
         store._conn.execute("PRAGMA foreign_keys = OFF")
         store._conn.execute(
             "INSERT INTO parsed_manpages(source, name, options, aliases) "
@@ -125,14 +129,18 @@ class TestCheck:
 
     def test_positional_on_positional_ok(self, store, db_path):
         """Positional operands (no flags) with positional set should not warn."""
-        opts = json.dumps([{
-            "text": "FILE desc",
-            "short": [],
-            "long": [],
-            "has_argument": False,
-            "positional": "FILE",
-            "nested_cmd": False,
-        }])
+        opts = json.dumps(
+            [
+                {
+                    "text": "FILE desc",
+                    "short": [],
+                    "long": [],
+                    "has_argument": False,
+                    "positional": "FILE",
+                    "nested_cmd": False,
+                }
+            ]
+        )
         store._conn.execute("PRAGMA foreign_keys = OFF")
         store._conn.execute(
             "INSERT INTO parsed_manpages(source, name, options, aliases) "

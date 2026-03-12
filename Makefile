@@ -34,6 +34,7 @@ tests-all: lint tests e2e parsing-regression
 
 lint:
 	ruff check explainshell tests tools
+	ruff format --check explainshell tests tools
 	npx biome check
 
 format:
