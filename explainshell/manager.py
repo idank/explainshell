@@ -591,14 +591,10 @@ def batch_extract_files(
                     chunk_info = (
                         f" (part {chunk_idx + 1} of {n_chunks})" if n_chunks > 1 else ""
                     )
-                    user_content = llm_extractor.build_user_content(
+                    _, messages = llm_extractor.build_messages(
                         chunks[chunk_idx],
                         chunk_info,
                     )
-                    messages = [
-                        {"role": "system", "content": llm_extractor._SYSTEM_PROMPT},
-                        {"role": "user", "content": user_content},
-                    ]
                     all_chunk_data.append((chunk_data, messages, raw))
 
                 if file_failed:
