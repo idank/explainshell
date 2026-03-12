@@ -18,7 +18,7 @@ import os
 import pytest
 
 from explainshell import errors, store
-from explainshell.manager import compare_manpages, run_extractor
+from explainshell.manager import batch_extract_files, compare_manpages, run_extractor
 
 _REGRESSION_DIR = os.path.join(os.path.dirname(__file__), "manpages")
 _REGRESSION_DB = os.path.join(os.path.dirname(__file__), "regression.db")
@@ -74,10 +74,20 @@ def db_store(request):
     return store.Store(db_path)
 
 
+@pytest.fixture(scope="session")
+def llm_results(request):
+    """Batch-extract all LLM corpus files once per session."""
+    if request.config.getoption("--extractor") != "llm":
+        return None
+    model = request.config.getoption("--model")
+    gz_paths = [p for p in _gz_files if os.path.basename(p) in _LLM_CORPUS]
+    return batch_extract_files(gz_paths, model)
+
+
 @pytest.mark.parametrize(
     "gz_path", _gz_files, ids=[os.path.basename(p) for p in _gz_files]
 )
-def test_parsing_matches_db(gz_path, db_store, request):
+def test_parsing_matches_db(gz_path, db_store, llm_results, request):
     basename = os.path.basename(gz_path)
     source = os.path.relpath(gz_path, _REGRESSION_DIR)
     extractor = request.config.getoption("--extractor")
@@ -90,10 +100,15 @@ def test_parsing_matches_db(gz_path, db_store, request):
         pytest.skip(f"{source} not in DB")
 
     # Re-parse with selected extractor.
-    model = request.config.getoption("--model") if extractor == "llm" else None
-    fresh_mp, _raw = run_extractor(extractor, gz_path, model=model)
-    if fresh_mp is None:
-        pytest.skip(f"Extraction returned None for {source}")
+    if extractor == "llm":
+        result = llm_results.get(gz_path)
+        if result is None:
+            pytest.skip(f"Batch extraction returned no result for {source}")
+        fresh_mp, _raw = result
+    else:
+        fresh_mp, _raw = run_extractor(extractor, gz_path)
+        if fresh_mp is None:
+            pytest.skip(f"Extraction returned None for {source}")
 
     # has_subcommands is computed post-extraction by update_subcommand_mappings(),
     # not by the parser, so exclude it from comparison.
