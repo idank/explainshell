@@ -398,7 +398,7 @@ def _parse_mode(raw):
     )
 
 
-def _run_extractor(mode, gz_path, model=None, debug_dir=None, fail_dir=None):
+def run_extractor(mode, gz_path, model=None, debug_dir=None, fail_dir=None):
     """Run a single extractor by mode name and return (ParsedManpage, RawManpage)."""
     if mode == "source":
         mp, raw = source_extractor.extract(gz_path)
@@ -496,7 +496,7 @@ def _process_one_file(
 
         logger.info("%s %s running %s extractor...", progress, tag, left_mode)
         try:
-            left_mp, _left_raw = _run_extractor(
+            left_mp, _left_raw = run_extractor(
                 left_mode,
                 gz_path,
                 model=left_model,
@@ -518,7 +518,7 @@ def _process_one_file(
         right_label = right_mode if not right_model else f"{right_mode} ({right_model})"
         logger.info("%s %s running %s extractor...", progress, tag, right_label)
         try:
-            right_mp, _right_raw = _run_extractor(
+            right_mp, _right_raw = run_extractor(
                 right_mode,
                 gz_path,
                 model=right_model,

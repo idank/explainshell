@@ -63,6 +63,36 @@ Use the manager to parse and save a gzipped man page in raw format:
 $ python -m explainshell.manager --mode source /usr/share/man/man1/echo.1.gz
 ```
 
+## Tests
+
+```bash
+$ make tests-all          # lint + unit tests + e2e + parsing regression
+```
+
+### Parsing regression
+
+The parsing regression suite re-extracts manpages from a fixed corpus and compares against a stored baseline DB. Any difference in options, fields, or option metadata is reported as a failure.
+
+```bash
+$ make parsing-regression           # run with the source (roff) extractor
+$ make parsing-update               # regenerate the source baseline DB
+```
+
+There is a separate LLM extractor mode that runs a subset of the corpus (8 manpages chosen to cover single/multi-chunk, dashless options, nested commands, aliases, and subcommands) through the LLM extraction path:
+
+```bash
+$ make parsing-regression-llm                       # run against LLM baseline
+$ make parsing-update-llm                           # regenerate LLM baseline (makes API calls)
+$ make parsing-regression-llm MODEL=openai/gpt-5.2  # override the default model
+```
+
+Because LLM output is non-deterministic, re-running the same prompt can produce slightly different results. The workflow for evaluating prompt or chunking changes is:
+
+1. `make parsing-update-llm` — generate a baseline with the **current** code
+2. Make your prompt/chunking changes
+3. `make parsing-regression-llm` — re-extract and compare against the baseline
+4. Review the diffs to decide whether differences are regressions or expected improvements
+
 ### Deployment
 
 The app is deployed to [Fly.io](https://fly.io) with two machines for availability. The SQLite database is stored on persistent Fly volumes mounted at `/data`.
