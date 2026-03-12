@@ -8,6 +8,7 @@ from explainshell import store
 from explainshell.llm_extractor import (
     ExtractionError,
     CHUNK_SIZE_CHARS,
+    _BLACKLISTED_SECTIONS,
     _dedup_options,
     _dedup_ref_options,
     _extract_text_from_lines,
@@ -19,6 +20,7 @@ from explainshell.llm_extractor import (
     build_user_content,
     chunk_text,
     extract,
+    filter_sections,
     get_manpage_text,
     get_plain_text,
 )
@@ -183,6 +185,85 @@ class TestChunkText(unittest.TestCase):
         if len(chunks) >= 2:
             self.assertIn("[Context", chunks[1])
             self.assertIn("test-cmd", chunks[1])
+
+
+# ---------------------------------------------------------------------------
+# TestFilterSections
+# ---------------------------------------------------------------------------
+
+
+class TestFilterSections(unittest.TestCase):
+    def test_removes_blacklisted_sections(self):
+        text = (
+            "# NAME\n\nfoo - a tool\n\n"
+            "# OPTIONS\n\n**-v**\n\n> verbose\n\n"
+            "# SEE ALSO\n\nbar(1)\n\n"
+            "# BUGS\n\nNone known."
+        )
+        filtered, counts = filter_sections(text)
+        self.assertIn("# NAME", filtered)
+        self.assertIn("# OPTIONS", filtered)
+        self.assertNotIn("# SEE ALSO", filtered)
+        self.assertNotIn("bar(1)", filtered)
+        self.assertNotIn("# BUGS", filtered)
+        self.assertEqual(counts, {"SEE ALSO": 1, "BUGS": 1})
+
+    def test_keeps_non_blacklisted_sections(self):
+        text = "# NAME\n\nfoo\n\n# DESCRIPTION\n\nSome desc\n\n# OPTIONS\n\n**-v**"
+        filtered, counts = filter_sections(text)
+        self.assertEqual(filtered, text)
+        self.assertEqual(counts, {})
+
+    def test_removes_subsections_under_blacklisted_top_level(self):
+        text = (
+            "# NAME\n\nfoo\n\n"
+            "# BUGS\n\nSome bugs\n\n"
+            "## Known Issues\n\nIssue 1\n\n"
+            "# OPTIONS\n\n**-v**"
+        )
+        filtered, counts = filter_sections(text)
+        self.assertNotIn("BUGS", filtered)
+        self.assertNotIn("Known Issues", filtered)
+        self.assertIn("# OPTIONS", filtered)
+
+    def test_case_insensitive_matching(self):
+        # mandoc typically outputs uppercase, but test robustness
+        text = "# NAME\n\nfoo\n\n# Copyright\n\n2024 Foo Inc."
+        filtered, counts = filter_sections(text)
+        self.assertNotIn("Copyright", filtered)
+        self.assertEqual(counts, {"COPYRIGHT": 1})
+
+    def test_does_not_remove_subsections_with_blacklisted_name(self):
+        """## AUTHORS under a non-blacklisted parent should not be removed."""
+        text = (
+            "# NAME\n\nfoo\n\n"
+            "# ACKNOWLEDGEMENTS\n\nThanks to:\n\n"
+            "## AUTHORS\n\nJohn Doe\n\n"
+            "# OPTIONS\n\n**-v**"
+        )
+        filtered, counts = filter_sections(text)
+        # ## AUTHORS is a sub-section; only top-level # AUTHORS is blacklisted
+        self.assertIn("## AUTHORS", filtered)
+        self.assertEqual(counts, {})
+
+    def test_empty_text(self):
+        filtered, counts = filter_sections("")
+        self.assertEqual(filtered, "")
+        self.assertEqual(counts, {})
+
+    def test_all_blacklisted_headings_are_uppercase(self):
+        for heading in _BLACKLISTED_SECTIONS:
+            self.assertEqual(heading, heading.upper())
+
+    def test_real_manpage_filters(self):
+        """Smoke test on a real manpage to verify sections are removed."""
+        text = get_manpage_text(_FIND_GZ)
+        filtered, counts = filter_sections(text)
+        self.assertGreater(len(counts), 0, "Expected some sections to be filtered")
+        self.assertLess(len(filtered), len(text))
+        # Core sections should survive
+        self.assertIn("# NAME", filtered)
+        self.assertIn("# OPTIONS", filtered)
 
 
 # ---------------------------------------------------------------------------
