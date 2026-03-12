@@ -213,7 +213,13 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
         prepared_map = {gz: self._make_prepared(n) for gz, n in zip(gz_files, names)}
         mock_llm.prepare_extraction.side_effect = lambda gz: prepared_map[gz]
         mock_llm.build_user_content.side_effect = lambda chunk, info: f"prompt:{chunk}"
-        mock_llm._SYSTEM_PROMPT = "system"
+        mock_llm.build_messages.side_effect = lambda chunk, info: (
+            f"prompt:{chunk}",
+            [
+                {"role": "system", "content": "system"},
+                {"role": "user", "content": f"prompt:{chunk}"},
+            ],
+        )
         mock_llm.make_batch_client.return_value = MagicMock()
 
         # submit_batch returns a mock job with an .id attribute
@@ -303,7 +309,13 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
         prepared_map = {gz: self._make_prepared(n) for gz, n in zip(gz_files, names)}
         mock_llm.prepare_extraction.side_effect = lambda gz: prepared_map[gz]
         mock_llm.build_user_content.side_effect = lambda chunk, info: f"prompt:{chunk}"
-        mock_llm._SYSTEM_PROMPT = "system"
+        mock_llm.build_messages.side_effect = lambda chunk, info: (
+            f"prompt:{chunk}",
+            [
+                {"role": "system", "content": "system"},
+                {"role": "user", "content": f"prompt:{chunk}"},
+            ],
+        )
         mock_llm.make_batch_client.return_value = MagicMock()
 
         # submit_batch: succeed on first call, succeed on second (failure comes

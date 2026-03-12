@@ -479,11 +479,7 @@ def _call_llm(chunk, chunk_info, model):
     Retries up to 3x on transient errors.
     Returns (data_dict, messages, raw_response_content).
     """
-    user_content = build_user_content(chunk, chunk_info)
-    messages = [
-        {"role": "system", "content": _SYSTEM_PROMPT},
-        {"role": "user", "content": user_content},
-    ]
+    user_content, messages = build_messages(chunk, chunk_info)
 
     use_gemini = model.startswith("gemini/")
     use_openai = not use_gemini and _is_openai_model(model)
@@ -636,6 +632,20 @@ def build_user_content(chunk, chunk_info):
     if chunk_info:
         return f"Man page{chunk_info}:\n\n{chunk}"
     return chunk
+
+
+def build_messages(chunk, chunk_info):
+    """Build the full (user_content, messages) pair for a single chunk.
+
+    Returns (user_content, messages) where messages is the system+user
+    list used by litellm and stored for debug output.
+    """
+    user_content = build_user_content(chunk, chunk_info)
+    messages = [
+        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "user", "content": user_content},
+    ]
+    return user_content, messages
 
 
 def process_llm_result(content):
