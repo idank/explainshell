@@ -26,9 +26,28 @@ test-llm:
 parsing-regression:
 	python -m pytest tests/regression/test_parsing_regression.py -v
 
+parsing-regression-llm:
+	@test -f tests/regression/regression-llm.db || (echo "LLM regression DB not found. Build it with: make parsing-update-llm"; exit 1)
+	python -m pytest tests/regression/test_parsing_regression.py -v --extractor llm $(if $(MODEL),--model $(MODEL),)
+
 parsing-update:
 	rm -f tests/regression/regression.db
 	python -m explainshell.manager --mode source --db tests/regression/regression.db tests/regression/manpages/
+
+REGRESSION_LLM_MANPAGES := tests/regression/manpages/ubuntu/25.10/1
+REGRESSION_LLM_CORPUS := \
+	$(REGRESSION_LLM_MANPAGES)/sed.1.gz \
+	$(REGRESSION_LLM_MANPAGES)/grep.1.gz \
+	$(REGRESSION_LLM_MANPAGES)/docker.1.gz \
+	$(REGRESSION_LLM_MANPAGES)/ps.1.gz \
+	$(REGRESSION_LLM_MANPAGES)/ssh.1.gz \
+	$(REGRESSION_LLM_MANPAGES)/tar.1.gz \
+	$(REGRESSION_LLM_MANPAGES)/find.1.gz \
+	$(REGRESSION_LLM_MANPAGES)/curl.1.gz
+
+parsing-update-llm:
+	rm -f tests/regression/regression-llm.db
+	python -m explainshell.manager --mode llm:$(or $(MODEL),openai/gpt-5-mini) --db tests/regression/regression-llm.db $(REGRESSION_LLM_CORPUS)
 
 tests-all: lint tests e2e parsing-regression
 
@@ -72,4 +91,4 @@ arch-archive:
 	python tools/fetch_manned.py --log INFO extract --data-dir $(MANNED_DATA_DIR) \
 		--distro arch --sections 1,8 --output-dir manpages
 
-.PHONY: tests e2e e2e-db e2e-update test-llm tests-all lint serve parsing-regression parsing-update db-check ubuntu-archive arch-archive
+.PHONY: tests e2e e2e-db e2e-update test-llm tests-all lint serve parsing-regression parsing-regression-llm parsing-update parsing-update-llm db-check ubuntu-archive arch-archive
