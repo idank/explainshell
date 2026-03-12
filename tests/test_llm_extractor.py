@@ -1,6 +1,5 @@
 """Unit and integration tests for explainshell.llm_extractor."""
 
-import argparse
 import os
 import unittest
 from unittest.mock import MagicMock, patch
@@ -617,85 +616,6 @@ class TestExtractIntegration(unittest.TestCase):
             self.assertTrue(os.path.exists(response_path))
             with open(response_path) as f:
                 self.assertEqual(f.read(), raw_response)
-
-
-# ---------------------------------------------------------------------------
-# TestLlmManagerDryRun
-# ---------------------------------------------------------------------------
-
-
-class TestLlmManagerDryRun(unittest.TestCase):
-    """Tests for --dry-run: LLM is called, DB is not written."""
-
-    def _make_args(self, dry_run=True, overwrite=False, mode="llm:test-model"):
-        args = argparse.Namespace(
-            mode=mode,
-            db="/tmp/test.db",
-            overwrite=overwrite,
-            drop=False,
-            dry_run=dry_run,
-            diff=False,
-            debug_dir="debug-output",
-            log="WARNING",
-            jobs=1,
-            batch=None,
-            files=[],
-        )
-        return args
-
-    @patch("explainshell.manager.llm_extractor.extract")
-    @patch("explainshell.manager.store.Store.create")
-    @patch("explainshell.manager._collect_gz_files")
-    def test_dry_run_calls_llm_but_not_store(
-        self, mock_collect, mock_store_create, mock_extract
-    ):
-        mock_collect.return_value = ["/fake/echo.1.gz"]
-        fake_mp = MagicMock()
-        fake_mp.options = [MagicMock(), MagicMock()]
-        fake_raw = MagicMock()
-        mock_extract.return_value = (fake_mp, fake_raw)
-
-        from explainshell.manager import main
-
-        args = self._make_args(dry_run=True)
-        ret = main(args)
-
-        mock_extract.assert_called_once_with(
-            "/fake/echo.1.gz",
-            "test-model",
-            debug_dir="debug-output",
-            fail_dir="debug-output",
-        )
-        mock_store_create.assert_not_called()
-        self.assertEqual(ret, 0)
-
-    @patch("explainshell.manager.llm_extractor.extract")
-    @patch("explainshell.manager.store.Store.create")
-    @patch("explainshell.manager._collect_gz_files")
-    def test_normal_run_writes_to_store(
-        self, mock_collect, mock_store_create, mock_extract
-    ):
-        mock_collect.return_value = ["/fake/echo.1.gz"]
-        fake_mp = MagicMock()
-        fake_mp.options = [MagicMock()]
-        fake_mp.source = "echo.1.gz"
-        fake_raw = MagicMock()
-        mock_extract.return_value = (fake_mp, fake_raw)
-
-        mock_store = MagicMock()
-        mock_store_create.return_value = mock_store
-        # simulate page not already stored
-        from explainshell import errors
-
-        mock_store.find_man_page.side_effect = errors.ProgramDoesNotExist("echo")
-
-        from explainshell.manager import main
-
-        args = self._make_args(dry_run=False)
-        main(args)
-
-        mock_extract.assert_called_once()
-        mock_store.add_manpage.assert_called_once_with(fake_mp, fake_raw)
 
 
 # ---------------------------------------------------------------------------

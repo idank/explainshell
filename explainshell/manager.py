@@ -329,6 +329,28 @@ def _already_stored(s, short_path, name):
         return False
 
 
+def _build_chunk_aligned_batches(all_requests, key_to_location, batch_size):
+    """Split *all_requests* into batches of roughly *batch_size*, ensuring all
+    chunks belonging to the same file (work_idx) end up in the same batch.
+
+    Returns a list of sub-lists of *all_requests*.
+    """
+    batches = []
+    i = 0
+    while i < len(all_requests):
+        end = min(i + batch_size, len(all_requests))
+        if end < len(all_requests):
+            last_work_idx, _ = key_to_location[all_requests[end - 1][0]]
+            while end < len(all_requests):
+                next_work_idx, _ = key_to_location[all_requests[end][0]]
+                if next_work_idx != last_work_idx:
+                    break
+                end += 1
+        batches.append(all_requests[i:end])
+        i = end
+    return batches
+
+
 def _collect_gz_files(paths):
     result = []
     for path in paths:
@@ -808,6 +830,8 @@ def main(args):
             )
 
             # 3. Submit in batches of --batch size, finalizing per-batch.
+            #    Batch boundaries are adjusted so all chunks of a file stay
+            #    in the same batch, enabling immediate per-batch DB writes.
             batch_size = args.batch
             all_results = {}  # key_str -> response_text
             client = llm_extractor.make_batch_client(model)
@@ -817,11 +841,13 @@ def main(args):
             files_extracted = 0
             batch_start_time = time.time()
 
-            for batch_start in range(0, len(all_requests), batch_size):
-                batch_chunk = all_requests[batch_start : batch_start + batch_size]
-                batch_num = batch_start // batch_size + 1
-                total_batches = (len(all_requests) + batch_size - 1) // batch_size
+            # Build batches, keeping all chunks of a file in the same batch.
+            batches = _build_chunk_aligned_batches(
+                all_requests, key_to_location, batch_size
+            )
+            total_batches = len(batches)
 
+            for batch_num, batch_chunk in enumerate(batches, 1):
                 total_chars = sum(len(uc) for _, uc in batch_chunk)
                 logger.info(
                     "submitting batch %d/%d (%d requests, %s chars)...",
