@@ -769,8 +769,7 @@ def extract(gz_path, model, debug_dir=None, fail_dir=None):
     )
 
     def _progress(msg):
-        ts = time.strftime("[%H:%M:%S]")
-        logger.info("%s %s: %s", ts, basename, msg)
+        logger.info("%s: %s", basename, msg)
 
     if n_chunks > 1:
         _progress(f"{len(prepared['numbered_text'])} chars, {n_chunks} chunks")
@@ -851,10 +850,8 @@ def _poll_batch_gemini(client, job_name, poll_interval=30):
             consecutive_errors = 0
         except Exception as e:
             consecutive_errors += 1
-            ts = time.strftime("[%H:%M:%S]")
             logger.warning(
-                "%s batch %s: poll error (%d/%d): %s",
-                ts,
+                "batch %s: poll error (%d/%d): %s",
                 job_name,
                 consecutive_errors,
                 max_consecutive_errors,
@@ -878,10 +875,8 @@ def _poll_batch_gemini(client, job_name, poll_interval=30):
         if state in ("JOB_STATE_EXPIRED", "EXPIRED"):
             raise ExtractionError(f"Batch job expired: {job_name}")
 
-        ts = time.strftime("[%H:%M:%S]")
         logger.info(
-            "%s batch %s: state=%s, polling again in %ds...",
-            ts,
+            "batch %s: state=%s, polling again in %ds...",
             job_name,
             state,
             poll_interval,
@@ -980,10 +975,8 @@ def _poll_batch_openai(client, batch_id, poll_interval=30):
             consecutive_errors = 0
         except Exception as e:
             consecutive_errors += 1
-            ts = time.strftime("[%H:%M:%S]")
             logger.warning(
-                "%s batch %s: poll error (%d/%d): %s",
-                ts,
+                "batch %s: poll error (%d/%d): %s",
                 batch_id,
                 consecutive_errors,
                 max_consecutive_errors,
@@ -1012,10 +1005,8 @@ def _poll_batch_openai(client, batch_id, poll_interval=30):
         if status == "expired":
             raise ExtractionError(f"Batch job expired: {batch_id}")
 
-        ts = time.strftime("[%H:%M:%S]")
         logger.info(
-            "%s batch %s: status=%s%s, polling again in %ds...",
-            ts,
+            "batch %s: status=%s%s, polling again in %ds...",
             batch_id,
             status,
             counts_str,
