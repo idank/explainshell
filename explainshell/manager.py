@@ -80,6 +80,15 @@ def _fmt_elapsed(seconds):
     return f"{s}s"
 
 
+def _fmt_tokens(n):
+    """Format token count for display (e.g. 878K, 1.8M)."""
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.0f}K"
+    return str(n)
+
+
 def _normalize(field, val):
     """Normalize a field value so that None and False compare equal.
 
@@ -615,7 +624,11 @@ def _process_one_file(
 
 
 def main(args):
-    logging.basicConfig(level=getattr(logging, args.log.upper()))
+    logging.basicConfig(
+        level=getattr(logging, args.log.upper()),
+        stream=sys.stdout,
+        format="%(message)s",
+    )
 
     if args.jobs < 1:
         print("error: --jobs must be >= 1", file=sys.stderr)
@@ -718,9 +731,9 @@ def main(args):
     from explainshell import manpage as _manpage
 
     def _handle_result(result):
-        """Print output lines and write to DB. Returns (added_delta, failed_delta)."""
+        """Log output lines and write to DB. Returns (added_delta, failed_delta)."""
         for line in result.output_lines:
-            print(line)
+            logger.info(line)
         if result.mp and s:
             s.add_manpage(result.mp, result.raw)
         if result.outcome == "added":
@@ -758,7 +771,7 @@ def main(args):
             work_items.append((file_idx, gz_path, short_path, prepared))
 
         if not work_items:
-            print("No files to process after filtering.")
+            logger.info("No files to process after filtering.")
         else:
             # 2. Collect all (key, user_content) pairs.
             all_requests = []  # (key_str, user_content)
@@ -778,38 +791,178 @@ def main(args):
                     all_requests.append((key_str, user_content))
                     key_to_location[key_str] = (work_idx, chunk_idx)
 
-            print(
-                f"{_ts()} collected {len(all_requests)} request(s) from {len(work_items)} file(s)"
+            logger.info(
+                "%s collected %d request(s) from %d file(s)",
+                _ts(),
+                len(all_requests),
+                len(work_items),
             )
 
-            # 3. Submit in batches of --batch size.
+            # 3. Submit in batches of --batch size, finalizing per-batch.
             batch_size = args.batch
             all_results = {}  # key_str -> response_text
             client = llm_extractor.make_batch_client(model)
+            finalized_indices = set()
+            cumulative_usage = {"input_tokens": 0, "output_tokens": 0}
+            cumulative_requests = 0
+            files_extracted = 0
+            batch_start_time = time.time()
 
             for batch_start in range(0, len(all_requests), batch_size):
                 batch_chunk = all_requests[batch_start : batch_start + batch_size]
                 batch_num = batch_start // batch_size + 1
                 total_batches = (len(all_requests) + batch_size - 1) // batch_size
 
-                print(
-                    f"{_ts()} submitting batch {batch_num}/{total_batches} ({len(batch_chunk)} requests)..."
+                total_chars = sum(len(uc) for _, uc in batch_chunk)
+                logger.info(
+                    "%s submitting batch %d/%d (%d requests, %s chars)...",
+                    _ts(),
+                    batch_num,
+                    total_batches,
+                    len(batch_chunk),
+                    f"{total_chars:,}",
                 )
                 try:
                     job = llm_extractor.submit_batch(batch_chunk, model)
                     job_id = job.name if hasattr(job, "name") else job.id
-                    print(
-                        f"{_ts()} batch {batch_num}/{total_batches} submitted: {job_id}"
+                    logger.info(
+                        "%s batch %d/%d submitted: %s",
+                        _ts(),
+                        batch_num,
+                        total_batches,
+                        job_id,
                     )
 
                     completed_job = llm_extractor.poll_batch(client, job_id, model)
-                    batch_results = llm_extractor.collect_batch_results(
+                    batch_results, batch_usage = llm_extractor.collect_batch_results(
                         completed_job, model
                     )
                     all_results.update(batch_results)
-                    print(
-                        f"{_ts()} batch {batch_num}/{total_batches} completed: {len(batch_results)} result(s)"
+
+                    cumulative_usage["input_tokens"] += batch_usage["input_tokens"]
+                    cumulative_usage["output_tokens"] += batch_usage["output_tokens"]
+                    cumulative_requests += len(batch_results)
+
+                    logger.info(
+                        "%s batch %d/%d completed: %d result(s), "
+                        "input=%s tokens, output=%s tokens",
+                        _ts(),
+                        batch_num,
+                        total_batches,
+                        len(batch_results),
+                        _fmt_tokens(batch_usage["input_tokens"]),
+                        _fmt_tokens(batch_usage["output_tokens"]),
                     )
+
+                    # Finalize files that now have all chunks available.
+                    for work_idx, item in enumerate(work_items):
+                        if item is None or work_idx in finalized_indices:
+                            continue
+                        _fi, gz_path, short_path, prepared = item
+                        n_chunks = prepared["n_chunks"]
+                        if not all(
+                            f"{work_idx}:{ci}" in all_results for ci in range(n_chunks)
+                        ):
+                            continue
+
+                        finalized_indices.add(work_idx)
+                        chunks = prepared["chunks"]
+                        all_chunk_data = []
+                        file_failed = False
+
+                        for chunk_idx in range(n_chunks):
+                            key_str = f"{work_idx}:{chunk_idx}"
+                            response_text = all_results.get(key_str)
+                            if response_text is None:
+                                logger.error(
+                                    "missing batch result for %s chunk %d",
+                                    short_path,
+                                    chunk_idx,
+                                )
+                                file_failed = True
+                                break
+
+                            try:
+                                chunk_data, raw = llm_extractor.process_llm_result(
+                                    response_text
+                                )
+                            except errors.ExtractionError as e:
+                                logger.error(
+                                    "failed to parse batch result for %s chunk %d: %s",
+                                    short_path,
+                                    chunk_idx,
+                                    e,
+                                )
+                                raw_resp = getattr(e, "raw_response", None)
+                                if raw_resp:
+                                    basename = prepared["basename"]
+                                    llm_extractor._dump_failed_response(
+                                        args.debug_dir, basename, chunk_idx, raw_resp
+                                    )
+                                file_failed = True
+                                break
+
+                            chunk_info = (
+                                f" (part {chunk_idx + 1} of {n_chunks})"
+                                if n_chunks > 1
+                                else ""
+                            )
+                            user_content = llm_extractor.build_user_content(
+                                chunks[chunk_idx], chunk_info
+                            )
+                            messages = [
+                                {
+                                    "role": "system",
+                                    "content": llm_extractor._SYSTEM_PROMPT,
+                                },
+                                {"role": "user", "content": user_content},
+                            ]
+                            all_chunk_data.append((chunk_data, messages, raw))
+
+                        if file_failed:
+                            failed += 1
+                            continue
+
+                        try:
+                            mp, raw = llm_extractor.finalize_extraction(
+                                gz_path,
+                                prepared,
+                                all_chunk_data,
+                                debug_dir=_debug_dir,
+                            )
+                            mp.extractor = "llm"
+                            mp.extraction_meta = {"model": model}
+
+                            result = _FileResult(outcome="added", output_lines=[])
+                            result.mp = mp
+                            result.raw = raw
+                            result.output_lines.append(
+                                f"{_ts()} [{short_path}] done: "
+                                f"{len(mp.options)} option(s)"
+                            )
+                            a, f = _handle_result(result)
+                            added += a
+                            failed += f
+                            if a:
+                                files_extracted += 1
+                        except Exception as e:
+                            logger.error("failed to finalize %s: %s", short_path, e)
+                            failed += 1
+
+                    # Cumulative progress summary.
+                    elapsed_m = int((time.time() - batch_start_time) / 60)
+                    logger.info(
+                        "%s progress: %d/%d requests done, %d files extracted, "
+                        "input=%s tokens, output=%s tokens, elapsed=%dm",
+                        _ts(),
+                        cumulative_requests,
+                        len(all_requests),
+                        files_extracted,
+                        _fmt_tokens(cumulative_usage["input_tokens"]),
+                        _fmt_tokens(cumulative_usage["output_tokens"]),
+                        elapsed_m,
+                    )
+
                 except errors.ExtractionError as e:
                     logger.error("batch %d failed: %s", batch_num, e)
                     # Mark all files in this batch as failed.
@@ -822,84 +975,6 @@ def main(args):
                     for wi in sorted(batch_work_indices, reverse=True):
                         work_items[wi] = None
                     continue
-
-            # 4. Map results back and finalize each file.
-            for work_idx, item in enumerate(work_items):
-                if item is None:
-                    continue  # failed batch
-                file_idx, gz_path, short_path, prepared = item
-                chunks = prepared["chunks"]
-                n_chunks = prepared["n_chunks"]
-
-                all_chunk_data = []
-                file_failed = False
-                for chunk_idx in range(n_chunks):
-                    key_str = f"{work_idx}:{chunk_idx}"
-                    response_text = all_results.get(key_str)
-                    if response_text is None:
-                        logger.error(
-                            "missing batch result for %s chunk %d",
-                            short_path,
-                            chunk_idx,
-                        )
-                        file_failed = True
-                        break
-
-                    try:
-                        chunk_data, raw = llm_extractor.process_llm_result(
-                            response_text
-                        )
-                    except errors.ExtractionError as e:
-                        logger.error(
-                            "failed to parse batch result for %s chunk %d: %s",
-                            short_path,
-                            chunk_idx,
-                            e,
-                        )
-                        raw = getattr(e, "raw_response", None)
-                        if raw:
-                            basename = prepared["basename"]
-                            llm_extractor._dump_failed_response(
-                                args.debug_dir, basename, chunk_idx, raw
-                            )
-                        file_failed = True
-                        break
-
-                    chunk_info = (
-                        f" (part {chunk_idx + 1} of {n_chunks})" if n_chunks > 1 else ""
-                    )
-                    user_content = llm_extractor.build_user_content(
-                        chunks[chunk_idx], chunk_info
-                    )
-                    messages = [
-                        {"role": "system", "content": llm_extractor._SYSTEM_PROMPT},
-                        {"role": "user", "content": user_content},
-                    ]
-                    all_chunk_data.append((chunk_data, messages, raw))
-
-                if file_failed:
-                    failed += 1
-                    continue
-
-                try:
-                    mp, raw = llm_extractor.finalize_extraction(
-                        gz_path, prepared, all_chunk_data, debug_dir=_debug_dir
-                    )
-                    mp.extractor = "llm"
-                    mp.extraction_meta = {"model": model}
-
-                    result = _FileResult(outcome="added", output_lines=[])
-                    result.mp = mp
-                    result.raw = raw
-                    result.output_lines.append(
-                        f"{_ts()} [{short_path}] done: {len(mp.options)} option(s)"
-                    )
-                    a, f = _handle_result(result)
-                    added += a
-                    failed += f
-                except Exception as e:
-                    logger.error("failed to finalize %s: %s", short_path, e)
-                    failed += 1
 
     elif args.jobs == 1:
         # Sequential processing.
@@ -995,8 +1070,13 @@ def main(args):
 
     elapsed = time.monotonic() - t0
     dry_run_note = " (dry run)" if args.dry_run else ""
-    print(
-        f"Done{dry_run_note}: {added} extracted, {skipped} skipped, {failed} failed. Total time: {_fmt_elapsed(elapsed)}"
+    logger.info(
+        "Done%s: %d extracted, %d skipped, %d failed. Total time: %s",
+        dry_run_note,
+        added,
+        skipped,
+        failed,
+        _fmt_elapsed(elapsed),
     )
     return 0 if failed == 0 else 1
 
@@ -1055,8 +1135,8 @@ def _build_parser():
     )
     parser.add_argument(
         "--log",
-        default="WARNING",
-        help="Log level (default: WARNING)",
+        default="INFO",
+        help="Log level (default: INFO)",
     )
     parser.add_argument("files", nargs="*", help=".gz files or directories")
     return parser

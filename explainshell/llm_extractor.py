@@ -770,7 +770,7 @@ def extract(gz_path, model, debug_dir=None, fail_dir=None):
 
     def _progress(msg):
         ts = time.strftime("[%H:%M:%S]")
-        print(f"{ts} {basename}: {msg}")
+        logger.info("%s %s: %s", ts, basename, msg)
 
     if n_chunks > 1:
         _progress(f"{len(prepared['numbered_text'])} chars, {n_chunks} chunks")
@@ -852,8 +852,13 @@ def _poll_batch_gemini(client, job_name, poll_interval=30):
         except Exception as e:
             consecutive_errors += 1
             ts = time.strftime("[%H:%M:%S]")
-            print(
-                f"{ts} batch {job_name}: poll error ({consecutive_errors}/{max_consecutive_errors}): {e}"
+            logger.warning(
+                "%s batch %s: poll error (%d/%d): %s",
+                ts,
+                job_name,
+                consecutive_errors,
+                max_consecutive_errors,
+                e,
             )
             if consecutive_errors >= max_consecutive_errors:
                 raise ExtractionError(
@@ -863,7 +868,6 @@ def _poll_batch_gemini(client, job_name, poll_interval=30):
             continue
 
         state = job.state.name if hasattr(job.state, "name") else str(job.state)
-        logger.info("batch %s state: %s", job_name, state)
 
         if state in ("JOB_STATE_SUCCEEDED", "SUCCEEDED"):
             return job
@@ -875,25 +879,43 @@ def _poll_batch_gemini(client, job_name, poll_interval=30):
             raise ExtractionError(f"Batch job expired: {job_name}")
 
         ts = time.strftime("[%H:%M:%S]")
-        print(
-            f"{ts} batch {job_name}: state={state}, polling again in {poll_interval}s..."
+        logger.info(
+            "%s batch %s: state=%s, polling again in %ds...",
+            ts,
+            job_name,
+            state,
+            poll_interval,
         )
         time.sleep(poll_interval)
 
 
 def _collect_batch_results_gemini(job):
-    """Extract results from a completed Gemini batch job."""
+    """Extract results from a completed Gemini batch job.
+
+    Returns (results, usage) where results maps key -> text and usage is
+    {"input_tokens": N, "output_tokens": N}.
+    """
     results = {}
+    usage = {"input_tokens": 0, "output_tokens": 0}
     if not job.dest or not job.dest.inlined_responses:
-        return results
+        return results, usage
     for resp in job.dest.inlined_responses:
         key = (resp.metadata or {}).get("key", "")
         if resp.response and resp.response.candidates:
             text = resp.response.candidates[0].content.parts[0].text
             results[key] = text
+            # Aggregate per-response usage if available.
+            resp_usage = getattr(resp.response, "usage_metadata", None)
+            if resp_usage:
+                usage["input_tokens"] += (
+                    getattr(resp_usage, "prompt_token_count", 0) or 0
+                )
+                usage["output_tokens"] += (
+                    getattr(resp_usage, "candidates_token_count", 0) or 0
+                )
         else:
             logger.warning("batch response for key %s has no content", key)
-    return results
+    return results, usage
 
 
 # ---------------------------------------------------------------------------
@@ -959,8 +981,13 @@ def _poll_batch_openai(client, batch_id, poll_interval=30):
         except Exception as e:
             consecutive_errors += 1
             ts = time.strftime("[%H:%M:%S]")
-            print(
-                f"{ts} batch {batch_id}: poll error ({consecutive_errors}/{max_consecutive_errors}): {e}"
+            logger.warning(
+                "%s batch %s: poll error (%d/%d): %s",
+                ts,
+                batch_id,
+                consecutive_errors,
+                max_consecutive_errors,
+                e,
             )
             if consecutive_errors >= max_consecutive_errors:
                 raise ExtractionError(
@@ -970,7 +997,6 @@ def _poll_batch_openai(client, batch_id, poll_interval=30):
             continue
 
         status = batch.status
-        logger.info("batch %s status: %s", batch_id, status)
 
         counts = batch.request_counts
         counts_str = ""
@@ -987,20 +1013,40 @@ def _poll_batch_openai(client, batch_id, poll_interval=30):
             raise ExtractionError(f"Batch job expired: {batch_id}")
 
         ts = time.strftime("[%H:%M:%S]")
-        print(
-            f"{ts} batch {batch_id}: status={status}{counts_str}, polling again in {poll_interval}s..."
+        logger.info(
+            "%s batch %s: status=%s%s, polling again in %ds...",
+            ts,
+            batch_id,
+            status,
+            counts_str,
+            poll_interval,
         )
         time.sleep(poll_interval)
 
 
 def _collect_batch_results_openai(batch):
-    """Download and parse results from a completed OpenAI batch."""
+    """Download and parse results from a completed OpenAI batch.
+
+    Returns (results, usage) where results maps key -> text and usage is
+    {"input_tokens": N, "output_tokens": N}.
+    """
     results = {}
+    usage = {"input_tokens": 0, "output_tokens": 0}
+
+    # Prefer batch-level usage if available (newer OpenAI API).
+    batch_usage = getattr(batch, "usage", None)
+    if batch_usage:
+        usage["input_tokens"] = getattr(batch_usage, "input_tokens", 0) or 0
+        usage["output_tokens"] = getattr(batch_usage, "output_tokens", 0) or 0
+
     if not batch.output_file_id:
-        return results
+        return results, usage
 
     client = openai.OpenAI(timeout=LLM_TIMEOUT_SECONDS)
     content = client.files.content(batch.output_file_id)
+
+    per_request_input = 0
+    per_request_output = 0
 
     for line in content.text.splitlines():
         if not line.strip():
@@ -1009,6 +1055,12 @@ def _collect_batch_results_openai(batch):
         key = row.get("custom_id", "")
         response = row.get("response", {})
         body = response.get("body", {})
+
+        # Aggregate per-request token usage.
+        req_usage = body.get("usage", {})
+        per_request_input += req_usage.get("prompt_tokens", 0)
+        per_request_output += req_usage.get("completion_tokens", 0)
+
         choices = body.get("choices", [])
         if choices:
             text = choices[0].get("message", {}).get("content", "")
@@ -1019,7 +1071,26 @@ def _collect_batch_results_openai(batch):
                 "batch response for key %s has no content (error=%s)", key, error
             )
 
-    return results
+    # Fall back to per-request totals if batch-level usage was absent.
+    if not batch_usage:
+        usage["input_tokens"] = per_request_input
+        usage["output_tokens"] = per_request_output
+
+    # Log failed requests from error file.
+    if batch.error_file_id:
+        try:
+            error_content = client.files.content(batch.error_file_id)
+            for line in error_content.text.splitlines():
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                key = row.get("custom_id", "unknown")
+                error = row.get("error", {})
+                logger.warning("batch request %s error: %s", key, error)
+        except Exception as e:
+            logger.warning("failed to download batch error file: %s", e)
+
+    return results, usage
 
 
 # ---------------------------------------------------------------------------
@@ -1063,7 +1134,8 @@ def poll_batch(client, job_id, model, poll_interval=30):
 def collect_batch_results(job, model):
     """Extract results from a completed batch job.
 
-    Returns dict mapping request key → response text.
+    Returns (results, usage) where results maps request key → response text,
+    and usage is {"input_tokens": N, "output_tokens": N}.
     """
     if model.startswith("gemini/"):
         return _collect_batch_results_gemini(job)
