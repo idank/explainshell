@@ -644,8 +644,9 @@ class TestExtractIntegration(unittest.TestCase):
             },
             [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
             '{"options": []}',
+            {"input_tokens": 0, "output_tokens": 0},
         )
-        mp, raw = extract("dummy.1.gz", "test-model")
+        mp, raw, _usage = extract("dummy.1.gz", "test-model")
         self.assertIsInstance(mp, store.ParsedManpage)
         self.assertIsInstance(raw, store.RawManpage)
         self.assertEqual(len(mp.options), 2)
@@ -682,8 +683,9 @@ class TestExtractIntegration(unittest.TestCase):
             },
             [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
             '{"options": []}',
+            {"input_tokens": 0, "output_tokens": 0},
         )
-        mp, raw = extract("dummy.1.gz", "test-model")
+        mp, raw, _usage = extract("dummy.1.gz", "test-model")
         self.assertEqual(len(mp.options), 1)
         self.assertEqual(mp.options[0].short, ["-v"])
 
@@ -710,9 +712,10 @@ class TestExtractIntegration(unittest.TestCase):
             },
             [{"role": "system", "content": "sys"}, {"role": "user", "content": "usr"}],
             raw_response,
+            {"input_tokens": 0, "output_tokens": 0},
         )
         with tempfile.TemporaryDirectory() as tmpdir:
-            mp, raw = extract("dummy.1.gz", "test-model", debug_dir=tmpdir)
+            mp, raw, _usage = extract("dummy.1.gz", "test-model", debug_dir=tmpdir)
             self.assertEqual(len(mp.options), 1)
             # Check markdown file
             md_path = os.path.join(tmpdir, "dummy.md")
