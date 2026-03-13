@@ -455,9 +455,13 @@ def _extract_text_from_lines(original_lines, start, end):
     flag_line = selected[0]
     body_lines = selected[1:]
 
-    # Strip leading blank lines from body
+    # Strip leading and trailing blank lines from body.  LLMs tend to
+    # include one extra blank line at the end of the line range, so the
+    # trailing strip is important to avoid spurious newlines in descriptions.
     while body_lines and not body_lines[0].strip():
         body_lines.pop(0)
+    while body_lines and not body_lines[-1].strip():
+        body_lines.pop()
 
     if body_lines:
         return flag_line + "\n\n" + "\n".join(body_lines)
