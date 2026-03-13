@@ -404,6 +404,39 @@ class TestExtractTextFromLines(unittest.TestCase):
         self.assertEqual(len(parts), 2)
         self.assertFalse(parts[1].startswith("\n"))
 
+    def test_strips_trailing_blank_body_lines(self):
+        # Range includes a trailing blank line (line 5 is "")
+        text = _extract_text_from_lines(self.orig, 1, 5)
+        self.assertFalse(text.endswith("\n"))
+
+    def test_strips_multiple_trailing_blank_lines(self):
+        orig = {
+            1: "**-o**, **--output**",
+            2: "",
+            3: "Write output to file.",
+            4: "",
+            5: "",
+        }
+        text = _extract_text_from_lines(orig, 1, 5)
+        self.assertFalse(text.endswith("\n"))
+        self.assertIn("Write output to file.", text)
+
+    def test_strips_both_leading_and_trailing_blank_lines(self):
+        orig = {
+            1: "**-q**, **--quiet**",
+            2: "",
+            3: "",
+            4: "Suppress output.",
+            5: "",
+            6: "",
+        }
+        text = _extract_text_from_lines(orig, 1, 6)
+        parts = text.split("\n\n", 1)
+        self.assertEqual(len(parts), 2)
+        self.assertFalse(parts[1].startswith("\n"))
+        self.assertFalse(text.endswith("\n"))
+        self.assertEqual(parts[1], "Suppress output.")
+
 
 # ---------------------------------------------------------------------------
 # TestLlmOptionToStoreOption
