@@ -63,6 +63,10 @@ python tools/llm_bench.py run --model openai/gpt-5-mini --batch 50 -o report.jso
 python tools/llm_bench.py compare baseline.json current.json
 ```
 
+## Code Style
+
+- Use Python type annotations on all new code (function signatures, return types, and non-obvious variables). Do not retroactively annotate existing code unless you are already modifying it.
+
 ## Environment
 
 - Python virtualenv: repo-local `.venv`
