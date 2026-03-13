@@ -29,6 +29,49 @@ When changing prompts, chunking, or other LLM extraction logic, use the LLM regr
 3. `make parsing-regression-llm` — re-extract and compare against the baseline
 4. Review the diffs to decide whether differences are regressions or expected improvements
 
+### LLM Benchmarking
+
+Use the benchmark tool (`tools/llm_bench.py`) to compare before/after metrics when making changes to the LLM extractor. It runs extraction on a fixed 10-file corpus and produces a JSON report with aggregate metrics: extracted files, failed files, total options, zero-option pages, multi-chunk pages, and token usage.
+
+**Workflow for code changes (API, prompt, chunking, post-processing):**
+
+```bash
+# 1. Stash your changes to get a clean baseline
+git stash push -- explainshell/llm_extractor.py
+
+# 2. Run benchmark on the old code
+make llm-bench
+make llm-bench-baseline
+
+# 3. Restore your changes
+git stash pop
+
+# 4. Run benchmark on the new code
+make llm-bench
+
+# 5. Compare
+make llm-bench-compare
+```
+
+**Makefile targets:**
+
+- `make llm-bench` — run benchmark (uses batch API, override model with `MODEL=...`)
+- `make llm-bench-baseline` — save the current report as the baseline
+- `make llm-bench-compare` — compare current report against baseline, exits non-zero on regressions
+
+**Direct usage** for custom runs (e.g., single file, sequential mode, specific model):
+
+```bash
+# Sequential mode (no --batch), single file
+python tools/llm_bench.py run --model openai/gpt-5-mini -o report.json path/to/file.1.gz
+
+# Batch mode on the full corpus
+python tools/llm_bench.py run --model openai/gpt-5-mini --batch 50 -o report.json tests/regression/manpages/
+
+# Compare two reports
+python tools/llm_bench.py compare baseline.json current.json
+```
+
 ## Environment
 
 - Python virtualenv: repo-local `.venv`
@@ -76,6 +119,15 @@ make parsing-update-llm
 # Run all tests (unit + e2e + parsing regression)
 make tests-all
 
+# Run LLM benchmark (makes API calls, override model with MODEL=...)
+make llm-bench
+
+# Save current benchmark report as baseline
+make llm-bench-baseline
+
+# Compare current benchmark report against baseline
+make llm-bench-compare
+
 # Run DB integrity checks
 make db-check
 
@@ -108,6 +160,7 @@ python -m explainshell.manager --mode source /path/to/manpage.1.gz
   - `config.py` - Configuration (DB_PATH, HOST_IP, DEBUG, MANPAGE_URLS)
 - `tools/` - Standalone scripts
   - `db_check.py` - DB integrity checker (malformed paths, shadowed duplicates, orphans)
+  - `llm_bench.py` - LLM extractor benchmark tool (run/compare metrics reports)
   - `store_extraction.py` - Store LLM-ref extraction JSON into database
 - `tests/` - Unit tests (`test_*.py`), fixtures
 - `tests/e2e/` - Playwright e2e tests, snapshots, and dedicated `e2e.db`
