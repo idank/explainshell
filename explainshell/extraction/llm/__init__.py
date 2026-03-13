@@ -1,0 +1,415 @@
+"""LLM-based extractor: orchestration only.
+
+Public API:
+    LLMExtractor(config).extract(gz_path) -> ExtractionResult
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import time
+from dataclasses import dataclass
+import dotenv
+
+from explainshell import manpage
+from explainshell.errors import ExtractionError, SkippedExtraction
+from explainshell.extraction.common import build_manpage_metadata, build_raw_manpage
+from explainshell.extraction.postprocess import postprocess
+from explainshell.extraction.llm.providers import (
+    BatchProvider,
+    LLMProvider,
+    TokenUsage,
+    make_batch_provider,
+    make_provider,
+)
+from explainshell.extraction.llm.response import (
+    dedup_ref_options,
+    llm_option_to_store_option,
+    parse_json_response,
+    process_llm_result,
+    validate_llm_response,
+)
+from explainshell.extraction.llm.text import (
+    MAX_MANPAGE_CHARS,
+    chunk_text,
+    filter_sections,
+    get_manpage_text,
+    number_lines,
+)
+from explainshell.extraction.types import (
+    ExtractionResult,
+    ExtractionStats,
+    ExtractorConfig,
+)
+
+dotenv.load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+SYSTEM_PROMPT = """\
+You are an expert at parsing Unix man pages. You will be given a markdown-formatted man page
+with line numbers in the format "  42| content here". Extract ALL command-line options and
+return a JSON object. Only include options explicitly documented in the text — do not invent
+options. Return ONLY the JSON object, no markdown fences, no explanation.
+
+If multiple flags share one description, group them in the same entry.
+
+JSON schema:
+{
+  "dashless_opts": true if the page documents options without a leading dash (e.g. BSD-style
+                   "tar xzvf"), false otherwise,
+  "options": [
+    {
+      "short": ["-f"],           // short flags (e.g. ["-v"]). Bare names only — no argument
+                                 // placeholders (use "-f", not "-f FILE").
+      "long": ["--file"],        // long flags (e.g. ["--verbose"]). Same bare-name rule.
+      "has_argument": false,     // true if the option takes an argument; or a list of allowed
+                                 // values (e.g. ["always","never","auto"]). Omit if false.
+      "positional": null,        // name string for positional operands with no flags (e.g.
+                                 // "FILE"). NEVER set this if the option has short or long
+                                 // flags. Omit if null.
+      "nested_cmd": false,       // true only when the argument is itself a shell command
+                                 // (e.g. find -exec CMD ;). Omit if false.
+      "lines": [111, 115]        // [start, end] line range from the left margin, covering the
+                                 // flag line through the LAST description line — do not stop
+                                 // early.
+    }
+  ]
+}"""
+
+
+@dataclass
+class PreparedFile:
+    """Result of LLMExtractor.prepare() — everything needed for extraction."""
+
+    synopsis: str | None
+    aliases: list[tuple[str, int]]
+    chunks: list[str]
+    original_lines: dict[int, str]
+    basename: str
+    numbered_text: str
+    n_chunks: int
+    plain_text_len: int
+    plain_text: str
+
+
+class LLMExtractor:
+    """LLM-based option extractor.
+
+    Implements the base ``Extractor`` protocol via ``extract()``.
+    Also exposes ``prepare()``, ``build_request()``, ``finalize()``,
+    and ``provider`` for ``run_batch``.
+    """
+
+    def __init__(self, config: ExtractorConfig) -> None:
+        self._model = config.model or ""
+        self._debug_dir = config.debug_dir
+        self._fail_dir = config.fail_dir
+        self._provider_instance: LLMProvider | None = None
+        self._batch_provider_instance: BatchProvider | None = None
+
+    @property
+    def provider(self) -> LLMProvider:
+        if self._provider_instance is None:
+            self._provider_instance = make_provider(self._model)
+        return self._provider_instance
+
+    @property
+    def batch_provider(self) -> BatchProvider:
+        if self._batch_provider_instance is None:
+            self._batch_provider_instance = make_batch_provider(self._model)
+        return self._batch_provider_instance
+
+    def extract(self, gz_path: str) -> ExtractionResult:
+        """Full extraction pipeline: prepare → LLM calls → finalize."""
+        prepared = self.prepare(gz_path)
+        basename = prepared.basename
+        chunks = prepared.chunks
+        n_chunks = prepared.n_chunks
+
+        logger.info(
+            "%s: %d chars, %d chunk(s)", basename, prepared.plain_text_len, n_chunks
+        )
+
+        if n_chunks > 1:
+            logger.info(
+                "%s: %d chars, %d chunks",
+                basename,
+                len(prepared.numbered_text),
+                n_chunks,
+            )
+
+        stats = ExtractionStats(
+            chunks=n_chunks,
+            plain_text_len=prepared.plain_text_len,
+        )
+
+        all_chunk_data: list[tuple[dict, list[dict[str, str]], str]] = []
+        t0 = time.monotonic()
+
+        for i, chunk in enumerate(chunks):
+            chunk_info = f" (part {i + 1} of {n_chunks})" if n_chunks > 1 else ""
+            chunk_label = (
+                f"chunk {i + 1}/{n_chunks}" if n_chunks > 1 else "single chunk"
+            )
+            logger.info(
+                "%s: calling LLM (%s, %d chars)...", basename, chunk_label, len(chunk)
+            )
+
+            try:
+                chunk_data, messages, raw_response, chunk_usage = self._call_llm(
+                    chunk, chunk_info
+                )
+            except ExtractionError as e:
+                raw = getattr(e, "raw_response", None) or getattr(
+                    e.__cause__, "raw_response", None
+                )
+                if raw:
+                    self._dump_failed_response(basename, i, raw)
+                raise
+
+            stats.input_tokens += chunk_usage.input_tokens
+            stats.output_tokens += chunk_usage.output_tokens
+            n_opts = len(chunk_data["options"])
+            logger.info(
+                "%s: LLM returned %d option(s) for %s",
+                basename,
+                n_opts,
+                chunk_label,
+            )
+            all_chunk_data.append((chunk_data, messages, raw_response))
+
+        stats.elapsed_seconds = time.monotonic() - t0
+        return self._finalize(gz_path, prepared, all_chunk_data, stats)
+
+    def prepare(self, gz_path: str) -> PreparedFile:
+        """Pre-process a manpage without calling LLM.
+
+        Raises SkippedExtraction if the manpage is too large.
+        """
+        synopsis, aliases = manpage.get_synopsis_and_aliases(gz_path)
+        plain_text = get_manpage_text(gz_path)
+        basename = os.path.splitext(os.path.splitext(os.path.basename(gz_path))[0])[0]
+
+        if len(plain_text) > MAX_MANPAGE_CHARS:
+            logger.warning(
+                "%s: skipping, manpage too large for LLM extraction (%s chars, limit %s)",
+                basename,
+                f"{len(plain_text):,}",
+                f"{MAX_MANPAGE_CHARS:,}",
+            )
+            raise SkippedExtraction(
+                f"manpage too large ({len(plain_text):,} chars, limit {MAX_MANPAGE_CHARS:,})",
+                stats=ExtractionStats(plain_text_len=len(plain_text)),
+            )
+
+        filtered_text, removal_counts = filter_sections(plain_text)
+        if removal_counts:
+            logger.info(
+                "%s: filtered sections: %s (saved %d chars)",
+                basename,
+                ", ".join(f"{k} ({v})" for k, v in sorted(removal_counts.items())),
+                len(plain_text) - len(filtered_text),
+            )
+
+        numbered_text, original_lines = number_lines(filtered_text)
+        chunks = chunk_text(filtered_text)
+
+        return PreparedFile(
+            synopsis=synopsis,
+            aliases=aliases,
+            chunks=chunks,
+            original_lines=original_lines,
+            basename=basename,
+            numbered_text=numbered_text,
+            n_chunks=len(chunks),
+            plain_text_len=len(plain_text),
+            plain_text=plain_text,
+        )
+
+    def build_request(self, prepared: PreparedFile, chunk_idx: int) -> tuple[str, str]:
+        """Build (chunk_info, user_content) for a single chunk.
+
+        Used by run_batch to construct batch requests.
+        """
+        n_chunks = prepared.n_chunks
+        chunk = prepared.chunks[chunk_idx]
+        chunk_info = f" (part {chunk_idx + 1} of {n_chunks})" if n_chunks > 1 else ""
+        user_content = self._build_user_content(chunk, chunk_info)
+        return chunk_info, user_content
+
+    def finalize(
+        self,
+        gz_path: str,
+        prepared: PreparedFile,
+        responses: list[str],
+        token_usage: TokenUsage | None = None,
+    ) -> ExtractionResult:
+        """Finalize extraction from batch responses.
+
+        Used by run_batch after collecting provider results.  The returned
+        stats carry ``chunks`` and ``plain_text_len`` but token counts and
+        ``elapsed_seconds`` are only populated when ``token_usage`` is
+        provided by the caller.
+        """
+        all_chunk_data: list[tuple[dict, list[dict[str, str]], str]] = []
+        stats = ExtractionStats(
+            chunks=prepared.n_chunks,
+            plain_text_len=prepared.plain_text_len,
+            input_tokens=token_usage.input_tokens if token_usage else 0,
+            output_tokens=token_usage.output_tokens if token_usage else 0,
+        )
+
+        for chunk_idx, response_text in enumerate(responses):
+            try:
+                chunk_data, raw = process_llm_result(response_text)
+            except ExtractionError as e:
+                raw_resp = getattr(e, "raw_response", None)
+                if raw_resp:
+                    self._dump_failed_response(prepared.basename, chunk_idx, raw_resp)
+                raise
+
+            chunk_info = (
+                f" (part {chunk_idx + 1} of {prepared.n_chunks})"
+                if prepared.n_chunks > 1
+                else ""
+            )
+            messages = self._build_messages(prepared.chunks[chunk_idx], chunk_info)
+            all_chunk_data.append((chunk_data, messages, raw))
+
+        return self._finalize(gz_path, prepared, all_chunk_data, stats)
+
+    def _finalize(
+        self,
+        gz_path: str,
+        prepared: PreparedFile,
+        all_chunk_data: list[tuple[dict, list[dict[str, str]], str]],
+        stats: ExtractionStats,
+    ) -> ExtractionResult:
+        """Assemble ExtractionResult from prepared data + chunk results."""
+        basename = prepared.basename
+        original_lines = prepared.original_lines
+        n_chunks = prepared.n_chunks
+        numbered_text = prepared.numbered_text
+
+        if self._debug_dir:
+            os.makedirs(self._debug_dir, exist_ok=True)
+            with open(os.path.join(self._debug_dir, f"{basename}.md"), "w") as f:
+                f.write(numbered_text)
+
+        all_raw: list[dict] = []
+        dashless_opts = False
+        for i, (chunk_data, messages, raw_response) in enumerate(all_chunk_data):
+            all_raw.extend(chunk_data["options"])
+            if chunk_data.get("dashless_opts"):
+                dashless_opts = True
+
+            if self._debug_dir:
+                if n_chunks == 1:
+                    prompt_name = f"{basename}.prompt.json"
+                    response_name = f"{basename}.response.txt"
+                else:
+                    prompt_name = f"{basename}.chunk-{i}.prompt.json"
+                    response_name = f"{basename}.chunk-{i}.response.txt"
+                with open(os.path.join(self._debug_dir, prompt_name), "w") as f:
+                    json.dump(messages, f, indent=2)
+                with open(os.path.join(self._debug_dir, response_name), "w") as f:
+                    f.write(raw_response)
+
+        all_raw = dedup_ref_options(all_raw)
+
+        options = []
+        for idx, raw_opt in enumerate(all_raw):
+            try:
+                options.append(llm_option_to_store_option(raw_opt, original_lines))
+            except ValueError as e:
+                logger.warning("skipping malformed option %d: %s", idx, e)
+                stats.malformed_options += 1
+
+        options, pp_stats = postprocess(options)
+        stats.deduped_options += pp_stats.deduped_options
+        stats.malformed_options += pp_stats.malformed_options
+
+        logger.info("%s: extracted %d option(s) total", basename, len(options))
+
+        mp = build_manpage_metadata(
+            gz_path,
+            options,
+            dashless_opts=dashless_opts,
+            extractor="llm",
+            extraction_meta={"model": self._model},
+        )
+
+        raw_mp = build_raw_manpage(prepared.plain_text, "mandoc -T markdown", gz_path)
+
+        return ExtractionResult(mp=mp, raw=raw_mp, stats=stats)
+
+    def _call_llm(
+        self, chunk: str, chunk_info: str
+    ) -> tuple[dict, list[dict[str, str]], str, TokenUsage]:
+        """Call LLM via the provider with retries.
+
+        Returns (data_dict, messages, raw_response_content, usage).
+        """
+        user_content = self._build_user_content(chunk, chunk_info)
+        messages = self._build_messages(chunk, chunk_info)
+
+        provider = self.provider
+        retryable = provider.retryable_exceptions
+
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                content, usage = provider.call(user_content)
+                data = parse_json_response(content)
+                validate_llm_response(data)
+                return data, messages, content, usage
+            except ExtractionError:
+                raise
+            except retryable as e:
+                last_err = e
+                wait = 2**attempt
+                logger.warning(
+                    "LLM call attempt %d failed (%s), retrying in %ds",
+                    attempt + 1,
+                    e,
+                    wait,
+                )
+                time.sleep(wait)
+            except Exception as e:
+                raise ExtractionError(f"LLM call failed: {e}") from e
+
+        raise ExtractionError(
+            f"LLM call failed after 3 attempts: {last_err}"
+        ) from last_err
+
+    @staticmethod
+    def _build_user_content(chunk: str, chunk_info: str) -> str:
+        """Build the user prompt string for a single chunk."""
+        if chunk_info:
+            return f"Man page{chunk_info}:\n\n{chunk}"
+        return chunk
+
+    @staticmethod
+    def _build_messages(chunk: str, chunk_info: str) -> list[dict[str, str]]:
+        """Build messages list for debug output."""
+        user_content = LLMExtractor._build_user_content(chunk, chunk_info)
+        return [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ]
+
+    def _dump_failed_response(
+        self, basename: str, chunk_idx: int, raw_response: str
+    ) -> None:
+        """Write a failed LLM response to fail_dir for inspection."""
+        if not self._fail_dir:
+            return
+        os.makedirs(self._fail_dir, exist_ok=True)
+        name = f"{basename}.chunk-{chunk_idx}.failed-response.txt"
+        path = os.path.join(self._fail_dir, name)
+        with open(path, "w") as f:
+            f.write(raw_response)
+        logger.error("raw LLM response saved to %s", path)

@@ -5,24 +5,26 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from explainshell import store
-from explainshell.llm_extractor import (
-    ExtractionError,
+from explainshell.errors import ExtractionError
+from explainshell.extraction import ExtractorConfig
+from explainshell.extraction.llm import LLMExtractor
+from explainshell.extraction.llm.response import (
+    dedup_options as _dedup_options,
+    dedup_ref_options as _dedup_ref_options,
+    extract_text_from_lines as _extract_text_from_lines,
+    llm_option_to_store_option as _llm_option_to_store_option,
+    parse_json_response as _parse_json_response,
+    sanitize_option_fields as _sanitize_option,
+    validate_llm_response as _validate_llm_response,
+)
+from explainshell.extraction.llm.text import (
     CHUNK_SIZE_CHARS,
     _BLACKLISTED_SECTIONS,
-    _dedup_options,
-    _dedup_ref_options,
-    _extract_text_from_lines,
-    _llm_option_to_store_option,
-    _number_lines,
-    _parse_json_response,
-    _sanitize_option,
-    _validate_llm_response,
-    build_user_content,
     chunk_text,
-    extract,
     filter_sections,
     get_manpage_text,
     get_plain_text,
+    number_lines as _number_lines,
 )
 
 
@@ -32,7 +34,7 @@ from explainshell.llm_extractor import (
 
 
 class TestGetManpageText(unittest.TestCase):
-    @patch("explainshell.llm_extractor.subprocess.run")
+    @patch("explainshell.extraction.llm.text.subprocess.run")
     def test_success_returns_markdown(self, mock_run):
         md_output = (
             "# NAME\n\ngrep - search for patterns\n\n**-v**, **--invert-match**\n"
@@ -45,13 +47,13 @@ class TestGetManpageText(unittest.TestCase):
         self.assertIn("markdown", cmd)
         self.assertEqual(result, md_output.strip())
 
-    @patch("explainshell.llm_extractor.subprocess.run")
+    @patch("explainshell.extraction.llm.text.subprocess.run")
     def test_empty_output_raises(self, mock_run):
         mock_run.return_value = MagicMock(returncode=0, stdout="   ", stderr="")
         with self.assertRaises(ExtractionError):
             get_manpage_text("dummy.1.gz")
 
-    @patch("explainshell.llm_extractor.subprocess.run")
+    @patch("explainshell.extraction.llm.text.subprocess.run")
     def test_nonzero_exit_raises(self, mock_run):
         mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error msg")
         with self.assertRaises(ExtractionError):
@@ -612,18 +614,35 @@ class TestDedupRefOptions(unittest.TestCase):
 
 
 class TestExtractIntegration(unittest.TestCase):
-    @patch("explainshell.llm_extractor._call_llm")
-    @patch("explainshell.llm_extractor.get_manpage_text")
-    @patch("explainshell.llm_extractor.manpage.get_synopsis_and_aliases")
-    @patch("explainshell.llm_extractor._gz_sha256", return_value="abc123")
+    def _make_extractor(self, model="test-model", debug_dir=None, fail_dir=None):
+        cfg = ExtractorConfig(model=model, debug_dir=debug_dir, fail_dir=fail_dir)
+        return LLMExtractor(cfg)
+
+    @patch(
+        "explainshell.extraction.common.roff_utils.detect_nested_cmd",
+        return_value=False,
+    )
+    @patch("explainshell.extraction.common.manpage.get_synopsis_and_aliases")
+    @patch("explainshell.extraction.llm.LLMExtractor._call_llm")
+    @patch("explainshell.extraction.llm.get_manpage_text")
+    @patch("explainshell.extraction.llm.manpage.get_synopsis_and_aliases")
+    @patch("explainshell.extraction.common.gz_sha256", return_value="abc123")
     def test_extract_returns_manpage(
-        self, mock_sha, mock_synopsis, mock_text, mock_llm
+        self,
+        mock_sha,
+        mock_synopsis,
+        mock_text,
+        mock_llm,
+        mock_common_synopsis,
+        mock_nested_cmd,
     ):
+        from explainshell.extraction.llm.providers import TokenUsage
+
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
+        mock_common_synopsis.return_value = ("a test tool", [("dummy", 10)])
         mock_text.return_value = (
             "**-n**\n\nDo not output trailing newline.\n\n**-e**\n\nEnable escapes."
         )
-        # Lines: 1=**-n**, 2="", 3=Do not..., 4="", 5=**-e**, 6="", 7=Enable...
         mock_llm.return_value = (
             {
                 "dashless_opts": False,
@@ -644,30 +663,44 @@ class TestExtractIntegration(unittest.TestCase):
             },
             [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
             '{"options": []}',
-            {"input_tokens": 0, "output_tokens": 0},
+            TokenUsage(0, 0),
         )
-        mp, raw, _usage = extract("dummy.1.gz", "test-model")
+        ext = self._make_extractor()
+        result = ext.extract("dummy.1.gz")
+        mp, raw = result.mp, result.raw
         self.assertIsInstance(mp, store.ParsedManpage)
         self.assertIsInstance(raw, store.RawManpage)
         self.assertEqual(len(mp.options), 2)
         flags = [opt.short[0] for opt in mp.options]
         self.assertIn("-n", flags)
         self.assertIn("-e", flags)
-        # Verify text comes from source, not LLM
         n_opt = next(o for o in mp.options if "-n" in o.short)
         self.assertIn("Do not output trailing newline.", n_opt.text)
-        # Verify RawManpage
         self.assertEqual(raw.generator, "mandoc -T markdown")
         self.assertIn("-n", raw.source_text)
 
-    @patch("explainshell.llm_extractor._call_llm")
-    @patch("explainshell.llm_extractor.get_manpage_text")
-    @patch("explainshell.llm_extractor.manpage.get_synopsis_and_aliases")
-    @patch("explainshell.llm_extractor._gz_sha256", return_value="abc123")
+    @patch(
+        "explainshell.extraction.common.roff_utils.detect_nested_cmd",
+        return_value=False,
+    )
+    @patch("explainshell.extraction.common.manpage.get_synopsis_and_aliases")
+    @patch("explainshell.extraction.llm.LLMExtractor._call_llm")
+    @patch("explainshell.extraction.llm.get_manpage_text")
+    @patch("explainshell.extraction.llm.manpage.get_synopsis_and_aliases")
+    @patch("explainshell.extraction.common.gz_sha256", return_value="abc123")
     def test_malformed_options_skipped(
-        self, mock_sha, mock_synopsis, mock_text, mock_llm
+        self,
+        mock_sha,
+        mock_synopsis,
+        mock_text,
+        mock_llm,
+        mock_common_synopsis,
+        mock_nested_cmd,
     ):
+        from explainshell.extraction.llm.providers import TokenUsage
+
         mock_synopsis.return_value = (None, [("dummy", 10)])
+        mock_common_synopsis.return_value = (None, [("dummy", 10)])
         mock_text.return_value = "**-v**\n\nVerbose."
         mock_llm.return_value = (
             {
@@ -683,20 +716,37 @@ class TestExtractIntegration(unittest.TestCase):
             },
             [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
             '{"options": []}',
-            {"input_tokens": 0, "output_tokens": 0},
+            TokenUsage(0, 0),
         )
-        mp, raw, _usage = extract("dummy.1.gz", "test-model")
-        self.assertEqual(len(mp.options), 1)
-        self.assertEqual(mp.options[0].short, ["-v"])
+        ext = self._make_extractor()
+        result = ext.extract("dummy.1.gz")
+        self.assertEqual(len(result.mp.options), 1)
+        self.assertEqual(result.mp.options[0].short, ["-v"])
 
-    @patch("explainshell.llm_extractor._call_llm")
-    @patch("explainshell.llm_extractor.get_manpage_text")
-    @patch("explainshell.llm_extractor.manpage.get_synopsis_and_aliases")
-    @patch("explainshell.llm_extractor._gz_sha256", return_value="abc123")
-    def test_debug_dir_writes_files(self, mock_sha, mock_synopsis, mock_text, mock_llm):
+    @patch(
+        "explainshell.extraction.common.roff_utils.detect_nested_cmd",
+        return_value=False,
+    )
+    @patch("explainshell.extraction.common.manpage.get_synopsis_and_aliases")
+    @patch("explainshell.extraction.llm.LLMExtractor._call_llm")
+    @patch("explainshell.extraction.llm.get_manpage_text")
+    @patch("explainshell.extraction.llm.manpage.get_synopsis_and_aliases")
+    @patch("explainshell.extraction.common.gz_sha256", return_value="abc123")
+    def test_debug_dir_writes_files(
+        self,
+        mock_sha,
+        mock_synopsis,
+        mock_text,
+        mock_llm,
+        mock_common_synopsis,
+        mock_nested_cmd,
+    ):
         import tempfile
 
+        from explainshell.extraction.llm.providers import TokenUsage
+
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
+        mock_common_synopsis.return_value = ("a test tool", [("dummy", 10)])
         mock_text.return_value = "**-v**\n\nVerbose."
         raw_response = '{"options": [{"short": ["-v"], "long": [], "has_argument": false, "lines": [1, 3]}]}'
         mock_llm.return_value = (
@@ -712,15 +762,14 @@ class TestExtractIntegration(unittest.TestCase):
             },
             [{"role": "system", "content": "sys"}, {"role": "user", "content": "usr"}],
             raw_response,
-            {"input_tokens": 0, "output_tokens": 0},
+            TokenUsage(0, 0),
         )
         with tempfile.TemporaryDirectory() as tmpdir:
-            mp, raw, _usage = extract("dummy.1.gz", "test-model", debug_dir=tmpdir)
-            self.assertEqual(len(mp.options), 1)
-            # Check markdown file
+            ext = self._make_extractor(debug_dir=tmpdir)
+            result = ext.extract("dummy.1.gz")
+            self.assertEqual(len(result.mp.options), 1)
             md_path = os.path.join(tmpdir, "dummy.md")
             self.assertTrue(os.path.exists(md_path))
-            # Check prompt file
             prompt_path = os.path.join(tmpdir, "dummy.prompt.json")
             self.assertTrue(os.path.exists(prompt_path))
             with open(prompt_path) as f:
@@ -729,7 +778,6 @@ class TestExtractIntegration(unittest.TestCase):
                 msgs = json.load(f)
                 self.assertEqual(len(msgs), 2)
                 self.assertEqual(msgs[0]["role"], "system")
-            # Check response file
             response_path = os.path.join(tmpdir, "dummy.response.txt")
             self.assertTrue(os.path.exists(response_path))
             with open(response_path) as f:
@@ -743,11 +791,11 @@ class TestExtractIntegration(unittest.TestCase):
 
 class TestBuildUserContent(unittest.TestCase):
     def test_includes_chunk_text(self):
-        content = build_user_content("chunk text", "")
+        content = LLMExtractor._build_user_content("chunk text", "")
         self.assertIn("chunk text", content)
 
     def test_chunk_info_included(self):
-        content = build_user_content("chunk", " (part 1 of 3)")
+        content = LLMExtractor._build_user_content("chunk", " (part 1 of 3)")
         self.assertIn("(part 1 of 3)", content)
 
 
@@ -798,9 +846,11 @@ class TestRealLlm(unittest.TestCase):
 
     def test_echo_manpage(self):
         model = os.environ.get("LLM_MODEL", _DEFAULT_LLM_MODEL)
-        mp, raw = extract(self.ECHO_GZ, model)
+        cfg = ExtractorConfig(model=model)
+        ext = LLMExtractor(cfg)
+        result = ext.extract(self.ECHO_GZ)
         flags = set()
-        for opt in mp.options:
+        for opt in result.mp.options:
             flags.update(opt.short)
         self.assertIn("-n", flags, f"Expected -n in options, got: {flags}")
         self.assertIn("-e", flags, f"Expected -e in options, got: {flags}")

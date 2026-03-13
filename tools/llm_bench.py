@@ -23,8 +23,8 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from explainshell import errors, llm_extractor
-from explainshell.manager import batch_extract_files, run_extractor
+from explainshell.extraction import ExtractorConfig, FileOutcome, make_extractor
+from explainshell.extraction.runner import run_batch, run_sequential
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +34,8 @@ _BOLD = "\033[1m"
 _RESET = "\033[0m"
 
 
-def _collect_gz_files(paths):
-    result = []
+def _collect_gz_files(paths: list[str]) -> list[str]:
+    result: list[str] = []
     for path in paths:
         if os.path.isdir(path):
             result.extend(
@@ -46,136 +46,77 @@ def _collect_gz_files(paths):
     return [os.path.abspath(p) for p in result]
 
 
-def _basename(gz_path):
+def _basename(gz_path: str) -> str:
     return os.path.splitext(os.path.splitext(os.path.basename(gz_path))[0])[0]
 
 
-def _run_prepare(gz_files):
-    """Run prepare_extraction on all files, return (file_metrics, prepared_map).
-
-    prepared_map maps gz_path -> prepared dict for files that succeeded.
-    """
-    file_metrics = {}
-    prepared_map = {}
-
-    for gz_path in gz_files:
-        name = _basename(gz_path)
-        entry = {"file": os.path.basename(gz_path)}
-
-        try:
-            prepared = llm_extractor.prepare_extraction(gz_path)
-        except errors.ExtractionError as e:
-            entry.update(
-                success=False,
-                error=f"prepare failed: {e}",
-                n_chunks=0,
-                plain_text_len=0,
-            )
-            file_metrics[name] = entry
-            continue
-
-        if prepared is None:
-            entry.update(
-                success=False, error="skipped (too large)", n_chunks=0, plain_text_len=0
-            )
-            file_metrics[name] = entry
-            continue
-
-        entry.update(
-            n_chunks=prepared["n_chunks"],
-            plain_text_len=prepared["plain_text_len"],
-        )
-        file_metrics[name] = entry
-        prepared_map[gz_path] = prepared
-
-    return file_metrics, prepared_map
-
-
-def _run_extract(gz_files, file_metrics, model, batch_size):
-    """Run LLM extraction and merge results into file_metrics.
-
-    Returns (elapsed_seconds, usage_dict).
-    """
-    t0 = time.monotonic()
-    usage = {"input_tokens": 0, "output_tokens": 0}
-
-    if batch_size is not None:
-        results, usage = batch_extract_files(gz_files, model, batch_size=batch_size)
-    else:
-        results = {}
-        for gz_path in gz_files:
-            try:
-                mp, raw, file_usage = run_extractor("llm", gz_path, model=model)
-                if mp is not None:
-                    results[gz_path] = (mp, raw)
-                usage["input_tokens"] += file_usage["input_tokens"]
-                usage["output_tokens"] += file_usage["output_tokens"]
-            except (errors.ExtractionError, Exception) as e:
-                logger.error("failed to extract %s: %s", gz_path, e)
-
-    elapsed = time.monotonic() - t0
-
-    for gz_path in gz_files:
-        name = _basename(gz_path)
-        entry = file_metrics.get(name)
-        if entry is None:
-            continue
-
-        result = results.get(gz_path)
-        if result is None:
-            entry["success"] = False
-            entry.setdefault("error", "extraction failed")
-            entry["n_options"] = 0
-        else:
-            mp, _raw = result
-            entry["success"] = True
-            entry["n_options"] = len(mp.options)
-            entry["dashless_opts"] = mp.dashless_opts
-            entry["n_aliases"] = len(mp.aliases)
-            entry["has_synopsis"] = bool(mp.synopsis)
-
-    return elapsed, usage
-
-
-def _compute_aggregate(file_metrics, elapsed, usage):
-    all_files = list(file_metrics.values())
-    extracted = [f for f in all_files if f.get("success") is True]
-    failed = [f for f in all_files if f.get("success") is False]
-
-    return {
-        "total_files": len(all_files),
-        "extracted_files": len(extracted),
-        "failed_files": len(failed),
-        "total_options": sum(f.get("n_options", 0) for f in extracted),
-        "zero_option_pages": sum(1 for f in extracted if f.get("n_options", 0) == 0),
-        "multi_chunk_pages": sum(1 for f in all_files if f.get("n_chunks", 0) > 1),
-        "total_chunks": sum(f.get("n_chunks", 0) for f in all_files),
-        "input_tokens": usage["input_tokens"],
-        "output_tokens": usage["output_tokens"],
-        "elapsed_seconds": round(elapsed, 1),
-    }
-
-
-def run_bench(args):
+def run_bench(args: argparse.Namespace) -> int:
     gz_files = _collect_gz_files(args.files)
     if not gz_files:
         print("No .gz files found.", file=sys.stderr)
         return 1
 
-    logger.info("benchmarking %d file(s)...", len(gz_files))
-
-    # Phase 1: prepare (always).
-    file_metrics, prepared_map = _run_prepare(gz_files)
-    extractable = [p for p in gz_files if p in prepared_map]
-
-    # Phase 2: extract.
     if not args.model:
         print("error: --model is required", file=sys.stderr)
         return 1
-    elapsed, usage = _run_extract(extractable, file_metrics, args.model, args.batch)
 
-    # Build report.
-    agg = _compute_aggregate(file_metrics, elapsed, usage)
+    logger.info("benchmarking %d file(s)...", len(gz_files))
+
+    config = ExtractorConfig(model=args.model)
+    extractor = make_extractor("llm", config)
+
+    t0 = time.monotonic()
+    if args.batch is not None:
+        result = run_batch(extractor, gz_files, batch_size=args.batch)
+    else:
+        result = run_sequential(extractor, gz_files)
+    elapsed = time.monotonic() - t0
+
+    # Build per-file metrics.
+    file_metrics: dict[str, dict] = {}
+    for fe in result.files:
+        name = _basename(fe.gz_path)
+        entry: dict = {"file": os.path.basename(fe.gz_path)}
+
+        if fe.outcome == FileOutcome.SUCCESS and fe.result:
+            entry["success"] = True
+            entry["n_options"] = len(fe.result.mp.options)
+            entry["dashless_opts"] = fe.result.mp.dashless_opts
+            entry["n_aliases"] = len(fe.result.mp.aliases)
+            entry["has_synopsis"] = bool(fe.result.mp.synopsis)
+            entry["n_chunks"] = fe.result.stats.chunks
+            entry["plain_text_len"] = fe.result.stats.plain_text_len
+        elif fe.outcome == FileOutcome.SKIPPED:
+            entry["success"] = False
+            entry["error"] = fe.error or "skipped"
+            entry["n_chunks"] = fe.stats.chunks if fe.stats else 0
+            entry["plain_text_len"] = fe.stats.plain_text_len if fe.stats else 0
+        else:
+            entry["success"] = False
+            entry["error"] = fe.error or "extraction failed"
+            entry["n_chunks"] = fe.stats.chunks if fe.stats else 0
+            entry["plain_text_len"] = fe.stats.plain_text_len if fe.stats else 0
+            entry["n_options"] = 0
+
+        file_metrics[name] = entry
+
+    # Build aggregate.
+    all_files = list(file_metrics.values())
+    extracted = [f for f in all_files if f.get("success") is True]
+    failed_files = [f for f in all_files if f.get("success") is False]
+
+    agg = {
+        "total_files": len(all_files),
+        "extracted_files": len(extracted),
+        "failed_files": len(failed_files),
+        "total_options": sum(f.get("n_options", 0) for f in extracted),
+        "zero_option_pages": sum(1 for f in extracted if f.get("n_options", 0) == 0),
+        "multi_chunk_pages": sum(1 for f in all_files if f.get("n_chunks", 0) > 1),
+        "total_chunks": sum(f.get("n_chunks", 0) for f in all_files),
+        "input_tokens": result.stats.input_tokens,
+        "output_tokens": result.stats.output_tokens,
+        "elapsed_seconds": round(elapsed, 1),
+    }
 
     report = {
         "model": args.model,
@@ -184,10 +125,8 @@ def run_bench(args):
         "files": file_metrics,
     }
 
-    # Print summary.
     _print_summary(report)
 
-    # Write output.
     output = args.output
     if output:
         os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
@@ -199,7 +138,7 @@ def run_bench(args):
     return 0
 
 
-def _print_summary(report):
+def _print_summary(report: dict) -> None:
     agg = report["aggregate"]
     print()
     print(f"  {_BOLD}LLM Bench Report{_RESET}")
@@ -226,7 +165,7 @@ def _print_summary(report):
     print()
 
 
-def compare_reports(args):
+def compare_reports(args: argparse.Namespace) -> int:
     with open(args.baseline) as f:
         baseline = json.load(f)
     with open(args.current) as f:
@@ -241,8 +180,6 @@ def compare_reports(args):
     print(f"  Current:  {current['model']} @ {current['timestamp']}")
     print()
 
-    # Determine which metrics to compare (intersection of available keys).
-    # (key, label, higher_is_better)
     all_metrics = [
         ("total_files", "Total files", None),
         ("extracted_files", "Extracted files", True),
@@ -258,7 +195,7 @@ def compare_reports(args):
     metrics = [
         (k, label, h) for k, label, h in all_metrics if k in b_agg and k in c_agg
     ]
-    regressions = []
+    regressions: list[tuple] = []
 
     print(f"  {'Metric':<22} {'Baseline':>10} {'Current':>10} {'Delta':>8}")
     print(f"  {'-' * 54}")
@@ -289,12 +226,11 @@ def compare_reports(args):
         delta_str = f"{delta:+d}" if delta != 0 else "-"
         print(f"  {label:<22} {b_val:>10} {c_val:>10} {delta_str:>8}{marker}")
 
-    # Per-file option count changes.
     b_files = baseline.get("files", {})
     c_files = current.get("files", {})
     all_names = sorted(set(b_files) | set(c_files))
 
-    changed_files = []
+    changed_files: list[tuple] = []
     for name in all_names:
         b_opts = b_files.get(name, {}).get("n_options")
         c_opts = c_files.get(name, {}).get("n_options")
@@ -332,12 +268,11 @@ def compare_reports(args):
     return 0
 
 
-def _build_parser():
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="LLM extractor benchmark tool.")
     parser.add_argument("--log", default="INFO", help="Log level (default: INFO)")
     sub = parser.add_subparsers(dest="command")
 
-    # run
     run_p = sub.add_parser("run", help="Run benchmark and produce a metrics report")
     run_p.add_argument("--model", help="LLM model (e.g. openai/gpt-5-mini)")
     run_p.add_argument(
@@ -349,7 +284,6 @@ def _build_parser():
     run_p.add_argument("--output", "-o", help="Output JSON file path")
     run_p.add_argument("files", nargs="+", help=".gz files or directories")
 
-    # compare
     cmp_p = sub.add_parser("compare", help="Compare two benchmark reports")
     cmp_p.add_argument("baseline", help="Baseline report JSON")
     cmp_p.add_argument("current", help="Current report JSON")

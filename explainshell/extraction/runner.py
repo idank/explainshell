@@ -1,0 +1,414 @@
+"""Execution strategies for running an extractor over multiple files.
+
+All return BatchResult. Pure orchestration with no extraction logic,
+no DB access, no CLI concerns.
+"""
+
+from __future__ import annotations
+
+import concurrent.futures
+import logging
+import time
+from collections.abc import Callable
+
+from explainshell.errors import ExtractionError, SkippedExtraction
+from explainshell.extraction.types import (
+    BatchResult,
+    ExtractionStats,
+    FileEntry,
+    FileOutcome,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _fmt_tokens(n: int) -> str:
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.0f}K"
+    return str(n)
+
+
+def run_sequential(
+    extractor: object,
+    gz_files: list[str],
+    on_start: Callable[[str], None] | None = None,
+    on_result: Callable[[str, FileEntry], None] | None = None,
+) -> BatchResult:
+    """Run extractor on each file sequentially."""
+    batch = BatchResult()
+
+    for gz_path in gz_files:
+        if on_start:
+            on_start(gz_path)
+
+        try:
+            result = extractor.extract(gz_path)  # type: ignore[union-attr]
+            entry = FileEntry(
+                gz_path=gz_path,
+                outcome=FileOutcome.SUCCESS,
+                result=result,
+                stats=result.stats,
+            )
+            batch.stats += result.stats
+        except SkippedExtraction as e:
+            entry = FileEntry(
+                gz_path=gz_path,
+                outcome=FileOutcome.SKIPPED,
+                stats=e.stats,
+                error=e.reason,
+            )
+        except ExtractionError as e:
+            entry = FileEntry(
+                gz_path=gz_path,
+                outcome=FileOutcome.FAILED,
+                error=str(e),
+            )
+        except Exception as e:
+            entry = FileEntry(
+                gz_path=gz_path,
+                outcome=FileOutcome.FAILED,
+                error=str(e),
+            )
+
+        batch.files.append(entry)
+        if on_result:
+            on_result(gz_path, entry)
+
+    return batch
+
+
+def run_parallel(
+    extractor: object,
+    gz_files: list[str],
+    jobs: int,
+    on_start: Callable[[str], None] | None = None,
+    on_result: Callable[[str, FileEntry], None] | None = None,
+) -> BatchResult:
+    """Run extractor on files using a thread pool."""
+    batch = BatchResult()
+
+    def _extract_one(gz_path: str) -> FileEntry:
+        if on_start:
+            on_start(gz_path)
+        try:
+            result = extractor.extract(gz_path)  # type: ignore[union-attr]
+            return FileEntry(
+                gz_path=gz_path,
+                outcome=FileOutcome.SUCCESS,
+                result=result,
+                stats=result.stats,
+            )
+        except SkippedExtraction as e:
+            return FileEntry(
+                gz_path=gz_path,
+                outcome=FileOutcome.SKIPPED,
+                stats=e.stats,
+                error=e.reason,
+            )
+        except ExtractionError as e:
+            return FileEntry(
+                gz_path=gz_path,
+                outcome=FileOutcome.FAILED,
+                error=str(e),
+            )
+        except Exception as e:
+            return FileEntry(
+                gz_path=gz_path,
+                outcome=FileOutcome.FAILED,
+                error=str(e),
+            )
+
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=jobs)
+    try:
+        futures = {
+            executor.submit(_extract_one, gz_path): gz_path for gz_path in gz_files
+        }
+        for future in concurrent.futures.as_completed(futures):
+            entry = future.result()
+            batch.files.append(entry)
+            if entry.outcome == FileOutcome.SUCCESS and entry.result:
+                batch.stats += entry.result.stats
+            if on_result:
+                on_result(entry.gz_path, entry)
+    except KeyboardInterrupt:
+        executor.shutdown(wait=False, cancel_futures=True)
+        raise
+    else:
+        executor.shutdown(wait=True)
+
+    return batch
+
+
+def _build_chunk_aligned_batches(
+    all_requests: list[tuple[str, str]],
+    key_to_location: dict[str, tuple[int, int]],
+    batch_size: int,
+) -> list[list[tuple[str, str]]]:
+    """Split requests into batches, keeping all chunks of one file together."""
+    batches: list[list[tuple[str, str]]] = []
+    i = 0
+    while i < len(all_requests):
+        end = min(i + batch_size, len(all_requests))
+        if end < len(all_requests):
+            last_work_idx, _ = key_to_location[all_requests[end - 1][0]]
+            while end < len(all_requests):
+                next_work_idx, _ = key_to_location[all_requests[end][0]]
+                if next_work_idx != last_work_idx:
+                    break
+                end += 1
+        batches.append(all_requests[i:end])
+        i = end
+    return batches
+
+
+def _prep_stats(prepared: object) -> ExtractionStats:
+    """Build an ExtractionStats from a PreparedFile's prep-phase metrics."""
+    return ExtractionStats(
+        chunks=prepared.n_chunks,  # type: ignore[union-attr]
+        plain_text_len=prepared.plain_text_len,  # type: ignore[union-attr]
+    )
+
+
+def run_batch(
+    extractor: object,  # LLMExtractor
+    gz_files: list[str],
+    batch_size: int = 50,
+    on_start: Callable[[str], None] | None = None,
+    on_result: Callable[[str, FileEntry], None] | None = None,
+) -> BatchResult:
+    """Run LLM extraction via provider batch API.
+
+    Files are finalized as soon as their batch completes (per-batch),
+    not after all batches finish. The optional ``on_result`` callback
+    is invoked immediately after each file is finalized.
+    """
+    from explainshell.extraction.llm import LLMExtractor
+
+    llm_ext: LLMExtractor = extractor  # type: ignore[assignment]
+    batch = BatchResult()
+
+    # Phase 1: prepare all files.
+    work_items: list[tuple[int, str, object]] = []
+    for gz_path in gz_files:
+        if on_start:
+            on_start(gz_path)
+        try:
+            prepared = llm_ext.prepare(gz_path)
+        except SkippedExtraction as e:
+            entry = FileEntry(
+                gz_path=gz_path,
+                outcome=FileOutcome.SKIPPED,
+                stats=e.stats,
+                error=e.reason,
+            )
+            batch.files.append(entry)
+            if on_result:
+                on_result(gz_path, entry)
+            continue
+        except ExtractionError as e:
+            logger.error("failed to prepare %s: %s", gz_path, e)
+            entry = FileEntry(
+                gz_path=gz_path,
+                outcome=FileOutcome.FAILED,
+                error=str(e),
+            )
+            batch.files.append(entry)
+            if on_result:
+                on_result(gz_path, entry)
+            continue
+        work_items.append((len(work_items), gz_path, prepared))
+
+    if not work_items:
+        return batch
+
+    # Phase 2: collect all (key, user_content) pairs.
+    all_requests: list[tuple[str, str]] = []
+    key_to_location: dict[str, tuple[int, int]] = {}
+    for work_idx, gz_path, prepared in work_items:
+        n_chunks = prepared.n_chunks  # type: ignore[union-attr]
+        for chunk_idx in range(n_chunks):
+            _chunk_info, user_content = llm_ext.build_request(prepared, chunk_idx)  # type: ignore[arg-type]
+            key_str = f"{work_idx}:{chunk_idx}"
+            all_requests.append((key_str, user_content))
+            key_to_location[key_str] = (work_idx, chunk_idx)
+
+    logger.info(
+        "collected %d request(s) from %d file(s)", len(all_requests), len(work_items)
+    )
+
+    # Phase 3: submit in batches, finalizing files per-batch.
+    batches = _build_chunk_aligned_batches(all_requests, key_to_location, batch_size)
+    bp = llm_ext.batch_provider
+    try:
+        client = bp.make_poll_client()
+    except Exception as e:
+        logger.error("failed to create batch poll client: %s", e)
+        for work_idx, gz_path, prepared in work_items:
+            entry = FileEntry(
+                gz_path=gz_path,
+                outcome=FileOutcome.FAILED,
+                error=f"batch poll client failed: {e}",
+                stats=_prep_stats(prepared),
+            )
+            batch.files.append(entry)
+            if on_result:
+                on_result(gz_path, entry)
+        return batch
+
+    all_results: dict[str, str] = {}
+    finalized_indices: set[int] = set()
+    cumulative_requests = 0
+    batch_start_time = time.time()
+
+    for batch_idx, batch_chunk in enumerate(batches, 1):
+        total_chars = sum(len(uc) for _, uc in batch_chunk)
+        logger.info(
+            "submitting batch %d/%d (%d requests, %s chars)...",
+            batch_idx,
+            len(batches),
+            len(batch_chunk),
+            f"{total_chars:,}",
+        )
+        try:
+            job = bp.submit_batch(batch_chunk)
+            job_id = job.name if hasattr(job, "name") else job.id
+            logger.info("batch %d/%d submitted: %s", batch_idx, len(batches), job_id)
+
+            completed_job = bp.poll_batch(client, job_id)
+            batch_results, batch_usage = bp.collect_results(completed_job)
+            all_results.update(batch_results)
+            cumulative_requests += len(batch_results)
+
+            logger.info(
+                "batch %d/%d completed: %d result(s), "
+                "input=%s tokens, output=%s tokens",
+                batch_idx,
+                len(batches),
+                len(batch_results),
+                _fmt_tokens(batch_usage.input_tokens),
+                _fmt_tokens(batch_usage.output_tokens),
+            )
+
+            # Finalize files that now have all chunks available.
+            for work_idx, gz_path, prepared in work_items:
+                if work_idx in finalized_indices:
+                    continue
+                n_chunks = prepared.n_chunks  # type: ignore[union-attr]
+                if not all(f"{work_idx}:{ci}" in all_results for ci in range(n_chunks)):
+                    continue
+
+                finalized_indices.add(work_idx)
+                responses: list[str] = []
+                file_failed = False
+
+                for chunk_idx in range(n_chunks):
+                    key_str = f"{work_idx}:{chunk_idx}"
+                    response_text = all_results.get(key_str)
+                    if response_text is None:
+                        logger.error(
+                            "missing batch result for %s chunk %d", gz_path, chunk_idx
+                        )
+                        file_failed = True
+                        break
+                    responses.append(response_text)
+
+                if file_failed:
+                    entry = FileEntry(
+                        gz_path=gz_path,
+                        outcome=FileOutcome.FAILED,
+                        error="missing batch result for one or more chunks",
+                        stats=_prep_stats(prepared),
+                    )
+                    batch.files.append(entry)
+                    if on_result:
+                        on_result(gz_path, entry)
+                    continue
+
+                try:
+                    result = llm_ext.finalize(gz_path, prepared, responses)  # type: ignore[arg-type]
+                except Exception as e:
+                    logger.error("failed to finalize %s: %s", gz_path, e)
+                    entry = FileEntry(
+                        gz_path=gz_path,
+                        outcome=FileOutcome.FAILED,
+                        error=str(e),
+                        stats=_prep_stats(prepared),
+                    )
+                    batch.files.append(entry)
+                    if on_result:
+                        on_result(gz_path, entry)
+                    continue
+
+                entry = FileEntry(
+                    gz_path=gz_path,
+                    outcome=FileOutcome.SUCCESS,
+                    result=result,
+                    stats=result.stats,
+                )
+                batch.files.append(entry)
+                batch.stats += result.stats
+                logger.info("[%s] done: %d option(s)", gz_path, len(result.mp.options))
+                if on_result:
+                    on_result(gz_path, entry)
+
+            # Cumulative progress summary.
+            elapsed_m = int((time.time() - batch_start_time) / 60)
+            n_succeeded = sum(
+                1 for f in batch.files if f.outcome == FileOutcome.SUCCESS
+            )
+            logger.info(
+                "progress: %d/%d requests done, %d files extracted, "
+                "input=%s tokens, output=%s tokens, elapsed=%dm",
+                cumulative_requests,
+                len(all_requests),
+                n_succeeded,
+                _fmt_tokens(batch.stats.input_tokens),
+                _fmt_tokens(batch.stats.output_tokens),
+                elapsed_m,
+            )
+
+        except Exception as e:
+            # Emit FAILED entries for all files in this batch that haven't
+            # been finalized yet, so every file gets an outcome.
+            logger.error("batch %d failed: %s", batch_idx, e)
+            batch_work_indices = {key_to_location[key][0] for key, _ in batch_chunk}
+            for work_idx, gz_path, prepared in work_items:
+                if work_idx in finalized_indices:
+                    continue
+                if work_idx not in batch_work_indices:
+                    continue
+                finalized_indices.add(work_idx)
+                entry = FileEntry(
+                    gz_path=gz_path,
+                    outcome=FileOutcome.FAILED,
+                    error=f"batch {batch_idx} failed: {e}",
+                    stats=_prep_stats(prepared),
+                )
+                batch.files.append(entry)
+                if on_result:
+                    on_result(gz_path, entry)
+
+    # End-of-run reconciliation: any work item that was never finalized
+    # (e.g. its batch never ran or partially failed) gets a FAILED entry.
+    for work_idx, gz_path, prepared in work_items:
+        if work_idx not in finalized_indices:
+            finalized_indices.add(work_idx)
+            entry = FileEntry(
+                gz_path=gz_path,
+                outcome=FileOutcome.FAILED,
+                error="file was never finalized (batch may not have run)",
+                stats=_prep_stats(prepared),
+            )
+            batch.files.append(entry)
+            if on_result:
+                on_result(gz_path, entry)
+
+    n_succeeded = sum(1 for f in batch.files if f.outcome == FileOutcome.SUCCESS)
+    logger.info(
+        "batch: %d/%d file(s) extracted successfully",
+        n_succeeded,
+        len(work_items),
+    )
+    return batch

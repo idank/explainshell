@@ -4,7 +4,8 @@ import argparse
 import unittest
 from unittest.mock import MagicMock, patch
 
-from explainshell.manager import _build_chunk_aligned_batches
+from explainshell.extraction.runner import _build_chunk_aligned_batches
+from explainshell.extraction.types import ExtractionResult, ExtractionStats, FileOutcome
 
 
 # ---------------------------------------------------------------------------
@@ -144,14 +145,8 @@ class TestBuildChunkAlignedBatches(unittest.TestCase):
 
 
 class TestBatchPerBatchDbWrites(unittest.TestCase):
-    """Verify the manager writes results to the DB after each batch completes,
-    not only after all batches finish."""
-
-    _LLM_RESPONSE = (
-        '{"dashless_opts": false, "options": ['
-        '{"short": ["-v"], "long": [], "has_argument": false, "lines": [1, 3]}'
-        "]}"
-    )
+    """Verify the manager writes results to the DB via on_result callback
+    from run_batch."""
 
     def _make_args(self, batch_size=2):
         return argparse.Namespace(
@@ -168,30 +163,20 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
             files=[],
         )
 
-    def _make_prepared(self, name):
-        """Return a minimal ``prepared`` dict for a single-chunk file."""
-        return {
-            "chunks": [f"1| **-v**\n2| \n3| Verbose for {name}."],
-            "n_chunks": 1,
-            "original_lines": {1: "**-v**", 2: "", 3: f"Verbose for {name}."},
-            "plain_text": f"**-v**\n\nVerbose for {name}.",
-            "numbered_text": f"1| **-v**\n2| \n3| Verbose for {name}.",
-            "plain_text_len": 30,
-            "basename": name,
-            "synopsis": f"a {name} tool",
-            "aliases": [(name, 1)],
-        }
-
-    @patch("explainshell.manager.llm_extractor")
+    @patch("explainshell.manager.run_batch")
+    @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
     @patch("explainshell.manager._collect_gz_files")
     @patch("explainshell.manager.config.source_from_path")
     def test_db_writes_after_each_batch(
-        self, mock_source, mock_collect, mock_store_create, mock_llm
+        self,
+        mock_source,
+        mock_collect,
+        mock_store_create,
+        mock_make_ext,
+        mock_run_batch,
     ):
-        """4 files, batch_size=2 → 2 batches.  After batch 1 completes the
-        store must already have 2 add_manpage calls; after batch 2, 4 total."""
-        # -- set up 4 fake gz files --
+        """Verify on_result callback writes to DB for each successful file."""
         gz_files = [
             "/fake/distro/release/1/alpha.1.gz",
             "/fake/distro/release/1/bravo.1.gz",
@@ -201,95 +186,71 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
         mock_collect.return_value = gz_files
         mock_source.side_effect = lambda p: "/".join(p.split("/")[-4:])
 
-        # -- store mock --
         mock_store = MagicMock()
         mock_store_create.return_value = mock_store
         from explainshell import errors as _errors
 
         mock_store.find_man_page.side_effect = _errors.ProgramDoesNotExist("x")
 
-        # -- llm_extractor mocks --
-        names = ["alpha", "bravo", "charlie", "delta"]
-        prepared_map = {gz: self._make_prepared(n) for gz, n in zip(gz_files, names)}
-        mock_llm.prepare_extraction.side_effect = lambda gz: prepared_map[gz]
-        mock_llm.build_user_content.side_effect = lambda chunk, info: f"prompt:{chunk}"
-        mock_llm.build_messages.side_effect = lambda chunk, info: (
-            f"prompt:{chunk}",
-            [
-                {"role": "system", "content": "system"},
-                {"role": "user", "content": f"prompt:{chunk}"},
-            ],
-        )
-        mock_llm.make_batch_client.return_value = MagicMock()
+        mock_make_ext.return_value = MagicMock()
 
-        # submit_batch returns a mock job with an .id attribute
-        mock_llm.submit_batch.return_value = MagicMock(id="job-1")
+        # When run_batch is called, simulate per-file callbacks
+        writes_at_callback = []
 
-        # poll_batch just returns the completed job
-        mock_llm.poll_batch.return_value = MagicMock()
+        def _fake_run_batch(ext, files, batch_size, on_start=None, on_result=None):
+            from explainshell.extraction.types import BatchResult, FileEntry
 
-        def _collect_side_effect(completed_job, model):
-            """Return results for whichever batch we're on, keyed by the
-            requests that were submitted in the most recent submit_batch call."""
-            # Grab the batch_chunk from the most recent submit_batch call
-            batch_chunk = mock_llm.submit_batch.call_args[0][0]
-            results = {key: self._LLM_RESPONSE for key, _ in batch_chunk}
-            usage = {"input_tokens": 100, "output_tokens": 50}
-            return results, usage
+            batch = BatchResult()
+            for gz_path in files:
+                if on_start:
+                    on_start(gz_path)
+                fake_result = MagicMock()
+                fake_result.mp = MagicMock()
+                fake_result.mp.options = [MagicMock()]
+                fake_result.raw = MagicMock()
+                fake_result.stats = ExtractionStats()
+                entry = FileEntry(
+                    gz_path=gz_path,
+                    outcome=FileOutcome.SUCCESS,
+                    result=ExtractionResult(
+                        mp=fake_result.mp,
+                        raw=fake_result.raw,
+                        stats=fake_result.stats,
+                    ),
+                    stats=fake_result.stats,
+                )
+                batch.files.append(entry)
+                if on_result:
+                    writes_at_callback.append(mock_store.add_manpage.call_count)
+                    on_result(gz_path, entry)
+            return batch
 
-        mock_llm.collect_batch_results.side_effect = _collect_side_effect
-
-        # process_llm_result: parse the JSON response
-        def _process_side_effect(response_text):
-            import json
-
-            data = json.loads(response_text)
-            return data, response_text
-
-        mock_llm.process_llm_result.side_effect = _process_side_effect
-
-        # finalize_extraction: return a minimal ParsedManpage + RawManpage
-        def _finalize_side_effect(gz_path, prepared, all_chunk_data, debug_dir=None):
-            mp = MagicMock()
-            mp.options = [MagicMock()]
-            raw = MagicMock()
-            return mp, raw
-
-        mock_llm.finalize_extraction.side_effect = _finalize_side_effect
-
-        # Snapshot add_manpage call count each time submit_batch is called.
-        # Flow per batch: submit → poll → collect → finalize → add_manpage.
-        # So when submit is called for batch N, batch N-1's writes are done.
-        writes_at_submit = []
-
-        def _submit_side_effect(batch_chunk, model):
-            writes_at_submit.append(mock_store.add_manpage.call_count)
-            return MagicMock(id="job-1")
-
-        mock_llm.submit_batch.side_effect = _submit_side_effect
+        mock_run_batch.side_effect = _fake_run_batch
 
         from explainshell.manager import main
 
         args = self._make_args(batch_size=2)
         main(args)
 
-        # submit_batch is called twice (once per batch):
-        # - Submit for batch 1: 0 writes yet
-        # - Submit for batch 2: batch 1 finalized → 2 writes
-        self.assertEqual(len(writes_at_submit), 2)
-        self.assertEqual(writes_at_submit[0], 0)
-        self.assertEqual(writes_at_submit[1], 2)
-        # After everything: 4 total writes
+        # on_result is called 4 times (once per file), and each call writes to DB
         self.assertEqual(mock_store.add_manpage.call_count, 4)
+        # Writes are incremental: 0 before first, 1 before second, etc.
+        self.assertEqual(writes_at_callback, [0, 1, 2, 3])
 
-    @patch("explainshell.manager.llm_extractor")
+    @patch("explainshell.manager.run_batch")
+    @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
     @patch("explainshell.manager._collect_gz_files")
     @patch("explainshell.manager.config.source_from_path")
     def test_batch2_failure_preserves_batch1_writes(
-        self, mock_source, mock_collect, mock_store_create, mock_llm
+        self,
+        mock_source,
+        mock_collect,
+        mock_store_create,
+        mock_make_ext,
+        mock_run_batch,
     ):
-        """If batch 2 fails, files from batch 1 must still be in the DB."""
+        """If some files fail, successful files must still be in the DB."""
         gz_files = [
             "/fake/distro/release/1/alpha.1.gz",
             "/fake/distro/release/1/bravo.1.gz",
@@ -304,59 +265,52 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
         from explainshell import errors as _errors
 
         mock_store.find_man_page.side_effect = _errors.ProgramDoesNotExist("x")
+        mock_make_ext.return_value = MagicMock()
 
-        names = ["alpha", "bravo", "charlie", "delta"]
-        prepared_map = {gz: self._make_prepared(n) for gz, n in zip(gz_files, names)}
-        mock_llm.prepare_extraction.side_effect = lambda gz: prepared_map[gz]
-        mock_llm.build_user_content.side_effect = lambda chunk, info: f"prompt:{chunk}"
-        mock_llm.build_messages.side_effect = lambda chunk, info: (
-            f"prompt:{chunk}",
-            [
-                {"role": "system", "content": "system"},
-                {"role": "user", "content": f"prompt:{chunk}"},
-            ],
-        )
-        mock_llm.make_batch_client.return_value = MagicMock()
+        def _fake_run_batch(ext, files, batch_size, on_start=None, on_result=None):
+            from explainshell.extraction.types import BatchResult, FileEntry
 
-        # submit_batch: succeed on first call, succeed on second (failure comes
-        # from collect_batch_results)
-        mock_llm.submit_batch.return_value = MagicMock(id="job-1")
-        mock_llm.poll_batch.return_value = MagicMock()
+            batch = BatchResult()
+            for i, gz_path in enumerate(files):
+                if on_start:
+                    on_start(gz_path)
+                if i < 2:
+                    # First 2 files succeed
+                    fake_result = MagicMock()
+                    fake_result.mp = MagicMock()
+                    fake_result.mp.options = [MagicMock()]
+                    fake_result.raw = MagicMock()
+                    fake_result.stats = ExtractionStats()
+                    entry = FileEntry(
+                        gz_path=gz_path,
+                        outcome=FileOutcome.SUCCESS,
+                        result=ExtractionResult(
+                            mp=fake_result.mp,
+                            raw=fake_result.raw,
+                            stats=fake_result.stats,
+                        ),
+                        stats=fake_result.stats,
+                    )
+                else:
+                    # Last 2 files fail
+                    entry = FileEntry(
+                        gz_path=gz_path,
+                        outcome=FileOutcome.FAILED,
+                        error="batch failed",
+                    )
+                batch.files.append(entry)
+                if on_result:
+                    on_result(gz_path, entry)
+            return batch
 
-        call_count = {"n": 0}
-
-        def _collect_side_effect(completed_job, model):
-            call_count["n"] += 1
-            if call_count["n"] == 1:
-                # Batch 1 succeeds
-                batch_chunk = mock_llm.submit_batch.call_args[0][0]
-                results = {key: self._LLM_RESPONSE for key, _ in batch_chunk}
-                return results, {"input_tokens": 100, "output_tokens": 50}
-            # Batch 2 fails
-            raise _errors.ExtractionError("billing limit reached")
-
-        mock_llm.collect_batch_results.side_effect = _collect_side_effect
-
-        def _process_side_effect(response_text):
-            import json
-
-            return json.loads(response_text), response_text
-
-        mock_llm.process_llm_result.side_effect = _process_side_effect
-
-        def _finalize_side_effect(gz_path, prepared, all_chunk_data, debug_dir=None):
-            mp = MagicMock()
-            mp.options = [MagicMock()]
-            return mp, MagicMock()
-
-        mock_llm.finalize_extraction.side_effect = _finalize_side_effect
+        mock_run_batch.side_effect = _fake_run_batch
 
         from explainshell.manager import main
 
         args = self._make_args(batch_size=2)
         ret = main(args)
 
-        # Batch 1's 2 files were written; batch 2 failed so its 2 were not.
+        # Only 2 successful files were written
         self.assertEqual(mock_store.add_manpage.call_count, 2)
         # Return code is non-zero because some files failed
         self.assertNotEqual(ret, 0)
@@ -368,7 +322,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
 
 
 class TestLlmManagerDryRun(unittest.TestCase):
-    """Tests for --dry-run: LLM is called, DB is not written."""
+    """Tests for --dry-run: extractor is called, DB is not written."""
 
     def _make_args(self, dry_run=True, overwrite=False, mode="llm:test-model"):
         args = argparse.Namespace(
@@ -386,66 +340,85 @@ class TestLlmManagerDryRun(unittest.TestCase):
         )
         return args
 
-    @patch("explainshell.manager.llm_extractor.extract")
+    @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
     @patch("explainshell.manager._collect_gz_files")
+    @patch(
+        "explainshell.manager.config.source_from_path", return_value="fake/echo.1.gz"
+    )
     def test_dry_run_calls_llm_but_not_store(
-        self, mock_collect, mock_store_create, mock_extract
+        self, mock_source, mock_collect, mock_store_create, mock_make_ext
     ):
         mock_collect.return_value = ["/fake/echo.1.gz"]
-        fake_mp = MagicMock()
-        fake_mp.options = [MagicMock(), MagicMock()]
-        fake_raw = MagicMock()
-        mock_extract.return_value = (
-            fake_mp,
-            fake_raw,
-            {"input_tokens": 0, "output_tokens": 0},
-        )
+        fake_result = MagicMock()
+        fake_result.mp.options = [MagicMock(), MagicMock()]
+        fake_result.stats.elapsed_seconds = 0
+        mock_ext = MagicMock()
+        mock_ext.extract.return_value = fake_result
+        mock_make_ext.return_value = mock_ext
 
         from explainshell.manager import main
 
         args = self._make_args(dry_run=True)
         ret = main(args)
 
-        mock_extract.assert_called_once_with(
-            "/fake/echo.1.gz",
-            "test-model",
-            debug_dir="debug-output",
-            fail_dir="debug-output",
-        )
+        mock_ext.extract.assert_called_once_with("/fake/echo.1.gz")
         mock_store_create.assert_not_called()
         self.assertEqual(ret, 0)
 
-    @patch("explainshell.manager.llm_extractor.extract")
+    @patch("explainshell.manager.run_sequential")
+    @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
     @patch("explainshell.manager._collect_gz_files")
+    @patch(
+        "explainshell.manager.config.source_from_path", return_value="fake/echo.1.gz"
+    )
     def test_normal_run_writes_to_store(
-        self, mock_collect, mock_store_create, mock_extract
+        self, mock_source, mock_collect, mock_store_create, mock_make_ext, mock_run_seq
     ):
         mock_collect.return_value = ["/fake/echo.1.gz"]
-        fake_mp = MagicMock()
-        fake_mp.options = [MagicMock()]
-        fake_mp.source = "echo.1.gz"
-        fake_raw = MagicMock()
-        mock_extract.return_value = (
-            fake_mp,
-            fake_raw,
-            {"input_tokens": 0, "output_tokens": 0},
-        )
 
         mock_store = MagicMock()
         mock_store_create.return_value = mock_store
-        # simulate page not already stored
         from explainshell import errors
 
         mock_store.find_man_page.side_effect = errors.ProgramDoesNotExist("echo")
+
+        fake_mp = MagicMock()
+        fake_mp.options = [MagicMock()]
+        fake_raw = MagicMock()
+
+        mock_make_ext.return_value = MagicMock()
+
+        def _fake_run_sequential(ext, files, on_start=None, on_result=None):
+            from explainshell.extraction.types import BatchResult, FileEntry
+
+            batch = BatchResult()
+            for gz_path in files:
+                if on_start:
+                    on_start(gz_path)
+                entry = FileEntry(
+                    gz_path=gz_path,
+                    outcome=FileOutcome.SUCCESS,
+                    result=ExtractionResult(
+                        mp=fake_mp,
+                        raw=fake_raw,
+                        stats=ExtractionStats(),
+                    ),
+                    stats=ExtractionStats(),
+                )
+                batch.files.append(entry)
+                if on_result:
+                    on_result(gz_path, entry)
+            return batch
+
+        mock_run_seq.side_effect = _fake_run_sequential
 
         from explainshell.manager import main
 
         args = self._make_args(dry_run=False)
         main(args)
 
-        mock_extract.assert_called_once()
         mock_store.add_manpage.assert_called_once_with(fake_mp, fake_raw)
 
 
