@@ -396,7 +396,11 @@ class TestLlmManagerDryRun(unittest.TestCase):
         fake_mp = MagicMock()
         fake_mp.options = [MagicMock(), MagicMock()]
         fake_raw = MagicMock()
-        mock_extract.return_value = (fake_mp, fake_raw)
+        mock_extract.return_value = (
+            fake_mp,
+            fake_raw,
+            {"input_tokens": 0, "output_tokens": 0},
+        )
 
         from explainshell.manager import main
 
@@ -423,7 +427,11 @@ class TestLlmManagerDryRun(unittest.TestCase):
         fake_mp.options = [MagicMock()]
         fake_mp.source = "echo.1.gz"
         fake_raw = MagicMock()
-        mock_extract.return_value = (fake_mp, fake_raw)
+        mock_extract.return_value = (
+            fake_mp,
+            fake_raw,
+            {"input_tokens": 0, "output_tokens": 0},
+        )
 
         mock_store = MagicMock()
         mock_store_create.return_value = mock_store

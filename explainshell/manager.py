@@ -398,46 +398,52 @@ def _parse_mode(raw):
     )
 
 
+_ZERO_USAGE = {"input_tokens": 0, "output_tokens": 0}
+
+
 def run_extractor(mode, gz_path, model=None, debug_dir=None, fail_dir=None):
-    """Run a single extractor by mode name and return (ParsedManpage, RawManpage)."""
+    """Run a single extractor by mode name and return (ParsedManpage, RawManpage, usage).
+
+    *usage* is a dict with input_tokens/output_tokens (zero for non-LLM modes).
+    """
     if mode == "source":
         mp, raw = source_extractor.extract(gz_path)
         mp.extractor = "source"
         mp.extraction_meta = {}
-        return mp, raw
+        return mp, raw, _ZERO_USAGE
     if mode == "mandoc":
         mp, raw = mandoc_extractor.extract(gz_path)
         mp.extractor = "mandoc"
         mp.extraction_meta = {}
-        return mp, raw
+        return mp, raw, _ZERO_USAGE
     if mode == "llm":
-        mp, raw = llm_extractor.extract(
+        mp, raw, usage = llm_extractor.extract(
             gz_path, model, debug_dir=debug_dir, fail_dir=fail_dir
         )
         if mp is None:
-            return None, None
+            return None, None, usage
         mp.extractor = "llm"
         mp.extraction_meta = {"model": model}
-        return mp, raw
+        return mp, raw, usage
     if mode == "hybrid":
         try:
             mp, raw = mandoc_extractor.extract(gz_path)
             mp.extractor = "mandoc"
             mp.extraction_meta = {}
-            return mp, raw
+            return mp, raw, _ZERO_USAGE
         except errors.LowConfidenceError as e:
-            mp, raw = llm_extractor.extract(
+            mp, raw, usage = llm_extractor.extract(
                 gz_path, model, debug_dir=debug_dir, fail_dir=fail_dir
             )
             if mp is None:
-                return None, None
+                return None, None, usage
             mp.extractor = "llm"
             mp.extraction_meta = {
                 "model": model,
                 "fallback": True,
                 "fallback_reason": str(e)[:256],
             }
-            return mp, raw
+            return mp, raw, usage
     raise ValueError(f"unknown extractor mode: {mode!r}")
 
 
@@ -639,7 +645,7 @@ def batch_extract_files(
         len(results),
         len(work_items),
     )
-    return results
+    return results, cumulative_usage
 
 
 def _parse_diff(raw):
@@ -697,7 +703,7 @@ def _process_one_file(
 
         logger.info("%s %s running %s extractor...", progress, tag, left_mode)
         try:
-            left_mp, _left_raw = run_extractor(
+            left_mp, _left_raw, left_usage = run_extractor(
                 left_mode,
                 gz_path,
                 model=left_model,
@@ -719,7 +725,7 @@ def _process_one_file(
         right_label = right_mode if not right_model else f"{right_mode} ({right_model})"
         logger.info("%s %s running %s extractor...", progress, tag, right_label)
         try:
-            right_mp, _right_raw = run_extractor(
+            right_mp, _right_raw, right_usage = run_extractor(
                 right_mode,
                 gz_path,
                 model=right_model,
@@ -741,6 +747,19 @@ def _process_one_file(
         logger.info("=== %s (%s) ===", short_path, label)
         for line in _diff_manpage(left_mp, right_mp):
             logger.info(line)
+
+        # Show token usage when both sides are LLM extractors.
+        if left_usage["input_tokens"] or right_usage["input_tokens"]:
+            logger.info("  %stokens:%s", _BOLD, _RESET)
+            li, lo = left_usage["input_tokens"], left_usage["output_tokens"]
+            ri, ro = right_usage["input_tokens"], right_usage["output_tokens"]
+            logger.info(
+                "    %s: %s in / %s out", left_mode, _fmt_tokens(li), _fmt_tokens(lo)
+            )
+            logger.info(
+                "    %s: %s in / %s out", right_mode, _fmt_tokens(ri), _fmt_tokens(ro)
+            )
+
         return result
 
     file_t0 = time.monotonic()
@@ -772,7 +791,7 @@ def _process_one_file(
                     model,
                 )
                 _debug_dir = debug_dir if dry_run else None
-                mp, raw = llm_extractor.extract(
+                mp, raw, _usage = llm_extractor.extract(
                     gz_path, model, debug_dir=_debug_dir, fail_dir=debug_dir
                 )
                 if mp is None:
@@ -787,7 +806,7 @@ def _process_one_file(
         else:
             logger.info("%s %s extracting (%s)...", progress, tag, model)
             _debug_dir = debug_dir if dry_run else None
-            mp, raw = llm_extractor.extract(
+            mp, raw, _usage = llm_extractor.extract(
                 gz_path, model, debug_dir=_debug_dir, fail_dir=debug_dir
             )
             if mp is None:
@@ -1000,7 +1019,7 @@ def main(args):
             added += a
             failed += f
 
-        results = batch_extract_files(
+        results, _usage = batch_extract_files(
             batch_gz_files,
             model,
             batch_size=args.batch,

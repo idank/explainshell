@@ -471,7 +471,7 @@ def _extract_text_from_lines(original_lines, start, end):
 def _call_gemini_native(user_content, model):
     """Call Gemini using the native google-genai SDK.
 
-    Returns raw response text.
+    Returns (text, usage_dict).
     """
     client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
     gemini_model = model.removeprefix("gemini/")
@@ -484,7 +484,11 @@ def _call_gemini_native(user_content, model):
             http_options=types.HttpOptions(timeout=LLM_TIMEOUT_SECONDS * 1000),
         ),
     )
-    return response.text
+    usage = {"input_tokens": 0, "output_tokens": 0}
+    if response.usage_metadata:
+        usage["input_tokens"] = response.usage_metadata.prompt_token_count or 0
+        usage["output_tokens"] = response.usage_metadata.candidates_token_count or 0
+    return response.text, usage
 
 
 def _is_openai_model(model):
@@ -496,23 +500,34 @@ def _call_openai(user_content, model):
     """Call OpenAI using the native Responses API.
 
     Strips the 'openai/' prefix if present.
-    Returns raw response text.
+    Returns (text, usage_dict).
     """
     openai_model = model.removeprefix("openai/")
     client = openai.OpenAI(timeout=LLM_TIMEOUT_SECONDS)
     response = client.responses.create(
         model=openai_model,
-        instructions=_SYSTEM_PROMPT,
-        input=user_content,
+        input=_openai_input(user_content),
         text={"format": {"type": "json_object"}},
     )
-    return response.output_text
+    usage = {"input_tokens": 0, "output_tokens": 0}
+    if response.usage:
+        usage["input_tokens"] = response.usage.input_tokens or 0
+        usage["output_tokens"] = response.usage.output_tokens or 0
+    return response.output_text, usage
+
+
+def _openai_input(user_content):
+    """Build the Responses API input message list."""
+    return [
+        {"role": "developer", "content": _SYSTEM_PROMPT},
+        {"role": "user", "content": user_content},
+    ]
 
 
 def _call_litellm(messages, model):
     """Call any model via litellm (fallback for non-Gemini, non-OpenAI models).
 
-    Returns raw response text.
+    Returns (text, usage_dict).
     """
     kwargs = {}
     try:
@@ -534,7 +549,11 @@ def _call_litellm(messages, model):
         num_retries=0,
         **kwargs,
     )
-    return response.choices[0].message.content
+    usage = {"input_tokens": 0, "output_tokens": 0}
+    if response.usage:
+        usage["input_tokens"] = response.usage.prompt_tokens or 0
+        usage["output_tokens"] = response.usage.completion_tokens or 0
+    return response.choices[0].message.content, usage
 
 
 def _call_llm(chunk, chunk_info, model):
@@ -544,7 +563,7 @@ def _call_llm(chunk, chunk_info, model):
     everything else → litellm.
 
     Retries up to 3x on transient errors.
-    Returns (data_dict, messages, raw_response_content).
+    Returns (data_dict, messages, raw_response_content, usage_dict).
     """
     user_content, messages = build_messages(chunk, chunk_info)
 
@@ -573,14 +592,14 @@ def _call_llm(chunk, chunk_info, model):
     for attempt in range(3):
         try:
             if use_gemini:
-                content = _call_gemini_native(user_content, model)
+                content, usage = _call_gemini_native(user_content, model)
             elif use_openai:
-                content = _call_openai(user_content, model)
+                content, usage = _call_openai(user_content, model)
             else:
-                content = _call_litellm(messages, model)
+                content, usage = _call_litellm(messages, model)
             data = _parse_json_response(content)
             _validate_llm_response(data)
-            return data, messages, content
+            return data, messages, content, usage
         except ExtractionError:
             raise
         except retryable as e:
@@ -825,10 +844,11 @@ def _dump_failed_response(fail_dir, basename, chunk_idx, raw_response):
 
 
 def extract(gz_path, model, debug_dir=None, fail_dir=None):
-    """LLM extraction pipeline: mandoc → numbered markdown → LLM → (ParsedManpage, RawManpage)."""
+    """LLM extraction pipeline: mandoc → numbered markdown → LLM → (ParsedManpage, RawManpage, usage)."""
+    _zero = {"input_tokens": 0, "output_tokens": 0}
     prepared = prepare_extraction(gz_path)
     if prepared is None:
-        return None, None
+        return None, None, _zero
     basename = prepared["basename"]
     chunks = prepared["chunks"]
     n_chunks = prepared["n_chunks"]
@@ -844,6 +864,7 @@ def extract(gz_path, model, debug_dir=None, fail_dir=None):
         _progress(f"{len(prepared['numbered_text'])} chars, {n_chunks} chunks")
 
     all_chunk_data = []
+    total_usage = {"input_tokens": 0, "output_tokens": 0}
     for i, chunk in enumerate(chunks):
         chunk_info = f" (part {i + 1} of {n_chunks})" if n_chunks > 1 else ""
         chunk_label = f"chunk {i + 1}/{n_chunks}" if n_chunks > 1 else "single chunk"
@@ -853,7 +874,9 @@ def extract(gz_path, model, debug_dir=None, fail_dir=None):
         _progress(f"calling LLM ({chunk_label}, {len(chunk)} chars)...")
         t0 = time.monotonic()
         try:
-            chunk_data, messages, raw_response = _call_llm(chunk, chunk_info, model)
+            chunk_data, messages, raw_response, chunk_usage = _call_llm(
+                chunk, chunk_info, model
+            )
         except ExtractionError as e:
             raw = getattr(e, "raw_response", None) or getattr(
                 e.__cause__, "raw_response", None
@@ -862,6 +885,8 @@ def extract(gz_path, model, debug_dir=None, fail_dir=None):
                 _dump_failed_response(fail_dir, basename, i, raw)
             raise
         elapsed = time.monotonic() - t0
+        total_usage["input_tokens"] += chunk_usage["input_tokens"]
+        total_usage["output_tokens"] += chunk_usage["output_tokens"]
         n_opts = len(chunk_data["options"])
         logger.info(
             "%s: LLM returned %d option(s) for %s in %.1fs",
@@ -875,7 +900,10 @@ def extract(gz_path, model, debug_dir=None, fail_dir=None):
         )
         all_chunk_data.append((chunk_data, messages, raw_response))
 
-    return finalize_extraction(gz_path, prepared, all_chunk_data, debug_dir=debug_dir)
+    mp, raw = finalize_extraction(
+        gz_path, prepared, all_chunk_data, debug_dir=debug_dir
+    )
+    return mp, raw, total_usage
 
 
 # ---------------------------------------------------------------------------
@@ -998,21 +1026,18 @@ def _submit_batch_openai(requests, model):
     openai_model = model.removeprefix("openai/")
     client = openai.OpenAI(timeout=LLM_TIMEOUT_SECONDS)
 
-    # Build JSONL in memory
+    # Build JSONL in memory using the Responses API format
     buf = io.BytesIO()
     for key, user_content in requests:
         line = json.dumps(
             {
                 "custom_id": key,
                 "method": "POST",
-                "url": "/v1/chat/completions",
+                "url": "/v1/responses",
                 "body": {
                     "model": openai_model,
-                    "messages": [
-                        {"role": "system", "content": _SYSTEM_PROMPT},
-                        {"role": "user", "content": user_content},
-                    ],
-                    "response_format": {"type": "json_object"},
+                    "input": _openai_input(user_content),
+                    "text": {"format": {"type": "json_object"}},
                 },
             }
         )
@@ -1027,7 +1052,7 @@ def _submit_batch_openai(requests, model):
     # Create batch
     batch = client.batches.create(
         input_file_id=file_obj.id,
-        endpoint="/v1/chat/completions",
+        endpoint="/v1/responses",
         completion_window="24h",
         metadata={"source": "explainshell"},
     )
@@ -1116,14 +1141,22 @@ def _collect_batch_results_openai(batch):
         response = row.get("response", {})
         body = response.get("body", {})
 
-        # Aggregate per-request token usage.
+        # Aggregate per-request token usage (Responses API field names).
         req_usage = body.get("usage", {})
-        per_request_input += req_usage.get("prompt_tokens", 0)
-        per_request_output += req_usage.get("completion_tokens", 0)
+        per_request_input += req_usage.get("input_tokens", 0)
+        per_request_output += req_usage.get("output_tokens", 0)
 
-        choices = body.get("choices", [])
-        if choices:
-            text = choices[0].get("message", {}).get("content", "")
+        # Responses API: output is a list of items; find the message text.
+        text = None
+        for item in body.get("output", []):
+            if item.get("type") == "message":
+                for part in item.get("content", []):
+                    if part.get("type") == "output_text":
+                        text = part.get("text", "")
+                        break
+                if text is not None:
+                    break
+        if text is not None:
             results[key] = text
         else:
             error = row.get("error")

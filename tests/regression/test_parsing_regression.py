@@ -81,7 +81,8 @@ def llm_results(request):
         return None
     model = request.config.getoption("--model")
     gz_paths = [p for p in _gz_files if os.path.basename(p) in _LLM_CORPUS]
-    return batch_extract_files(gz_paths, model)
+    results, _usage = batch_extract_files(gz_paths, model)
+    return results
 
 
 @pytest.mark.parametrize(
@@ -106,7 +107,7 @@ def test_parsing_matches_db(gz_path, db_store, llm_results, request):
             pytest.skip(f"Batch extraction returned no result for {source}")
         fresh_mp, _raw = result
     else:
-        fresh_mp, _raw = run_extractor(extractor, gz_path)
+        fresh_mp, _raw, _usage = run_extractor(extractor, gz_path)
         if fresh_mp is None:
             pytest.skip(f"Extraction returned None for {source}")
 
