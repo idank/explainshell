@@ -14,7 +14,8 @@ import os
 import pytest
 
 from explainshell import errors, store
-from explainshell.manager import compare_manpages, run_extractor
+from explainshell.diff import compare_manpages
+from explainshell.extraction import make_extractor
 
 _REGRESSION_DIR = os.path.join(os.path.dirname(__file__), "manpages")
 _REGRESSION_DB = os.path.join(os.path.dirname(__file__), "regression.db")
@@ -59,7 +60,7 @@ def db_store():
 def test_parsing_matches_db(gz_path, db_store, request):
     basename = os.path.basename(gz_path)
     source = os.path.relpath(gz_path, _REGRESSION_DIR)
-    extractor = request.config.getoption("--extractor")
+    extractor_mode = request.config.getoption("--extractor")
 
     # Look up stored manpage by full source path (distro/release/section/name.gz).
     try:
@@ -69,15 +70,14 @@ def test_parsing_matches_db(gz_path, db_store, request):
         pytest.skip(f"{source} not in DB")
 
     # Re-parse with selected extractor.
-    fresh_mp, _raw, _usage = run_extractor(extractor, gz_path)
-    if fresh_mp is None:
-        pytest.skip(f"Extraction returned None for {source}")
+    ext = make_extractor(extractor_mode)
+    result = ext.extract(gz_path)
 
     # has_subcommands is computed post-extraction by update_subcommand_mappings(),
     # not by the parser, so exclude it from comparison.
     diffs = compare_manpages(
         stored_mp,
-        fresh_mp,
+        result.mp,
         skip_fields=("has_subcommands", "extractor", "extraction_meta"),
     )
     assert not diffs, f"Parsing regression for {basename}:\n{_format_diffs(diffs)}"
