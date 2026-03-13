@@ -807,7 +807,7 @@ def finalize_extraction(
     for idx, raw in enumerate(all_raw):
         try:
             options.append(_llm_option_to_store_option(raw, original_lines))
-        except (AssertionError, ValueError) as e:
+        except ValueError as e:
             logger.warning("skipping malformed option %d: %s", idx, e)
 
     logger.info("%s: extracted %d option(s) total", basename, len(options))
