@@ -20,15 +20,6 @@ A web tool that parses man pages and explains command-line arguments by matching
 1. Update AGENTS.md if the change affects structure, convention, workflow, etc.
 1. Provide a draft commit message using Conventional Commits format
 
-### LLM Parsing Regression
-
-When changing prompts, chunking, or other LLM extraction logic, use the LLM regression suite to catch regressions. LLM output is non-deterministic, so the workflow is:
-
-1. `make parsing-update-llm` — generate a baseline with the **current** code
-2. Make your prompt/chunking changes
-3. `make parsing-regression-llm` — re-extract and compare against the baseline
-4. Review the diffs to decide whether differences are regressions or expected improvements
-
 ### LLM Benchmarking
 
 Use the benchmark tool (`tools/llm_bench.py`) to compare before/after metrics when making changes to the LLM extractor. It runs extraction on a fixed 10-file corpus and produces a JSON report with aggregate metrics: extracted files, failed files, total options, zero-option pages, multi-chunk pages, and token usage.
@@ -109,12 +100,6 @@ make parsing-regression
 
 # Update DB to accept current parser output for regression manpages
 make parsing-update
-
-# Run LLM parsing regression (requires regression-llm.db)
-make parsing-regression-llm
-
-# Regenerate LLM baseline DB (makes API calls, override model with MODEL=...)
-make parsing-update-llm
 
 # Run all tests (unit + e2e + parsing regression)
 make tests-all
