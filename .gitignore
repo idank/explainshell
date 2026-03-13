@@ -14,3 +14,4 @@ dump.gz
 .claude/
 docs/
 ignore/
+tests/regression/llm-bench*.json

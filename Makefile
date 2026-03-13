@@ -73,6 +73,41 @@ ubuntu-archive:
 	find manpages/ubuntu -mindepth 2 -maxdepth 2 -type d -name 'man*' | while read d; do mv "$$d" "$$(dirname "$$d")/$$(echo "$$(basename "$$d")" | sed 's/^man//')"; done
 	find manpages/ubuntu -mindepth 3 -maxdepth 3 -type d -exec rm -rf {} +
 
+BENCH_REPORT := tests/regression/llm-bench.json
+BENCH_BASELINE := tests/regression/llm-bench-baseline.json
+BENCH_MODEL := openai/gpt-5-mini
+BENCH_DIR := tests/regression/manpages/ubuntu/25.10
+# 10 files, 17 chunks — covers tiny→huge, 1→6 chunks, dashless_opts,
+# nested_cmd, aliases, and section 1+8 mix.
+BENCH_CORPUS := \
+	$(BENCH_DIR)/1/echo.1.gz \
+	$(BENCH_DIR)/1/docker.1.gz \
+	$(BENCH_DIR)/1/sed.1.gz \
+	$(BENCH_DIR)/1/xargs.1.gz \
+	$(BENCH_DIR)/1/ps.1.gz \
+	$(BENCH_DIR)/1/grep.1.gz \
+	$(BENCH_DIR)/1/tar.1.gz \
+	$(BENCH_DIR)/1/ssh.1.gz \
+	$(BENCH_DIR)/1/find.1.gz \
+	$(BENCH_DIR)/1/curl.1.gz
+
+# Run LLM benchmark on the bench corpus.
+llm-bench:
+	python tools/llm_bench.py run --model $(or $(MODEL),$(BENCH_MODEL)) --batch 50 \
+		-o $(BENCH_REPORT) $(BENCH_CORPUS)
+
+# Save the current report as the baseline.
+llm-bench-baseline:
+	@test -f $(BENCH_REPORT) || (echo "No report found. Run 'make llm-bench' first."; exit 1)
+	cp $(BENCH_REPORT) $(BENCH_BASELINE)
+	@echo "Baseline saved to $(BENCH_BASELINE)"
+
+# Compare current report against baseline.
+llm-bench-compare:
+	@test -f $(BENCH_BASELINE) || (echo "No baseline found. Run 'make llm-bench-baseline' first."; exit 1)
+	@test -f $(BENCH_REPORT) || (echo "No report found. Run 'make llm-bench' first."; exit 1)
+	python tools/llm_bench.py compare $(BENCH_BASELINE) $(BENCH_REPORT)
+
 MANNED_DATA_DIR := ignore/manned
 
 arch-archive:
@@ -81,4 +116,4 @@ arch-archive:
 	python tools/fetch_manned.py --log INFO extract --data-dir $(MANNED_DATA_DIR) \
 		--distro arch --sections 1,8 --output-dir manpages
 
-.PHONY: tests e2e e2e-db e2e-update test-llm tests-all lint serve parsing-regression parsing-regression-llm parsing-update parsing-update-llm db-check ubuntu-archive arch-archive
+.PHONY: tests e2e e2e-db e2e-update test-llm tests-all lint serve parsing-regression parsing-regression-llm parsing-update parsing-update-llm db-check ubuntu-archive arch-archive llm-bench llm-bench-baseline llm-bench-compare
