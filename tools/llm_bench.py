@@ -4,9 +4,21 @@ Runs the LLM extractor on a corpus of manpages and produces a metrics
 report.  Reports are stored with timestamps in a report directory so you
 can track benchmark results over time.
 
+A default corpus of 10 manpages lives in tests/regression/llm-bench/manpages/
+covering tiny-to-huge pages, 1-6 chunks, dashless_opts, nested_cmd, and aliases.
+
 Usage:
-    # Run benchmark (auto-saves to report directory):
+    # Run benchmark on the default corpus (auto-saves to report directory):
+    python tools/llm_bench.py run --model openai/gpt-5-mini
+
+    # Run benchmark on specific files:
     python tools/llm_bench.py run --model openai/gpt-5-mini path/to/file.1.gz ...
+
+    # Run with batch API:
+    python tools/llm_bench.py run --model openai/gpt-5-mini --batch 50
+
+    # Run with a description tag:
+    python tools/llm_bench.py run --model openai/gpt-5-mini -d 'prompt tweak v2'
 
     # Compare the two most recent reports:
     python tools/llm_bench.py compare
@@ -41,6 +53,7 @@ _BOLD = "\033[1m"
 _RESET = "\033[0m"
 
 DEFAULT_REPORT_DIR = "tests/regression/llm-bench"
+DEFAULT_CORPUS_DIR = "tests/regression/llm-bench/manpages"
 
 
 def _collect_gz_files(paths: list[str]) -> list[str]:
@@ -100,7 +113,7 @@ def _list_reports(report_dir: str) -> list[str]:
 
 
 def run_bench(args: argparse.Namespace) -> int:
-    gz_files = _collect_gz_files(args.files)
+    gz_files = _collect_gz_files(args.files or [DEFAULT_CORPUS_DIR])
     if not gz_files:
         print("No .gz files found.", file=sys.stderr)
         return 1
@@ -435,7 +448,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "-d",
         help="Short description of changes for this run",
     )
-    run_p.add_argument("files", nargs="+", help=".gz files or directories")
+    run_p.add_argument(
+        "files",
+        nargs="*",
+        help=f".gz files or directories (default: {DEFAULT_CORPUS_DIR})",
+    )
 
     cmp_p = sub.add_parser("compare", help="Compare two benchmark reports")
     cmp_p.add_argument(

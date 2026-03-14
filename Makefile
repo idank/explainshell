@@ -64,35 +64,6 @@ ubuntu-archive:
 	find manpages/ubuntu -mindepth 2 -maxdepth 2 -type d -name 'man*' | while read d; do mv "$$d" "$$(dirname "$$d")/$$(echo "$$(basename "$$d")" | sed 's/^man//')"; done
 	find manpages/ubuntu -mindepth 3 -maxdepth 3 -type d -exec rm -rf {} +
 
-BENCH_MODEL := openai/gpt-5-mini
-BENCH_DIR := tests/regression/manpages/ubuntu/25.10
-# 10 files, 17 chunks — covers tiny→huge, 1→6 chunks, dashless_opts,
-# nested_cmd, aliases, and section 1+8 mix.
-BENCH_CORPUS := \
-	$(BENCH_DIR)/1/echo.1.gz \
-	$(BENCH_DIR)/1/docker.1.gz \
-	$(BENCH_DIR)/1/sed.1.gz \
-	$(BENCH_DIR)/1/xargs.1.gz \
-	$(BENCH_DIR)/1/ps.1.gz \
-	$(BENCH_DIR)/1/grep.1.gz \
-	$(BENCH_DIR)/1/tar.1.gz \
-	$(BENCH_DIR)/1/ssh.1.gz \
-	$(BENCH_DIR)/1/find.1.gz \
-	$(BENCH_DIR)/1/curl.1.gz
-
-# Run LLM benchmark on the bench corpus.
-llm-bench:
-	python tools/llm_bench.py run --model $(or $(MODEL),$(BENCH_MODEL)) --batch 50 \
-		$(if $(DESC),-d '$(DESC)') $(BENCH_CORPUS)
-
-# Compare the two most recent reports.
-llm-bench-compare:
-	python tools/llm_bench.py compare
-
-# List all saved reports.
-llm-bench-list:
-	python tools/llm_bench.py list
-
 MANNED_DATA_DIR := ignore/manned
 
 arch-archive:
@@ -101,4 +72,4 @@ arch-archive:
 	python tools/fetch_manned.py --log INFO extract --data-dir $(MANNED_DATA_DIR) \
 		--distro arch --sections 1,8 --output-dir manpages
 
-.PHONY: tests e2e e2e-db e2e-update test-llm tests-all lint serve parsing-regression parsing-update db-check ubuntu-archive arch-archive llm-bench llm-bench-compare llm-bench-list
+.PHONY: tests e2e e2e-db e2e-update test-llm tests-all lint serve parsing-regression parsing-update db-check ubuntu-archive arch-archive
