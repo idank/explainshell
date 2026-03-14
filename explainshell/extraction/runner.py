@@ -268,20 +268,21 @@ def run_batch(
             logger.info("batch %d/%d submitted: %s", batch_idx, len(batches), job_id)
 
             completed_job = bp.poll_batch(client, job_id)
-            batch_results, batch_usage = bp.collect_results(completed_job)
-            all_results.update(batch_results)
-            cumulative_requests += len(batch_results)
-            batch.stats.input_tokens += batch_usage.input_tokens
-            batch.stats.output_tokens += batch_usage.output_tokens
+            collected = bp.collect_results(completed_job)
+            all_results.update(collected.responses)
+            cumulative_requests += len(collected.responses)
+            batch.stats.input_tokens += collected.usage.input_tokens
+            batch.stats.output_tokens += collected.usage.output_tokens
+            batch.stats.reasoning_tokens += collected.usage.reasoning_tokens
 
             logger.info(
                 "batch %d/%d completed: %d result(s), "
                 "input=%s tokens, output=%s tokens",
                 batch_idx,
                 len(batches),
-                len(batch_results),
-                _fmt_tokens(batch_usage.input_tokens),
-                _fmt_tokens(batch_usage.output_tokens),
+                len(collected.responses),
+                _fmt_tokens(collected.usage.input_tokens),
+                _fmt_tokens(collected.usage.output_tokens),
             )
 
             # Finalize files that now have all chunks available.

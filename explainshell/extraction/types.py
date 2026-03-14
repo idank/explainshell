@@ -21,6 +21,7 @@ class ExtractionStats:
 
     input_tokens: int = 0
     output_tokens: int = 0
+    reasoning_tokens: int = 0
     chunks: int = 0
     plain_text_len: int = 0
     elapsed_seconds: float = 0.0
@@ -33,6 +34,7 @@ class ExtractionStats:
         """Accumulate numeric fields, OR boolean fields."""
         self.input_tokens += other.input_tokens
         self.output_tokens += other.output_tokens
+        self.reasoning_tokens += other.reasoning_tokens
         self.chunks += other.chunks
         self.plain_text_len += other.plain_text_len
         self.elapsed_seconds += other.elapsed_seconds

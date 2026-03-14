@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, PropertyMock
 
 from explainshell.errors import ExtractionError, SkippedExtraction
 from explainshell.extraction.llm import PreparedFile
-from explainshell.extraction.llm.providers import TokenUsage
+from explainshell.extraction.llm.providers import BatchResults, TokenUsage
 from explainshell.extraction.runner import run_batch
 from explainshell.extraction.types import (
     ExtractionResult,
@@ -96,7 +96,7 @@ def _make_batch_provider(
         bp.collect_results.side_effect = error
     else:
         usage = TokenUsage(input_tokens=500, output_tokens=200)
-        bp.collect_results.return_value = (responses or {}, usage)
+        bp.collect_results.return_value = BatchResults(responses or {}, usage)
 
     return bp
 
@@ -397,7 +397,7 @@ class TestRunBatchGenericExceptions(unittest.TestCase):
 
         bp.submit_batch.side_effect = _submit_batch
         bp.poll_batch.return_value = MagicMock()
-        bp.collect_results.return_value = (
+        bp.collect_results.return_value = BatchResults(
             {"0:0": '{"options":[],"dashless_opts":false}'},
             TokenUsage(100, 50),
         )
