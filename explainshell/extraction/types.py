@@ -42,39 +42,29 @@ class ExtractionStats:
         return self
 
 
-@dataclass
-class ExtractionResult:
-    """Returned by ``Extractor.extract()`` on success.
-
-    Always fully populated -- no optional fields.
-    """
-
-    mp: ParsedManpage
-    raw: RawManpage
-    stats: ExtractionStats
-
-
-class FileOutcome(enum.Enum):
+class ExtractionOutcome(enum.Enum):
     SUCCESS = "success"
     SKIPPED = "skipped"
     FAILED = "failed"
 
 
 @dataclass
-class FileEntry:
-    """Per-file record in a ``BatchResult``.
+class ExtractionResult:
+    """Per-file extraction result.
 
-    For SUCCESS, ``result`` is set and ``result.stats`` has the full metrics.
-    For SKIPPED/FAILED, ``error`` describes why. ``stats`` is populated when
-    preparation succeeded (even if extraction itself was skipped/failed), so
-    bench tools can report ``plain_text_len`` and ``chunks`` for non-success
-    files.
+    For SUCCESS, ``mp`` and ``raw`` are populated.
+    For SKIPPED/FAILED, ``error`` describes why; ``stats`` may still carry
+    prep-phase metrics (``plain_text_len``, ``chunks``).
+
+    Extractors return instances with just ``mp``, ``raw``, ``stats`` set;
+    the runner fills in ``gz_path`` and ``outcome``.
     """
 
-    gz_path: str
-    outcome: FileOutcome
-    result: ExtractionResult | None = None
-    stats: ExtractionStats | None = None
+    mp: ParsedManpage | None = None
+    raw: RawManpage | None = None
+    stats: ExtractionStats = field(default_factory=ExtractionStats)
+    gz_path: str = ""
+    outcome: ExtractionOutcome = ExtractionOutcome.SUCCESS
     error: str | None = None
 
 
@@ -82,29 +72,26 @@ class FileEntry:
 class BatchResult:
     """Aggregated result from running an extractor over multiple files.
 
-    ``stats`` accumulates only SUCCESS outcomes.  In batch mode, per-file
-    token breakdowns are not available from provider APIs, so
-    ``stats.input_tokens`` / ``stats.output_tokens`` will be zero.
+    ``stats`` accumulates SUCCESS outcomes plus batch-level token counts.
+    In batch mode, token counts are aggregate (not per-file).
     """
 
-    files: list[FileEntry] = field(default_factory=list)
+    files: list[ExtractionResult] = field(default_factory=list)
     stats: ExtractionStats = field(default_factory=ExtractionStats)
 
     @property
     def succeeded(self) -> dict[str, ExtractionResult]:
         return {
-            f.gz_path: f.result
-            for f in self.files
-            if f.outcome == FileOutcome.SUCCESS and f.result is not None
+            f.gz_path: f for f in self.files if f.outcome == ExtractionOutcome.SUCCESS
         }
 
     @property
-    def skipped(self) -> list[FileEntry]:
-        return [f for f in self.files if f.outcome == FileOutcome.SKIPPED]
+    def skipped(self) -> list[ExtractionResult]:
+        return [f for f in self.files if f.outcome == ExtractionOutcome.SKIPPED]
 
     @property
-    def failed(self) -> list[FileEntry]:
-        return [f for f in self.files if f.outcome == FileOutcome.FAILED]
+    def failed(self) -> list[ExtractionResult]:
+        return [f for f in self.files if f.outcome == ExtractionOutcome.FAILED]
 
 
 @dataclass(frozen=True)

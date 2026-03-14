@@ -23,7 +23,7 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from explainshell.extraction import ExtractorConfig, FileOutcome, make_extractor
+from explainshell.extraction import ExtractorConfig, ExtractionOutcome, make_extractor
 from explainshell.extraction.runner import run_batch, run_sequential
 
 logger = logging.getLogger(__name__)
@@ -78,24 +78,24 @@ def run_bench(args: argparse.Namespace) -> int:
         name = _basename(fe.gz_path)
         entry: dict = {"file": os.path.basename(fe.gz_path)}
 
-        if fe.outcome == FileOutcome.SUCCESS and fe.result:
+        if fe.outcome == ExtractionOutcome.SUCCESS and fe.mp:
             entry["success"] = True
-            entry["n_options"] = len(fe.result.mp.options)
-            entry["dashless_opts"] = fe.result.mp.dashless_opts
-            entry["n_aliases"] = len(fe.result.mp.aliases)
-            entry["has_synopsis"] = bool(fe.result.mp.synopsis)
-            entry["n_chunks"] = fe.result.stats.chunks
-            entry["plain_text_len"] = fe.result.stats.plain_text_len
-        elif fe.outcome == FileOutcome.SKIPPED:
+            entry["n_options"] = len(fe.mp.options)
+            entry["dashless_opts"] = fe.mp.dashless_opts
+            entry["n_aliases"] = len(fe.mp.aliases)
+            entry["has_synopsis"] = bool(fe.mp.synopsis)
+            entry["n_chunks"] = fe.stats.chunks
+            entry["plain_text_len"] = fe.stats.plain_text_len
+        elif fe.outcome == ExtractionOutcome.SKIPPED:
             entry["success"] = False
             entry["error"] = fe.error or "skipped"
-            entry["n_chunks"] = fe.stats.chunks if fe.stats else 0
-            entry["plain_text_len"] = fe.stats.plain_text_len if fe.stats else 0
+            entry["n_chunks"] = fe.stats.chunks
+            entry["plain_text_len"] = fe.stats.plain_text_len
         else:
             entry["success"] = False
             entry["error"] = fe.error or "extraction failed"
-            entry["n_chunks"] = fe.stats.chunks if fe.stats else 0
-            entry["plain_text_len"] = fe.stats.plain_text_len if fe.stats else 0
+            entry["n_chunks"] = fe.stats.chunks
+            entry["plain_text_len"] = fe.stats.plain_text_len
             entry["n_options"] = 0
 
         file_metrics[name] = entry

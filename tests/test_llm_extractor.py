@@ -7,7 +7,8 @@ from unittest.mock import MagicMock, patch
 from explainshell import store
 from explainshell.errors import ExtractionError
 from explainshell.extraction import ExtractorConfig
-from explainshell.extraction.llm import LLMExtractor
+from explainshell.extraction.llm import ChunkResult, LLMExtractor
+from explainshell.extraction.llm.providers import TokenUsage
 from explainshell.extraction.llm.response import (
     dedup_options as _dedup_options,
     dedup_ref_options as _dedup_ref_options,
@@ -636,15 +637,13 @@ class TestExtractIntegration(unittest.TestCase):
         mock_common_synopsis,
         mock_nested_cmd,
     ):
-        from explainshell.extraction.llm.providers import TokenUsage
-
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
         mock_common_synopsis.return_value = ("a test tool", [("dummy", 10)])
         mock_text.return_value = (
             "**-n**\n\nDo not output trailing newline.\n\n**-e**\n\nEnable escapes."
         )
-        mock_llm.return_value = (
-            {
+        mock_llm.return_value = ChunkResult(
+            data={
                 "dashless_opts": False,
                 "options": [
                     {
@@ -661,9 +660,12 @@ class TestExtractIntegration(unittest.TestCase):
                     },
                 ],
             },
-            [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
-            '{"options": []}',
-            TokenUsage(0, 0),
+            messages=[
+                {"role": "system", "content": "..."},
+                {"role": "user", "content": "..."},
+            ],
+            raw_response='{"options": []}',
+            usage=TokenUsage(0, 0),
         )
         ext = self._make_extractor()
         result = ext.extract("dummy.1.gz")
@@ -697,13 +699,11 @@ class TestExtractIntegration(unittest.TestCase):
         mock_common_synopsis,
         mock_nested_cmd,
     ):
-        from explainshell.extraction.llm.providers import TokenUsage
-
         mock_synopsis.return_value = (None, [("dummy", 10)])
         mock_common_synopsis.return_value = (None, [("dummy", 10)])
         mock_text.return_value = "**-v**\n\nVerbose."
-        mock_llm.return_value = (
-            {
+        mock_llm.return_value = ChunkResult(
+            data={
                 "options": [
                     {"short": "not-a-list", "long": [], "lines": [1, 3]},
                     {
@@ -714,9 +714,12 @@ class TestExtractIntegration(unittest.TestCase):
                     },
                 ],
             },
-            [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
-            '{"options": []}',
-            TokenUsage(0, 0),
+            messages=[
+                {"role": "system", "content": "..."},
+                {"role": "user", "content": "..."},
+            ],
+            raw_response='{"options": []}',
+            usage=TokenUsage(0, 0),
         )
         ext = self._make_extractor()
         result = ext.extract("dummy.1.gz")
@@ -743,14 +746,12 @@ class TestExtractIntegration(unittest.TestCase):
     ):
         import tempfile
 
-        from explainshell.extraction.llm.providers import TokenUsage
-
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
         mock_common_synopsis.return_value = ("a test tool", [("dummy", 10)])
         mock_text.return_value = "**-v**\n\nVerbose."
         raw_response = '{"options": [{"short": ["-v"], "long": [], "has_argument": false, "lines": [1, 3]}]}'
-        mock_llm.return_value = (
-            {
+        mock_llm.return_value = ChunkResult(
+            data={
                 "options": [
                     {
                         "short": ["-v"],
@@ -760,9 +761,12 @@ class TestExtractIntegration(unittest.TestCase):
                     },
                 ]
             },
-            [{"role": "system", "content": "sys"}, {"role": "user", "content": "usr"}],
-            raw_response,
-            TokenUsage(0, 0),
+            messages=[
+                {"role": "system", "content": "sys"},
+                {"role": "user", "content": "usr"},
+            ],
+            raw_response=raw_response,
+            usage=TokenUsage(0, 0),
         )
         with tempfile.TemporaryDirectory() as tmpdir:
             ext = self._make_extractor(debug_dir=tmpdir)

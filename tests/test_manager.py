@@ -5,7 +5,11 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from explainshell.extraction.runner import _build_chunk_aligned_batches
-from explainshell.extraction.types import ExtractionResult, ExtractionStats, FileOutcome
+from explainshell.extraction.types import (
+    ExtractionResult,
+    ExtractionStats,
+    ExtractionOutcome,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -198,26 +202,20 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
         writes_at_callback = []
 
         def _fake_run_batch(ext, files, batch_size, on_start=None, on_result=None):
-            from explainshell.extraction.types import BatchResult, FileEntry
+            from explainshell.extraction.types import BatchResult
 
             batch = BatchResult()
             for gz_path in files:
                 if on_start:
                     on_start(gz_path)
-                fake_result = MagicMock()
-                fake_result.mp = MagicMock()
-                fake_result.mp.options = [MagicMock()]
-                fake_result.raw = MagicMock()
-                fake_result.stats = ExtractionStats()
-                entry = FileEntry(
+                fake_mp = MagicMock()
+                fake_mp.options = [MagicMock()]
+                entry = ExtractionResult(
                     gz_path=gz_path,
-                    outcome=FileOutcome.SUCCESS,
-                    result=ExtractionResult(
-                        mp=fake_result.mp,
-                        raw=fake_result.raw,
-                        stats=fake_result.stats,
-                    ),
-                    stats=fake_result.stats,
+                    outcome=ExtractionOutcome.SUCCESS,
+                    mp=fake_mp,
+                    raw=MagicMock(),
+                    stats=ExtractionStats(),
                 )
                 batch.files.append(entry)
                 if on_result:
@@ -268,7 +266,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
         mock_make_ext.return_value = MagicMock()
 
         def _fake_run_batch(ext, files, batch_size, on_start=None, on_result=None):
-            from explainshell.extraction.types import BatchResult, FileEntry
+            from explainshell.extraction.types import BatchResult
 
             batch = BatchResult()
             for i, gz_path in enumerate(files):
@@ -276,26 +274,20 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
                     on_start(gz_path)
                 if i < 2:
                     # First 2 files succeed
-                    fake_result = MagicMock()
-                    fake_result.mp = MagicMock()
-                    fake_result.mp.options = [MagicMock()]
-                    fake_result.raw = MagicMock()
-                    fake_result.stats = ExtractionStats()
-                    entry = FileEntry(
+                    fake_mp = MagicMock()
+                    fake_mp.options = [MagicMock()]
+                    entry = ExtractionResult(
                         gz_path=gz_path,
-                        outcome=FileOutcome.SUCCESS,
-                        result=ExtractionResult(
-                            mp=fake_result.mp,
-                            raw=fake_result.raw,
-                            stats=fake_result.stats,
-                        ),
-                        stats=fake_result.stats,
+                        outcome=ExtractionOutcome.SUCCESS,
+                        mp=fake_mp,
+                        raw=MagicMock(),
+                        stats=ExtractionStats(),
                     )
                 else:
                     # Last 2 files fail
-                    entry = FileEntry(
+                    entry = ExtractionResult(
                         gz_path=gz_path,
-                        outcome=FileOutcome.FAILED,
+                        outcome=ExtractionOutcome.FAILED,
                         error="batch failed",
                     )
                 batch.files.append(entry)
@@ -391,20 +383,17 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_make_ext.return_value = MagicMock()
 
         def _fake_run_sequential(ext, files, on_start=None, on_result=None):
-            from explainshell.extraction.types import BatchResult, FileEntry
+            from explainshell.extraction.types import BatchResult
 
             batch = BatchResult()
             for gz_path in files:
                 if on_start:
                     on_start(gz_path)
-                entry = FileEntry(
+                entry = ExtractionResult(
                     gz_path=gz_path,
-                    outcome=FileOutcome.SUCCESS,
-                    result=ExtractionResult(
-                        mp=fake_mp,
-                        raw=fake_raw,
-                        stats=ExtractionStats(),
-                    ),
+                    outcome=ExtractionOutcome.SUCCESS,
+                    mp=fake_mp,
+                    raw=fake_raw,
                     stats=ExtractionStats(),
                 )
                 batch.files.append(entry)
