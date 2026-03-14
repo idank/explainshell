@@ -22,9 +22,9 @@ from explainshell.extraction.llm.text import (
     CHUNK_SIZE_CHARS,
     _BLACKLISTED_SECTIONS,
     chunk_text,
+    clean_mandoc_artifacts,
     filter_sections,
     get_manpage_text,
-    get_plain_text,
     number_lines as _number_lines,
 )
 
@@ -59,10 +59,6 @@ class TestGetManpageText(unittest.TestCase):
         mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error msg")
         with self.assertRaises(ExtractionError):
             get_manpage_text("dummy.1.gz")
-
-    def test_backward_compat_alias(self):
-        """get_plain_text is an alias for get_manpage_text."""
-        self.assertIs(get_plain_text, get_manpage_text)
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +95,18 @@ class TestGetManpageTextReal(unittest.TestCase):
         """mandoc emits &#x00A0; between flags and args; these should be regular spaces."""
         text = get_manpage_text(_FIND_GZ)
         self.assertNotIn("\xa0", text)
+
+    def test_no_zwnj_entities(self):
+        """clean_mandoc_artifacts strips &zwnj; entities emitted by mandoc -T markdown."""
+        raw = get_manpage_text(_FIND_GZ)
+        cleaned = clean_mandoc_artifacts(raw)
+        self.assertNotIn("&zwnj;", cleaned)
+
+    def test_no_nbsp_entities(self):
+        """clean_mandoc_artifacts replaces &nbsp; entities with plain spaces."""
+        raw = get_manpage_text(_FIND_GZ)
+        cleaned = clean_mandoc_artifacts(raw)
+        self.assertNotIn("&nbsp;", cleaned)
 
     def test_no_artificial_line_wrapping(self):
         """Prose paragraphs should not be hard-wrapped at terminal width (~78 cols)."""

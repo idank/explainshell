@@ -54,10 +54,6 @@ def get_manpage_text(gz_path: str) -> str:
     return result.stdout.strip()
 
 
-# Keep backward-compatible alias
-get_plain_text = get_manpage_text
-
-
 def _split_sections(text: str) -> list[tuple[int, str]]:
     """Split text into sections at markdown header lines (# or ##).
 
@@ -81,6 +77,13 @@ def _split_sections(text: str) -> list[tuple[int, str]]:
         sections.append((current_start, "\n".join(current_lines)))
 
     return sections
+
+
+def clean_mandoc_artifacts(text: str) -> str:
+    """Strip HTML entities that mandoc -T markdown emits but serve no purpose. Easier
+    to clean these here than to fix mandoc to stop emitting them.
+    """
+    return text.replace("&zwnj;", "").replace("&nbsp;", " ")
 
 
 def filter_sections(text: str) -> tuple[str, dict[str, int]]:
