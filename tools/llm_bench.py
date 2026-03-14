@@ -175,6 +175,8 @@ def run_bench(args: argparse.Namespace) -> int:
         "zero_option_pages": sum(1 for f in extracted if f.get("n_options", 0) == 0),
         "multi_chunk_pages": sum(1 for f in all_files if f.get("n_chunks", 0) > 1),
         "total_chunks": sum(f.get("n_chunks", 0) for f in all_files),
+        "malformed_options": result.stats.malformed_options,
+        "deduped_options": result.stats.deduped_options,
         "input_tokens": result.stats.input_tokens,
         "output_tokens": result.stats.output_tokens,
         "elapsed_seconds": round(elapsed, 1),
@@ -233,6 +235,8 @@ def _print_summary(report: dict) -> None:
         ("Extracted files", agg["extracted_files"]),
         ("Failed files", agg["failed_files"]),
         ("Total options", agg["total_options"]),
+        ("Malformed options", agg["malformed_options"]),
+        ("Deduped options", agg["deduped_options"]),
         ("Zero-option pages", agg["zero_option_pages"]),
         ("Multi-chunk pages", agg["multi_chunk_pages"]),
         ("Total chunks", agg["total_chunks"]),
@@ -299,11 +303,13 @@ def compare_reports(args: argparse.Namespace) -> int:
         ("extracted_files", "Extracted files", True),
         ("failed_files", "Failed files", False),
         ("total_options", "Total options", True),
+        ("malformed_options", "Malformed options", False),
+        ("deduped_options", "Deduped options", False),
         ("zero_option_pages", "Zero-option pages", False),
         ("multi_chunk_pages", "Multi-chunk pages", None),
         ("total_chunks", "Total chunks", None),
-        ("input_tokens", "Input tokens", None),
-        ("output_tokens", "Output tokens", None),
+        ("input_tokens", "Input tokens", False),
+        ("output_tokens", "Output tokens", False),
     ]
 
     metrics = [
