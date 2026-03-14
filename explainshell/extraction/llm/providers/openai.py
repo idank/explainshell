@@ -5,13 +5,13 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import Any
-
 import openai
+from openai import OpenAI
+from openai.types import Batch
 
 from explainshell.errors import ExtractionError
 from explainshell.extraction.llm import SYSTEM_PROMPT
-from explainshell.extraction.llm.providers import TokenUsage
+from explainshell.extraction.llm.providers import BatchResults, TokenUsage
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class OpenAIProvider:
         self._openai_model = model.removeprefix("openai/")
 
     def call(self, user_content: str) -> tuple[str, TokenUsage]:
-        client = openai.OpenAI(timeout=LLM_TIMEOUT_SECONDS)
+        client = OpenAI(timeout=LLM_TIMEOUT_SECONDS)
         response = client.responses.create(
             model=self._openai_model,
             input=_openai_input(user_content),
@@ -42,8 +42,11 @@ class OpenAIProvider:
         )
         usage = TokenUsage()
         if response.usage:
-            usage.input_tokens = response.usage.input_tokens or 0
-            usage.output_tokens = response.usage.output_tokens or 0
+            usage.input_tokens = response.usage.input_tokens
+            usage.output_tokens = response.usage.output_tokens
+            usage.reasoning_tokens = (
+                response.usage.output_tokens_details.reasoning_tokens
+            )
         return response.output_text, usage
 
     @property
@@ -57,10 +60,10 @@ class OpenAIProvider:
 
     # -- Batch API --
 
-    def submit_batch(self, requests: list[tuple[str, str]]) -> Any:
+    def submit_batch(self, requests: list[tuple[str, str]]) -> Batch:
         import io
 
-        client = openai.OpenAI(timeout=LLM_TIMEOUT_SECONDS)
+        client = OpenAI(timeout=LLM_TIMEOUT_SECONDS)
 
         buf = io.BytesIO()
         for key, user_content in requests:
@@ -94,10 +97,10 @@ class OpenAIProvider:
         )
         return batch
 
-    def make_poll_client(self) -> Any:
-        return openai.OpenAI(timeout=LLM_TIMEOUT_SECONDS)
+    def make_poll_client(self) -> OpenAI:
+        return OpenAI(timeout=LLM_TIMEOUT_SECONDS)
 
-    def poll_batch(self, client: Any, job_id: str, poll_interval: int = 30) -> Any:
+    def poll_batch(self, client: OpenAI, job_id: str, poll_interval: int = 30) -> Batch:
         consecutive_errors = 0
         max_consecutive_errors = 5
         while True:
@@ -144,23 +147,23 @@ class OpenAIProvider:
             )
             time.sleep(poll_interval)
 
-    def collect_results(self, job: Any) -> tuple[dict[str, str], TokenUsage]:
+    def collect_results(self, job: Batch) -> BatchResults:
         results: dict[str, str] = {}
         usage = TokenUsage()
 
-        batch_usage = getattr(job, "usage", None)
-        if batch_usage:
-            usage.input_tokens = getattr(batch_usage, "input_tokens", 0) or 0
-            usage.output_tokens = getattr(batch_usage, "output_tokens", 0) or 0
+        if job.usage:
+            usage.input_tokens = job.usage.input_tokens
+            usage.output_tokens = job.usage.output_tokens
 
         if not job.output_file_id:
-            return results, usage
+            return BatchResults(results, usage)
 
-        client = openai.OpenAI(timeout=LLM_TIMEOUT_SECONDS)
+        client = OpenAI(timeout=LLM_TIMEOUT_SECONDS)
         content = client.files.content(job.output_file_id)
 
         per_request_input = 0
         per_request_output = 0
+        per_request_reasoning = 0
 
         for line in content.text.splitlines():
             if not line.strip():
@@ -173,6 +176,8 @@ class OpenAIProvider:
             req_usage = body.get("usage", {})
             per_request_input += req_usage.get("input_tokens", 0)
             per_request_output += req_usage.get("output_tokens", 0)
+            od = req_usage.get("output_tokens_details", {}) or {}
+            per_request_reasoning += od.get("reasoning_tokens", 0)
 
             text = None
             for item in body.get("output", []):
@@ -191,9 +196,10 @@ class OpenAIProvider:
                     "batch response for key %s has no content (error=%s)", key, error
                 )
 
-        if not batch_usage:
+        if not job.usage:
             usage.input_tokens = per_request_input
             usage.output_tokens = per_request_output
+        usage.reasoning_tokens = per_request_reasoning
 
         if job.error_file_id:
             try:
@@ -208,4 +214,4 @@ class OpenAIProvider:
             except Exception as e:
                 logger.warning("failed to download batch error file: %s", e)
 
-        return results, usage
+        return BatchResults(results, usage)

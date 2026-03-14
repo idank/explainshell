@@ -180,6 +180,7 @@ class LLMExtractor:
 
             stats.input_tokens += cr.usage.input_tokens
             stats.output_tokens += cr.usage.output_tokens
+            stats.reasoning_tokens += cr.usage.reasoning_tokens
             n_opts = len(cr.data["options"])
             logger.info(
                 "%s: LLM returned %d option(s) for %s",

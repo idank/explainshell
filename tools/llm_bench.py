@@ -179,6 +179,7 @@ def run_bench(args: argparse.Namespace) -> int:
         "deduped_options": result.stats.deduped_options,
         "input_tokens": result.stats.input_tokens,
         "output_tokens": result.stats.output_tokens,
+        "reasoning_tokens": result.stats.reasoning_tokens,
         "elapsed_seconds": round(elapsed, 1),
     }
 
@@ -242,6 +243,7 @@ def _print_summary(report: dict) -> None:
         ("Total chunks", agg["total_chunks"]),
         ("Input tokens", f"{agg['input_tokens']:,}"),
         ("Output tokens", f"{agg['output_tokens']:,}"),
+        ("Reasoning tokens", f"{agg['reasoning_tokens']:,}"),
         ("Elapsed", f"{agg['elapsed_seconds']}s"),
     ]
 
@@ -310,6 +312,7 @@ def compare_reports(args: argparse.Namespace) -> int:
         ("total_chunks", "Total chunks", None),
         ("input_tokens", "Input tokens", False),
         ("output_tokens", "Output tokens", False),
+        ("reasoning_tokens", "Reasoning tokens", False),
     ]
 
     metrics = [

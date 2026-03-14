@@ -5,11 +5,15 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import Any
+from typing import TYPE_CHECKING
 
 from explainshell.errors import ExtractionError
+
+if TYPE_CHECKING:
+    from google.genai import Client
+    from google.genai.types import BatchJob
 from explainshell.extraction.llm import SYSTEM_PROMPT
-from explainshell.extraction.llm.providers import TokenUsage
+from explainshell.extraction.llm.providers import BatchResults, TokenUsage
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +42,11 @@ class GeminiProvider:
             ),
         )
         usage = TokenUsage()
-        if response.usage_metadata:
-            usage.input_tokens = response.usage_metadata.prompt_token_count or 0
-            usage.output_tokens = response.usage_metadata.candidates_token_count or 0
+        um = response.usage_metadata
+        if um:
+            usage.input_tokens = um.prompt_token_count or 0
+            usage.output_tokens = um.candidates_token_count or 0
+            usage.reasoning_tokens = um.thoughts_token_count or 0
         return response.text, usage
 
     @property
@@ -53,7 +59,7 @@ class GeminiProvider:
 
     # -- Batch API --
 
-    def submit_batch(self, requests: list[tuple[str, str]]) -> Any:
+    def submit_batch(self, requests: list[tuple[str, str]]) -> BatchJob:
         from google import genai
         from google.genai import types
 
@@ -79,12 +85,14 @@ class GeminiProvider:
         )
         return job
 
-    def make_poll_client(self) -> Any:
+    def make_poll_client(self) -> Client:
         from google import genai
 
         return genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
-    def poll_batch(self, client: Any, job_id: str, poll_interval: int = 30) -> Any:
+    def poll_batch(
+        self, client: Client, job_id: str, poll_interval: int = 30
+    ) -> BatchJob:
         consecutive_errors = 0
         max_consecutive_errors = 5
         while True:
@@ -126,24 +134,21 @@ class GeminiProvider:
             )
             time.sleep(poll_interval)
 
-    def collect_results(self, job: Any) -> tuple[dict[str, str], TokenUsage]:
+    def collect_results(self, job: BatchJob) -> BatchResults:
         results: dict[str, str] = {}
         usage = TokenUsage()
         if not job.dest or not job.dest.inlined_responses:
-            return results, usage
+            return BatchResults(results, usage)
         for resp in job.dest.inlined_responses:
             key = (resp.metadata or {}).get("key", "")
             if resp.response and resp.response.candidates:
                 text = resp.response.candidates[0].content.parts[0].text
                 results[key] = text
-                resp_usage = getattr(resp.response, "usage_metadata", None)
-                if resp_usage:
-                    usage.input_tokens += (
-                        getattr(resp_usage, "prompt_token_count", 0) or 0
-                    )
-                    usage.output_tokens += (
-                        getattr(resp_usage, "candidates_token_count", 0) or 0
-                    )
+                um = resp.response.usage_metadata
+                if um:
+                    usage.input_tokens += um.prompt_token_count or 0
+                    usage.output_tokens += um.candidates_token_count or 0
+                    usage.reasoning_tokens += um.thoughts_token_count or 0
             else:
                 logger.warning("batch response for key %s has no content", key)
-        return results, usage
+        return BatchResults(results, usage)

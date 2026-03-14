@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any, NamedTuple, Protocol
 
 
 class TokenUsage:
     """Simple container for token counts."""
 
-    __slots__ = ("input_tokens", "output_tokens")
+    __slots__ = ("input_tokens", "output_tokens", "reasoning_tokens")
 
-    def __init__(self, input_tokens: int = 0, output_tokens: int = 0) -> None:
+    def __init__(
+        self,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        reasoning_tokens: int = 0,
+    ) -> None:
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
+        self.reasoning_tokens = reasoning_tokens
 
 
 class LLMProvider(Protocol):
@@ -24,6 +30,14 @@ class LLMProvider(Protocol):
     def call(self, user_content: str) -> tuple[str, TokenUsage]: ...
 
 
+class BatchResults(NamedTuple):
+    """Return type for BatchProvider.collect_results."""
+
+    responses: dict[str, str]
+    """Mapping of request custom_id to LLM response text."""
+    usage: TokenUsage
+
+
 class BatchProvider(Protocol):
     """Batch API interface (not all providers support this)."""
 
@@ -33,7 +47,7 @@ class BatchProvider(Protocol):
 
     def poll_batch(self, client: Any, job_id: str, poll_interval: int = 30) -> Any: ...
 
-    def collect_results(self, job: Any) -> tuple[dict[str, str], TokenUsage]: ...
+    def collect_results(self, job: Any) -> BatchResults: ...
 
 
 def make_provider(model: str) -> LLMProvider:
