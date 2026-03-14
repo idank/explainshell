@@ -22,7 +22,9 @@ A web tool that parses man pages and explains command-line arguments by matching
 
 ### LLM Benchmarking
 
-Use the benchmark tool (`tools/llm_bench.py`) to compare before/after metrics when making changes to the LLM extractor. It runs extraction on a fixed 10-file corpus and produces a JSON report with aggregate metrics: extracted files, failed files, total options, zero-option pages, multi-chunk pages, and token usage.
+Use the benchmark tool (`tools/llm_bench.py`) to compare before/after metrics when making changes to the LLM extractor. It runs extraction on a fixed 10-file corpus and produces a JSON report with aggregate metrics: extracted files, failed files, total options, zero-option pages, multi-chunk pages, and token usage. Reports are auto-saved with timestamps to `tests/regression/llm-bench/` and include git metadata (commit, dirty state).
+
+Each run accepts an optional `DESC="..."` to label what this run represents. When running benchmarks, always provide a description inferred from context — e.g. the task you're working on, the nature of local changes, or "baseline (clean)" for a pre-change run. This makes `make llm-bench-list` and `make llm-bench-compare` output self-explanatory.
 
 **Workflow for code changes (API, prompt, chunking, post-processing):**
 
@@ -31,36 +33,38 @@ Use the benchmark tool (`tools/llm_bench.py`) to compare before/after metrics wh
 git stash push -- explainshell/llm_extractor.py
 
 # 2. Run benchmark on the old code
-make llm-bench
-make llm-bench-baseline
+make llm-bench DESC="baseline before <short summary of change>"
 
 # 3. Restore your changes
 git stash pop
 
 # 4. Run benchmark on the new code
-make llm-bench
+make llm-bench DESC="<short summary of change>"
 
-# 5. Compare
+# 5. Compare the two most recent reports
 make llm-bench-compare
 ```
 
 **Makefile targets:**
 
-- `make llm-bench` — run benchmark (uses batch API, override model with `MODEL=...`)
-- `make llm-bench-baseline` — save the current report as the baseline
-- `make llm-bench-compare` — compare current report against baseline, exits non-zero on regressions
+- `make llm-bench` — run benchmark (uses batch API, override model with `MODEL=...`, label with `DESC="..."`)
+- `make llm-bench-compare` — compare the two most recent reports, exits non-zero on regressions
+- `make llm-bench-list` — list all saved reports
 
 **Direct usage** for custom runs (e.g., single file, sequential mode, specific model):
 
 ```bash
 # Sequential mode (no --batch), single file
-python tools/llm_bench.py run --model openai/gpt-5-mini -o report.json path/to/file.1.gz
+python tools/llm_bench.py run --model openai/gpt-5-mini path/to/file.1.gz
 
-# Batch mode on the full corpus
-python tools/llm_bench.py run --model openai/gpt-5-mini --batch 50 -o report.json tests/regression/manpages/
+# Save to a specific path instead of the report directory
+python tools/llm_bench.py run --model openai/gpt-5-mini -o report.json tests/regression/manpages/
 
-# Compare two reports
-python tools/llm_bench.py compare baseline.json current.json
+# Compare two specific reports
+python tools/llm_bench.py compare report1.json report2.json
+
+# List all reports
+python tools/llm_bench.py list
 ```
 
 ## Code Style
@@ -111,11 +115,11 @@ make tests-all
 # Run LLM benchmark (makes API calls, override model with MODEL=...)
 make llm-bench
 
-# Save current benchmark report as baseline
-make llm-bench-baseline
-
-# Compare current benchmark report against baseline
+# Compare the two most recent benchmark reports
 make llm-bench-compare
+
+# List all saved benchmark reports
+make llm-bench-list
 
 # Run DB integrity checks
 make db-check

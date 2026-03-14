@@ -1,15 +1,21 @@
 """LLM extractor benchmark tool.
 
 Runs the LLM extractor on a corpus of manpages and produces a metrics
-report.  Compare before/after reports when making changes to the LLM
-extractor to catch regressions.
+report.  Reports are stored with timestamps in a report directory so you
+can track benchmark results over time.
 
 Usage:
-    # Run benchmark, save report:
-    python tools/llm_bench.py run --model openai/gpt-5-mini tests/regression/manpages/
+    # Run benchmark (auto-saves to report directory):
+    python tools/llm_bench.py run --model openai/gpt-5-mini path/to/file.1.gz ...
 
-    # Compare two reports:
-    python tools/llm_bench.py compare baseline.json current.json
+    # Compare the two most recent reports:
+    python tools/llm_bench.py compare
+
+    # Compare two specific reports:
+    python tools/llm_bench.py compare report1.json report2.json
+
+    # List all saved reports:
+    python tools/llm_bench.py list
 """
 
 import argparse
@@ -18,6 +24,7 @@ import glob
 import json
 import logging
 import os
+import subprocess
 import sys
 import time
 
@@ -32,6 +39,8 @@ _RED = "\033[31m"
 _GREEN = "\033[32m"
 _BOLD = "\033[1m"
 _RESET = "\033[0m"
+
+DEFAULT_REPORT_DIR = "tests/regression/llm-bench"
 
 
 def _collect_gz_files(paths: list[str]) -> list[str]:
@@ -48,6 +57,46 @@ def _collect_gz_files(paths: list[str]) -> list[str]:
 
 def _basename(gz_path: str) -> str:
     return os.path.splitext(os.path.splitext(os.path.basename(gz_path))[0])[0]
+
+
+def _git_metadata() -> dict:
+    """Capture git commit hash and working-tree state."""
+    meta: dict = {}
+    try:
+        meta["commit"] = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+        meta["commit_short"] = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        meta["commit"] = None
+        meta["commit_short"] = None
+
+    try:
+        status = subprocess.check_output(
+            ["git", "status", "--porcelain"], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+        meta["dirty"] = bool(status)
+    except Exception:
+        meta["dirty"] = None
+
+    return meta
+
+
+def _auto_output_path(report_dir: str) -> str:
+    """Generate a timestamped output path in the report directory."""
+    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
+    os.makedirs(report_dir, exist_ok=True)
+    return os.path.join(report_dir, f"{ts}.json")
+
+
+def _list_reports(report_dir: str) -> list[str]:
+    """Return report files sorted newest first (by filename)."""
+    pattern = os.path.join(report_dir, "*.json")
+    return sorted(glob.glob(pattern), reverse=True)
 
 
 def run_bench(args: argparse.Namespace) -> int:
@@ -118,32 +167,52 @@ def run_bench(args: argparse.Namespace) -> int:
         "elapsed_seconds": round(elapsed, 1),
     }
 
-    report = {
+    report: dict = {
         "model": args.model,
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "git": _git_metadata(),
+        "batch_mode": args.batch is not None,
+        "batch_size": args.batch,
         "aggregate": agg,
         "files": file_metrics,
     }
+    if args.description:
+        report["description"] = args.description
 
     _print_summary(report)
 
-    output = args.output
-    if output:
-        os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
-        with open(output, "w") as f:
-            json.dump(report, f, indent=2)
-            f.write("\n")
-        logger.info("report saved to %s", output)
+    output = args.output or _auto_output_path(args.report_dir)
+    os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
+    with open(output, "w") as f:
+        json.dump(report, f, indent=2)
+        f.write("\n")
+    print(f"  Report saved to {output}")
+    print()
 
     return 0
 
 
 def _print_summary(report: dict) -> None:
     agg = report["aggregate"]
+    git = report.get("git", {})
+
     print()
     print(f"  {_BOLD}LLM Bench Report{_RESET}")
     print(f"  Model: {report['model']}")
     print(f"  Timestamp: {report['timestamp']}")
+
+    if git.get("commit_short"):
+        dirty_marker = " (dirty)" if git.get("dirty") else ""
+        print(f"  Git: {git['commit_short']}{dirty_marker}")
+
+    if report.get("description"):
+        print(f"  Description: {report['description']}")
+
+    if report.get("batch_mode"):
+        print(f"  Batch size: {report.get('batch_size')}")
+    else:
+        print("  Batch: off")
+
     print()
 
     rows = [
@@ -165,10 +234,38 @@ def _print_summary(report: dict) -> None:
     print()
 
 
+def _format_report_label(report: dict) -> str:
+    """Format a one-line label for a report (model @ timestamp (git))."""
+    label = f"{report['model']} @ {report['timestamp']}"
+    git = report.get("git", {})
+    if git.get("commit_short"):
+        dirty = ", dirty" if git.get("dirty") else ""
+        label += f" ({git['commit_short']}{dirty})"
+    return label
+
+
 def compare_reports(args: argparse.Namespace) -> int:
-    with open(args.baseline) as f:
+    # Determine which files to compare.
+    if len(args.reports) == 2:
+        baseline_path, current_path = args.reports
+    elif len(args.reports) == 0:
+        reports = _list_reports(args.report_dir)
+        if len(reports) < 2:
+            print(
+                f"Need at least 2 reports in {args.report_dir} to compare. "
+                f"Found {len(reports)}.",
+                file=sys.stderr,
+            )
+            return 1
+        current_path = reports[0]  # newest
+        baseline_path = reports[1]  # second newest
+    else:
+        print("Expected 0 or 2 report files.", file=sys.stderr)
+        return 1
+
+    with open(baseline_path) as f:
         baseline = json.load(f)
-    with open(args.current) as f:
+    with open(current_path) as f:
         current = json.load(f)
 
     b_agg = baseline["aggregate"]
@@ -176,8 +273,12 @@ def compare_reports(args: argparse.Namespace) -> int:
 
     print()
     print(f"  {_BOLD}LLM Bench Comparison{_RESET}")
-    print(f"  Baseline: {baseline['model']} @ {baseline['timestamp']}")
-    print(f"  Current:  {current['model']} @ {current['timestamp']}")
+    print(f"  Baseline: {_format_report_label(baseline)}")
+    if baseline.get("description"):
+        print(f"            {baseline['description']}")
+    print(f"  Current:  {_format_report_label(current)}")
+    if current.get("description"):
+        print(f"            {current['description']}")
     print()
 
     all_metrics = [
@@ -268,9 +369,52 @@ def compare_reports(args: argparse.Namespace) -> int:
     return 0
 
 
+def list_reports(args: argparse.Namespace) -> int:
+    reports = _list_reports(args.report_dir)
+    if not reports:
+        print(f"No reports found in {args.report_dir}.", file=sys.stderr)
+        return 1
+
+    print()
+    print(f"  {_BOLD}LLM Bench Reports{_RESET} ({args.report_dir})")
+    print()
+    print(f"  {'#':<4} {'Date':<22} {'Git':<10} {'Options':>8}  {'Description'}")
+    print(f"  {'-' * 72}")
+
+    for i, path in enumerate(reports):
+        with open(path) as f:
+            report = json.load(f)
+
+        git = report.get("git", {})
+        commit = git.get("commit_short", "?")
+        dirty = "*" if git.get("dirty") else ""
+        git_str = f"{commit}{dirty}"
+
+        agg = report.get("aggregate", {})
+        ts = report.get("timestamp", "?")
+        # Truncate to seconds for display.
+        if len(ts) > 19:
+            ts = ts[:19]
+
+        desc = report.get("description", "")
+
+        print(
+            f"  {i + 1:<4} {ts:<22} {git_str:<10} "
+            f"{agg.get('total_options', '?'):>8}  {desc}"
+        )
+
+    print()
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="LLM extractor benchmark tool.")
     parser.add_argument("--log", default="INFO", help="Log level (default: INFO)")
+    parser.add_argument(
+        "--report-dir",
+        default=DEFAULT_REPORT_DIR,
+        help=f"Report directory (default: {DEFAULT_REPORT_DIR})",
+    )
     sub = parser.add_subparsers(dest="command")
 
     run_p = sub.add_parser("run", help="Run benchmark and produce a metrics report")
@@ -281,12 +425,26 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Use provider batch API with this batch size (e.g. 50)",
     )
-    run_p.add_argument("--output", "-o", help="Output JSON file path")
+    run_p.add_argument(
+        "--output",
+        "-o",
+        help="Output JSON file path (default: auto-generated in report dir)",
+    )
+    run_p.add_argument(
+        "--description",
+        "-d",
+        help="Short description of changes for this run",
+    )
     run_p.add_argument("files", nargs="+", help=".gz files or directories")
 
     cmp_p = sub.add_parser("compare", help="Compare two benchmark reports")
-    cmp_p.add_argument("baseline", help="Baseline report JSON")
-    cmp_p.add_argument("current", help="Current report JSON")
+    cmp_p.add_argument(
+        "reports",
+        nargs="*",
+        help="Two report files to compare (default: latest two from report dir)",
+    )
+
+    sub.add_parser("list", help="List all saved reports")
 
     return parser
 
@@ -306,6 +464,8 @@ if __name__ == "__main__":
         sys.exit(run_bench(args))
     elif args.command == "compare":
         sys.exit(compare_reports(args))
+    elif args.command == "list":
+        sys.exit(list_reports(args))
     else:
         parser.print_help()
         sys.exit(1)
