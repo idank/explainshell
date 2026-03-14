@@ -23,7 +23,7 @@ from explainshell import config, errors, store
 from explainshell.diff import format_diff
 from explainshell.extraction import (
     ExtractorConfig,
-    FileOutcome,
+    ExtractionOutcome,
     make_extractor,
 )
 from explainshell.extraction.runner import run_batch, run_parallel, run_sequential
@@ -534,17 +534,17 @@ def main(args: argparse.Namespace) -> int:
 
         def on_result(gz_path: str, entry: object) -> None:
             nonlocal added, failed, skipped
-            if entry.outcome == FileOutcome.SUCCESS:  # type: ignore[union-attr]
+            if entry.outcome == ExtractionOutcome.SUCCESS:  # type: ignore[union-attr]
                 if s:
-                    s.add_manpage(entry.result.mp, entry.result.raw)  # type: ignore[union-attr]
+                    s.add_manpage(entry.mp, entry.raw)  # type: ignore[union-attr]
                 added += 1
                 short_path = config.source_from_path(gz_path)
                 logger.info(
                     "[%s] done: %d option(s)",
                     short_path,
-                    len(entry.result.mp.options),  # type: ignore[union-attr]
+                    len(entry.mp.options),  # type: ignore[union-attr]
                 )
-            elif entry.outcome == FileOutcome.SKIPPED:  # type: ignore[union-attr]
+            elif entry.outcome == ExtractionOutcome.SKIPPED:  # type: ignore[union-attr]
                 skipped += 1
                 short_path = config.source_from_path(gz_path)
                 logger.info(

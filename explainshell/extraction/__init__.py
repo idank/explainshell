@@ -5,7 +5,7 @@ Factory:
 
 Re-exports:
     ExtractionResult, ExtractionStats, ExtractorConfig, BatchResult,
-    FileEntry, FileOutcome, Extractor
+    ExtractionOutcome, Extractor
 """
 
 from __future__ import annotations
@@ -16,8 +16,7 @@ from explainshell.extraction.types import (
     ExtractionStats,
     Extractor,
     ExtractorConfig,
-    FileEntry,
-    FileOutcome,
+    ExtractionOutcome,
 )
 
 __all__ = [
@@ -26,8 +25,7 @@ __all__ = [
     "ExtractionStats",
     "Extractor",
     "ExtractorConfig",
-    "FileEntry",
-    "FileOutcome",
+    "ExtractionOutcome",
     "make_extractor",
 ]
 

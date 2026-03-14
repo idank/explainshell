@@ -81,6 +81,16 @@ JSON schema:
 
 
 @dataclass
+class ChunkResult:
+    """Result of a single LLM call for one chunk."""
+
+    data: dict
+    messages: list[dict[str, str]]
+    raw_response: str
+    usage: TokenUsage
+
+
+@dataclass
 class PreparedFile:
     """Result of LLMExtractor.prepare() — everything needed for extraction."""
 
@@ -146,7 +156,7 @@ class LLMExtractor:
             plain_text_len=prepared.plain_text_len,
         )
 
-        all_chunk_data: list[tuple[dict, list[dict[str, str]], str]] = []
+        all_chunk_data: list[ChunkResult] = []
         t0 = time.monotonic()
 
         for i, chunk in enumerate(chunks):
@@ -159,9 +169,7 @@ class LLMExtractor:
             )
 
             try:
-                chunk_data, messages, raw_response, chunk_usage = self._call_llm(
-                    chunk, chunk_info
-                )
+                cr = self._call_llm(chunk, chunk_info)
             except ExtractionError as e:
                 raw = getattr(e, "raw_response", None) or getattr(
                     e.__cause__, "raw_response", None
@@ -170,16 +178,16 @@ class LLMExtractor:
                     self._dump_failed_response(basename, i, raw)
                 raise
 
-            stats.input_tokens += chunk_usage.input_tokens
-            stats.output_tokens += chunk_usage.output_tokens
-            n_opts = len(chunk_data["options"])
+            stats.input_tokens += cr.usage.input_tokens
+            stats.output_tokens += cr.usage.output_tokens
+            n_opts = len(cr.data["options"])
             logger.info(
                 "%s: LLM returned %d option(s) for %s",
                 basename,
                 n_opts,
                 chunk_label,
             )
-            all_chunk_data.append((chunk_data, messages, raw_response))
+            all_chunk_data.append(cr)
 
         stats.elapsed_seconds = time.monotonic() - t0
         return self._finalize(gz_path, prepared, all_chunk_data, stats)
@@ -245,21 +253,17 @@ class LLMExtractor:
         gz_path: str,
         prepared: PreparedFile,
         responses: list[str],
-        token_usage: TokenUsage | None = None,
     ) -> ExtractionResult:
         """Finalize extraction from batch responses.
 
         Used by run_batch after collecting provider results.  The returned
-        stats carry ``chunks`` and ``plain_text_len`` but token counts and
-        ``elapsed_seconds`` are only populated when ``token_usage`` is
-        provided by the caller.
+        stats carry ``chunks`` and ``plain_text_len``; token counts are
+        tracked at the batch level by the runner.
         """
-        all_chunk_data: list[tuple[dict, list[dict[str, str]], str]] = []
+        all_chunk_data: list[ChunkResult] = []
         stats = ExtractionStats(
             chunks=prepared.n_chunks,
             plain_text_len=prepared.plain_text_len,
-            input_tokens=token_usage.input_tokens if token_usage else 0,
-            output_tokens=token_usage.output_tokens if token_usage else 0,
         )
 
         for chunk_idx, response_text in enumerate(responses):
@@ -277,7 +281,14 @@ class LLMExtractor:
                 else ""
             )
             messages = self._build_messages(prepared.chunks[chunk_idx], chunk_info)
-            all_chunk_data.append((chunk_data, messages, raw))
+            all_chunk_data.append(
+                ChunkResult(
+                    data=chunk_data,
+                    messages=messages,
+                    raw_response=raw,
+                    usage=TokenUsage(0, 0),
+                )
+            )
 
         return self._finalize(gz_path, prepared, all_chunk_data, stats)
 
@@ -285,7 +296,7 @@ class LLMExtractor:
         self,
         gz_path: str,
         prepared: PreparedFile,
-        all_chunk_data: list[tuple[dict, list[dict[str, str]], str]],
+        all_chunk_data: list[ChunkResult],
         stats: ExtractionStats,
     ) -> ExtractionResult:
         """Assemble ExtractionResult from prepared data + chunk results."""
@@ -301,9 +312,9 @@ class LLMExtractor:
 
         all_raw: list[dict] = []
         dashless_opts = False
-        for i, (chunk_data, messages, raw_response) in enumerate(all_chunk_data):
-            all_raw.extend(chunk_data["options"])
-            if chunk_data.get("dashless_opts"):
+        for i, cr in enumerate(all_chunk_data):
+            all_raw.extend(cr.data["options"])
+            if cr.data.get("dashless_opts"):
                 dashless_opts = True
 
             if self._debug_dir:
@@ -314,9 +325,9 @@ class LLMExtractor:
                     prompt_name = f"{basename}.chunk-{i}.prompt.json"
                     response_name = f"{basename}.chunk-{i}.response.txt"
                 with open(os.path.join(self._debug_dir, prompt_name), "w") as f:
-                    json.dump(messages, f, indent=2)
+                    json.dump(cr.messages, f, indent=2)
                 with open(os.path.join(self._debug_dir, response_name), "w") as f:
-                    f.write(raw_response)
+                    f.write(cr.raw_response)
 
         all_raw = dedup_ref_options(all_raw)
 
@@ -346,13 +357,8 @@ class LLMExtractor:
 
         return ExtractionResult(mp=mp, raw=raw_mp, stats=stats)
 
-    def _call_llm(
-        self, chunk: str, chunk_info: str
-    ) -> tuple[dict, list[dict[str, str]], str, TokenUsage]:
-        """Call LLM via the provider with retries.
-
-        Returns (data_dict, messages, raw_response_content, usage).
-        """
+    def _call_llm(self, chunk: str, chunk_info: str) -> ChunkResult:
+        """Call LLM via the provider with retries."""
         user_content = self._build_user_content(chunk, chunk_info)
         messages = self._build_messages(chunk, chunk_info)
 
@@ -365,7 +371,12 @@ class LLMExtractor:
                 content, usage = provider.call(user_content)
                 data = parse_json_response(content)
                 validate_llm_response(data)
-                return data, messages, content, usage
+                return ChunkResult(
+                    data=data,
+                    messages=messages,
+                    raw_response=content,
+                    usage=usage,
+                )
             except ExtractionError:
                 raise
             except retryable as e:

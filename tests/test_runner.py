@@ -10,7 +10,7 @@ from explainshell.extraction.runner import run_batch
 from explainshell.extraction.types import (
     ExtractionResult,
     ExtractionStats,
-    FileOutcome,
+    ExtractionOutcome,
 )
 
 
@@ -59,19 +59,19 @@ def _make_extractor(
 
     if finalize_error:
 
-        def _finalize(gz_path, prepared, responses, token_usage=None):
+        def _finalize(gz_path, prepared, responses):
             raise finalize_error
 
         ext.finalize.side_effect = _finalize
     elif finalize_results:
 
-        def _finalize(gz_path, prepared, responses, token_usage=None):
+        def _finalize(gz_path, prepared, responses):
             return finalize_results[gz_path]
 
         ext.finalize.side_effect = _finalize
     else:
 
-        def _finalize(gz_path, prepared, responses, token_usage=None):
+        def _finalize(gz_path, prepared, responses):
             return _make_result()
 
         ext.finalize.side_effect = _finalize
@@ -125,10 +125,10 @@ class TestRunBatchStatsContract(unittest.TestCase):
         # bravo will fail finalization
         original_side_effect = ext.finalize.side_effect
 
-        def _finalize_with_error(gz_path, prepared, responses, token_usage=None):
+        def _finalize_with_error(gz_path, prepared, responses):
             if gz_path == gz_b:
                 raise ValueError("finalize failed")
-            return original_side_effect(gz_path, prepared, responses, token_usage)
+            return original_side_effect(gz_path, prepared, responses)
 
         ext.finalize.side_effect = _finalize_with_error
 
@@ -143,16 +143,15 @@ class TestRunBatchStatsContract(unittest.TestCase):
         batch = run_batch(ext, [gz_a, gz_b])
 
         # Only alpha succeeded
-        succeeded = [f for f in batch.files if f.outcome == FileOutcome.SUCCESS]
-        failed = [f for f in batch.files if f.outcome == FileOutcome.FAILED]
+        succeeded = [f for f in batch.files if f.outcome == ExtractionOutcome.SUCCESS]
+        failed = [f for f in batch.files if f.outcome == ExtractionOutcome.FAILED]
         self.assertEqual(len(succeeded), 1)
         self.assertEqual(len(failed), 1)
 
-        # BatchResult.stats should NOT include batch-level token counts
-        # (since batch API doesn't provide per-file breakdowns)
-        self.assertEqual(batch.stats.input_tokens, 0)
-        self.assertEqual(batch.stats.output_tokens, 0)
-        # But non-token stats from successful file should be present
+        # BatchResult.stats includes batch-level token counts
+        self.assertEqual(batch.stats.input_tokens, 500)
+        self.assertEqual(batch.stats.output_tokens, 200)
+        # Plus non-token stats from successful file
         self.assertEqual(batch.stats.chunks, 1)
         self.assertEqual(batch.stats.plain_text_len, 100)
 
@@ -161,7 +160,7 @@ class TestRunBatchFailedStats(unittest.TestCase):
     """Finding 2: Failed batch files should preserve prep-phase stats."""
 
     def test_finalize_failure_preserves_prep_stats(self):
-        """When finalize() fails, the FileEntry should still have prep stats."""
+        """When finalize() fails, the result should still have prep stats."""
         prepared = _make_prepared("alpha")
         gz = "/fake/alpha.1.gz"
 
@@ -178,7 +177,7 @@ class TestRunBatchFailedStats(unittest.TestCase):
 
         self.assertEqual(len(batch.files), 1)
         entry = batch.files[0]
-        self.assertEqual(entry.outcome, FileOutcome.FAILED)
+        self.assertEqual(entry.outcome, ExtractionOutcome.FAILED)
         self.assertIsNotNone(entry.stats)
         self.assertEqual(entry.stats.plain_text_len, 100)
         self.assertEqual(entry.stats.chunks, 1)
@@ -196,7 +195,7 @@ class TestRunBatchFailedStats(unittest.TestCase):
 
         self.assertEqual(len(batch.files), 1)
         entry = batch.files[0]
-        self.assertEqual(entry.outcome, FileOutcome.FAILED)
+        self.assertEqual(entry.outcome, ExtractionOutcome.FAILED)
         self.assertIsNotNone(entry.stats)
         self.assertEqual(entry.stats.plain_text_len, 100)
         self.assertEqual(entry.stats.chunks, 1)
@@ -223,13 +222,13 @@ class TestRunBatchFailedStats(unittest.TestCase):
         bravo_entries = [f for f in batch.files if f.gz_path == gz_b]
         self.assertEqual(len(bravo_entries), 1)
         entry = bravo_entries[0]
-        self.assertEqual(entry.outcome, FileOutcome.FAILED)
+        self.assertEqual(entry.outcome, ExtractionOutcome.FAILED)
         self.assertIsNotNone(entry.stats)
         self.assertEqual(entry.stats.plain_text_len, 100)
 
 
 class TestRunBatchAllOutcomes(unittest.TestCase):
-    """Every input file gets exactly one FileEntry."""
+    """Every input file gets exactly one ExtractionResult."""
 
     def test_all_files_get_entries(self):
         """Even when some fail, every file gets an outcome."""
@@ -240,7 +239,7 @@ class TestRunBatchAllOutcomes(unittest.TestCase):
 
         ext = _make_extractor({gz_a: prepared_a, gz_b: prepared_b})
 
-        def _finalize(gz_path, prepared, responses, token_usage=None):
+        def _finalize(gz_path, prepared, responses):
             if gz_path == gz_b:
                 raise ValueError("boom")
             return _make_result()
@@ -291,11 +290,11 @@ class TestRunBatchAllOutcomes(unittest.TestCase):
         alpha = next(f for f in batch.files if f.gz_path == gz_a)
         bravo = next(f for f in batch.files if f.gz_path == gz_b)
 
-        self.assertEqual(alpha.outcome, FileOutcome.SKIPPED)
+        self.assertEqual(alpha.outcome, ExtractionOutcome.SKIPPED)
         self.assertIsNotNone(alpha.stats)
         self.assertEqual(alpha.stats.plain_text_len, 999999)
 
-        self.assertEqual(bravo.outcome, FileOutcome.SUCCESS)
+        self.assertEqual(bravo.outcome, ExtractionOutcome.SUCCESS)
 
 
 class TestRunBatchCallbacks(unittest.TestCase):
@@ -350,7 +349,7 @@ class TestRunBatchGenericExceptions(unittest.TestCase):
 
         self.assertEqual(len(batch.files), 1)
         entry = batch.files[0]
-        self.assertEqual(entry.outcome, FileOutcome.FAILED)
+        self.assertEqual(entry.outcome, ExtractionOutcome.FAILED)
         self.assertIn("network timeout", entry.error)
         self.assertIsNotNone(entry.stats)
 
@@ -370,7 +369,7 @@ class TestRunBatchGenericExceptions(unittest.TestCase):
 
         self.assertEqual(len(batch.files), 2)
         for entry in batch.files:
-            self.assertEqual(entry.outcome, FileOutcome.FAILED)
+            self.assertEqual(entry.outcome, ExtractionOutcome.FAILED)
             self.assertIn("auth failed", entry.error)
             self.assertIsNotNone(entry.stats)
 
@@ -410,8 +409,8 @@ class TestRunBatchGenericExceptions(unittest.TestCase):
         self.assertEqual(len(batch.files), 2)
         alpha = next(f for f in batch.files if f.gz_path == gz_a)
         bravo = next(f for f in batch.files if f.gz_path == gz_b)
-        self.assertEqual(alpha.outcome, FileOutcome.SUCCESS)
-        self.assertEqual(bravo.outcome, FileOutcome.FAILED)
+        self.assertEqual(alpha.outcome, ExtractionOutcome.SUCCESS)
+        self.assertEqual(bravo.outcome, ExtractionOutcome.FAILED)
         self.assertIn("lost connection", bravo.error)
 
 

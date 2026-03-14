@@ -14,9 +14,9 @@ from collections.abc import Callable
 from explainshell.errors import ExtractionError, SkippedExtraction
 from explainshell.extraction.types import (
     BatchResult,
+    ExtractionResult,
     ExtractionStats,
-    FileEntry,
-    FileOutcome,
+    ExtractionOutcome,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ def run_sequential(
     extractor: object,
     gz_files: list[str],
     on_start: Callable[[str], None] | None = None,
-    on_result: Callable[[str, FileEntry], None] | None = None,
+    on_result: Callable[[str, ExtractionResult], None] | None = None,
 ) -> BatchResult:
     """Run extractor on each file sequentially."""
     batch = BatchResult()
@@ -44,31 +44,26 @@ def run_sequential(
             on_start(gz_path)
 
         try:
-            result = extractor.extract(gz_path)  # type: ignore[union-attr]
-            entry = FileEntry(
-                gz_path=gz_path,
-                outcome=FileOutcome.SUCCESS,
-                result=result,
-                stats=result.stats,
-            )
-            batch.stats += result.stats
+            entry = extractor.extract(gz_path)  # type: ignore[union-attr]
+            entry.gz_path = gz_path
+            batch.stats += entry.stats
         except SkippedExtraction as e:
-            entry = FileEntry(
+            entry = ExtractionResult(
                 gz_path=gz_path,
-                outcome=FileOutcome.SKIPPED,
+                outcome=ExtractionOutcome.SKIPPED,
                 stats=e.stats,
                 error=e.reason,
             )
         except ExtractionError as e:
-            entry = FileEntry(
+            entry = ExtractionResult(
                 gz_path=gz_path,
-                outcome=FileOutcome.FAILED,
+                outcome=ExtractionOutcome.FAILED,
                 error=str(e),
             )
         except Exception as e:
-            entry = FileEntry(
+            entry = ExtractionResult(
                 gz_path=gz_path,
-                outcome=FileOutcome.FAILED,
+                outcome=ExtractionOutcome.FAILED,
                 error=str(e),
             )
 
@@ -84,39 +79,35 @@ def run_parallel(
     gz_files: list[str],
     jobs: int,
     on_start: Callable[[str], None] | None = None,
-    on_result: Callable[[str, FileEntry], None] | None = None,
+    on_result: Callable[[str, ExtractionResult], None] | None = None,
 ) -> BatchResult:
     """Run extractor on files using a thread pool."""
     batch = BatchResult()
 
-    def _extract_one(gz_path: str) -> FileEntry:
+    def _extract_one(gz_path: str) -> ExtractionResult:
         if on_start:
             on_start(gz_path)
         try:
-            result = extractor.extract(gz_path)  # type: ignore[union-attr]
-            return FileEntry(
-                gz_path=gz_path,
-                outcome=FileOutcome.SUCCESS,
-                result=result,
-                stats=result.stats,
-            )
+            entry = extractor.extract(gz_path)  # type: ignore[union-attr]
+            entry.gz_path = gz_path
+            return entry
         except SkippedExtraction as e:
-            return FileEntry(
+            return ExtractionResult(
                 gz_path=gz_path,
-                outcome=FileOutcome.SKIPPED,
+                outcome=ExtractionOutcome.SKIPPED,
                 stats=e.stats,
                 error=e.reason,
             )
         except ExtractionError as e:
-            return FileEntry(
+            return ExtractionResult(
                 gz_path=gz_path,
-                outcome=FileOutcome.FAILED,
+                outcome=ExtractionOutcome.FAILED,
                 error=str(e),
             )
         except Exception as e:
-            return FileEntry(
+            return ExtractionResult(
                 gz_path=gz_path,
-                outcome=FileOutcome.FAILED,
+                outcome=ExtractionOutcome.FAILED,
                 error=str(e),
             )
 
@@ -128,8 +119,8 @@ def run_parallel(
         for future in concurrent.futures.as_completed(futures):
             entry = future.result()
             batch.files.append(entry)
-            if entry.outcome == FileOutcome.SUCCESS and entry.result:
-                batch.stats += entry.result.stats
+            if entry.outcome == ExtractionOutcome.SUCCESS:
+                batch.stats += entry.stats
             if on_result:
                 on_result(entry.gz_path, entry)
     except KeyboardInterrupt:
@@ -176,7 +167,7 @@ def run_batch(
     gz_files: list[str],
     batch_size: int = 50,
     on_start: Callable[[str], None] | None = None,
-    on_result: Callable[[str, FileEntry], None] | None = None,
+    on_result: Callable[[str, ExtractionResult], None] | None = None,
 ) -> BatchResult:
     """Run LLM extraction via provider batch API.
 
@@ -197,9 +188,9 @@ def run_batch(
         try:
             prepared = llm_ext.prepare(gz_path)
         except SkippedExtraction as e:
-            entry = FileEntry(
+            entry = ExtractionResult(
                 gz_path=gz_path,
-                outcome=FileOutcome.SKIPPED,
+                outcome=ExtractionOutcome.SKIPPED,
                 stats=e.stats,
                 error=e.reason,
             )
@@ -209,9 +200,9 @@ def run_batch(
             continue
         except ExtractionError as e:
             logger.error("failed to prepare %s: %s", gz_path, e)
-            entry = FileEntry(
+            entry = ExtractionResult(
                 gz_path=gz_path,
-                outcome=FileOutcome.FAILED,
+                outcome=ExtractionOutcome.FAILED,
                 error=str(e),
             )
             batch.files.append(entry)
@@ -246,9 +237,9 @@ def run_batch(
     except Exception as e:
         logger.error("failed to create batch poll client: %s", e)
         for work_idx, gz_path, prepared in work_items:
-            entry = FileEntry(
+            entry = ExtractionResult(
                 gz_path=gz_path,
-                outcome=FileOutcome.FAILED,
+                outcome=ExtractionOutcome.FAILED,
                 error=f"batch poll client failed: {e}",
                 stats=_prep_stats(prepared),
             )
@@ -280,6 +271,8 @@ def run_batch(
             batch_results, batch_usage = bp.collect_results(completed_job)
             all_results.update(batch_results)
             cumulative_requests += len(batch_results)
+            batch.stats.input_tokens += batch_usage.input_tokens
+            batch.stats.output_tokens += batch_usage.output_tokens
 
             logger.info(
                 "batch %d/%d completed: %d result(s), "
@@ -315,9 +308,9 @@ def run_batch(
                     responses.append(response_text)
 
                 if file_failed:
-                    entry = FileEntry(
+                    entry = ExtractionResult(
                         gz_path=gz_path,
-                        outcome=FileOutcome.FAILED,
+                        outcome=ExtractionOutcome.FAILED,
                         error="missing batch result for one or more chunks",
                         stats=_prep_stats(prepared),
                     )
@@ -330,9 +323,9 @@ def run_batch(
                     result = llm_ext.finalize(gz_path, prepared, responses)  # type: ignore[arg-type]
                 except Exception as e:
                     logger.error("failed to finalize %s: %s", gz_path, e)
-                    entry = FileEntry(
+                    entry = ExtractionResult(
                         gz_path=gz_path,
-                        outcome=FileOutcome.FAILED,
+                        outcome=ExtractionOutcome.FAILED,
                         error=str(e),
                         stats=_prep_stats(prepared),
                     )
@@ -341,22 +334,18 @@ def run_batch(
                         on_result(gz_path, entry)
                     continue
 
-                entry = FileEntry(
-                    gz_path=gz_path,
-                    outcome=FileOutcome.SUCCESS,
-                    result=result,
-                    stats=result.stats,
-                )
+                entry = result
+                entry.gz_path = gz_path
                 batch.files.append(entry)
-                batch.stats += result.stats
-                logger.info("[%s] done: %d option(s)", gz_path, len(result.mp.options))
+                batch.stats += entry.stats
+                logger.info("[%s] done: %d option(s)", gz_path, len(entry.mp.options))
                 if on_result:
                     on_result(gz_path, entry)
 
             # Cumulative progress summary.
             elapsed_m = int((time.time() - batch_start_time) / 60)
             n_succeeded = sum(
-                1 for f in batch.files if f.outcome == FileOutcome.SUCCESS
+                1 for f in batch.files if f.outcome == ExtractionOutcome.SUCCESS
             )
             logger.info(
                 "progress: %d/%d requests done, %d files extracted, "
@@ -380,9 +369,9 @@ def run_batch(
                 if work_idx not in batch_work_indices:
                     continue
                 finalized_indices.add(work_idx)
-                entry = FileEntry(
+                entry = ExtractionResult(
                     gz_path=gz_path,
-                    outcome=FileOutcome.FAILED,
+                    outcome=ExtractionOutcome.FAILED,
                     error=f"batch {batch_idx} failed: {e}",
                     stats=_prep_stats(prepared),
                 )
@@ -395,9 +384,9 @@ def run_batch(
     for work_idx, gz_path, prepared in work_items:
         if work_idx not in finalized_indices:
             finalized_indices.add(work_idx)
-            entry = FileEntry(
+            entry = ExtractionResult(
                 gz_path=gz_path,
-                outcome=FileOutcome.FAILED,
+                outcome=ExtractionOutcome.FAILED,
                 error="file was never finalized (batch may not have run)",
                 stats=_prep_stats(prepared),
             )
@@ -405,7 +394,7 @@ def run_batch(
             if on_result:
                 on_result(gz_path, entry)
 
-    n_succeeded = sum(1 for f in batch.files if f.outcome == FileOutcome.SUCCESS)
+    n_succeeded = sum(1 for f in batch.files if f.outcome == ExtractionOutcome.SUCCESS)
     logger.info(
         "batch: %d/%d file(s) extracted successfully",
         n_succeeded,
