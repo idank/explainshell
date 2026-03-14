@@ -34,6 +34,7 @@ from explainshell.extraction.llm.response import (
 from explainshell.extraction.llm.text import (
     MAX_MANPAGE_CHARS,
     chunk_text,
+    clean_mandoc_artifacts,
     filter_sections,
     get_manpage_text,
     number_lines,
@@ -199,7 +200,7 @@ class LLMExtractor:
         Raises SkippedExtraction if the manpage is too large.
         """
         synopsis, aliases = manpage.get_synopsis_and_aliases(gz_path)
-        plain_text = get_manpage_text(gz_path)
+        plain_text = clean_mandoc_artifacts(get_manpage_text(gz_path))
         basename = os.path.splitext(os.path.splitext(os.path.basename(gz_path))[0])[0]
 
         if len(plain_text) > MAX_MANPAGE_CHARS:
