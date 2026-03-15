@@ -10,10 +10,15 @@ import concurrent.futures
 import logging
 import time
 from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from explainshell.extraction.llm import LLMExtractor, PreparedFile
 
 from explainshell.errors import ExtractionError, SkippedExtraction
 from explainshell.extraction.types import (
     BatchResult,
+    Extractor,
     ExtractionResult,
     ExtractionStats,
     ExtractionOutcome,
@@ -30,8 +35,29 @@ def _fmt_tokens(n: int) -> str:
     return str(n)
 
 
+def _extract_one(extractor: Extractor, gz_path: str) -> ExtractionResult:
+    """Run extractor on a single file, catching all expected errors."""
+    try:
+        entry = extractor.extract(gz_path)
+        entry.gz_path = gz_path
+        return entry
+    except SkippedExtraction as e:
+        return ExtractionResult(
+            gz_path=gz_path,
+            outcome=ExtractionOutcome.SKIPPED,
+            stats=e.stats,
+            error=e.reason,
+        )
+    except (ExtractionError, Exception) as e:
+        return ExtractionResult(
+            gz_path=gz_path,
+            outcome=ExtractionOutcome.FAILED,
+            error=str(e),
+        )
+
+
 def run_sequential(
-    extractor: object,
+    extractor: Extractor,
     gz_files: list[str],
     on_start: Callable[[str], None] | None = None,
     on_result: Callable[[str, ExtractionResult], None] | None = None,
@@ -43,30 +69,9 @@ def run_sequential(
         if on_start:
             on_start(gz_path)
 
-        try:
-            entry = extractor.extract(gz_path)  # type: ignore[union-attr]
-            entry.gz_path = gz_path
+        entry = _extract_one(extractor, gz_path)
+        if entry.outcome == ExtractionOutcome.SUCCESS:
             batch.stats += entry.stats
-        except SkippedExtraction as e:
-            entry = ExtractionResult(
-                gz_path=gz_path,
-                outcome=ExtractionOutcome.SKIPPED,
-                stats=e.stats,
-                error=e.reason,
-            )
-        except ExtractionError as e:
-            entry = ExtractionResult(
-                gz_path=gz_path,
-                outcome=ExtractionOutcome.FAILED,
-                error=str(e),
-            )
-        except Exception as e:
-            entry = ExtractionResult(
-                gz_path=gz_path,
-                outcome=ExtractionOutcome.FAILED,
-                error=str(e),
-            )
-
         batch.files.append(entry)
         if on_result:
             on_result(gz_path, entry)
@@ -75,7 +80,7 @@ def run_sequential(
 
 
 def run_parallel(
-    extractor: object,
+    extractor: Extractor,
     gz_files: list[str],
     jobs: int,
     on_start: Callable[[str], None] | None = None,
@@ -84,38 +89,14 @@ def run_parallel(
     """Run extractor on files using a thread pool."""
     batch = BatchResult()
 
-    def _extract_one(gz_path: str) -> ExtractionResult:
+    def _do_one(gz_path: str) -> ExtractionResult:
         if on_start:
             on_start(gz_path)
-        try:
-            entry = extractor.extract(gz_path)  # type: ignore[union-attr]
-            entry.gz_path = gz_path
-            return entry
-        except SkippedExtraction as e:
-            return ExtractionResult(
-                gz_path=gz_path,
-                outcome=ExtractionOutcome.SKIPPED,
-                stats=e.stats,
-                error=e.reason,
-            )
-        except ExtractionError as e:
-            return ExtractionResult(
-                gz_path=gz_path,
-                outcome=ExtractionOutcome.FAILED,
-                error=str(e),
-            )
-        except Exception as e:
-            return ExtractionResult(
-                gz_path=gz_path,
-                outcome=ExtractionOutcome.FAILED,
-                error=str(e),
-            )
+        return _extract_one(extractor, gz_path)
 
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=jobs)
     try:
-        futures = {
-            executor.submit(_extract_one, gz_path): gz_path for gz_path in gz_files
-        }
+        futures = {executor.submit(_do_one, gz_path): gz_path for gz_path in gz_files}
         for future in concurrent.futures.as_completed(futures):
             entry = future.result()
             batch.files.append(entry)
@@ -154,16 +135,16 @@ def _build_chunk_aligned_batches(
     return batches
 
 
-def _prep_stats(prepared: object) -> ExtractionStats:
+def _prep_stats(prepared: PreparedFile) -> ExtractionStats:
     """Build an ExtractionStats from a PreparedFile's prep-phase metrics."""
     return ExtractionStats(
-        chunks=prepared.n_chunks,  # type: ignore[union-attr]
-        plain_text_len=prepared.plain_text_len,  # type: ignore[union-attr]
+        chunks=prepared.n_chunks,
+        plain_text_len=prepared.plain_text_len,
     )
 
 
 def run_batch(
-    extractor: object,  # LLMExtractor
+    extractor: LLMExtractor,
     gz_files: list[str],
     batch_size: int = 50,
     on_start: Callable[[str], None] | None = None,
@@ -175,18 +156,15 @@ def run_batch(
     not after all batches finish. The optional ``on_result`` callback
     is invoked immediately after each file is finalized.
     """
-    from explainshell.extraction.llm import LLMExtractor
-
-    llm_ext: LLMExtractor = extractor  # type: ignore[assignment]
     batch = BatchResult()
 
     # Phase 1: prepare all files.
-    work_items: list[tuple[int, str, object]] = []
+    work_items: list[tuple[int, str, PreparedFile]] = []
     for gz_path in gz_files:
         if on_start:
             on_start(gz_path)
         try:
-            prepared = llm_ext.prepare(gz_path)
+            prepared = extractor.prepare(gz_path)
         except SkippedExtraction as e:
             entry = ExtractionResult(
                 gz_path=gz_path,
@@ -198,7 +176,7 @@ def run_batch(
             if on_result:
                 on_result(gz_path, entry)
             continue
-        except ExtractionError as e:
+        except (ExtractionError, Exception) as e:
             logger.error("failed to prepare %s: %s", gz_path, e)
             entry = ExtractionResult(
                 gz_path=gz_path,
@@ -218,9 +196,9 @@ def run_batch(
     all_requests: list[tuple[str, str]] = []
     key_to_location: dict[str, tuple[int, int]] = {}
     for work_idx, gz_path, prepared in work_items:
-        n_chunks = prepared.n_chunks  # type: ignore[union-attr]
+        n_chunks = prepared.n_chunks
         for chunk_idx in range(n_chunks):
-            _chunk_info, user_content = llm_ext.build_request(prepared, chunk_idx)  # type: ignore[arg-type]
+            _chunk_info, user_content = extractor.build_request(prepared, chunk_idx)
             key_str = f"{work_idx}:{chunk_idx}"
             all_requests.append((key_str, user_content))
             key_to_location[key_str] = (work_idx, chunk_idx)
@@ -231,7 +209,7 @@ def run_batch(
 
     # Phase 3: submit in batches, finalizing files per-batch.
     batches = _build_chunk_aligned_batches(all_requests, key_to_location, batch_size)
-    bp = llm_ext.batch_provider
+    bp = extractor.batch_provider
     try:
         client = bp.make_poll_client()
     except Exception as e:
@@ -289,7 +267,7 @@ def run_batch(
             for work_idx, gz_path, prepared in work_items:
                 if work_idx in finalized_indices:
                     continue
-                n_chunks = prepared.n_chunks  # type: ignore[union-attr]
+                n_chunks = prepared.n_chunks
                 if not all(f"{work_idx}:{ci}" in all_results for ci in range(n_chunks)):
                     continue
 
@@ -321,7 +299,7 @@ def run_batch(
                     continue
 
                 try:
-                    result = llm_ext.finalize(gz_path, prepared, responses)  # type: ignore[arg-type]
+                    result = extractor.finalize(gz_path, prepared, responses)
                 except Exception as e:
                     logger.error("failed to finalize %s: %s", gz_path, e)
                     entry = ExtractionResult(

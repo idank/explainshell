@@ -618,5 +618,63 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
         self.assertEqual(result.files[0].outcome, ExtractionOutcome.SKIPPED)
 
 
+class TestDiffExtractorLabels(unittest.TestCase):
+    """Labels in diff output must include model when present."""
+
+    @patch("explainshell.manager.run_sequential")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_llm_vs_llm_labels_include_model(
+        self, mock_source, mock_make_ext, mock_run_seq
+    ):
+        """When both sides are llm:<model>, labels must distinguish them."""
+        mock_source.side_effect = lambda p: p.split("/")[-1]
+        from explainshell.extraction.types import BatchResult
+
+        mp = MagicMock()
+        mp.options = []
+
+        left_batch = BatchResult()
+        left_batch.files = [
+            ExtractionResult(
+                gz_path="/fake/a.1.gz",
+                outcome=ExtractionOutcome.SUCCESS,
+                stats=ExtractionStats(input_tokens=100, output_tokens=50),
+                mp=mp,
+            ),
+        ]
+
+        right_batch = BatchResult()
+        right_batch.files = [
+            ExtractionResult(
+                gz_path="/fake/a.1.gz",
+                outcome=ExtractionOutcome.SUCCESS,
+                stats=ExtractionStats(input_tokens=200, output_tokens=80),
+                mp=mp,
+            ),
+        ]
+
+        mock_run_seq.side_effect = [left_batch, right_batch]
+
+        from explainshell.manager import _run_diff_extractors
+
+        import logging
+
+        with self.assertLogs("explainshell.manager", level=logging.INFO) as cm:
+            _run_diff_extractors(
+                ["/fake/a.1.gz"],
+                ("llm", "openai/gpt-5-mini"),
+                ("llm", "gemini/2.5-flash"),
+                None,
+            )
+
+        log_text = "\n".join(cm.output)
+        # Header must show full qualified labels, not bare "llm vs llm"
+        self.assertIn("llm (openai/gpt-5-mini) vs llm (gemini/2.5-flash)", log_text)
+        # Token lines must distinguish the two models
+        self.assertIn("llm (openai/gpt-5-mini)", log_text)
+        self.assertIn("llm (gemini/2.5-flash)", log_text)
+
+
 if __name__ == "__main__":
     unittest.main()
