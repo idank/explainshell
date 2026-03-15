@@ -1,4 +1,8 @@
+import os
+
 from explainshell import store, errors
+
+TESTS_DIR = os.path.dirname(__file__)
 
 
 class MockStore:
