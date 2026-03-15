@@ -170,7 +170,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
     @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
-    @patch("explainshell.manager._collect_gz_files")
+    @patch("explainshell.util.collect_gz_files")
     @patch("explainshell.manager.config.source_from_path")
     def test_db_writes_after_each_batch(
         self,
@@ -240,7 +240,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
     @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
-    @patch("explainshell.manager._collect_gz_files")
+    @patch("explainshell.util.collect_gz_files")
     @patch("explainshell.manager.config.source_from_path")
     def test_batch2_failure_preserves_batch1_writes(
         self,
@@ -338,7 +338,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
 
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
-    @patch("explainshell.manager._collect_gz_files")
+    @patch("explainshell.util.collect_gz_files")
     @patch(
         "explainshell.manager.config.source_from_path", return_value="fake/echo.1.gz"
     )
@@ -364,7 +364,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
 
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
-    @patch("explainshell.manager._collect_gz_files")
+    @patch("explainshell.util.collect_gz_files")
     @patch(
         "explainshell.manager.config.source_from_path", return_value="fake/echo.1.gz"
     )
@@ -390,7 +390,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
 
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
-    @patch("explainshell.manager._collect_gz_files")
+    @patch("explainshell.util.collect_gz_files")
     @patch(
         "explainshell.manager.config.source_from_path", return_value="fake/echo.1.gz"
     )
@@ -417,7 +417,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
     @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
-    @patch("explainshell.manager._collect_gz_files")
+    @patch("explainshell.util.collect_gz_files")
     @patch(
         "explainshell.manager.config.source_from_path", return_value="fake/echo.1.gz"
     )

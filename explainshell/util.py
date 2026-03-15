@@ -1,4 +1,6 @@
+import glob
 import itertools
+import os
 from operator import itemgetter
 
 
@@ -85,3 +87,25 @@ def name_section(path):
     assert ".gz" not in path
     name, section = path.rsplit(".", 1)
     return name, section
+
+
+def collect_gz_files(paths: list[str]) -> list[str]:
+    """Expand a list of files/directories into absolute .gz file paths."""
+    result: list[str] = []
+    for path in paths:
+        if os.path.isdir(path):
+            result.extend(
+                sorted(glob.glob(os.path.join(path, "**", "*.gz"), recursive=True))
+            )
+        else:
+            result.append(path)
+    return [os.path.abspath(p) for p in result]
+
+
+def fmt_tokens(n: int) -> str:
+    """Format token count for display (e.g. 878K, 1.8M)."""
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.0f}K"
+    return str(n)

@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from explainshell.extraction.llm import PreparedFile
 
 from explainshell.errors import ExtractionError, SkippedExtraction
+from explainshell.util import fmt_tokens
 from explainshell.extraction.types import (
     BatchExtractor,
     BatchResult,
@@ -26,14 +27,6 @@ from explainshell.extraction.types import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _fmt_tokens(n: int) -> str:
-    if n >= 1_000_000:
-        return f"{n / 1_000_000:.1f}M"
-    if n >= 1_000:
-        return f"{n / 1_000:.0f}K"
-    return str(n)
 
 
 def _extract_one(extractor: Extractor, gz_path: str) -> ExtractionResult:
@@ -255,11 +248,13 @@ def run_batch(
             batch_complete_msg = (
                 f"batch {batch_idx}/{len(batches)} completed: "
                 f"{len(collected.responses)} result(s), "
-                f"input={_fmt_tokens(collected.usage.input_tokens)} tokens, "
-                f"output={_fmt_tokens(collected.usage.output_tokens)} tokens"
+                f"input={fmt_tokens(collected.usage.input_tokens)} tokens, "
+                f"output={fmt_tokens(collected.usage.output_tokens)} tokens"
             )
             if collected.usage.reasoning_tokens:
-                batch_complete_msg += f", reasoning={_fmt_tokens(collected.usage.reasoning_tokens)} tokens"
+                batch_complete_msg += (
+                    f", reasoning={fmt_tokens(collected.usage.reasoning_tokens)} tokens"
+                )
             logger.info(batch_complete_msg)
 
             # Finalize files that now have all chunks available.
@@ -328,12 +323,12 @@ def run_batch(
             progress_msg = (
                 f"progress: {cumulative_requests}/{len(all_requests)} requests done, "
                 f"{n_succeeded} files extracted, "
-                f"input={_fmt_tokens(batch.stats.input_tokens)} tokens, "
-                f"output={_fmt_tokens(batch.stats.output_tokens)} tokens"
+                f"input={fmt_tokens(batch.stats.input_tokens)} tokens, "
+                f"output={fmt_tokens(batch.stats.output_tokens)} tokens"
             )
             if batch.stats.reasoning_tokens:
                 progress_msg += (
-                    f", reasoning={_fmt_tokens(batch.stats.reasoning_tokens)} tokens"
+                    f", reasoning={fmt_tokens(batch.stats.reasoning_tokens)} tokens"
                 )
             progress_msg += f", elapsed={elapsed_m}m"
             logger.info(progress_msg)

@@ -387,7 +387,6 @@ def explain_cmd(command, store, distro=None, release=None, explain_prefix="/expl
     matches = list(itertools.chain.from_iterable(matches))
     helpers.suggestions(matches, command)
 
-    # _check_overlaps(matcher_.s, matches)
     matches.sort(key=lambda d: d["start"])
 
     it = util.Peekable(iter(matches))
@@ -480,14 +479,3 @@ def _substitution_markup(cmd, explain_prefix="/explain"):
     return (
         '<a href="{prefix}?{query}" title="Zoom in to nested command">{cmd}</a>'
     ).format(prefix=explain_prefix, cmd=cmd, query=encoded)
-
-
-def _check_overlaps(s, matches):
-    explained = [None] * len(s)
-    for d in matches:
-        for i in range(d["start"], d["end"]):
-            if explained[i]:
-                raise RuntimeError(
-                    f"explained overlap for group {d} at {i} with {explained[i]}"
-                )
-            explained[i] = d

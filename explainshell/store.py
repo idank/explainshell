@@ -174,10 +174,6 @@ class ParsedManpage(BaseModel):
 
         return groups
 
-    @property
-    def synopsis_no_name(self):
-        return re.match(r"[\w|-]+ - (.*)$", self.synopsis).group(1)
-
     def find_option(self, flag):
         for o_tmp in self.options:
             for o in o_tmp.opts:
@@ -276,16 +272,6 @@ class Store:
             DELETE FROM manpages;
         """)
         self._conn.commit()
-
-    def __contains__(self, name):
-        row = self._conn.execute(
-            "SELECT COUNT(*) FROM mappings WHERE src = ?", (name,)
-        ).fetchone()
-        return row[0] > 0
-
-    def __iter__(self):
-        for row in self._conn.execute("SELECT * FROM parsed_manpages"):
-            yield ParsedManpage.from_store(dict(row))
 
     def find_man_page(self, name, distro=None, release=None):
         """find a man page by its name, everything following the last dot (.) in name,
@@ -535,80 +521,6 @@ class Store:
             )
         self._conn.commit()
         return m
-
-    def update_man_page(self, m, raw):
-        """update m and add new aliases if necessary
-
-        change updated attribute so we don't overwrite this in the future"""
-        logger.info("updating manpage %s", m.source)
-        m.updated = True
-
-        self._upsert_raw_manpage(m.source, raw)
-
-        d = m.to_store()
-        self._conn.execute(
-            """UPDATE parsed_manpages
-               SET name=:name, synopsis=:synopsis, options=:options,
-                   aliases=:aliases, dashless_opts=:dashless_opts,
-                   has_subcommands=:has_subcommands, updated=:updated, nested_cmd=:nested_cmd,
-                   extractor=:extractor, extraction_meta=:extraction_meta
-               WHERE source=:source""",
-            d,
-        )
-        self._conn.commit()
-
-        for alias, score in m.aliases:
-            if alias not in self:
-                self._conn.execute(
-                    "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)",
-                    (alias, m.source, score),
-                )
-                self._conn.commit()
-                logger.info(
-                    "inserting mapping (alias) %s -> %s with score %d",
-                    alias,
-                    m.name,
-                    score,
-                )
-            else:
-                logger.debug(
-                    "mapping (alias) %s -> %s already exists",
-                    alias,
-                    m.name,
-                )
-        return m
-
-    def verify(self):
-        # check that everything in manpage is reachable
-        mapping_rows = self._conn.execute("SELECT dst FROM mappings").fetchall()
-        reachable = {row["dst"] for row in mapping_rows}
-
-        manpage_rows = self._conn.execute(
-            "SELECT source FROM parsed_manpages"
-        ).fetchall()
-        man_pages = {row["source"] for row in manpage_rows}
-
-        ok = True
-        unreachable_sources = man_pages - reachable
-        if unreachable_sources:
-            logger.error(
-                "manpages %r are unreachable (nothing maps to them)",
-                unreachable_sources,
-            )
-            placeholders = ",".join("?" * len(unreachable_sources))
-            name_rows = self._conn.execute(
-                f"SELECT name FROM parsed_manpages WHERE source IN ({placeholders})",
-                list(unreachable_sources),
-            ).fetchall()
-            unreachable_sources = [row["name"] for row in name_rows]
-            ok = False
-
-        notfound = reachable - man_pages
-        if notfound:
-            logger.error("mappings to non-existing manpages: %r", notfound)
-            ok = False
-
-        return ok, unreachable_sources, notfound
 
     def names(self):
         for row in self._conn.execute("SELECT source, name FROM parsed_manpages"):
