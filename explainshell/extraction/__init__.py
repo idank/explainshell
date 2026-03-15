@@ -11,6 +11,7 @@ Re-exports:
 from __future__ import annotations
 
 from explainshell.extraction.types import (
+    BatchExtractor,
     BatchResult,
     ExtractionResult,
     ExtractionStats,
@@ -20,6 +21,7 @@ from explainshell.extraction.types import (
 )
 
 __all__ = [
+    "BatchExtractor",
     "BatchResult",
     "ExtractionResult",
     "ExtractionStats",

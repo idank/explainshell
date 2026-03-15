@@ -18,10 +18,6 @@ import os
 import sys
 import threading
 import time
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from explainshell.extraction.llm import LLMExtractor
 
 from explainshell import config, errors, store
 from explainshell.diff import format_diff
@@ -32,7 +28,7 @@ from explainshell.extraction import (
     ExtractionResult,
     make_extractor,
 )
-from explainshell.extraction.runner import run_batch, run_parallel, run_sequential
+from explainshell.extraction.runner import run, run_sequential
 
 logger = logging.getLogger(__name__)
 
@@ -533,31 +529,14 @@ def main(args: argparse.Namespace) -> int:
                     entry.error or "unknown reason",
                 )
 
-        if args.batch is not None:
-            from typing import cast
-
-            batch_result = run_batch(
-                cast("LLMExtractor", extractor),
-                work_files,
-                batch_size=args.batch,
-                on_start=on_start,
-                on_result=on_result,
-            )
-        elif args.jobs > 1:
-            batch_result = run_parallel(
-                extractor,
-                work_files,
-                args.jobs,
-                on_start=on_start,
-                on_result=on_result,
-            )
-        else:
-            batch_result = run_sequential(
-                extractor,
-                work_files,
-                on_start=on_start,
-                on_result=on_result,
-            )
+        batch_result = run(
+            extractor,
+            work_files,
+            batch_size=args.batch,
+            jobs=args.jobs,
+            on_start=on_start,
+            on_result=on_result,
+        )
 
     added = len(batch_result.succeeded)
     skipped = len(batch_result.skipped) + prefilter_skipped

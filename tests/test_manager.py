@@ -150,7 +150,7 @@ class TestBuildChunkAlignedBatches(unittest.TestCase):
 
 class TestBatchPerBatchDbWrites(unittest.TestCase):
     """Verify the manager writes results to the DB via on_result callback
-    from run_batch."""
+    from run()."""
 
     def _make_args(self, batch_size=2):
         return argparse.Namespace(
@@ -167,7 +167,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
             files=[],
         )
 
-    @patch("explainshell.manager.run_batch")
+    @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
     @patch("explainshell.manager._collect_gz_files")
@@ -178,7 +178,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
         mock_collect,
         mock_store_create,
         mock_make_ext,
-        mock_run_batch,
+        mock_run,
     ):
         """Verify on_result callback writes to DB for each successful file."""
         gz_files = [
@@ -198,10 +198,12 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
 
         mock_make_ext.return_value = MagicMock()
 
-        # When run_batch is called, simulate per-file callbacks
+        # When run() is called, simulate per-file callbacks
         writes_at_callback = []
 
-        def _fake_run_batch(ext, files, batch_size, on_start=None, on_result=None):
+        def _fake_run(
+            ext, files, batch_size=None, jobs=1, on_start=None, on_result=None
+        ):
             from explainshell.extraction.types import BatchResult
 
             batch = BatchResult()
@@ -223,7 +225,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
                     on_result(gz_path, entry)
             return batch
 
-        mock_run_batch.side_effect = _fake_run_batch
+        mock_run.side_effect = _fake_run
 
         from explainshell.manager import main
 
@@ -235,7 +237,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
         # Writes are incremental: 0 before first, 1 before second, etc.
         self.assertEqual(writes_at_callback, [0, 1, 2, 3])
 
-    @patch("explainshell.manager.run_batch")
+    @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
     @patch("explainshell.manager._collect_gz_files")
@@ -246,7 +248,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
         mock_collect,
         mock_store_create,
         mock_make_ext,
-        mock_run_batch,
+        mock_run,
     ):
         """If some files fail, successful files must still be in the DB."""
         gz_files = [
@@ -265,7 +267,9 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
         mock_store.find_man_page.side_effect = _errors.ProgramDoesNotExist("x")
         mock_make_ext.return_value = MagicMock()
 
-        def _fake_run_batch(ext, files, batch_size, on_start=None, on_result=None):
+        def _fake_run(
+            ext, files, batch_size=None, jobs=1, on_start=None, on_result=None
+        ):
             from explainshell.extraction.types import BatchResult
 
             batch = BatchResult()
@@ -295,7 +299,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
                     on_result(gz_path, entry)
             return batch
 
-        mock_run_batch.side_effect = _fake_run_batch
+        mock_run.side_effect = _fake_run
 
         from explainshell.manager import main
 
@@ -410,7 +414,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_store_create.assert_not_called()
         self.assertEqual(ret, 1)
 
-    @patch("explainshell.manager.run_sequential")
+    @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
     @patch("explainshell.manager._collect_gz_files")
@@ -418,7 +422,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
         "explainshell.manager.config.source_from_path", return_value="fake/echo.1.gz"
     )
     def test_normal_run_writes_to_store(
-        self, mock_source, mock_collect, mock_store_create, mock_make_ext, mock_run_seq
+        self, mock_source, mock_collect, mock_store_create, mock_make_ext, mock_run
     ):
         mock_collect.return_value = ["/fake/echo.1.gz"]
 
@@ -434,7 +438,9 @@ class TestLlmManagerDryRun(unittest.TestCase):
 
         mock_make_ext.return_value = MagicMock()
 
-        def _fake_run_sequential(ext, files, on_start=None, on_result=None):
+        def _fake_run(
+            ext, files, batch_size=None, jobs=1, on_start=None, on_result=None
+        ):
             from explainshell.extraction.types import BatchResult
 
             batch = BatchResult()
@@ -453,7 +459,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
                     on_result(gz_path, entry)
             return batch
 
-        mock_run_seq.side_effect = _fake_run_sequential
+        mock_run.side_effect = _fake_run
 
         from explainshell.manager import main
 

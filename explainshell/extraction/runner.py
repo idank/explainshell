@@ -13,10 +13,11 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from explainshell.extraction.llm import LLMExtractor, PreparedFile
+    from explainshell.extraction.llm import PreparedFile
 
 from explainshell.errors import ExtractionError, SkippedExtraction
 from explainshell.extraction.types import (
+    BatchExtractor,
     BatchResult,
     Extractor,
     ExtractionResult,
@@ -144,7 +145,7 @@ def _prep_stats(prepared: PreparedFile) -> ExtractionStats:
 
 
 def run_batch(
-    extractor: LLMExtractor,
+    extractor: BatchExtractor,
     gz_files: list[str],
     batch_size: int = 50,
     on_start: Callable[[str], None] | None = None,
@@ -196,9 +197,7 @@ def run_batch(
     all_requests: list[tuple[str, str]] = []
     key_to_location: dict[str, tuple[int, int]] = {}
     for work_idx, gz_path, prepared in work_items:
-        n_chunks = prepared.n_chunks
-        for chunk_idx in range(n_chunks):
-            _chunk_info, user_content = extractor.build_request(prepared, chunk_idx)
+        for chunk_idx, user_content in enumerate(prepared.requests):
             key_str = f"{work_idx}:{chunk_idx}"
             all_requests.append((key_str, user_content))
             key_to_location[key_str] = (work_idx, chunk_idx)
@@ -382,3 +381,48 @@ def run_batch(
         len(work_items),
     )
     return batch
+
+
+def run(
+    extractor: Extractor,
+    gz_files: list[str],
+    *,
+    batch_size: int | None = None,
+    jobs: int = 1,
+    on_start: Callable[[str], None] | None = None,
+    on_result: Callable[[str, ExtractionResult], None] | None = None,
+) -> BatchResult:
+    """Unified dispatcher for all execution modes.
+
+    - ``batch_size`` set → batch mode (requires ``BatchExtractor``).
+    - ``jobs > 1`` → parallel mode via thread pool.
+    - otherwise → sequential.
+    """
+    if batch_size is not None:
+        if batch_size < 1:
+            raise ValueError(f"batch_size must be >= 1 (got {batch_size})")
+        if not isinstance(extractor, BatchExtractor):
+            raise TypeError(
+                f"batch mode requires a BatchExtractor (got {type(extractor).__name__})"
+            )
+        return run_batch(
+            extractor,
+            gz_files,
+            batch_size=batch_size,
+            on_start=on_start,
+            on_result=on_result,
+        )
+    if jobs > 1:
+        return run_parallel(
+            extractor,
+            gz_files,
+            jobs,
+            on_start=on_start,
+            on_result=on_result,
+        )
+    return run_sequential(
+        extractor,
+        gz_files,
+        on_start=on_start,
+        on_result=on_result,
+    )

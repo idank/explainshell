@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from explainshell.extraction.llm import PreparedFile
+    from explainshell.extraction.llm.providers import BatchProvider
     from explainshell.store import ParsedManpage, RawManpage
 
 
@@ -115,3 +117,17 @@ class ExtractorConfig:
 @runtime_checkable
 class Extractor(Protocol):
     def extract(self, gz_path: str) -> ExtractionResult: ...
+
+
+@runtime_checkable
+class BatchExtractor(Extractor, Protocol):
+    """Extractor that supports batch execution via a provider API."""
+
+    @property
+    def batch_provider(self) -> BatchProvider: ...
+
+    def prepare(self, gz_path: str) -> PreparedFile: ...
+
+    def finalize(
+        self, gz_path: str, prepared: PreparedFile, responses: list[str]
+    ) -> ExtractionResult: ...
