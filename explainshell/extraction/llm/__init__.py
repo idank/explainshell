@@ -93,25 +93,45 @@ class ChunkResult:
 
 @dataclass
 class PreparedFile:
-    """Result of LLMExtractor.prepare() — everything needed for extraction."""
+    """Result of LLMExtractor.prepare() — everything needed for extraction.
+
+    Fields
+    ------
+    synopsis:       Synopsis line from lexgrog, or None.
+    aliases:        (name, score) tuples for alternative command names.
+    original_lines: 1-indexed line number → original line content (before
+                    numbering). Used by finalize to map LLM line references
+                    back to source text.
+    basename:       Manpage file stem without .gz/.section suffixes (e.g. "tar").
+    numbered_text:  Full manpage text with "  42| …" line-number prefixes,
+                    used for debug dumps.
+    plain_text_len: Length of the original plain text before filtering/chunking.
+    plain_text:     Original unfiltered manpage text (used for RawManpage storage).
+    requests:       Pre-formatted user-content strings, one per chunk, ready to
+                    submit to the LLM provider.
+    n_chunks:       Derived property — ``len(requests)``.
+    """
 
     synopsis: str | None
     aliases: list[tuple[str, int]]
-    chunks: list[str]
     original_lines: dict[int, str]
     basename: str
     numbered_text: str
-    n_chunks: int
     plain_text_len: int
     plain_text: str
+    requests: list[str]
+
+    @property
+    def n_chunks(self) -> int:
+        return len(self.requests)
 
 
 class LLMExtractor:
     """LLM-based option extractor.
 
     Implements the base ``Extractor`` protocol via ``extract()``.
-    Also exposes ``prepare()``, ``build_request()``, ``finalize()``,
-    and ``provider`` for ``run_batch``.
+    Also satisfies ``BatchExtractor`` via ``prepare()``, ``finalize()``,
+    and ``batch_provider``.
     """
 
     def __init__(self, config: ExtractorConfig) -> None:
@@ -137,7 +157,6 @@ class LLMExtractor:
         """Full extraction pipeline: prepare → LLM calls → finalize."""
         prepared = self.prepare(gz_path)
         basename = prepared.basename
-        chunks = prepared.chunks
         n_chunks = prepared.n_chunks
 
         logger.info(
@@ -160,17 +179,19 @@ class LLMExtractor:
         all_chunk_data: list[ChunkResult] = []
         t0 = time.monotonic()
 
-        for i, chunk in enumerate(chunks):
-            chunk_info = f" (part {i + 1} of {n_chunks})" if n_chunks > 1 else ""
+        for i, user_content in enumerate(prepared.requests):
             chunk_label = (
                 f"chunk {i + 1}/{n_chunks}" if n_chunks > 1 else "single chunk"
             )
             logger.info(
-                "%s: calling LLM (%s, %d chars)...", basename, chunk_label, len(chunk)
+                "%s: calling LLM (%s, %d chars)...",
+                basename,
+                chunk_label,
+                len(user_content),
             )
 
             try:
-                cr = self._call_llm(chunk, chunk_info)
+                cr = self._call_llm(user_content)
             except ExtractionError as e:
                 raw = getattr(e, "raw_response", None) or getattr(
                     e.__cause__, "raw_response", None
@@ -226,29 +247,23 @@ class LLMExtractor:
 
         numbered_text, original_lines = number_lines(filtered_text)
         chunks = chunk_text(filtered_text)
+        n_chunks = len(chunks)
+
+        requests: list[str] = []
+        for i, chunk in enumerate(chunks):
+            chunk_info = f" (part {i + 1} of {n_chunks})" if n_chunks > 1 else ""
+            requests.append(self._build_user_content(chunk, chunk_info))
 
         return PreparedFile(
             synopsis=synopsis,
             aliases=aliases,
-            chunks=chunks,
             original_lines=original_lines,
             basename=basename,
             numbered_text=numbered_text,
-            n_chunks=len(chunks),
             plain_text_len=len(plain_text),
             plain_text=plain_text,
+            requests=requests,
         )
-
-    def build_request(self, prepared: PreparedFile, chunk_idx: int) -> tuple[str, str]:
-        """Build (chunk_info, user_content) for a single chunk.
-
-        Used by run_batch to construct batch requests.
-        """
-        n_chunks = prepared.n_chunks
-        chunk = prepared.chunks[chunk_idx]
-        chunk_info = f" (part {chunk_idx + 1} of {n_chunks})" if n_chunks > 1 else ""
-        user_content = self._build_user_content(chunk, chunk_info)
-        return chunk_info, user_content
 
     def finalize(
         self,
@@ -277,12 +292,7 @@ class LLMExtractor:
                     self._dump_failed_response(prepared.basename, chunk_idx, raw_resp)
                 raise
 
-            chunk_info = (
-                f" (part {chunk_idx + 1} of {prepared.n_chunks})"
-                if prepared.n_chunks > 1
-                else ""
-            )
-            messages = self._build_messages(prepared.chunks[chunk_idx], chunk_info)
+            messages = self._build_messages(prepared.requests[chunk_idx])
             all_chunk_data.append(
                 ChunkResult(
                     data=chunk_data,
@@ -359,10 +369,9 @@ class LLMExtractor:
 
         return ExtractionResult(mp=mp, raw=raw_mp, stats=stats)
 
-    def _call_llm(self, chunk: str, chunk_info: str) -> ChunkResult:
+    def _call_llm(self, user_content: str) -> ChunkResult:
         """Call LLM via the provider with retries."""
-        user_content = self._build_user_content(chunk, chunk_info)
-        messages = self._build_messages(chunk, chunk_info)
+        messages = self._build_messages(user_content)
 
         provider = self.provider
         retryable = provider.retryable_exceptions
@@ -406,9 +415,8 @@ class LLMExtractor:
         return chunk
 
     @staticmethod
-    def _build_messages(chunk: str, chunk_info: str) -> list[dict[str, str]]:
+    def _build_messages(user_content: str) -> list[dict[str, str]]:
         """Build messages list for debug output."""
-        user_content = LLMExtractor._build_user_content(chunk, chunk_info)
         return [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_content},

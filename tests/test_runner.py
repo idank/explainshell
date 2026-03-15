@@ -1,12 +1,12 @@
 """Tests for explainshell.extraction.runner — batch orchestration."""
 
 import unittest
-from unittest.mock import MagicMock, PropertyMock
+from unittest.mock import MagicMock
 
 from explainshell.errors import ExtractionError, SkippedExtraction
 from explainshell.extraction.llm import PreparedFile
 from explainshell.extraction.llm.providers import BatchResults, TokenUsage
-from explainshell.extraction.runner import run_batch
+from explainshell.extraction.runner import run, run_batch
 from explainshell.extraction.types import (
     ExtractionResult,
     ExtractionStats,
@@ -19,13 +19,12 @@ def _make_prepared(basename: str, n_chunks: int = 1) -> PreparedFile:
     return PreparedFile(
         synopsis="test",
         aliases=[],
-        chunks=[f"chunk-{i}" for i in range(n_chunks)],
         original_lines={},
         basename=basename,
         numbered_text="",
-        n_chunks=n_chunks,
         plain_text_len=100,
         plain_text="x" * 100,
+        requests=[f"content-{basename}-{i}" for i in range(n_chunks)],
     )
 
 
@@ -39,23 +38,33 @@ def _make_result() -> ExtractionResult:
     )
 
 
+class _FakeExtractor:
+    """Fake that satisfies BatchExtractor for isinstance checks.
+
+    Uses MagicMock for method bodies so tests can inspect calls and set
+    side_effects.  All attributes are per-instance, avoiding the class-level
+    mutation that PropertyMock on MagicMock causes.
+    """
+
+    def __init__(self) -> None:
+        self.extract = MagicMock()
+        self.prepare = MagicMock()
+        self.finalize = MagicMock()
+        self.batch_provider = MagicMock()
+
+
 def _make_extractor(
     prepared_map: dict[str, PreparedFile],
     finalize_results: dict[str, ExtractionResult] | None = None,
     finalize_error: Exception | None = None,
-) -> MagicMock:
-    """Build a mock LLMExtractor with prepare/build_request/finalize/batch_provider."""
-    ext = MagicMock()
+) -> _FakeExtractor:
+    """Build a fake BatchExtractor with prepare/finalize/batch_provider."""
+    ext = _FakeExtractor()
 
     def _prepare(gz_path: str) -> PreparedFile:
         return prepared_map[gz_path]
 
     ext.prepare.side_effect = _prepare
-
-    def _build_request(prepared: PreparedFile, chunk_idx: int) -> tuple[str, str]:
-        return f"info-{chunk_idx}", f"content-{prepared.basename}-{chunk_idx}"
-
-    ext.build_request.side_effect = _build_request
 
     if finalize_error:
 
@@ -138,7 +147,7 @@ class TestRunBatchStatsContract(unittest.TestCase):
                 "1:0": '{"options":[],"dashless_opts":false}',
             }
         )
-        type(ext).batch_provider = PropertyMock(return_value=bp)
+        ext.batch_provider = bp
 
         batch = run_batch(ext, [gz_a, gz_b])
 
@@ -171,7 +180,7 @@ class TestRunBatchFailedStats(unittest.TestCase):
         bp = _make_batch_provider(
             responses={"0:0": '{"options":[],"dashless_opts":false}'}
         )
-        type(ext).batch_provider = PropertyMock(return_value=bp)
+        ext.batch_provider = bp
 
         batch = run_batch(ext, [gz])
 
@@ -189,7 +198,7 @@ class TestRunBatchFailedStats(unittest.TestCase):
 
         ext = _make_extractor({gz: prepared})
         bp = _make_batch_provider(error=ExtractionError("batch exploded"))
-        type(ext).batch_provider = PropertyMock(return_value=bp)
+        ext.batch_provider = bp
 
         batch = run_batch(ext, [gz])
 
@@ -214,7 +223,7 @@ class TestRunBatchFailedStats(unittest.TestCase):
         bp = _make_batch_provider(
             responses={"0:0": '{"options":[],"dashless_opts":false}'}
         )
-        type(ext).batch_provider = PropertyMock(return_value=bp)
+        ext.batch_provider = bp
 
         batch = run_batch(ext, [gz_a, gz_b])
 
@@ -252,7 +261,7 @@ class TestRunBatchAllOutcomes(unittest.TestCase):
                 "1:0": '{"options":[],"dashless_opts":false}',
             }
         )
-        type(ext).batch_provider = PropertyMock(return_value=bp)
+        ext.batch_provider = bp
 
         batch = run_batch(ext, [gz_a, gz_b])
 
@@ -265,7 +274,7 @@ class TestRunBatchAllOutcomes(unittest.TestCase):
         gz_b = "/fake/bravo.1.gz"
         prepared_b = _make_prepared("bravo")
 
-        ext = MagicMock()
+        ext = _FakeExtractor()
 
         def _prepare(gz_path):
             if gz_path == gz_a:
@@ -276,13 +285,13 @@ class TestRunBatchAllOutcomes(unittest.TestCase):
             return prepared_b
 
         ext.prepare.side_effect = _prepare
-        ext.build_request.side_effect = lambda p, i: (f"info-{i}", f"content-{i}")
+
         ext.finalize.side_effect = lambda *a, **kw: _make_result()
 
         bp = _make_batch_provider(
             responses={"0:0": '{"options":[],"dashless_opts":false}'}
         )
-        type(ext).batch_provider = PropertyMock(return_value=bp)
+        ext.batch_provider = bp
 
         batch = run_batch(ext, [gz_a, gz_b])
 
@@ -302,7 +311,7 @@ class TestRunBatchAllOutcomes(unittest.TestCase):
         gz_b = "/fake/bravo.1.gz"
         prepared_b = _make_prepared("bravo")
 
-        ext = MagicMock()
+        ext = _FakeExtractor()
 
         def _prepare(gz_path):
             if gz_path == gz_a:
@@ -310,13 +319,13 @@ class TestRunBatchAllOutcomes(unittest.TestCase):
             return prepared_b
 
         ext.prepare.side_effect = _prepare
-        ext.build_request.side_effect = lambda p, i: (f"info-{i}", f"content-{i}")
+
         ext.finalize.side_effect = lambda *a, **kw: _make_result()
 
         bp = _make_batch_provider(
             responses={"0:0": '{"options":[],"dashless_opts":false}'}
         )
-        type(ext).batch_provider = PropertyMock(return_value=bp)
+        ext.batch_provider = bp
 
         batch = run_batch(ext, [gz_a, gz_b])
 
@@ -337,7 +346,7 @@ class TestRunBatchCallbacks(unittest.TestCase):
         gz_b = "/fake/bravo.1.gz"
         prepared_a = _make_prepared("alpha")
 
-        ext = MagicMock()
+        ext = _FakeExtractor()
 
         def _prepare(gz_path):
             if gz_path == gz_b:
@@ -345,13 +354,13 @@ class TestRunBatchCallbacks(unittest.TestCase):
             return prepared_a
 
         ext.prepare.side_effect = _prepare
-        ext.build_request.side_effect = lambda p, i: (f"info-{i}", f"content-{i}")
+
         ext.finalize.side_effect = lambda *a, **kw: _make_result()
 
         bp = _make_batch_provider(
             responses={"0:0": '{"options":[],"dashless_opts":false}'}
         )
-        type(ext).batch_provider = PropertyMock(return_value=bp)
+        ext.batch_provider = bp
 
         callback_entries: list[tuple[str, object]] = []
 
@@ -375,7 +384,7 @@ class TestRunBatchGenericExceptions(unittest.TestCase):
 
         ext = _make_extractor({gz: prepared})
         bp = _make_batch_provider(error=RuntimeError("network timeout"))
-        type(ext).batch_provider = PropertyMock(return_value=bp)
+        ext.batch_provider = bp
 
         batch = run_batch(ext, [gz])
 
@@ -395,7 +404,7 @@ class TestRunBatchGenericExceptions(unittest.TestCase):
         ext = _make_extractor({gz_a: prepared_a, gz_b: prepared_b})
         bp = MagicMock()
         bp.make_poll_client.side_effect = RuntimeError("auth failed")
-        type(ext).batch_provider = PropertyMock(return_value=bp)
+        ext.batch_provider = bp
 
         batch = run_batch(ext, [gz_a, gz_b])
 
@@ -433,7 +442,7 @@ class TestRunBatchGenericExceptions(unittest.TestCase):
             {"0:0": '{"options":[],"dashless_opts":false}'},
             TokenUsage(100, 50),
         )
-        type(ext).batch_provider = PropertyMock(return_value=bp)
+        ext.batch_provider = bp
 
         # batch_size=1 forces each file into its own batch
         batch = run_batch(ext, [gz_a, gz_b], batch_size=1)
@@ -444,6 +453,107 @@ class TestRunBatchGenericExceptions(unittest.TestCase):
         self.assertEqual(alpha.outcome, ExtractionOutcome.SUCCESS)
         self.assertEqual(bravo.outcome, ExtractionOutcome.FAILED)
         self.assertIn("lost connection", bravo.error)
+
+
+class TestRunDispatcher(unittest.TestCase):
+    """Tests for the unified run() dispatcher."""
+
+    def test_batch_size_zero_raises(self):
+        """batch_size=0 raises ValueError before dispatch."""
+        ext = _FakeExtractor()
+        with self.assertRaises(ValueError) as ctx:
+            run(ext, ["/fake/a.1.gz"], batch_size=0)
+        self.assertIn("batch_size must be >= 1", str(ctx.exception))
+
+    def test_batch_size_negative_raises(self):
+        """Negative batch_size raises ValueError."""
+        ext = _FakeExtractor()
+        with self.assertRaises(ValueError):
+            run(ext, ["/fake/a.1.gz"], batch_size=-1)
+
+    def test_batch_mode_raises_for_non_batch_extractor(self):
+        """Requesting batch mode with a plain Extractor raises TypeError."""
+        ext = MagicMock(spec=["extract"])
+        with self.assertRaises(TypeError) as ctx:
+            run(ext, ["/fake/a.1.gz"], batch_size=10)
+        self.assertIn("BatchExtractor", str(ctx.exception))
+
+    def test_batch_mode_dispatches_to_batch_extractor(self):
+        """batch_size set with a BatchExtractor calls run_batch path."""
+        prepared = _make_prepared("alpha")
+        gz = "/fake/alpha.1.gz"
+
+        ext = _make_extractor({gz: prepared})
+        bp = _make_batch_provider(
+            responses={"0:0": '{"options":[],"dashless_opts":false}'}
+        )
+        ext.batch_provider = bp
+
+        batch = run(ext, [gz], batch_size=50)
+
+        self.assertEqual(len(batch.files), 1)
+        self.assertEqual(batch.files[0].outcome, ExtractionOutcome.SUCCESS)
+
+    def test_sequential_fallback(self):
+        """No batch_size and jobs=1 runs sequentially."""
+        ext = MagicMock()
+        result = _make_result()
+        result.gz_path = "/fake/a.1.gz"
+        ext.extract.return_value = result
+
+        batch = run(ext, ["/fake/a.1.gz"])
+
+        ext.extract.assert_called_once_with("/fake/a.1.gz")
+        self.assertEqual(len(batch.files), 1)
+
+    def test_parallel_mode(self):
+        """jobs > 1 runs in parallel."""
+        ext = MagicMock()
+        result = _make_result()
+        result.gz_path = "/fake/a.1.gz"
+        ext.extract.return_value = result
+
+        batch = run(ext, ["/fake/a.1.gz"], jobs=2)
+
+        ext.extract.assert_called_once_with("/fake/a.1.gz")
+        self.assertEqual(len(batch.files), 1)
+
+    def test_callbacks_forwarded(self):
+        """on_start and on_result callbacks are forwarded through run()."""
+        ext = MagicMock()
+        result = _make_result()
+        result.gz_path = "/fake/a.1.gz"
+        ext.extract.return_value = result
+
+        starts: list[str] = []
+        results: list[str] = []
+
+        run(
+            ext,
+            ["/fake/a.1.gz"],
+            on_start=lambda p: starts.append(p),
+            on_result=lambda p, e: results.append(p),
+        )
+
+        self.assertEqual(starts, ["/fake/a.1.gz"])
+        self.assertEqual(results, ["/fake/a.1.gz"])
+
+    def test_batch_takes_precedence_over_jobs(self):
+        """When both batch_size and jobs are set, batch mode wins."""
+        prepared = _make_prepared("alpha")
+        gz = "/fake/alpha.1.gz"
+
+        ext = _make_extractor({gz: prepared})
+        bp = _make_batch_provider(
+            responses={"0:0": '{"options":[],"dashless_opts":false}'}
+        )
+        ext.batch_provider = bp
+
+        batch = run(ext, [gz], batch_size=50, jobs=4)
+
+        # batch_provider was used (batch mode), not thread pool
+        bp.submit_batch.assert_called_once()
+        self.assertEqual(len(batch.files), 1)
 
 
 if __name__ == "__main__":

@@ -43,7 +43,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from explainshell.extraction import ExtractorConfig, ExtractionOutcome, make_extractor
-from explainshell.extraction.runner import run_batch, run_sequential
+from explainshell.extraction.runner import run
 
 logger = logging.getLogger(__name__)
 
@@ -122,16 +122,24 @@ def run_bench(args: argparse.Namespace) -> int:
         print("error: --model is required", file=sys.stderr)
         return 1
 
+    if args.batch is not None:
+        if args.batch < 1:
+            print("error: --batch must be >= 1", file=sys.stderr)
+            return 1
+        if not args.model.startswith(("gemini/", "openai/")):
+            print(
+                "error: --batch only supports gemini/ and openai/ models",
+                file=sys.stderr,
+            )
+            return 1
+
     logger.info("benchmarking %d file(s)...", len(gz_files))
 
     config = ExtractorConfig(model=args.model)
     extractor = make_extractor("llm", config)
 
     t0 = time.monotonic()
-    if args.batch is not None:
-        result = run_batch(extractor, gz_files, batch_size=args.batch)
-    else:
-        result = run_sequential(extractor, gz_files)
+    result = run(extractor, gz_files, batch_size=args.batch)
     elapsed = time.monotonic() - t0
 
     # Build per-file metrics.
