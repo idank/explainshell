@@ -296,6 +296,38 @@ class TestRunBatchAllOutcomes(unittest.TestCase):
 
         self.assertEqual(bravo.outcome, ExtractionOutcome.SUCCESS)
 
+    def test_generic_prepare_exception_gives_failed_entry(self):
+        """A generic exception from prepare() must not abort the whole batch."""
+        gz_a = "/fake/alpha.1.gz"
+        gz_b = "/fake/bravo.1.gz"
+        prepared_b = _make_prepared("bravo")
+
+        ext = MagicMock()
+
+        def _prepare(gz_path):
+            if gz_path == gz_a:
+                raise RuntimeError("unexpected IO error")
+            return prepared_b
+
+        ext.prepare.side_effect = _prepare
+        ext.build_request.side_effect = lambda p, i: (f"info-{i}", f"content-{i}")
+        ext.finalize.side_effect = lambda *a, **kw: _make_result()
+
+        bp = _make_batch_provider(
+            responses={"0:0": '{"options":[],"dashless_opts":false}'}
+        )
+        type(ext).batch_provider = PropertyMock(return_value=bp)
+
+        batch = run_batch(ext, [gz_a, gz_b])
+
+        self.assertEqual(len(batch.files), 2)
+        alpha = next(f for f in batch.files if f.gz_path == gz_a)
+        bravo = next(f for f in batch.files if f.gz_path == gz_b)
+
+        self.assertEqual(alpha.outcome, ExtractionOutcome.FAILED)
+        self.assertIn("unexpected IO error", alpha.error)
+        self.assertEqual(bravo.outcome, ExtractionOutcome.SUCCESS)
+
 
 class TestRunBatchCallbacks(unittest.TestCase):
     """on_result is called for every file."""

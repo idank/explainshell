@@ -18,6 +18,10 @@ import os
 import sys
 import threading
 import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from explainshell.extraction.llm import LLMExtractor
 
 from explainshell import config, errors, store
 from explainshell.diff import format_diff
@@ -153,15 +157,16 @@ def _run_diff_extractors(
     """Run --diff A..B mode: compare two extractors on each file."""
     left_mode, left_model = diff_left
     right_mode, right_model = diff_right
-    label = f"{left_mode} vs {right_mode}"
+    left_label = left_mode if not left_model else f"{left_mode} ({left_model})"
+    right_label = right_mode if not right_model else f"{right_mode} ({right_model})"
+    label = f"{left_label} vs {right_label}"
 
     left_cfg = ExtractorConfig(model=left_model, fail_dir=debug_dir)
     right_cfg = ExtractorConfig(model=right_model, fail_dir=debug_dir)
     left_ext = make_extractor(left_mode, left_cfg)
     right_ext = make_extractor(right_mode, right_cfg)
 
-    right_label = right_mode if not right_model else f"{right_mode} ({right_model})"
-    logger.info("running %s extractor on %d file(s)...", left_mode, len(gz_files))
+    logger.info("running %s extractor on %d file(s)...", left_label, len(gz_files))
     left_batch = run_sequential(left_ext, gz_files)
     logger.info("running %s extractor on %d file(s)...", right_label, len(gz_files))
     right_batch = run_sequential(right_ext, gz_files)
@@ -186,7 +191,7 @@ def _run_diff_extractors(
                 logger.info(
                     "  %s(%s extractor %s: %s)%s",
                     _DIM,
-                    left_mode,
+                    left_label,
                     left_entry.outcome.value,
                     left_entry.error,
                     _RESET,
@@ -240,13 +245,13 @@ def _run_diff_extractors(
             logger.info("  %stokens:%s", _BOLD, _RESET)
             logger.info(
                 "    %s: %s in / %s out",
-                left_mode,
+                left_label,
                 _fmt_tokens(li),
                 _fmt_tokens(lo),
             )
             logger.info(
                 "    %s: %s in / %s out",
-                right_mode,
+                right_label,
                 _fmt_tokens(ri),
                 _fmt_tokens(ro),
             )
@@ -529,8 +534,10 @@ def main(args: argparse.Namespace) -> int:
                 )
 
         if args.batch is not None:
+            from typing import cast
+
             batch_result = run_batch(
-                extractor,
+                cast("LLMExtractor", extractor),
                 work_files,
                 batch_size=args.batch,
                 on_start=on_start,
