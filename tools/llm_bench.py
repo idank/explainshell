@@ -44,6 +44,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from explainshell.extraction import ExtractorConfig, ExtractionOutcome, make_extractor
 from explainshell.extraction.runner import run
+from explainshell.util import collect_gz_files
 
 logger = logging.getLogger(__name__)
 
@@ -54,18 +55,6 @@ _RESET = "\033[0m"
 
 DEFAULT_REPORT_DIR = "tests/regression/llm-bench"
 DEFAULT_CORPUS_DIR = "tests/regression/llm-bench/manpages"
-
-
-def _collect_gz_files(paths: list[str]) -> list[str]:
-    result: list[str] = []
-    for path in paths:
-        if os.path.isdir(path):
-            result.extend(
-                sorted(glob.glob(os.path.join(path, "**", "*.gz"), recursive=True))
-            )
-        else:
-            result.append(path)
-    return [os.path.abspath(p) for p in result]
 
 
 def _basename(gz_path: str) -> str:
@@ -113,7 +102,7 @@ def _list_reports(report_dir: str) -> list[str]:
 
 
 def run_bench(args: argparse.Namespace) -> int:
-    gz_files = _collect_gz_files(args.files or [DEFAULT_CORPUS_DIR])
+    gz_files = collect_gz_files(args.files or [DEFAULT_CORPUS_DIR])
     if not gz_files:
         print("No .gz files found.", file=sys.stderr)
         return 1

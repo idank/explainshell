@@ -12,14 +12,12 @@ Modes:
 """
 
 import argparse
-import glob
 import logging
-import os
 import sys
 import threading
 import time
 
-from explainshell import config, errors, store
+from explainshell import config, errors, store, util
 from explainshell.diff import format_diff
 from explainshell.extraction import (
     BatchResult,
@@ -48,34 +46,12 @@ def _fmt_elapsed(seconds: float) -> str:
     return f"{s}s"
 
 
-def _fmt_tokens(n: int) -> str:
-    """Format token count for display (e.g. 878K, 1.8M)."""
-    if n >= 1_000_000:
-        return f"{n / 1_000_000:.1f}M"
-    if n >= 1_000:
-        return f"{n / 1_000:.0f}K"
-    return str(n)
-
-
 def _already_stored(s: store.Store, short_path: str, name: str) -> bool:
     try:
         results = s.find_man_page(name)
         return any(mp.source == short_path for mp in results)
     except errors.ProgramDoesNotExist:
         return False
-
-
-def _collect_gz_files(paths: list[str]) -> list[str]:
-    result: list[str] = []
-    for path in paths:
-        if os.path.isdir(path):
-            result.extend(
-                os.path.abspath(f)
-                for f in glob.glob(os.path.join(path, "**", "*.gz"), recursive=True)
-            )
-        else:
-            result.append(os.path.abspath(path))
-    return result
 
 
 def _parse_mode(raw: str | None) -> tuple[str | None, str | None]:
@@ -242,14 +218,14 @@ def _run_diff_extractors(
             logger.info(
                 "    %s: %s in / %s out",
                 left_label,
-                _fmt_tokens(li),
-                _fmt_tokens(lo),
+                util.fmt_tokens(li),
+                util.fmt_tokens(lo),
             )
             logger.info(
                 "    %s: %s in / %s out",
                 right_label,
-                _fmt_tokens(ri),
-                _fmt_tokens(ro),
+                util.fmt_tokens(ri),
+                util.fmt_tokens(ro),
             )
 
         batch.files.append(
@@ -458,7 +434,7 @@ def main(args: argparse.Namespace) -> int:
             print("Aborted.")
             return 0
 
-    gz_files = _collect_gz_files(args.files)
+    gz_files = util.collect_gz_files(args.files)
     if not gz_files:
         print("No .gz files found.", file=sys.stderr)
         return 1
@@ -551,12 +527,12 @@ def main(args: argparse.Namespace) -> int:
     token_note = ""
     if batch_result.stats.input_tokens:
         parts = [
-            f"{_fmt_tokens(batch_result.stats.input_tokens)} in",
-            f"{_fmt_tokens(batch_result.stats.output_tokens)} out",
+            f"{util.fmt_tokens(batch_result.stats.input_tokens)} in",
+            f"{util.fmt_tokens(batch_result.stats.output_tokens)} out",
         ]
         if batch_result.stats.reasoning_tokens:
             parts.append(
-                f"{_fmt_tokens(batch_result.stats.reasoning_tokens)} reasoning"
+                f"{util.fmt_tokens(batch_result.stats.reasoning_tokens)} reasoning"
             )
         token_note = f" Tokens: {' / '.join(parts)}."
     logger.info(

@@ -22,11 +22,7 @@ class LiteLLMProvider:
             {"role": "user", "content": user_content},
         ]
 
-        kwargs: dict = {}
-        try:
-            kwargs["response_format"] = {"type": "json_object"}
-        except Exception:
-            pass
+        kwargs: dict = {"response_format": {"type": "json_object"}}
         try:
             info = litellm.get_model_info(self._model)
             max_out = info.get("max_output_tokens")
