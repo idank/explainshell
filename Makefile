@@ -21,7 +21,7 @@ e2e-update:
 	npx playwright test --update-snapshots
 
 test-llm:
-	RUN_LLM_TESTS=1 pytest tests/test_llm_extractor.py::TestRealLlm -v
+	RUN_LLM_TESTS=1 pytest tests/extraction/llm/test_extractor.py::TestRealLlm -v
 
 parsing-regression:
 	python -m pytest tests/regression/test_parsing_regression.py -v
