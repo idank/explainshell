@@ -275,15 +275,15 @@ def run_batch(
             batch.stats.output_tokens += collected.usage.output_tokens
             batch.stats.reasoning_tokens += collected.usage.reasoning_tokens
 
-            logger.info(
-                "batch %d/%d completed: %d result(s), "
-                "input=%s tokens, output=%s tokens",
-                batch_idx,
-                len(batches),
-                len(collected.responses),
-                _fmt_tokens(collected.usage.input_tokens),
-                _fmt_tokens(collected.usage.output_tokens),
+            batch_complete_msg = (
+                f"batch {batch_idx}/{len(batches)} completed: "
+                f"{len(collected.responses)} result(s), "
+                f"input={_fmt_tokens(collected.usage.input_tokens)} tokens, "
+                f"output={_fmt_tokens(collected.usage.output_tokens)} tokens"
             )
+            if collected.usage.reasoning_tokens:
+                batch_complete_msg += f", reasoning={_fmt_tokens(collected.usage.reasoning_tokens)} tokens"
+            logger.info(batch_complete_msg)
 
             # Finalize files that now have all chunks available.
             for work_idx, gz_path, prepared in work_items:
@@ -348,16 +348,18 @@ def run_batch(
             n_succeeded = sum(
                 1 for f in batch.files if f.outcome == ExtractionOutcome.SUCCESS
             )
-            logger.info(
-                "progress: %d/%d requests done, %d files extracted, "
-                "input=%s tokens, output=%s tokens, elapsed=%dm",
-                cumulative_requests,
-                len(all_requests),
-                n_succeeded,
-                _fmt_tokens(batch.stats.input_tokens),
-                _fmt_tokens(batch.stats.output_tokens),
-                elapsed_m,
+            progress_msg = (
+                f"progress: {cumulative_requests}/{len(all_requests)} requests done, "
+                f"{n_succeeded} files extracted, "
+                f"input={_fmt_tokens(batch.stats.input_tokens)} tokens, "
+                f"output={_fmt_tokens(batch.stats.output_tokens)} tokens"
             )
+            if batch.stats.reasoning_tokens:
+                progress_msg += (
+                    f", reasoning={_fmt_tokens(batch.stats.reasoning_tokens)} tokens"
+                )
+            progress_msg += f", elapsed={elapsed_m}m"
+            logger.info(progress_msg)
 
         except Exception as e:
             # Emit FAILED entries for all files in this batch that haven't

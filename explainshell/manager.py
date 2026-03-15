@@ -22,8 +22,10 @@ import time
 from explainshell import config, errors, store
 from explainshell.diff import format_diff
 from explainshell.extraction import (
+    BatchResult,
     ExtractorConfig,
     ExtractionOutcome,
+    ExtractionResult,
     make_extractor,
 )
 from explainshell.extraction.runner import run_batch, run_parallel, run_sequential
@@ -147,11 +149,8 @@ def _run_diff_extractors(
     diff_left: tuple,
     diff_right: tuple,
     debug_dir: str | None,
-) -> tuple[int, int, int]:
-    """Run --diff A..B mode: compare two extractors on each file.
-
-    Returns (added, failed, skipped).
-    """
+) -> BatchResult:
+    """Run --diff A..B mode: compare two extractors on each file."""
     left_mode, left_model = diff_left
     right_mode, right_model = diff_right
     label = f"{left_mode} vs {right_mode}"
@@ -161,70 +160,83 @@ def _run_diff_extractors(
     left_ext = make_extractor(left_mode, left_cfg)
     right_ext = make_extractor(right_mode, right_cfg)
 
-    added = 0
-    failed = 0
-    skipped = 0
-    total = len(gz_files)
+    right_label = right_mode if not right_model else f"{right_mode} ({right_model})"
+    logger.info("running %s extractor on %d file(s)...", left_mode, len(gz_files))
+    left_batch = run_sequential(left_ext, gz_files)
+    logger.info("running %s extractor on %d file(s)...", right_label, len(gz_files))
+    right_batch = run_sequential(right_ext, gz_files)
 
-    for file_idx, gz_path in enumerate(gz_files, 1):
+    batch = BatchResult()
+    for left_entry, right_entry in zip(left_batch.files, right_batch.files):
+        gz_path = left_entry.gz_path
         short_path = config.source_from_path(gz_path)
-        progress = f"[{file_idx}/{total}]"
-        tag = f"[{short_path}]"
+        left_ok = left_entry.outcome == ExtractionOutcome.SUCCESS
+        right_ok = right_entry.outcome == ExtractionOutcome.SUCCESS
 
-        logger.info("%s %s running %s extractor...", progress, tag, left_mode)
-        try:
-            left_result = left_ext.extract(gz_path)
-        except errors.SkippedExtraction as e:
-            logger.info(
-                "%s %s skipped by %s extractor: %s", progress, tag, left_mode, e
-            )
-            skipped += 1
-            continue
-        except errors.ExtractionError as e:
-            logger.error("%s extractor failed for %s: %s", left_mode, short_path, e)
-            logger.info("=== %s (%s) ===", short_path, label)
-            logger.info(
-                "  %s(%s extractor failed: %s, skipping)%s",
-                _DIM,
-                left_mode,
-                e,
-                _RESET,
-            )
-            failed += 1
-            continue
+        # Always accumulate stats from successful extractions, even when
+        # the other side failed — the tokens were consumed either way.
+        if left_ok:
+            batch.stats += left_entry.stats
+        if right_ok:
+            batch.stats += right_entry.stats
 
-        right_label = right_mode if not right_model else f"{right_mode} ({right_model})"
-        logger.info("%s %s running %s extractor...", progress, tag, right_label)
-        try:
-            right_result = right_ext.extract(gz_path)
-        except errors.SkippedExtraction as e:
-            logger.info(
-                "%s %s skipped by %s extractor: %s", progress, tag, right_mode, e
-            )
-            skipped += 1
-            continue
-        except errors.ExtractionError as e:
-            logger.error("%s extractor failed for %s: %s", right_mode, short_path, e)
+        if not left_ok or not right_ok:
             logger.info("=== %s (%s) ===", short_path, label)
-            logger.info(
-                "  %s(%s extractor failed: %s, skipping)%s",
-                _DIM,
-                right_mode,
-                e,
-                _RESET,
-            )
-            failed += 1
+            if not left_ok:
+                logger.info(
+                    "  %s(%s extractor %s: %s)%s",
+                    _DIM,
+                    left_mode,
+                    left_entry.outcome.value,
+                    left_entry.error,
+                    _RESET,
+                )
+            if not right_ok:
+                logger.info(
+                    "  %s(%s extractor %s: %s)%s",
+                    _DIM,
+                    right_label,
+                    right_entry.outcome.value,
+                    right_entry.error,
+                    _RESET,
+                )
+            # Use the more severe outcome (FAILED > SKIPPED).
+            if (
+                left_entry.outcome == ExtractionOutcome.FAILED
+                or right_entry.outcome == ExtractionOutcome.FAILED
+            ):
+                failed_side = (
+                    left_entry
+                    if left_entry.outcome == ExtractionOutcome.FAILED
+                    else right_entry
+                )
+                batch.files.append(
+                    ExtractionResult(
+                        gz_path=gz_path,
+                        outcome=ExtractionOutcome.FAILED,
+                        error=failed_side.error,
+                    )
+                )
+            else:
+                skipped_side = left_entry if not left_ok else right_entry
+                batch.files.append(
+                    ExtractionResult(
+                        gz_path=gz_path,
+                        outcome=ExtractionOutcome.SKIPPED,
+                        error=skipped_side.error,
+                    )
+                )
             continue
 
         logger.info("=== %s (%s) ===", short_path, label)
-        for line in format_diff(left_result.mp, right_result.mp):
+        for line in format_diff(left_entry.mp, right_entry.mp):
             logger.info(line)
 
-        li = left_result.stats.input_tokens
-        ri = right_result.stats.input_tokens
+        li = left_entry.stats.input_tokens
+        ri = right_entry.stats.input_tokens
         if li or ri:
-            lo = left_result.stats.output_tokens
-            ro = right_result.stats.output_tokens
+            lo = left_entry.stats.output_tokens
+            ro = right_entry.stats.output_tokens
             logger.info("  %stokens:%s", _BOLD, _RESET)
             logger.info(
                 "    %s: %s in / %s out",
@@ -239,9 +251,14 @@ def _run_diff_extractors(
                 _fmt_tokens(ro),
             )
 
-        added += 1
+        batch.files.append(
+            ExtractionResult(
+                gz_path=gz_path,
+                outcome=ExtractionOutcome.SUCCESS,
+            )
+        )
 
-    return added, failed, skipped
+    return batch
 
 
 def _run_diff_db(
@@ -251,58 +268,44 @@ def _run_diff_db(
     debug_dir: str | None,
     dry_run: bool,
     s: store.Store,
-) -> tuple[int, int, int]:
-    """Run --diff db mode: compare fresh extraction against the DB.
-
-    Returns (added, failed, skipped).
-    """
+) -> BatchResult:
+    """Run --diff db mode: compare fresh extraction against the DB."""
     _debug_dir = debug_dir if dry_run else None
     cfg = ExtractorConfig(model=model, debug_dir=_debug_dir, fail_dir=debug_dir)
     ext = make_extractor(mode, cfg)
 
-    added = 0
-    failed = 0
-    skipped = 0
-    total = len(gz_files)
-
     from explainshell import manpage as _manpage
 
-    for file_idx, gz_path in enumerate(gz_files, 1):
+    total = len(gz_files)
+    counter = {"n": 0}
+
+    def on_start(gz_path: str) -> None:
+        counter["n"] += 1
         short_path = config.source_from_path(gz_path)
+        logger.info(
+            "[%d/%d] [%s] extracting (%s)...", counter["n"], total, short_path, mode
+        )
+
+    def on_result(gz_path: str, entry: ExtractionResult) -> None:
+        short_path = config.source_from_path(gz_path)
+        if entry.outcome == ExtractionOutcome.SKIPPED:
+            logger.info("[%s] skipped: %s", short_path, entry.error)
+            return
+        if entry.outcome == ExtractionOutcome.FAILED:
+            logger.error("failed to process %s: %s", short_path, entry.error)
+            return
         name = _manpage.extract_name(gz_path)
-        progress = f"[{file_idx}/{total}]"
-        tag = f"[{short_path}]"
-
-        logger.info("%s %s extracting (%s)...", progress, tag, mode)
-        try:
-            result = ext.extract(gz_path)
-        except errors.SkippedExtraction as e:
-            logger.info("%s %s skipped: %s", progress, tag, e)
-            skipped += 1
-            continue
-        except errors.ExtractionError as e:
-            logger.error("failed to process %s: %s", short_path, e)
-            failed += 1
-            continue
-        except Exception as e:
-            logger.error("unexpected error processing %s: %s", short_path, e)
-            failed += 1
-            continue
-
         logger.info("=== %s ===", short_path)
         try:
             results = s.find_man_page(name)
             stored_mp = results[0]
         except errors.ProgramDoesNotExist:
             logger.info("  (not in DB, nothing to diff)")
-            added += 1
-            continue
+        else:
+            for line in format_diff(stored_mp, entry.mp):
+                logger.info(line)
 
-        for line in format_diff(stored_mp, result.mp):
-            logger.info(line)
-        added += 1
-
-    return added, failed, skipped
+    return run_sequential(ext, gz_files, on_start=on_start, on_result=on_result)
 
 
 def _run_dry_run(
@@ -310,42 +313,21 @@ def _run_dry_run(
     mode: str,
     model: str | None,
     debug_dir: str | None,
-) -> tuple[int, int, int]:
-    """Run --dry-run mode: extract but don't write to DB.
-
-    Returns (added, failed, skipped).
-    """
+) -> BatchResult:
+    """Run --dry-run mode: extract but don't write to DB."""
     cfg = ExtractorConfig(model=model, debug_dir=debug_dir, fail_dir=debug_dir)
     ext = make_extractor(mode, cfg)
 
-    added = 0
-    failed = 0
-    skipped = 0
-    total = len(gz_files)
-
-    for file_idx, gz_path in enumerate(gz_files, 1):
+    def on_result(gz_path: str, entry: ExtractionResult) -> None:
         short_path = config.source_from_path(gz_path)
-        progress = f"[{file_idx}/{total}]"
-        tag = f"[{short_path}]"
-
-        logger.info("%s %s extracting (%s)...", progress, tag, mode)
-        try:
-            result = ext.extract(gz_path)
-        except errors.SkippedExtraction as e:
-            logger.info("%s %s skipped: %s", progress, tag, e)
-            skipped += 1
-            continue
-        except errors.ExtractionError as e:
-            logger.error("failed to process %s: %s", short_path, e)
-            failed += 1
-            continue
-        except Exception as e:
-            logger.error("unexpected error processing %s: %s", short_path, e)
-            failed += 1
-            continue
-
-        mp = result.mp
-        file_elapsed = _fmt_elapsed(result.stats.elapsed_seconds)
+        if entry.outcome == ExtractionOutcome.SKIPPED:
+            logger.info("[%s] skipped: %s", short_path, entry.error)
+            return
+        if entry.outcome == ExtractionOutcome.FAILED:
+            logger.error("failed to process %s: %s", short_path, entry.error)
+            return
+        mp = entry.mp
+        file_elapsed = _fmt_elapsed(entry.stats.elapsed_seconds)
         logger.info(
             "=== %s (%d option(s), %s) ===",
             short_path,
@@ -375,9 +357,8 @@ def _run_dry_run(
             desc = opt.text.strip()
             for line in desc.split("\n"):
                 logger.info("      %s", line)
-        added += 1
 
-    return added, failed, skipped
+    return run_sequential(ext, gz_files, on_result=on_result)
 
 
 # ---------------------------------------------------------------------------
@@ -485,23 +466,21 @@ def main(args: argparse.Namespace) -> int:
     if s and args.drop:
         s.drop(confirm=True)
 
-    added = 0
-    skipped = 0
-    failed = 0
     t0 = time.monotonic()
+    prefilter_skipped = 0
 
     from explainshell import manpage as _manpage
 
     if is_extractor_diff:
-        added, failed, skipped = _run_diff_extractors(
+        batch_result = _run_diff_extractors(
             gz_files, diff_left, diff_right, args.debug_dir
         )
     elif diff_kind == "db":
-        added, failed, skipped = _run_diff_db(
+        batch_result = _run_diff_db(
             gz_files, mode, model, args.debug_dir, args.dry_run, s
         )
     elif args.dry_run:
-        added, failed, skipped = _run_dry_run(gz_files, mode, model, args.debug_dir)
+        batch_result = _run_dry_run(gz_files, mode, model, args.debug_dir)
     else:
         # Normal extraction: use runners.
         debug_dir = args.debug_dir if args.dry_run else None
@@ -515,12 +494,11 @@ def main(args: argparse.Namespace) -> int:
             name = _manpage.extract_name(gz_path)
             if s and not args.overwrite and _already_stored(s, short_path, name):
                 logger.info("skipping %s (already stored)", short_path)
-                skipped += 1
+                prefilter_skipped += 1
             else:
                 work_files.append(gz_path)
 
         total = len(gz_files)
-        prefilter_skipped = skipped
         file_counter = {"n": 0}
         counter_lock = threading.Lock()
 
@@ -532,31 +510,26 @@ def main(args: argparse.Namespace) -> int:
             progress = f"[{n + prefilter_skipped}/{total}]"
             logger.info("%s [%s] extracting...", progress, short_path)
 
-        def on_result(gz_path: str, entry: object) -> None:
-            nonlocal added, failed, skipped
-            if entry.outcome == ExtractionOutcome.SUCCESS:  # type: ignore[union-attr]
+        def on_result(gz_path: str, entry: ExtractionResult) -> None:
+            if entry.outcome == ExtractionOutcome.SUCCESS:
                 if s:
-                    s.add_manpage(entry.mp, entry.raw)  # type: ignore[union-attr]
-                added += 1
+                    s.add_manpage(entry.mp, entry.raw)
                 short_path = config.source_from_path(gz_path)
                 logger.info(
                     "[%s] done: %d option(s)",
                     short_path,
-                    len(entry.mp.options),  # type: ignore[union-attr]
+                    len(entry.mp.options),
                 )
-            elif entry.outcome == ExtractionOutcome.SKIPPED:  # type: ignore[union-attr]
-                skipped += 1
+            elif entry.outcome == ExtractionOutcome.SKIPPED:
                 short_path = config.source_from_path(gz_path)
                 logger.info(
                     "[%s] skipped: %s",
                     short_path,
-                    entry.error or "unknown reason",  # type: ignore[union-attr]
+                    entry.error or "unknown reason",
                 )
-            else:
-                failed += 1
 
         if args.batch is not None:
-            run_batch(
+            batch_result = run_batch(
                 extractor,
                 work_files,
                 batch_size=args.batch,
@@ -564,7 +537,7 @@ def main(args: argparse.Namespace) -> int:
                 on_result=on_result,
             )
         elif args.jobs > 1:
-            run_parallel(
+            batch_result = run_parallel(
                 extractor,
                 work_files,
                 args.jobs,
@@ -572,12 +545,16 @@ def main(args: argparse.Namespace) -> int:
                 on_result=on_result,
             )
         else:
-            run_sequential(
+            batch_result = run_sequential(
                 extractor,
                 work_files,
                 on_start=on_start,
                 on_result=on_result,
             )
+
+    added = len(batch_result.succeeded)
+    skipped = len(batch_result.skipped) + prefilter_skipped
+    failed = len(batch_result.failed)
 
     # Update multi-cmd mappings (only when writing to DB).
     if s and added > 0 and not args.dry_run and not args.diff:
@@ -585,12 +562,24 @@ def main(args: argparse.Namespace) -> int:
 
     elapsed = time.monotonic() - t0
     dry_run_note = " (dry run)" if args.dry_run else ""
+    token_note = ""
+    if batch_result.stats.input_tokens:
+        parts = [
+            f"{_fmt_tokens(batch_result.stats.input_tokens)} in",
+            f"{_fmt_tokens(batch_result.stats.output_tokens)} out",
+        ]
+        if batch_result.stats.reasoning_tokens:
+            parts.append(
+                f"{_fmt_tokens(batch_result.stats.reasoning_tokens)} reasoning"
+            )
+        token_note = f" Tokens: {' / '.join(parts)}."
     logger.info(
-        "Done%s: %d extracted, %d skipped, %d failed. Total time: %s",
+        "Done%s: %d extracted, %d skipped, %d failed.%s Total time: %s",
         dry_run_note,
         added,
         skipped,
         failed,
+        token_note,
         _fmt_elapsed(elapsed),
     )
     return 0 if failed == 0 else 1

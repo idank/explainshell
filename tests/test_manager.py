@@ -344,7 +344,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_collect.return_value = ["/fake/echo.1.gz"]
         fake_result = MagicMock()
         fake_result.mp.options = [MagicMock(), MagicMock()]
-        fake_result.stats.elapsed_seconds = 0
+        fake_result.stats = ExtractionStats(elapsed_seconds=0)
         mock_ext = MagicMock()
         mock_ext.extract.return_value = fake_result
         mock_make_ext.return_value = mock_ext
@@ -357,6 +357,58 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_ext.extract.assert_called_once_with("/fake/echo.1.gz")
         mock_store_create.assert_not_called()
         self.assertEqual(ret, 0)
+
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch("explainshell.manager._collect_gz_files")
+    @patch(
+        "explainshell.manager.config.source_from_path", return_value="fake/echo.1.gz"
+    )
+    def test_dry_run_skipped_file_returns_success(
+        self, mock_source, mock_collect, mock_store_create, mock_make_ext
+    ):
+        """Skipped files are not failures — return code should be 0."""
+        mock_collect.return_value = ["/fake/echo.1.gz"]
+        from explainshell.errors import SkippedExtraction
+
+        mock_ext = MagicMock()
+        mock_ext.extract.side_effect = SkippedExtraction("no OPTIONS section")
+        mock_make_ext.return_value = mock_ext
+
+        from explainshell.manager import main
+
+        args = self._make_args(dry_run=True)
+        ret = main(args)
+
+        mock_ext.extract.assert_called_once_with("/fake/echo.1.gz")
+        mock_store_create.assert_not_called()
+        self.assertEqual(ret, 0)
+
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch("explainshell.manager._collect_gz_files")
+    @patch(
+        "explainshell.manager.config.source_from_path", return_value="fake/echo.1.gz"
+    )
+    def test_dry_run_failed_file_returns_failure(
+        self, mock_source, mock_collect, mock_store_create, mock_make_ext
+    ):
+        """Failed extraction should cause non-zero return code."""
+        mock_collect.return_value = ["/fake/echo.1.gz"]
+        from explainshell.errors import ExtractionError
+
+        mock_ext = MagicMock()
+        mock_ext.extract.side_effect = ExtractionError("parse error")
+        mock_make_ext.return_value = mock_ext
+
+        from explainshell.manager import main
+
+        args = self._make_args(dry_run=True)
+        ret = main(args)
+
+        mock_ext.extract.assert_called_once_with("/fake/echo.1.gz")
+        mock_store_create.assert_not_called()
+        self.assertEqual(ret, 1)
 
     @patch("explainshell.manager.run_sequential")
     @patch("explainshell.manager.make_extractor")
@@ -409,6 +461,161 @@ class TestLlmManagerDryRun(unittest.TestCase):
         main(args)
 
         mock_store.add_manpage.assert_called_once_with(fake_mp, fake_raw)
+
+
+# ---------------------------------------------------------------------------
+# TestDiffExtractorsFailureHandling
+# ---------------------------------------------------------------------------
+
+
+class TestDiffExtractorsFailureHandling(unittest.TestCase):
+    """Tests for _run_diff_extractors under partial/total failure."""
+
+    @patch("explainshell.manager.run_sequential")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_partial_failure_preserves_successful_stats(
+        self, mock_source, mock_make_ext, mock_run_seq
+    ):
+        """When one side fails, the successful side's stats are still counted."""
+        mock_source.side_effect = lambda p: p.split("/")[-1]
+        from explainshell.extraction.types import BatchResult
+
+        left_batch = BatchResult()
+        left_batch.files = [
+            ExtractionResult(
+                gz_path="/fake/a.1.gz",
+                outcome=ExtractionOutcome.SUCCESS,
+                stats=ExtractionStats(input_tokens=100, output_tokens=50),
+                mp=MagicMock(),
+            ),
+            ExtractionResult(
+                gz_path="/fake/b.1.gz",
+                outcome=ExtractionOutcome.FAILED,
+                error="parse error",
+            ),
+        ]
+
+        right_batch = BatchResult()
+        right_batch.files = [
+            ExtractionResult(
+                gz_path="/fake/a.1.gz",
+                outcome=ExtractionOutcome.SUCCESS,
+                stats=ExtractionStats(input_tokens=200, output_tokens=80),
+                mp=MagicMock(),
+            ),
+            ExtractionResult(
+                gz_path="/fake/b.1.gz",
+                outcome=ExtractionOutcome.SUCCESS,
+                stats=ExtractionStats(input_tokens=150, output_tokens=60),
+                mp=MagicMock(),
+            ),
+        ]
+
+        mock_run_seq.side_effect = [left_batch, right_batch]
+
+        from explainshell.manager import _run_diff_extractors
+
+        result = _run_diff_extractors(
+            ["/fake/a.1.gz", "/fake/b.1.gz"],
+            ("source", None),
+            ("mandoc", None),
+            None,
+        )
+
+        # File a: both OK → 100+200 input tokens
+        # File b: left FAILED, right OK → right's 150 tokens preserved
+        self.assertEqual(result.stats.input_tokens, 100 + 200 + 150)
+        self.assertEqual(result.stats.output_tokens, 50 + 80 + 60)
+        self.assertEqual(len(result.succeeded), 1)
+        self.assertEqual(len(result.failed), 1)
+
+    @patch("explainshell.manager.run_sequential")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_failed_takes_precedence_over_skipped(
+        self, mock_source, mock_make_ext, mock_run_seq
+    ):
+        """When one side is SKIPPED and the other FAILED, outcome is FAILED."""
+        mock_source.side_effect = lambda p: p.split("/")[-1]
+        from explainshell.extraction.types import BatchResult
+
+        left_batch = BatchResult()
+        left_batch.files = [
+            ExtractionResult(
+                gz_path="/fake/a.1.gz",
+                outcome=ExtractionOutcome.SKIPPED,
+                error="no OPTIONS section",
+            ),
+        ]
+
+        right_batch = BatchResult()
+        right_batch.files = [
+            ExtractionResult(
+                gz_path="/fake/a.1.gz",
+                outcome=ExtractionOutcome.FAILED,
+                error="parse error",
+            ),
+        ]
+
+        mock_run_seq.side_effect = [left_batch, right_batch]
+
+        from explainshell.manager import _run_diff_extractors
+
+        result = _run_diff_extractors(
+            ["/fake/a.1.gz"],
+            ("source", None),
+            ("mandoc", None),
+            None,
+        )
+
+        self.assertEqual(len(result.failed), 1)
+        self.assertEqual(len(result.skipped), 0)
+        self.assertEqual(result.files[0].outcome, ExtractionOutcome.FAILED)
+        self.assertEqual(result.files[0].error, "parse error")
+
+    @patch("explainshell.manager.run_sequential")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_both_skipped_yields_skipped_outcome(
+        self, mock_source, mock_make_ext, mock_run_seq
+    ):
+        """When both extractors skip, outcome is SKIPPED (not FAILED)."""
+        mock_source.side_effect = lambda p: p.split("/")[-1]
+        from explainshell.extraction.types import BatchResult
+
+        left_batch = BatchResult()
+        left_batch.files = [
+            ExtractionResult(
+                gz_path="/fake/a.1.gz",
+                outcome=ExtractionOutcome.SKIPPED,
+                error="no OPTIONS section",
+            ),
+        ]
+
+        right_batch = BatchResult()
+        right_batch.files = [
+            ExtractionResult(
+                gz_path="/fake/a.1.gz",
+                outcome=ExtractionOutcome.SKIPPED,
+                error="too short",
+            ),
+        ]
+
+        mock_run_seq.side_effect = [left_batch, right_batch]
+
+        from explainshell.manager import _run_diff_extractors
+
+        result = _run_diff_extractors(
+            ["/fake/a.1.gz"],
+            ("source", None),
+            ("mandoc", None),
+            None,
+        )
+
+        self.assertEqual(len(result.skipped), 1)
+        self.assertEqual(len(result.failed), 0)
+        self.assertEqual(result.files[0].outcome, ExtractionOutcome.SKIPPED)
 
 
 if __name__ == "__main__":
