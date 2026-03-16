@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 
 from explainshell.store import Option
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class PostProcessStats:
-    malformed_options: int = 0
+    dropped_empty: int = 0
     deduped_options: int = 0
     blank_description_stripped: int = 0
 
@@ -71,32 +72,114 @@ def strip_trailing_blanks(opt: Option) -> Option:
     )
 
 
+def _subset_has_cross_reference(subset: Option, extra_flags: frozenset[str]) -> bool:
+    """Check if subset's description mentions any of the superset's extra flags.
+
+    This guards against false-positive subset merges that occur when the LLM
+    normalises dashless BSD options (e.g. ``U`` → ``-U``), creating spurious
+    flag overlaps with genuinely different POSIX options (e.g. ``-U``/``--User``).
+    Legitimate duplicates typically cross-reference the other entry's flags
+    ("Identical to -M", "same as --sort").
+
+    Flags are matched with non-alphanumeric boundaries so that bare
+    single-letter flags like ``k`` do not match inside ordinary words
+    ("work", "make") and flag prefixes like ``-M`` do not match inside
+    longer tokens.
+    """
+    desc = subset.text
+    for flag in extra_flags:
+        pattern = r"(?<![a-zA-Z0-9\-])" + re.escape(flag) + r"(?![a-zA-Z0-9\-])"
+        if re.search(pattern, desc):
+            return True
+    return False
+
+
 def dedup_options(options: list[Option]) -> tuple[list[Option], int]:
-    """Remove options with identical flag sets, keeping longest description.
+    """Remove options whose flag set is a subset of (or equal to) another's.
+
+    Covers both strict-subset (e.g. {Z} vs {-M, Z}) and exact-match
+    duplicates (e.g. two entries for {O}).  When one option's combined flags
+    (short ∪ long) are ⊆ another's, the smaller entry is removed.
+
+    For **exact-match** duplicates the first occurrence's position is kept.
+    If a later duplicate has a longer description, the first entry is
+    replaced with the later entry entirely (all fields, not just text).
+
+    For **strict subsets** the superset entry survives with its own flags.
+    If the subset has a longer description, the text and ``meta`` are
+    transferred so that provenance (e.g. ``meta["lines"]``) stays
+    consistent with the description text.
+
+    When multiple supersets qualify, the **closest** one (smallest number
+    of extra flags) is chosen so the subset merges into the most specific
+    match rather than depending on input order.
+
+    For **strict** subsets an additional cross-reference check is applied:
+    the subset's description must mention at least one of the superset's
+    extra flags.  This prevents false merges where dashless-option
+    normalisation creates spurious flag overlaps (see ``_subset_has_cross_reference``).
 
     Returns (deduped_list, num_removed).
     """
-    best: dict[tuple, tuple[int, Option]] = {}
-    positional: list[tuple[int, Option]] = []
-
-    for idx, opt in enumerate(options):
-        if not opt.short and not opt.long:
-            positional.append((idx, opt))
-            continue
-        key = (tuple(sorted(opt.short)), tuple(sorted(opt.long)))
-        prev = best.get(key)
-        if prev is None:
-            best[key] = (idx, opt)
+    flags_list: list[frozenset[str]] = []
+    for opt in options:
+        if opt.short or opt.long:
+            flags_list.append(frozenset(opt.short + opt.long))
         else:
-            old_len = len(prev[1].text)
-            new_len = len(opt.text)
-            if new_len > old_len:
-                best[key] = (idx, opt)
+            flags_list.append(frozenset())
 
-    all_entries = list(best.values()) + positional
-    all_entries.sort(key=lambda x: x[0])
-    result = [opt for _, opt in all_entries]
-    return result, len(options) - len(result)
+    removed: set[int] = set()
+
+    # Pass 1: exact-match dedup.  First occurrence's position wins;
+    # if a later duplicate has a longer description, replace entirely.
+    seen: dict[frozenset[str], int] = {}
+    for i in range(len(options)):
+        fi = flags_list[i]
+        if not fi:
+            continue
+        if fi in seen:
+            first = seen[fi]
+            if len(options[i].text) > len(options[first].text):
+                options[first] = options[i]
+            removed.add(i)
+        else:
+            seen[fi] = i
+
+    # Pass 2: strict-subset dedup.  For each surviving option, search
+    # ALL other surviving options (bidirectional) for the closest
+    # qualifying superset.
+    for i in range(len(options)):
+        if i in removed or not flags_list[i]:
+            continue
+        fi = flags_list[i]
+        best_j: int | None = None
+        best_extra_len: int = 0
+        for j in range(len(options)):
+            if j == i or j in removed or not flags_list[j]:
+                continue
+            fj = flags_list[j]
+            if fi < fj and _subset_has_cross_reference(options[i], fj - fi):
+                extra = len(fj - fi)
+                if best_j is None or extra < best_extra_len:
+                    best_j = j
+                    best_extra_len = extra
+        if best_j is not None:
+            sup = options[best_j]
+            sub = options[i]
+            if len(sub.text) > len(sup.text):
+                options[best_j] = Option(
+                    text=sub.text,
+                    short=sup.short,
+                    long=sup.long,
+                    has_argument=sup.has_argument,
+                    positional=sup.positional,
+                    nested_cmd=sup.nested_cmd,
+                    meta=sub.meta,
+                )
+            removed.add(i)
+
+    result = [opt for idx, opt in enumerate(options) if idx not in removed]
+    return result, len(removed)
 
 
 def drop_empty(options: list[Option]) -> tuple[list[Option], int]:
@@ -139,6 +222,6 @@ def postprocess(
 
     if "drop_empty" in active:
         options, removed = drop_empty(options)
-        stats.malformed_options = removed
+        stats.dropped_empty = removed
 
     return options, stats
