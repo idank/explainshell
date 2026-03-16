@@ -44,7 +44,7 @@ class SourceExtractor:
         raw = build_raw_manpage(roff_text, "roff", gz_path)
 
         stats = ExtractionStats(
-            malformed_options=pp_stats.malformed_options,
+            dropped_empty=pp_stats.dropped_empty,
         )
 
         return ExtractionResult(mp=mp, raw=raw, stats=stats)
