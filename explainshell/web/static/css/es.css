@@ -147,6 +147,20 @@ a {
     line-height: inherit;
 }
 
+.manpage-content blockquote {
+    border: none;
+    margin: 0 0 10px;
+    padding: 0 0 0 20px;
+    font-size: inherit;
+    font-weight: inherit;
+}
+
+.manpage-content blockquote p {
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+}
+
 .help-box h1,
 .help-box h2,
 .help-box h3,

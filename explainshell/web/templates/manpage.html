@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %} - {{ program|e }} manpage{% endblock %}
+{% block content %}
+            <div class="small-push"></div>
+            <div class="push"></div>
+            <div>
+                {% if is_markdown %}
+                <div class="manpage-content">{{ source_html|safe }}</div>
+                {% else %}
+                <pre>{{ source_text|e }}</pre>
+                {% endif %}
+            </div>
+{% endblock %}
