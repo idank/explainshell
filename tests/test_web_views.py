@@ -104,6 +104,109 @@ class TestExplainRouter(unittest.TestCase):
         self.assertNotIn(b"/explain/ubuntu/25.10/2/dup", rv.data)
 
 
+class TestManpageRoute(unittest.TestCase):
+    """Route-level tests for /manpage endpoints."""
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.store = helpers.MockStore()
+        self.app.config["TESTING"] = True
+        self.client = self.app.test_client()
+
+    # -- Single manpage view --
+
+    def test_manpage_returns_200(self):
+        rv = self.client.get("/manpage/ubuntu/25.10/1/bar.1")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"bar(1)", rv.data)
+
+    def test_manpage_displays_source_text(self):
+        rv = self.client.get("/manpage/ubuntu/25.10/1/bar.1")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b".TH roff content", rv.data)
+
+    def test_manpage_not_found(self):
+        rv = self.client.get("/manpage/ubuntu/25.10/1/nosuchpage.1")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"missing man page", rv.data)
+
+    def test_manpage_roff_rendered_as_pre(self):
+        rv = self.client.get("/manpage/ubuntu/25.10/1/bar.1")
+        self.assertIn(b"<pre>", rv.data)
+
+    def test_manpage_markdown_rendered_as_html(self):
+        rv = self.client.get("/manpage/ubuntu/25.10/1/markdown-page.1")
+        self.assertEqual(rv.status_code, 200)
+        # Markdown content should be rendered, not in a <pre> block
+        self.assertNotIn(b"<pre>", rv.data)
+        self.assertIn(b"markdown content", rv.data)
+
+    # -- Edge-case filenames --
+
+    def test_manpage_mismatched_dir_file_section(self):
+        rv = self.client.get("/manpage/ubuntu/25.10/1/cd.1posix")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"cd(1posix)", rv.data)
+
+    def test_manpage_filename_with_spaces(self):
+        rv = self.client.get("/manpage/ubuntu/25.10/1/pg_autoctl create worker.1")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"pg_autoctl create worker(1)", rv.data)
+
+    def test_manpage_filename_with_plus(self):
+        rv = self.client.get("/manpage/ubuntu/25.10/1/c++filt.1")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"c++filt(1)", rv.data)
+
+    # -- Release index --
+
+    def test_release_index(self):
+        rv = self.client.get("/manpage/ubuntu/")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"25.10", rv.data)
+        self.assertIn(b'href="/manpage/ubuntu/25.10/"', rv.data)
+
+    def test_release_index_unknown_distro(self):
+        rv = self.client.get("/manpage/archlinux/")
+        self.assertEqual(rv.status_code, 200)
+        # Should render but with no release links
+        self.assertNotIn(b"/manpage/archlinux/", rv.data)
+
+    # -- Section index --
+
+    def test_section_index(self):
+        rv = self.client.get("/manpage/ubuntu/25.10/")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"section 1", rv.data)
+
+    # -- Section listing --
+
+    def test_list_filtered_by_section(self):
+        rv = self.client.get("/manpage/ubuntu/25.10/1/")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"bar(1)", rv.data)
+
+    def test_list_empty_for_unknown_section(self):
+        rv = self.client.get("/manpage/ubuntu/25.10/9/")
+        self.assertEqual(rv.status_code, 200)
+        # No manpage links, but page should render
+        self.assertNotIn(b"/manpage/ubuntu/25.10/9/", rv.data)
+
+    def test_list_links_point_to_manpage_view(self):
+        rv = self.client.get("/manpage/ubuntu/25.10/1/")
+        self.assertIn(b'href="/manpage/ubuntu/25.10/1/bar.1"', rv.data)
+
+    def test_list_links_url_encode_special_chars(self):
+        rv = self.client.get("/manpage/ubuntu/25.10/1/")
+        # Spaces should be percent-encoded in URLs
+        self.assertIn(
+            b'href="/manpage/ubuntu/25.10/1/pg_autoctl%20create%20worker.1"',
+            rv.data,
+        )
+        # + should be percent-encoded in URLs
+        self.assertIn(b'href="/manpage/ubuntu/25.10/1/c%2B%2Bfilt.1"', rv.data)
+
+
 class TestManpageUrl(unittest.TestCase):
     def test_matching_prefix(self):
         url = manpage_url("ubuntu/25.10/1/tar.1.gz")

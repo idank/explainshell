@@ -574,11 +574,41 @@ class Store:
 
         return mappings_to_add, parents
 
-    def get_manpage_source(self, source: str) -> str | None:
-        """Fetch and decompress the raw manpage source text, or None if not stored."""
+    def list_sections(self, distro: str, release: str) -> list[str]:
+        """Return distinct section directories for a distro/release.
+
+        Extracts the third path component from source keys matching
+        ``distro/release/...`` using a range scan on the primary key.
+        """
+        prefix = f"{distro}/{release}/"
+        offset = len(prefix)
+        rows = self._conn.execute(
+            "SELECT DISTINCT SUBSTR(source, ?, INSTR(SUBSTR(source, ?), '/') - 1) AS section "
+            "FROM manpages WHERE source >= ? AND source < ? "
+            "ORDER BY section",
+            (offset + 1, offset + 1, prefix, prefix[:-1] + chr(ord(prefix[-1]) + 1)),
+        ).fetchall()
+        return [row["section"] for row in rows]
+
+    def list_manpages(self, prefix: str) -> list[str]:
+        """List source paths that start with *prefix*.
+
+        Uses a range scan on the ``manpages`` primary key index.
+        """
+        rows = self._conn.execute(
+            "SELECT source FROM manpages WHERE source >= ? AND source < ?",
+            (prefix, prefix[:-1] + chr(ord(prefix[-1]) + 1)),
+        ).fetchall()
+        return [row["source"] for row in rows]
+
+    def get_manpage_source(self, source: str) -> tuple[str, str] | None:
+        """Fetch and decompress the raw manpage source text.
+
+        Returns ``(source_text, generator)`` or ``None`` if not stored.
+        """
         row = self._conn.execute(
-            "SELECT data FROM manpages WHERE source = ?", (source,)
+            "SELECT data, generator FROM manpages WHERE source = ?", (source,)
         ).fetchone()
         if row is None:
             return None
-        return _decompress(row["data"])
+        return _decompress(row["data"]), row["generator"]

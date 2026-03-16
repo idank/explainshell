@@ -257,6 +257,93 @@ class TestDistros:
         assert pairs.count(("ubuntu", "25.10")) == 1
 
 
+class TestGetManpageSource:
+    def test_returns_text_and_generator(self, store):
+        mp = _make_manpage("tar", "1")
+        raw = RawManpage(
+            source_text=".TH TAR 1",
+            generated_at=datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc),
+            generator="roff",
+        )
+        store.add_manpage(mp, raw)
+
+        result = store.get_manpage_source("ubuntu/25.10/1/tar.1.gz")
+        assert result is not None
+        text, generator = result
+        assert text == ".TH TAR 1"
+        assert generator == "roff"
+
+    def test_markdown_generator(self, store):
+        mp = _make_manpage("curl", "1")
+        raw = RawManpage(
+            source_text="# curl",
+            generated_at=datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc),
+            generator="mandoc -T markdown",
+        )
+        store.add_manpage(mp, raw)
+
+        result = store.get_manpage_source("ubuntu/25.10/1/curl.1.gz")
+        assert result is not None
+        _, generator = result
+        assert "markdown" in generator
+
+    def test_not_found_returns_none(self, store):
+        assert store.get_manpage_source("ubuntu/25.10/1/nosuch.1.gz") is None
+
+
+class TestListSections:
+    def test_returns_distinct_sections(self, store):
+        mp1 = _make_manpage("tar", "1")
+        mp3 = _make_manpage("printf", "3")
+        store.add_manpage(mp1, _make_raw())
+        store.add_manpage(mp3, _make_raw())
+
+        sections = store.list_sections("ubuntu", "25.10")
+        assert sections == ["1", "3"]
+
+    def test_no_duplicates(self, store):
+        mp1 = _make_manpage("tar", "1")
+        mp2 = _make_manpage("ls", "1")
+        store.add_manpage(mp1, _make_raw())
+        store.add_manpage(mp2, _make_raw())
+
+        sections = store.list_sections("ubuntu", "25.10")
+        assert sections == ["1"]
+
+    def test_empty_for_unknown_distro(self, store):
+        mp = _make_manpage("tar", "1")
+        store.add_manpage(mp, _make_raw())
+
+        assert store.list_sections("debian", "12") == []
+
+
+class TestListManpages:
+    def test_prefix_filters_by_distro_release(self, store):
+        mp1 = _make_manpage("tar", "1", distro="ubuntu", release="25.10")
+        mp2 = _make_manpage("ps", "1", distro="debian", release="12")
+        store.add_manpage(mp1, _make_raw())
+        store.add_manpage(mp2, _make_raw())
+
+        sources = store.list_manpages("ubuntu/25.10/")
+        assert "ubuntu/25.10/1/tar.1.gz" in sources
+        assert "debian/12/1/ps.1.gz" not in sources
+
+    def test_prefix_filters_by_section(self, store):
+        mp1 = _make_manpage("printf", "1")
+        mp3 = _make_manpage("printf", "3")
+        store.add_manpage(mp1, _make_raw())
+        store.add_manpage(mp3, _make_raw())
+
+        sources = store.list_manpages("ubuntu/25.10/3/")
+        assert sources == ["ubuntu/25.10/3/printf.3.gz"]
+
+    def test_empty_result(self, store):
+        mp = _make_manpage("tar", "1")
+        store.add_manpage(mp, _make_raw())
+
+        assert store.list_manpages("debian/12/") == []
+
+
 class TestValidateSourcePath:
     def test_valid_path(self):
         validate_source_path("ubuntu/25.10/1/tar.1.gz")

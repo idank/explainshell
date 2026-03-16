@@ -27,8 +27,10 @@ def create_app(db_path=None):
     if db:
         app.store = store.Store(db, read_only=True)
 
-    from explainshell.web.views import bp
+    from explainshell.web.views import bp, debug_bp
 
     app.register_blueprint(bp)
+    if config.DEBUG:
+        app.register_blueprint(debug_bp)
 
     return app

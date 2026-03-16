@@ -96,6 +96,89 @@ def index():
     return render_template("index.html")
 
 
+debug_bp = Blueprint("manpage", __name__)
+
+
+@debug_bp.route("/manpage/<distro>/")
+def manpage_releases(distro):
+    """List available releases for a distro."""
+    releases = sorted(release for d, release in get_cached_distros() if d == distro)
+    return render_template(
+        "manpage_releases.html",
+        distro=distro,
+        releases=releases,
+    )
+
+
+@debug_bp.route("/manpage/<distro>/<release>/")
+def manpage_sections(distro, release):
+    """List available sections for a distro/release."""
+    sections = current_app.store.list_sections(distro, release)
+    return render_template(
+        "manpage_sections.html",
+        distro=distro,
+        release=release,
+        sections=sections,
+    )
+
+
+@debug_bp.route("/manpage/<distro>/<release>/<section>/")
+def manpage_list(distro, release, section):
+    """List available manpages within a section."""
+    prefix = f"{distro}/{release}/{section}/"
+    sources = current_app.store.list_manpages(prefix)
+    entries = []
+    for source in sorted(sources):
+        # source is e.g. "ubuntu/25.10/1/cd.1posix.gz"; strip the
+        # distro/release prefix and .gz suffix to form the URL tail.
+        tail = source[len(f"{distro}/{release}/") : -3]  # "1/cd.1posix"
+        basename = os.path.basename(source)[:-3]
+        name, sec = util.name_section(basename)
+        entries.append(
+            {
+                "name": name,
+                "section": sec,
+                "url": f"/manpage/{distro}/{release}/{urllib.parse.quote(tail)}",
+            }
+        )
+
+    return render_template(
+        "manpage_list.html",
+        distro=distro,
+        release=release,
+        section=section,
+        entries=entries,
+    )
+
+
+@debug_bp.route("/manpage/<distro>/<release>/<path:rest>")
+def manpage(distro, release, rest):
+    """Serve the raw manpage source text via exact lookup.
+
+    *rest* is everything after distro/release, e.g. "1/cd.1posix",
+    mapping to source key "ubuntu/25.10/1/cd.1posix.gz".
+    """
+    source = f"{distro}/{release}/{rest}.gz"
+    result = current_app.store.get_manpage_source(source)
+    if result is None:
+        return render_template(
+            "errors/missingmanpage.html",
+            title="missing man page",
+            e=errors.ProgramDoesNotExist(rest),
+        )
+
+    source_text, generator = result
+    is_markdown = "markdown" in generator
+    name, sec = util.name_section(os.path.basename(source)[:-3])
+    return render_template(
+        "manpage.html",
+        program=f"{name}({sec})",
+        source_text=source_text,
+        source_html=render_markdown(source_text) if is_markdown else None,
+        is_markdown=is_markdown,
+    )
+
+
 @bp.route("/explain", defaults={"path": ""})
 @bp.route("/explain/<path:path>")
 def explain_router(path):

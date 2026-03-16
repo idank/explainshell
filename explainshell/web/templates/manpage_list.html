@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %} - {{ distro }} {{ release }}{% if section %} section {{ section }}{% endif %} manpages{% endblock %}
+{% block content %}
+            <div class="small-push"></div>
+            <div class="push"></div>
+            <div id="command" style="word-spacing: 0px;">
+                {{ distro }} {{ release }}{% if section %} &ndash; section {{ section }}{% endif %}
+            </div>
+            <div class="small-push"></div>
+            <div>
+                <ul>
+                    {% for e in entries %}
+                    <li><a href="{{ e.url }}">{{ e.name|e }}({{ e.section|e }})</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+{% endblock %}

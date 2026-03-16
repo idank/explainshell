@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %} - {{ distro }} releases{% endblock %}
+{% block content %}
+            <div class="small-push"></div>
+            <div class="push"></div>
+            <div id="command" style="word-spacing: 0px;">
+                {{ distro }}
+            </div>
+            <div class="small-push"></div>
+            <div>
+                <ul>
+                    {% for release in releases %}
+                    <li><a href="/manpage/{{ distro|e }}/{{ release|e }}/">{{ release|e }}</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+{% endblock %}
