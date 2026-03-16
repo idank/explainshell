@@ -353,7 +353,7 @@ class LLMExtractor:
 
         options, pp_stats = postprocess(options)
         stats.deduped_options += pp_stats.deduped_options
-        stats.malformed_options += pp_stats.malformed_options
+        stats.dropped_empty += pp_stats.dropped_empty
 
         logger.info("%s: extracted %d option(s) total", basename, len(options))
 

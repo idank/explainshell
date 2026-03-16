@@ -21,15 +21,31 @@ class ExtractionStats:
     Per-file extractors set ``chunks = 1`` (or higher) at extraction time.
     """
 
+    # LLM input token count (batch-level aggregate).
     input_tokens: int = 0
+    # LLM output token count (batch-level aggregate).
     output_tokens: int = 0
+    # LLM reasoning/thinking tokens (subset of output).
     reasoning_tokens: int = 0
+    # Number of text chunks sent to the LLM for this file.
     chunks: int = 0
+    # Character count of the manpage plain text after filtering.
     plain_text_len: int = 0
+    # Wall-clock time for extraction.
     elapsed_seconds: float = 0.0
+    # Options skipped due to invalid LLM output (e.g. bad has_argument,
+    # missing lines). Counted at parse time in llm_option_to_store_option.
     malformed_options: int = 0
+    # Options removed by drop_empty in postprocessing because they had no
+    # flags (short/long) and no positional name — typically caused by the
+    # LLM omitting the flag from its response.
+    dropped_empty: int = 0
+    # Options removed as duplicates (exact-match or strict-subset) by
+    # dedup_options in postprocessing.
     deduped_options: int = 0
+    # Whether hybrid mode fell back from mandoc to LLM.
     fallback_used: bool = False
+    # Reason for the fallback (e.g. low confidence).
     fallback_reason: str | None = None
 
     def __iadd__(self, other: ExtractionStats) -> ExtractionStats:
@@ -41,6 +57,7 @@ class ExtractionStats:
         self.plain_text_len += other.plain_text_len
         self.elapsed_seconds += other.elapsed_seconds
         self.malformed_options += other.malformed_options
+        self.dropped_empty += other.dropped_empty
         self.deduped_options += other.deduped_options
         self.fallback_used = self.fallback_used or other.fallback_used
         return self
