@@ -165,7 +165,7 @@ python -m explainshell.manager --mode source /path/to/manpage.1.gz
 Extraction modes controlled by `--mode`:
 - `--mode source` - Parses roff macros directly via `roff_parser.py` + `source_extractor.py`
 - `--mode mandoc` - Uses mandoc -T tree parser via `mandoc_extractor.py`
-- `--mode llm:<model>` - Sends man page text to an LLM via LiteLLM (e.g., `llm:gpt-4o`)
+- `--mode llm:<model>` - Sends man page text to an LLM via LiteLLM (e.g., `llm:gpt-5-mini`)
 - `--mode hybrid:<model>` - Tries mandoc first, falls back to LLM on low confidence
 
 Manager key flags: `--overwrite`, `--dry-run`, `--diff [db|A..B]`, `--debug-dir`, `--drop`, `-j/--jobs <int>` (parallel extraction, default 1)

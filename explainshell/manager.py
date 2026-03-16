@@ -7,7 +7,7 @@ Usage:
 Modes:
     source              Use the roff parser
     mandoc              Use mandoc -T tree parser
-    llm:<model>         Use an LLM (e.g. llm:openai/gpt-4o)
+    llm:<model>         Use an LLM (e.g. llm:openai/gpt-5-mini)
     hybrid:<model>      Try tree parser first, fall back to LLM when confidence is low
 """
 
@@ -72,14 +72,14 @@ def _parse_mode(raw: str | None) -> tuple[str | None, str | None]:
         model = raw[4:]
         if not model:
             raise ValueError(
-                "--mode llm:<model> requires a model name (e.g. llm:gpt-4o)"
+                "--mode llm:<model> requires a model name (e.g. llm:gpt-5-mini)"
             )
         return "llm", model
     if raw.startswith("hybrid:"):
         model = raw[7:]
         if not model:
             raise ValueError(
-                "--mode hybrid:<model> requires a model name (e.g. hybrid:gpt-4o)"
+                "--mode hybrid:<model> requires a model name (e.g. hybrid:gpt-5-mini)"
             )
         return "hybrid", model
     raise ValueError(
@@ -579,7 +579,7 @@ def _build_parser() -> argparse.ArgumentParser:
         nargs="?",
         const="db",
         help="Diff mode: 'db' (default) compares fresh extraction against the DB; "
-        "'A..B' compares two extractors (e.g. source..mandoc, source..llm:gpt-4o)",
+        "'A..B' compares two extractors (e.g. source..mandoc, source..llm:gpt-5-mini)",
     )
     parser.add_argument(
         "--debug-dir",
