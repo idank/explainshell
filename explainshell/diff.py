@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import difflib
 
-from explainshell.store import ParsedManpage
+from explainshell.models import ParsedManpage
 
 # ParsedManpage-level fields to compare in diff mode.
 _MP_FIELDS = (

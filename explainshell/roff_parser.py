@@ -6,14 +6,14 @@ option records directly from roff macros — avoiding the lossy mandoc HTML
 round-trip.
 
 Public API:
-    parse_options(gz_path) -> list[store.Option]
+    parse_options(gz_path) -> list[models.Option]
 """
 
 import gzip
 import logging
 import re
 
-from explainshell import store
+from explainshell import models
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ _BLOCK_ENDERS_MAN = {".SH", ".SS", ".PP", ".LP", ".P", ".TP", ".IP", ".HP"}
 def parse_options(gz_path: str) -> list:
     """Main entry point: extract options from a .gz man page file.
 
-    Returns a list of store.Option objects, or an empty list if nothing
+    Returns a list of models.Option objects, or an empty list if nothing
     could be extracted.
     """
     try:
@@ -79,7 +79,7 @@ def parse_options(gz_path: str) -> list:
                 raw.append(e)
                 existing_flags.update(flags)
 
-    # Convert raw dicts to store.Option objects, filtering out non-option entries
+    # Convert raw dicts to models.Option objects, filtering out non-option entries
     options = []
     idx = 0
     for entry in raw:
@@ -108,7 +108,7 @@ def parse_options(gz_path: str) -> list:
         else:
             text = description
         options.append(
-            store.Option(
+            models.Option(
                 text=text,
                 short=short,
                 long=long,

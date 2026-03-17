@@ -6,7 +6,7 @@ import logging
 import re
 from dataclasses import dataclass
 
-from explainshell.store import Option
+from explainshell.models import Option
 
 logger = logging.getLogger(__name__)
 

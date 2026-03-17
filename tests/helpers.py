@@ -1,14 +1,14 @@
 import os
 
-from explainshell import store, errors
+from explainshell import models, errors
 
 TESTS_DIR = os.path.dirname(__file__)
 
 
 class MockStore:
     def __init__(self):
-        so = store.Option
-        sm = store.ParsedManpage
+        so = models.Option
+        sm = models.ParsedManpage
 
         opts = [
             so(text="-a desc", short=["-a"], long=["--a"], has_argument=False),

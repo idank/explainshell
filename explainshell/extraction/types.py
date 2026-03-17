@@ -6,10 +6,11 @@ import enum
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+from explainshell.models import ParsedManpage, RawManpage
+
 if TYPE_CHECKING:
     from explainshell.extraction.llm import PreparedFile
     from explainshell.extraction.llm.providers import BatchProvider
-    from explainshell.store import ParsedManpage, RawManpage
 
 
 @dataclass

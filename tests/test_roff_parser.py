@@ -3,7 +3,7 @@
 import os
 import unittest
 
-from explainshell import store
+from explainshell import models
 from explainshell.roff_parser import (
     clean_roff,
     _clean_roff_description,
@@ -434,7 +434,7 @@ class TestParseEcho(unittest.TestCase):
 
     def test_returns_store_options(self):
         for opt in self.opts:
-            self.assertIsInstance(opt, store.Option)
+            self.assertIsInstance(opt, models.Option)
 
     def test_has_n_flag(self):
         flags = {f for o in self.opts for f in o.short}
@@ -722,12 +722,12 @@ class TestParseGitRebase(unittest.TestCase):
 
 
 class TestParseOptionsReturnType(unittest.TestCase):
-    """parse_options() should return store.Option instances."""
+    """parse_options() should return models.Option instances."""
 
     def test_returns_option_instances(self):
         opts = parse_options(_gz("echo.1.gz"))
         for opt in opts:
-            self.assertIsInstance(opt, store.Option)
+            self.assertIsInstance(opt, models.Option)
 
     def test_nested_cmd_false(self):
         """Roff parser always sets nested_cmd to False."""

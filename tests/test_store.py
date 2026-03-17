@@ -4,7 +4,8 @@ import pytest
 
 from explainshell import errors
 from explainshell.config import parse_distro_release
-from explainshell.store import RawManpage, Store, ParsedManpage, validate_source_path
+from explainshell.models import ParsedManpage, RawManpage
+from explainshell.store import Store, validate_source_path
 
 
 def _make_raw():

@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from tests.helpers import TESTS_DIR
 
-from explainshell import store
+from explainshell import models
 from explainshell.extraction import ExtractorConfig
 from explainshell.extraction.llm import ChunkResult, LLMExtractor
 from explainshell.extraction.llm.providers import TokenUsage
@@ -73,8 +73,8 @@ class TestExtractIntegration(unittest.TestCase):
         ext = self._make_extractor()
         result = ext.extract("dummy.1.gz")
         mp, raw = result.mp, result.raw
-        self.assertIsInstance(mp, store.ParsedManpage)
-        self.assertIsInstance(raw, store.RawManpage)
+        self.assertIsInstance(mp, models.ParsedManpage)
+        self.assertIsInstance(raw, models.RawManpage)
         self.assertEqual(len(mp.options), 2)
         flags = [opt.short[0] for opt in mp.options]
         self.assertIn("-n", flags)

@@ -7,7 +7,7 @@ from explainshell.extraction.postprocess import (
     dedup_options,
     postprocess,
 )
-from explainshell.store import Option
+from explainshell.models import Option
 
 
 def _opt(

@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from tests.helpers import TESTS_DIR
 
-from explainshell import store
+from explainshell import models
 from explainshell.errors import ExtractionError
 from explainshell.extraction.source import SourceExtractor
 from explainshell.roff_utils import detect_dashless_opts, detect_nested_cmd
@@ -38,7 +38,7 @@ class TestExtract(unittest.TestCase):
     ):
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
         fake_opts = [
-            store.Option(
+            models.Option(
                 text="Do not output trailing newline.",
                 short=["-n"],
                 long=[],
@@ -55,7 +55,7 @@ class TestExtract(unittest.TestCase):
         ext = SourceExtractor()
         result = ext.extract(gz_path)
 
-        self.assertIsInstance(result.mp, store.ParsedManpage)
+        self.assertIsInstance(result.mp, models.ParsedManpage)
         self.assertEqual(result.mp.synopsis, "a test tool")
         self.assertEqual(len(result.mp.options), 1)
         self.assertEqual(result.mp.options[0].short, ["-n"])

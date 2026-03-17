@@ -6,7 +6,7 @@ import json
 import logging
 import re
 
-from explainshell import store
+from explainshell import models
 from explainshell.errors import ExtractionError
 
 logger = logging.getLogger(__name__)
@@ -128,8 +128,8 @@ def sanitize_option_fields(
 
 def llm_option_to_store_option(
     raw: dict, original_lines: dict[int, str]
-) -> store.Option:
-    """Convert one LLM option dict to a store.Option.
+) -> models.Option:
+    """Convert one LLM option dict to a models.Option.
 
     Uses the "lines" field to slice the description from original_lines.
     """
@@ -154,7 +154,7 @@ def llm_option_to_store_option(
         short, long, has_argument, positional, nested_cmd
     )
 
-    return store.Option(
+    return models.Option(
         text=text,
         short=short,
         long=long,

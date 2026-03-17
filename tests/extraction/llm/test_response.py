@@ -2,7 +2,7 @@
 
 import unittest
 
-from explainshell import store
+from explainshell import models
 from explainshell.errors import ExtractionError
 from explainshell.extraction.llm.response import (
     dedup_options,
@@ -170,7 +170,7 @@ class TestLlmOptionToStoreOption(unittest.TestCase):
             "lines": [10, 13],
         }
         opt = llm_option_to_store_option(raw, self.orig)
-        self.assertIsInstance(opt, store.Option)
+        self.assertIsInstance(opt, models.Option)
         self.assertEqual(opt.short, ["-A"])
         self.assertEqual(opt.long, ["--catenate"])
         self.assertFalse(opt.has_argument)
