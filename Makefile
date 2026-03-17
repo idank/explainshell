@@ -59,10 +59,10 @@ ubuntu-archive:
 	MANPAGES_GZ_ONLY=true \
 		$(UBUNTU_ARCHIVE_DIR)/ingest
 	mkdir -p manpages/ubuntu
-	cp -r $(UBUNTU_ARCHIVE_OUTPUT)/manpages.gz/* manpages/ubuntu/
-	find manpages/ubuntu -mindepth 2 -maxdepth 2 ! -name man1 ! -name man8 -exec rm -rf {} +
-	find manpages/ubuntu -mindepth 2 -maxdepth 2 -type d -name 'man*' | while read d; do mv "$$d" "$$(dirname "$$d")/$$(echo "$$(basename "$$d")" | sed 's/^man//')"; done
-	find manpages/ubuntu -mindepth 3 -maxdepth 3 -type d -exec rm -rf {} +
+	cp -r $(UBUNTU_ARCHIVE_OUTPUT)/manpages.gz/$(UBUNTU_RELEASE) manpages/ubuntu/
+	find manpages/ubuntu/$(UBUNTU_RELEASE) -mindepth 1 -maxdepth 1 ! -name man1 ! -name man8 -exec rm -rf {} +
+	find manpages/ubuntu/$(UBUNTU_RELEASE) -mindepth 1 -maxdepth 1 -type d -name 'man*' | while read d; do mv "$$d" "$$(dirname "$$d")/$$(echo "$$(basename "$$d")" | sed 's/^man//')"; done
+	find manpages/ubuntu/$(UBUNTU_RELEASE) -mindepth 2 -maxdepth 2 -type d -exec rm -rf {} +
 
 MANNED_DATA_DIR := ignore/manned
 
