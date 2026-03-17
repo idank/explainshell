@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from explainshell.errors import LowConfidenceError
-from explainshell.extraction.llm import LLMExtractor
+from explainshell.extraction.llm.extractor import LLMExtractor
 from explainshell.extraction.mandoc import MandocExtractor
 from explainshell.extraction.types import ExtractionResult, ExtractorConfig
 

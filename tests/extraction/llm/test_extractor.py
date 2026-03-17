@@ -8,7 +8,7 @@ from tests.helpers import TESTS_DIR
 
 from explainshell import models
 from explainshell.extraction import ExtractorConfig
-from explainshell.extraction.llm import ChunkResult, LLMExtractor
+from explainshell.extraction.llm.extractor import ChunkResult, LLMExtractor
 from explainshell.extraction.llm.providers import TokenUsage
 
 
@@ -27,9 +27,9 @@ class TestExtractIntegration(unittest.TestCase):
         return_value=False,
     )
     @patch("explainshell.extraction.common.manpage.get_synopsis_and_aliases")
-    @patch("explainshell.extraction.llm.LLMExtractor._call_llm")
-    @patch("explainshell.extraction.llm.get_manpage_text")
-    @patch("explainshell.extraction.llm.manpage.get_synopsis_and_aliases")
+    @patch("explainshell.extraction.llm.extractor.LLMExtractor._call_llm")
+    @patch("explainshell.extraction.llm.extractor.get_manpage_text")
+    @patch("explainshell.extraction.llm.extractor.manpage.get_synopsis_and_aliases")
     @patch("explainshell.extraction.common.gz_sha256", return_value="abc123")
     def test_extract_returns_manpage(
         self,
@@ -89,9 +89,9 @@ class TestExtractIntegration(unittest.TestCase):
         return_value=False,
     )
     @patch("explainshell.extraction.common.manpage.get_synopsis_and_aliases")
-    @patch("explainshell.extraction.llm.LLMExtractor._call_llm")
-    @patch("explainshell.extraction.llm.get_manpage_text")
-    @patch("explainshell.extraction.llm.manpage.get_synopsis_and_aliases")
+    @patch("explainshell.extraction.llm.extractor.LLMExtractor._call_llm")
+    @patch("explainshell.extraction.llm.extractor.get_manpage_text")
+    @patch("explainshell.extraction.llm.extractor.manpage.get_synopsis_and_aliases")
     @patch("explainshell.extraction.common.gz_sha256", return_value="abc123")
     def test_malformed_options_skipped(
         self,
@@ -134,9 +134,9 @@ class TestExtractIntegration(unittest.TestCase):
         return_value=False,
     )
     @patch("explainshell.extraction.common.manpage.get_synopsis_and_aliases")
-    @patch("explainshell.extraction.llm.LLMExtractor._call_llm")
-    @patch("explainshell.extraction.llm.get_manpage_text")
-    @patch("explainshell.extraction.llm.manpage.get_synopsis_and_aliases")
+    @patch("explainshell.extraction.llm.extractor.LLMExtractor._call_llm")
+    @patch("explainshell.extraction.llm.extractor.get_manpage_text")
+    @patch("explainshell.extraction.llm.extractor.manpage.get_synopsis_and_aliases")
     @patch("explainshell.extraction.common.gz_sha256", return_value="abc123")
     def test_debug_dir_writes_files(
         self,
