@@ -10,20 +10,15 @@ import concurrent.futures
 import logging
 import time
 from collections.abc import Callable
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from explainshell.extraction.llm import PreparedFile
-
 from explainshell.errors import ExtractionError, SkippedExtraction
 from explainshell.util import fmt_tokens
+from explainshell.extraction.llm.extractor import BatchExtractor, PreparedFile
 from explainshell.extraction.types import (
-    BatchExtractor,
     BatchResult,
     Extractor,
+    ExtractionOutcome,
     ExtractionResult,
     ExtractionStats,
-    ExtractionOutcome,
 )
 
 logger = logging.getLogger(__name__)

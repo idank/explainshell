@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import litellm
 
-from explainshell.extraction.llm import SYSTEM_PROMPT
+from explainshell.extraction.llm.prompt import SYSTEM_PROMPT
 from explainshell.extraction.llm.providers import TokenUsage
 
 LLM_TIMEOUT_SECONDS = 300

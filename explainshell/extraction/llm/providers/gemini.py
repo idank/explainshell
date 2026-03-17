@@ -12,7 +12,7 @@ from explainshell.errors import ExtractionError
 if TYPE_CHECKING:
     from google.genai import Client
     from google.genai.types import BatchJob
-from explainshell.extraction.llm import SYSTEM_PROMPT
+from explainshell.extraction.llm.prompt import SYSTEM_PROMPT
 from explainshell.extraction.llm.providers import BatchResults, TokenUsage
 
 logger = logging.getLogger(__name__)

@@ -4,13 +4,13 @@ import unittest
 from unittest.mock import MagicMock
 
 from explainshell.errors import ExtractionError, SkippedExtraction
-from explainshell.extraction.llm import PreparedFile
 from explainshell.extraction.llm.providers import BatchResults, TokenUsage
 from explainshell.extraction.runner import run, run_batch
+from explainshell.extraction.llm.extractor import PreparedFile
 from explainshell.extraction.types import (
+    ExtractionOutcome,
     ExtractionResult,
     ExtractionStats,
-    ExtractionOutcome,
 )
 
 

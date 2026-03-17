@@ -10,7 +10,7 @@ from openai import OpenAI
 from openai.types import Batch
 
 from explainshell.errors import ExtractionError
-from explainshell.extraction.llm import SYSTEM_PROMPT
+from explainshell.extraction.llm.prompt import SYSTEM_PROMPT
 from explainshell.extraction.llm.providers import BatchResults, TokenUsage
 
 logger = logging.getLogger(__name__)

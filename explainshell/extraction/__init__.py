@@ -11,23 +11,21 @@ Re-exports:
 from __future__ import annotations
 
 from explainshell.extraction.types import (
-    BatchExtractor,
     BatchResult,
+    ExtractionOutcome,
     ExtractionResult,
     ExtractionStats,
     Extractor,
     ExtractorConfig,
-    ExtractionOutcome,
 )
 
 __all__ = [
-    "BatchExtractor",
     "BatchResult",
+    "ExtractionOutcome",
     "ExtractionResult",
     "ExtractionStats",
     "Extractor",
     "ExtractorConfig",
-    "ExtractionOutcome",
     "make_extractor",
 ]
 
@@ -43,7 +41,7 @@ def make_extractor(mode: str, config: ExtractorConfig | None = None) -> Extracto
 
         return MandocExtractor()
     if mode == "llm":
-        from explainshell.extraction.llm import LLMExtractor
+        from explainshell.extraction.llm.extractor import LLMExtractor
 
         return LLMExtractor(config)
     if mode == "hybrid":
