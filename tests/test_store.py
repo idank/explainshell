@@ -268,11 +268,10 @@ class TestGetManpageSource:
         )
         store.add_manpage(mp, raw)
 
-        result = store.get_manpage_source("ubuntu/25.10/1/tar.1.gz")
+        result = store.get_raw_manpage("ubuntu/25.10/1/tar.1.gz")
         assert result is not None
-        text, generator = result
-        assert text == ".TH TAR 1"
-        assert generator == "roff"
+        assert result.source_text == ".TH TAR 1"
+        assert result.generator == "roff"
 
     def test_markdown_generator(self, store):
         mp = _make_manpage("curl", "1")
@@ -283,13 +282,12 @@ class TestGetManpageSource:
         )
         store.add_manpage(mp, raw)
 
-        result = store.get_manpage_source("ubuntu/25.10/1/curl.1.gz")
+        result = store.get_raw_manpage("ubuntu/25.10/1/curl.1.gz")
         assert result is not None
-        _, generator = result
-        assert "markdown" in generator
+        assert "markdown" in result.generator
 
     def test_not_found_returns_none(self, store):
-        assert store.get_manpage_source("ubuntu/25.10/1/nosuch.1.gz") is None
+        assert store.get_raw_manpage("ubuntu/25.10/1/nosuch.1.gz") is None
 
 
 class TestListSections:

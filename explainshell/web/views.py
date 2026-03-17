@@ -159,22 +159,21 @@ def manpage(distro, release, rest):
     mapping to source key "ubuntu/25.10/1/cd.1posix.gz".
     """
     source = f"{distro}/{release}/{rest}.gz"
-    result = current_app.store.get_manpage_source(source)
-    if result is None:
+    raw = current_app.store.get_raw_manpage(source)
+    if raw is None:
         return render_template(
             "errors/missingmanpage.html",
             title="missing man page",
             e=errors.ProgramDoesNotExist(rest),
         )
 
-    source_text, generator = result
-    is_markdown = "markdown" in generator
+    is_markdown = "markdown" in raw.generator
     name, sec = util.name_section(os.path.basename(source)[:-3])
     return render_template(
         "manpage.html",
         program=f"{name}({sec})",
-        source_text=source_text,
-        source_html=render_markdown(source_text) if is_markdown else None,
+        source_text=raw.source_text,
+        source_html=render_markdown(raw.source_text) if is_markdown else None,
         is_markdown=is_markdown,
     )
 
