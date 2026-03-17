@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import io
 import json
 import logging
 import time
+
 import openai
 from openai import OpenAI
 from openai.types import Batch
@@ -61,8 +63,6 @@ class OpenAIProvider:
     # -- Batch API --
 
     def submit_batch(self, requests: list[tuple[str, str]]) -> Batch:
-        import io
-
         client = OpenAI(timeout=LLM_TIMEOUT_SECONDS)
 
         buf = io.BytesIO()

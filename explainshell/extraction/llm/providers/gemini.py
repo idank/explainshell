@@ -5,13 +5,14 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import TYPE_CHECKING
+
+import httpx
+from google import genai
+from google.genai import Client, types
+from google.genai.errors import ClientError, ServerError
+from google.genai.types import BatchJob
 
 from explainshell.errors import ExtractionError
-
-if TYPE_CHECKING:
-    from google.genai import Client
-    from google.genai.types import BatchJob
 from explainshell.extraction.llm.prompt import SYSTEM_PROMPT
 from explainshell.extraction.llm.providers import BatchResults, TokenUsage
 
@@ -28,9 +29,6 @@ class GeminiProvider:
         self._gemini_model = model.removeprefix("gemini/")
 
     def call(self, user_content: str) -> tuple[str, TokenUsage]:
-        from google import genai
-        from google.genai import types
-
         client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
         response = client.models.generate_content(
             model=self._gemini_model,
@@ -51,18 +49,11 @@ class GeminiProvider:
 
     @property
     def retryable_exceptions(self) -> tuple[type[Exception], ...]:
-        import httpx
-
-        from google.genai.errors import ClientError, ServerError
-
         return (ClientError, ServerError, httpx.TimeoutException)
 
     # -- Batch API --
 
     def submit_batch(self, requests: list[tuple[str, str]]) -> BatchJob:
-        from google import genai
-        from google.genai import types
-
         client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
         inline_requests = []
@@ -86,8 +77,6 @@ class GeminiProvider:
         return job
 
     def make_poll_client(self) -> Client:
-        from google import genai
-
         return genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
     def poll_batch(
