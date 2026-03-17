@@ -16,7 +16,7 @@ import re
 import subprocess
 from dataclasses import dataclass, field
 
-from explainshell import store
+from explainshell import models
 from explainshell.roff_parser import clean_roff, _parse_flag_text
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 class ExtractionResult:
     """Result of tree-based option extraction with diagnostic metadata."""
 
-    options: list = field(default_factory=list)  # list[store.Option]
+    options: list = field(default_factory=list)  # list[models.Option]
     tree_text: str = ""
     mandoc_stderr: str = ""
     option_sections_found: int = 0  # sections matching _is_option_section()
@@ -1124,7 +1124,7 @@ def parse_options(gz_path: str) -> ExtractionResult:
                             existing_flags.update(flags)
                         break
 
-    # Convert to store.Option objects
+    # Convert to models.Option objects
     options = []
     empty_desc = 0
     for entry in raw:
@@ -1154,7 +1154,7 @@ def parse_options(gz_path: str) -> ExtractionResult:
             text = description
 
         options.append(
-            store.Option(
+            models.Option(
                 text=text,
                 short=short,
                 long=long,

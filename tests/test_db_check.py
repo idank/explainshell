@@ -3,7 +3,8 @@ import json
 
 import pytest
 
-from explainshell.store import RawManpage, Store, ParsedManpage
+from explainshell.models import ParsedManpage, RawManpage
+from explainshell.store import Store
 from tools.db_check import check as db_check
 
 

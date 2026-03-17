@@ -2,7 +2,7 @@
 
 import unittest
 
-from explainshell import store
+from explainshell import models
 from explainshell.tree_parser import (
     ExtractionResult,
     ConfidenceResult,
@@ -11,7 +11,7 @@ from explainshell.tree_parser import (
 
 
 def _make_option(short=None, long=None, text="flag\ndescription"):
-    return store.Option(
+    return models.Option(
         text=text,
         short=short or [],
         long=long or [],
