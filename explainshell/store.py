@@ -2,6 +2,7 @@
 data objects to save processed man pages to sqlite
 """
 
+import datetime
 import logging
 import os
 import re
@@ -9,7 +10,7 @@ import sqlite3
 import zlib
 
 from explainshell import errors, util, config
-from explainshell.models import ParsedManpage
+from explainshell.models import ParsedManpage, RawManpage
 
 logger = logging.getLogger(__name__)
 
@@ -450,14 +451,22 @@ class Store:
         ).fetchall()
         return [row["source"] for row in rows]
 
-    def get_manpage_source(self, source: str) -> tuple[str, str] | None:
-        """Fetch and decompress the raw manpage source text.
+    def get_raw_manpage(self, source: str) -> RawManpage | None:
+        """Fetch and decompress a raw manpage.
 
-        Returns ``(source_text, generator)`` or ``None`` if not stored.
+        Returns a ``RawManpage`` or ``None`` if not stored.
         """
         row = self._conn.execute(
-            "SELECT data, generator FROM manpages WHERE source = ?", (source,)
+            "SELECT data, generated_at, generator, generator_version, source_gz_sha256 "
+            "FROM manpages WHERE source = ?",
+            (source,),
         ).fetchone()
         if row is None:
             return None
-        return _decompress(row["data"]), row["generator"]
+        return RawManpage(
+            source_text=_decompress(row["data"]),
+            generated_at=datetime.datetime.fromisoformat(row["generated_at"]),
+            generator=row["generator"],
+            generator_version=row["generator_version"],
+            source_gz_sha256=row["source_gz_sha256"],
+        )

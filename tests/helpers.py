@@ -1,3 +1,4 @@
+import datetime
 import os
 
 from explainshell import models, errors
@@ -122,12 +123,21 @@ class MockStore:
     def distros(self):
         return [("ubuntu", "25.10")]
 
-    def get_manpage_source(self, source: str) -> tuple[str, str] | None:
+    def get_raw_manpage(self, source: str) -> models.RawManpage | None:
+        _now = datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc)
         for mp in self.manpages.values():
             if mp.source == source:
                 if "markdown" in mp.name:
-                    return "# markdown content", "mandoc -T markdown"
-                return ".TH roff content", "roff"
+                    return models.RawManpage(
+                        source_text="# markdown content",
+                        generated_at=_now,
+                        generator="mandoc -T markdown",
+                    )
+                return models.RawManpage(
+                    source_text=".TH roff content",
+                    generated_at=_now,
+                    generator="roff",
+                )
         return None
 
     def list_sections(self, distro: str, release: str) -> list[str]:
