@@ -138,13 +138,16 @@ def _run_diff_extractors(
     left_ext = make_extractor(left_mode, left_cfg)
     right_ext = make_extractor(right_mode, right_cfg)
 
+    left_files: list[ExtractionResult] = []
+    right_files: list[ExtractionResult] = []
+
     logger.info("running %s extractor on %d file(s)...", left_label, len(gz_files))
-    left_batch = run_sequential(left_ext, gz_files)
+    run_sequential(left_ext, gz_files, on_result=lambda _p, e: left_files.append(e))
     logger.info("running %s extractor on %d file(s)...", right_label, len(gz_files))
-    right_batch = run_sequential(right_ext, gz_files)
+    run_sequential(right_ext, gz_files, on_result=lambda _p, e: right_files.append(e))
 
     batch = BatchResult()
-    for left_entry, right_entry in zip(left_batch.files, right_batch.files):
+    for left_entry, right_entry in zip(left_files, right_files):
         gz_path = left_entry.gz_path
         short_path = config.source_from_path(gz_path)
         left_ok = left_entry.outcome == ExtractionOutcome.SUCCESS
@@ -182,27 +185,9 @@ def _run_diff_extractors(
                 left_entry.outcome == ExtractionOutcome.FAILED
                 or right_entry.outcome == ExtractionOutcome.FAILED
             ):
-                failed_side = (
-                    left_entry
-                    if left_entry.outcome == ExtractionOutcome.FAILED
-                    else right_entry
-                )
-                batch.files.append(
-                    ExtractionResult(
-                        gz_path=gz_path,
-                        outcome=ExtractionOutcome.FAILED,
-                        error=failed_side.error,
-                    )
-                )
+                batch.n_failed += 1
             else:
-                skipped_side = left_entry if not left_ok else right_entry
-                batch.files.append(
-                    ExtractionResult(
-                        gz_path=gz_path,
-                        outcome=ExtractionOutcome.SKIPPED,
-                        error=skipped_side.error,
-                    )
-                )
+                batch.n_skipped += 1
             continue
 
         logger.info("=== %s (%s) ===", short_path, label)
@@ -228,12 +213,7 @@ def _run_diff_extractors(
                 util.fmt_tokens(ro),
             )
 
-        batch.files.append(
-            ExtractionResult(
-                gz_path=gz_path,
-                outcome=ExtractionOutcome.SUCCESS,
-            )
-        )
+        batch.n_succeeded += 1
 
     return batch
 
@@ -514,9 +494,9 @@ def main(args: argparse.Namespace) -> int:
             on_result=on_result,
         )
 
-    added = len(batch_result.succeeded)
-    skipped = len(batch_result.skipped) + prefilter_skipped
-    failed = len(batch_result.failed)
+    added = batch_result.n_succeeded
+    skipped = batch_result.n_skipped + prefilter_skipped
+    failed = batch_result.n_failed
 
     # Update multi-cmd mappings (only when writing to DB).
     if s and added > 0 and not args.dry_run and not args.diff:

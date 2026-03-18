@@ -92,24 +92,15 @@ class BatchResult:
 
     ``stats`` accumulates SUCCESS outcomes plus batch-level token counts.
     In batch mode, token counts are aggregate (not per-file).
+
+    Per-file results are delivered via the ``on_result`` callback; only
+    aggregate counters and stats are kept here.
     """
 
-    files: list[ExtractionResult] = field(default_factory=list)
     stats: ExtractionStats = field(default_factory=ExtractionStats)
-
-    @property
-    def succeeded(self) -> dict[str, ExtractionResult]:
-        return {
-            f.gz_path: f for f in self.files if f.outcome == ExtractionOutcome.SUCCESS
-        }
-
-    @property
-    def skipped(self) -> list[ExtractionResult]:
-        return [f for f in self.files if f.outcome == ExtractionOutcome.SKIPPED]
-
-    @property
-    def failed(self) -> list[ExtractionResult]:
-        return [f for f in self.files if f.outcome == ExtractionOutcome.FAILED]
+    n_succeeded: int = 0
+    n_skipped: int = 0
+    n_failed: int = 0
 
 
 @dataclass(frozen=True)

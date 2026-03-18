@@ -36,6 +36,17 @@ class _WorkItem(NamedTuple):
     """Output of the prepare phase (chunked prompts, metadata)."""
 
 
+def _tally(batch: BatchResult, entry: ExtractionResult) -> None:
+    """Update batch counters and stats from a single file result."""
+    if entry.outcome == ExtractionOutcome.SUCCESS:
+        batch.stats += entry.stats
+        batch.n_succeeded += 1
+    elif entry.outcome == ExtractionOutcome.SKIPPED:
+        batch.n_skipped += 1
+    else:
+        batch.n_failed += 1
+
+
 def _extract_one(extractor: Extractor, gz_path: str) -> ExtractionResult:
     """Run extractor on a single file, catching all expected errors."""
     try:
@@ -71,9 +82,7 @@ def run_sequential(
             on_start(gz_path)
 
         entry = _extract_one(extractor, gz_path)
-        if entry.outcome == ExtractionOutcome.SUCCESS:
-            batch.stats += entry.stats
-        batch.files.append(entry)
+        _tally(batch, entry)
         if on_result:
             on_result(gz_path, entry)
 
@@ -100,9 +109,7 @@ def run_parallel(
         futures = {executor.submit(_do_one, gz_path): gz_path for gz_path in gz_files}
         for future in concurrent.futures.as_completed(futures):
             entry = future.result()
-            batch.files.append(entry)
-            if entry.outcome == ExtractionOutcome.SUCCESS:
-                batch.stats += entry.stats
+            _tally(batch, entry)
             if on_result:
                 on_result(entry.gz_path, entry)
     except KeyboardInterrupt:
@@ -176,7 +183,7 @@ def run_batch(
                 stats=e.stats,
                 error=e.reason,
             )
-            result.files.append(entry)
+            _tally(result, entry)
             if on_result:
                 on_result(gz_path, entry)
             continue
@@ -187,7 +194,7 @@ def run_batch(
                 outcome=ExtractionOutcome.FAILED,
                 error=str(e),
             )
-            result.files.append(entry)
+            _tally(result, entry)
             if on_result:
                 on_result(gz_path, entry)
             continue
@@ -215,7 +222,7 @@ def run_batch(
                     error=f"batch poll client failed: {e}",
                     stats=_prep_stats(prepared),
                 )
-                result.files.append(entry)
+                _tally(result, entry)
                 if on_result:
                     on_result(gz_path, entry)
         return result
@@ -229,9 +236,7 @@ def run_batch(
         def _finalize(gz_path: str, entry: ExtractionResult) -> None:
             finalized_paths.add(gz_path)
             entry.gz_path = gz_path
-            result.files.append(entry)
-            if entry.outcome == ExtractionOutcome.SUCCESS:
-                result.stats += entry.stats
+            _tally(result, entry)
             if on_result:
                 on_result(gz_path, entry)
 
@@ -321,9 +326,7 @@ def run_batch(
 
             # Cumulative progress summary.
             elapsed_m = int((time.time() - batch_start_time) / 60)
-            n_succeeded = sum(
-                1 for f in result.files if f.outcome == ExtractionOutcome.SUCCESS
-            )
+            n_succeeded = result.n_succeeded
             progress_msg = (
                 f"progress: {cumulative_requests}/{total_requests} requests done, "
                 f"{n_succeeded} files extracted, "
@@ -366,7 +369,7 @@ def run_batch(
         # Release PreparedFile references for this batch.
         batch_items.clear()
 
-    n_succeeded = sum(1 for f in result.files if f.outcome == ExtractionOutcome.SUCCESS)
+    n_succeeded = result.n_succeeded
     logger.info(
         "batch: %d/%d file(s) extracted successfully",
         n_succeeded,
@@ -418,3 +421,42 @@ def run(
         on_start=on_start,
         on_result=on_result,
     )
+
+
+def run_collected(
+    extractor: Extractor,
+    gz_files: list[str],
+    *,
+    batch_size: int | None = None,
+    jobs: int = 1,
+    on_start: Callable[[str], None] | None = None,
+) -> tuple[BatchResult, list[ExtractionResult]]:
+    """Like ``run``, but collects per-file results into a list."""
+    files: list[ExtractionResult] = []
+    batch = run(
+        extractor,
+        gz_files,
+        batch_size=batch_size,
+        jobs=jobs,
+        on_start=on_start,
+        on_result=lambda _p, e: files.append(e),
+    )
+    return batch, files
+
+
+def run_batch_collected(
+    extractor: BatchExtractor,
+    gz_files: list[str],
+    batch_size: int = 50,
+    on_start: Callable[[str], None] | None = None,
+) -> tuple[BatchResult, list[ExtractionResult]]:
+    """Like ``run_batch``, but collects per-file results into a list."""
+    files: list[ExtractionResult] = []
+    batch = run_batch(
+        extractor,
+        gz_files,
+        batch_size=batch_size,
+        on_start=on_start,
+        on_result=lambda _p, e: files.append(e),
+    )
+    return batch, files
