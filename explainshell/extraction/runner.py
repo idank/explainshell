@@ -50,9 +50,7 @@ def _tally(batch: BatchResult, entry: ExtractionResult) -> None:
 def _extract_one(extractor: Extractor, gz_path: str) -> ExtractionResult:
     """Run extractor on a single file, catching all expected errors."""
     try:
-        entry = extractor.extract(gz_path)
-        entry.gz_path = gz_path
-        return entry
+        return extractor.extract(gz_path)
     except SkippedExtraction as e:
         return ExtractionResult(
             gz_path=gz_path,
