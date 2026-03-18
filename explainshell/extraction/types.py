@@ -74,8 +74,8 @@ class ExtractionResult:
     For SKIPPED/FAILED, ``error`` describes why; ``stats`` may still carry
     prep-phase metrics (``plain_text_len``, ``chunks``).
 
-    Extractors return instances with just ``mp``, ``raw``, ``stats`` set;
-    the runner fills in ``gz_path`` and ``outcome``.
+    Extractors set ``gz_path`` on returned results.  Error/skip entries
+    are constructed with it by the runner.
     """
 
     mp: ParsedManpage | None = None

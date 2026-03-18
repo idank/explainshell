@@ -34,10 +34,11 @@ def _make_prepared(basename: str, n_chunks: int = 1) -> PreparedFile:
     )
 
 
-def _make_result() -> ExtractionResult:
+def _make_result(gz_path: str = "") -> ExtractionResult:
     mp = MagicMock()
     mp.options = [MagicMock()]
     return ExtractionResult(
+        gz_path=gz_path,
         mp=mp,
         raw=MagicMock(),
         stats=ExtractionStats(chunks=1, plain_text_len=100),
@@ -87,7 +88,7 @@ def _make_extractor(
     else:
 
         def _finalize(gz_path, prepared, responses):
-            return _make_result()
+            return _make_result(gz_path)
 
         ext.finalize.side_effect = _finalize
 
@@ -125,6 +126,7 @@ class TestRunBatchStatsContract(unittest.TestCase):
         gz_b = "/fake/bravo.1.gz"
 
         result_a = ExtractionResult(
+            gz_path=gz_a,
             mp=MagicMock(),
             raw=MagicMock(),
             stats=ExtractionStats(chunks=1, plain_text_len=100),
@@ -251,7 +253,7 @@ class TestRunBatchAllOutcomes(unittest.TestCase):
         def _finalize(gz_path, prepared, responses):
             if gz_path == gz_b:
                 raise ValueError("boom")
-            return _make_result()
+            return _make_result(gz_path)
 
         ext.finalize.side_effect = _finalize
 
@@ -286,7 +288,7 @@ class TestRunBatchAllOutcomes(unittest.TestCase):
 
         ext.prepare.side_effect = _prepare
 
-        ext.finalize.side_effect = lambda *a, **kw: _make_result()
+        ext.finalize.side_effect = lambda gz, *a, **kw: _make_result(gz)
 
         bp = _make_batch_provider(
             responses={"0:0": '{"options":[],"dashless_opts":false}'}
@@ -321,7 +323,7 @@ class TestRunBatchAllOutcomes(unittest.TestCase):
 
         ext.prepare.side_effect = _prepare
 
-        ext.finalize.side_effect = lambda *a, **kw: _make_result()
+        ext.finalize.side_effect = lambda gz, *a, **kw: _make_result(gz)
 
         bp = _make_batch_provider(
             responses={"0:0": '{"options":[],"dashless_opts":false}'}
@@ -357,7 +359,7 @@ class TestRunBatchCallbacks(unittest.TestCase):
 
         ext.prepare.side_effect = _prepare
 
-        ext.finalize.side_effect = lambda *a, **kw: _make_result()
+        ext.finalize.side_effect = lambda gz, *a, **kw: _make_result(gz)
 
         bp = _make_batch_provider(
             responses={"0:0": '{"options":[],"dashless_opts":false}'}
@@ -493,8 +495,7 @@ class TestRunDispatcher(unittest.TestCase):
     def test_sequential_fallback(self):
         """No batch_size and jobs=1 runs sequentially."""
         ext = MagicMock()
-        result = _make_result()
-        result.gz_path = "/fake/a.1.gz"
+        result = _make_result("/fake/a.1.gz")
         ext.extract.return_value = result
 
         batch, files = run_collected(ext, ["/fake/a.1.gz"])
@@ -505,8 +506,7 @@ class TestRunDispatcher(unittest.TestCase):
     def test_parallel_mode(self):
         """jobs > 1 runs in parallel."""
         ext = MagicMock()
-        result = _make_result()
-        result.gz_path = "/fake/a.1.gz"
+        result = _make_result("/fake/a.1.gz")
         ext.extract.return_value = result
 
         batch, files = run_collected(ext, ["/fake/a.1.gz"], jobs=2)
@@ -517,8 +517,7 @@ class TestRunDispatcher(unittest.TestCase):
     def test_callbacks_forwarded(self):
         """on_start and on_result callbacks are forwarded through run()."""
         ext = MagicMock()
-        result = _make_result()
-        result.gz_path = "/fake/a.1.gz"
+        result = _make_result("/fake/a.1.gz")
         ext.extract.return_value = result
 
         starts: list[str] = []

@@ -56,4 +56,4 @@ class MandocExtractor:
             dropped_empty=pp_stats.dropped_empty,
         )
 
-        return ExtractionResult(mp=mp, raw=raw, stats=stats)
+        return ExtractionResult(gz_path=gz_path, mp=mp, raw=raw, stats=stats)

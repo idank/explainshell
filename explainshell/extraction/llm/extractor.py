@@ -354,7 +354,7 @@ class LLMExtractor:
 
         raw_mp = build_raw_manpage(prepared.plain_text, "mandoc -T markdown", gz_path)
 
-        return ExtractionResult(mp=mp, raw=raw_mp, stats=stats)
+        return ExtractionResult(gz_path=gz_path, mp=mp, raw=raw_mp, stats=stats)
 
     def _call_llm(self, user_content: str) -> ChunkResult:
         """Call LLM via the provider with retries."""
