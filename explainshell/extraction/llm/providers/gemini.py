@@ -14,7 +14,7 @@ from google.genai.types import BatchJob
 
 from explainshell.errors import ExtractionError
 from explainshell.extraction.llm.prompt import SYSTEM_PROMPT
-from explainshell.extraction.llm.providers import BatchResults, TokenUsage
+from explainshell.extraction.llm.providers import BatchEntry, BatchResults, TokenUsage
 
 logger = logging.getLogger(__name__)
 
@@ -53,15 +53,15 @@ class GeminiProvider:
 
     # -- Batch API --
 
-    def submit_batch(self, requests: list[tuple[str, str]]) -> BatchJob:
+    def submit_batch(self, entries: list[BatchEntry]) -> str:
         client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
-        inline_requests = []
-        for key, user_content in requests:
-            inline_requests.append(
+        inline_entries = []
+        for entry in entries:
+            inline_entries.append(
                 types.InlinedRequest(
-                    contents=user_content,
-                    metadata={"key": key},
+                    contents=entry.user_content,
+                    metadata={"key": entry.key},
                     config=types.GenerateContentConfig(
                         system_instruction=SYSTEM_PROMPT,
                         response_mime_type="application/json",
@@ -71,10 +71,10 @@ class GeminiProvider:
 
         job = client.batches.create(
             model=self._gemini_model,
-            src=inline_requests,
+            src=inline_entries,
             config=types.CreateBatchJobConfig(display_name="explainshell-batch"),
         )
-        return job
+        return job.name
 
     def make_poll_client(self) -> Client:
         return genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))

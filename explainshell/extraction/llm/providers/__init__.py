@@ -38,10 +38,22 @@ class BatchResults(NamedTuple):
     usage: TokenUsage
 
 
+class BatchEntry(NamedTuple):
+    """A single entry in a batch."""
+
+    key: str
+    """Unique identifier to correlate this request with its response
+    (e.g. ``"3:1"`` for work-item 3, chunk 1).  Mapped to the
+    provider's ``custom_id`` / ``metadata`` field."""
+
+    user_content: str
+    """The user-role prompt text sent to the LLM."""
+
+
 class BatchProvider(Protocol):
     """Batch API interface (not all providers support this)."""
 
-    def submit_batch(self, requests: list[tuple[str, str]]) -> Any: ...
+    def submit_batch(self, entries: list[BatchEntry]) -> str: ...
 
     def make_poll_client(self) -> Any: ...
 
