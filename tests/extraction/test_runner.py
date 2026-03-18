@@ -5,7 +5,12 @@ from unittest.mock import MagicMock
 
 from explainshell.errors import ExtractionError, SkippedExtraction
 from explainshell.extraction.llm.providers import BatchResults, TokenUsage
-from explainshell.extraction.runner import run, run_batch
+from explainshell.extraction.runner import (
+    _WorkItem,
+    _group_work_items,
+    run,
+    run_batch,
+)
 from explainshell.extraction.llm.extractor import PreparedFile
 from explainshell.extraction.types import (
     ExtractionOutcome,
@@ -96,10 +101,8 @@ def _make_batch_provider(
     bp = MagicMock()
     bp.make_poll_client.return_value = MagicMock()
 
-    job = MagicMock()
-    job.id = "test-job-id"
-    bp.submit_batch.return_value = job
-    bp.poll_batch.return_value = job
+    bp.submit_batch.return_value = "test-job-id"
+    bp.poll_batch.return_value = MagicMock()
 
     if error:
         bp.collect_results.side_effect = error
@@ -209,8 +212,8 @@ class TestRunBatchFailedStats(unittest.TestCase):
         self.assertEqual(entry.stats.plain_text_len, 100)
         self.assertEqual(entry.stats.chunks, 1)
 
-    def test_reconciliation_preserves_prep_stats(self):
-        """End-of-run reconciliation entries should have prep stats."""
+    def test_incomplete_batch_result_preserves_prep_stats(self):
+        """Files with missing batch responses should have prep stats."""
         prepared_a = _make_prepared("alpha")
         prepared_b = _make_prepared("bravo")
         gz_a = "/fake/alpha.1.gz"
@@ -432,9 +435,7 @@ class TestRunBatchGenericExceptions(unittest.TestCase):
             call_count["n"] += 1
             if call_count["n"] == 2:
                 raise ConnectionError("lost connection")
-            job = MagicMock()
-            job.id = "job-1"
-            return job
+            return "job-1"
 
         bp.submit_batch.side_effect = _submit_batch
         bp.poll_batch.return_value = MagicMock()
@@ -554,6 +555,73 @@ class TestRunDispatcher(unittest.TestCase):
         # batch_provider was used (batch mode), not thread pool
         bp.submit_batch.assert_called_once()
         self.assertEqual(len(batch.files), 1)
+
+
+class TestGroupWorkItems(unittest.TestCase):
+    """Tests for _group_work_items: groups work items into batches
+    respecting batch_size as a request count limit."""
+
+    @staticmethod
+    def _make_items(chunk_counts: list[int]) -> list[_WorkItem]:
+        """Build work items with the given chunk counts."""
+        return [
+            _WorkItem(f"/fake/file{i}.1.gz", _make_prepared(f"file{i}", n))
+            for i, n in enumerate(chunk_counts)
+        ]
+
+    def test_single_chunk_files_even_split(self):
+        """4 single-chunk files with batch_size=2 → 2 batches of 2."""
+        items = self._make_items([1, 1, 1, 1])
+        batches = _group_work_items(items, batch_size=2)
+        self.assertEqual(len(batches), 2)
+        self.assertEqual(len(batches[0]), 2)
+        self.assertEqual(len(batches[1]), 2)
+
+    def test_empty(self):
+        batches = _group_work_items([], batch_size=5)
+        self.assertEqual(batches, [])
+
+    def test_batch_size_larger_than_total(self):
+        """All items fit in one batch."""
+        items = self._make_items([1, 1, 1])
+        batches = _group_work_items(items, batch_size=100)
+        self.assertEqual(len(batches), 1)
+        self.assertEqual(len(batches[0]), 3)
+
+    def test_multi_chunk_file_stays_together(self):
+        """A file with more chunks than batch_size gets its own batch."""
+        items = self._make_items([1, 3])
+        batches = _group_work_items(items, batch_size=2)
+        self.assertEqual(len(batches), 2)
+        self.assertEqual(len(batches[0]), 1)
+        self.assertEqual(len(batches[1]), 1)
+
+    def test_all_items_preserved(self):
+        """Every item appears in exactly one batch."""
+        items = self._make_items([2, 3, 1, 2])
+        batches = _group_work_items(items, batch_size=3)
+        flat = [item for batch in batches for item in batch]
+        self.assertEqual(flat, items)
+
+    def test_single_file_many_chunks(self):
+        """One file with many chunks → single batch."""
+        items = self._make_items([10])
+        batches = _group_work_items(items, batch_size=3)
+        self.assertEqual(len(batches), 1)
+
+    def test_batch_size_one(self):
+        """batch_size=1 gives each file its own batch."""
+        items = self._make_items([1, 2, 1])
+        batches = _group_work_items(items, batch_size=1)
+        self.assertEqual(len(batches), 3)
+
+    def test_exact_boundary(self):
+        """Batch boundary falls exactly between files."""
+        items = self._make_items([2, 2])
+        batches = _group_work_items(items, batch_size=2)
+        self.assertEqual(len(batches), 2)
+        self.assertEqual(batches[0], [items[0]])
+        self.assertEqual(batches[1], [items[1]])
 
 
 if __name__ == "__main__":

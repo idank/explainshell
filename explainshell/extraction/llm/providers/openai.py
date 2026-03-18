@@ -13,7 +13,7 @@ from openai.types import Batch
 
 from explainshell.errors import ExtractionError
 from explainshell.extraction.llm.prompt import SYSTEM_PROMPT
-from explainshell.extraction.llm.providers import BatchResults, TokenUsage
+from explainshell.extraction.llm.providers import BatchEntry, BatchResults, TokenUsage
 
 logger = logging.getLogger(__name__)
 
@@ -62,21 +62,21 @@ class OpenAIProvider:
 
     # -- Batch API --
 
-    def submit_batch(self, requests: list[tuple[str, str]]) -> Batch:
+    def submit_batch(self, entries: list[BatchEntry]) -> str:
         client = OpenAI(timeout=LLM_TIMEOUT_SECONDS)
 
         buf = io.BytesIO()
-        for key, user_content in requests:
+        for req in entries:
             line = json.dumps(
                 {
-                    "custom_id": key,
+                    "custom_id": req.key,
                     "method": "POST",
                     "url": "/v1/responses",
                     "body": {
                         "model": self._openai_model,
                         "input": [
                             {"role": "developer", "content": SYSTEM_PROMPT},
-                            {"role": "user", "content": user_content},
+                            {"role": "user", "content": req.user_content},
                         ],
                         "text": {"format": {"type": "json_object"}},
                     },
@@ -95,7 +95,7 @@ class OpenAIProvider:
             completion_window="24h",
             metadata={"source": "explainshell"},
         )
-        return batch
+        return batch.id
 
     def make_poll_client(self) -> OpenAI:
         return OpenAI(timeout=LLM_TIMEOUT_SECONDS)
