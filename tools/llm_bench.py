@@ -43,6 +43,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from explainshell.extraction import ExtractorConfig, ExtractionOutcome, make_extractor
+from explainshell.extraction.types import ExtractionResult
 from explainshell.extraction.runner import run
 from explainshell.util import collect_gz_files
 
@@ -127,13 +128,10 @@ def run_bench(args: argparse.Namespace) -> int:
     config = ExtractorConfig(model=args.model)
     extractor = make_extractor("llm", config)
 
-    t0 = time.monotonic()
-    result = run(extractor, gz_files, batch_size=args.batch)
-    elapsed = time.monotonic() - t0
-
-    # Build per-file metrics.
+    # Build per-file metrics via on_result callback.
     file_metrics: dict[str, dict] = {}
-    for fe in result.files:
+
+    def _on_result(gz_path: str, fe: ExtractionResult) -> None:
         name = _basename(fe.gz_path)
         entry: dict = {"file": os.path.basename(fe.gz_path)}
 
@@ -158,6 +156,10 @@ def run_bench(args: argparse.Namespace) -> int:
             entry["n_options"] = 0
 
         file_metrics[name] = entry
+
+    t0 = time.monotonic()
+    result = run(extractor, gz_files, batch_size=args.batch, on_result=_on_result)
+    elapsed = time.monotonic() - t0
 
     # Build aggregate.
     all_files = list(file_metrics.values())

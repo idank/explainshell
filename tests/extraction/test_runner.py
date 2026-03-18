@@ -9,7 +9,8 @@ from explainshell.extraction.runner import (
     _WorkItem,
     _group_work_items,
     run,
-    run_batch,
+    run_batch_collected,
+    run_collected,
 )
 from explainshell.extraction.llm.extractor import PreparedFile
 from explainshell.extraction.types import (
@@ -152,13 +153,10 @@ class TestRunBatchStatsContract(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        batch = run_batch(ext, [gz_a, gz_b])
+        batch, files = run_batch_collected(ext, [gz_a, gz_b])
 
-        # Only alpha succeeded
-        succeeded = [f for f in batch.files if f.outcome == ExtractionOutcome.SUCCESS]
-        failed = [f for f in batch.files if f.outcome == ExtractionOutcome.FAILED]
-        self.assertEqual(len(succeeded), 1)
-        self.assertEqual(len(failed), 1)
+        self.assertEqual(batch.n_succeeded, 1)
+        self.assertEqual(batch.n_failed, 1)
 
         # BatchResult.stats includes batch-level token counts
         self.assertEqual(batch.stats.input_tokens, 500)
@@ -185,10 +183,10 @@ class TestRunBatchFailedStats(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        batch = run_batch(ext, [gz])
+        batch, files = run_batch_collected(ext, [gz])
 
-        self.assertEqual(len(batch.files), 1)
-        entry = batch.files[0]
+        self.assertEqual(batch.n_failed, 1)
+        entry = files[0]
         self.assertEqual(entry.outcome, ExtractionOutcome.FAILED)
         self.assertIsNotNone(entry.stats)
         self.assertEqual(entry.stats.plain_text_len, 100)
@@ -203,10 +201,10 @@ class TestRunBatchFailedStats(unittest.TestCase):
         bp = _make_batch_provider(error=ExtractionError("batch exploded"))
         ext.batch_provider = bp
 
-        batch = run_batch(ext, [gz])
+        batch, files = run_batch_collected(ext, [gz])
 
-        self.assertEqual(len(batch.files), 1)
-        entry = batch.files[0]
+        self.assertEqual(batch.n_failed, 1)
+        entry = files[0]
         self.assertEqual(entry.outcome, ExtractionOutcome.FAILED)
         self.assertIsNotNone(entry.stats)
         self.assertEqual(entry.stats.plain_text_len, 100)
@@ -228,15 +226,14 @@ class TestRunBatchFailedStats(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        batch = run_batch(ext, [gz_a, gz_b])
+        batch, files = run_batch_collected(ext, [gz_a, gz_b])
 
-        # alpha succeeded, bravo was never finalized
-        bravo_entries = [f for f in batch.files if f.gz_path == gz_b]
-        self.assertEqual(len(bravo_entries), 1)
-        entry = bravo_entries[0]
-        self.assertEqual(entry.outcome, ExtractionOutcome.FAILED)
-        self.assertIsNotNone(entry.stats)
-        self.assertEqual(entry.stats.plain_text_len, 100)
+        self.assertEqual(batch.n_succeeded, 1)
+        self.assertEqual(batch.n_failed, 1)
+        bravo = next(f for f in files if f.gz_path == gz_b)
+        self.assertEqual(bravo.outcome, ExtractionOutcome.FAILED)
+        self.assertIsNotNone(bravo.stats)
+        self.assertEqual(bravo.stats.plain_text_len, 100)
 
 
 class TestRunBatchAllOutcomes(unittest.TestCase):
@@ -266,9 +263,9 @@ class TestRunBatchAllOutcomes(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        batch = run_batch(ext, [gz_a, gz_b])
+        _batch, files = run_batch_collected(ext, [gz_a, gz_b])
 
-        paths = {f.gz_path for f in batch.files}
+        paths = {f.gz_path for f in files}
         self.assertEqual(paths, {gz_a, gz_b})
 
     def test_skipped_files_get_entries(self):
@@ -296,11 +293,12 @@ class TestRunBatchAllOutcomes(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        batch = run_batch(ext, [gz_a, gz_b])
+        batch, files = run_batch_collected(ext, [gz_a, gz_b])
 
-        self.assertEqual(len(batch.files), 2)
-        alpha = next(f for f in batch.files if f.gz_path == gz_a)
-        bravo = next(f for f in batch.files if f.gz_path == gz_b)
+        self.assertEqual(batch.n_skipped, 1)
+        self.assertEqual(batch.n_succeeded, 1)
+        alpha = next(f for f in files if f.gz_path == gz_a)
+        bravo = next(f for f in files if f.gz_path == gz_b)
 
         self.assertEqual(alpha.outcome, ExtractionOutcome.SKIPPED)
         self.assertIsNotNone(alpha.stats)
@@ -330,11 +328,12 @@ class TestRunBatchAllOutcomes(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        batch = run_batch(ext, [gz_a, gz_b])
+        batch, files = run_batch_collected(ext, [gz_a, gz_b])
 
-        self.assertEqual(len(batch.files), 2)
-        alpha = next(f for f in batch.files if f.gz_path == gz_a)
-        bravo = next(f for f in batch.files if f.gz_path == gz_b)
+        self.assertEqual(batch.n_failed, 1)
+        self.assertEqual(batch.n_succeeded, 1)
+        alpha = next(f for f in files if f.gz_path == gz_a)
+        bravo = next(f for f in files if f.gz_path == gz_b)
 
         self.assertEqual(alpha.outcome, ExtractionOutcome.FAILED)
         self.assertIn("unexpected IO error", alpha.error)
@@ -365,15 +364,10 @@ class TestRunBatchCallbacks(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        callback_entries: list[tuple[str, object]] = []
+        _batch, files = run_batch_collected(ext, [gz_a, gz_b])
 
-        def _on_result(gz_path, entry):
-            callback_entries.append((gz_path, entry))
-
-        run_batch(ext, [gz_a, gz_b], on_result=_on_result)
-
-        self.assertEqual(len(callback_entries), 2)
-        paths = {p for p, _ in callback_entries}
+        self.assertEqual(len(files), 2)
+        paths = {f.gz_path for f in files}
         self.assertEqual(paths, {gz_a, gz_b})
 
 
@@ -389,10 +383,10 @@ class TestRunBatchGenericExceptions(unittest.TestCase):
         bp = _make_batch_provider(error=RuntimeError("network timeout"))
         ext.batch_provider = bp
 
-        batch = run_batch(ext, [gz])
+        batch, files = run_batch_collected(ext, [gz])
 
-        self.assertEqual(len(batch.files), 1)
-        entry = batch.files[0]
+        self.assertEqual(batch.n_failed, 1)
+        entry = files[0]
         self.assertEqual(entry.outcome, ExtractionOutcome.FAILED)
         self.assertIn("network timeout", entry.error)
         self.assertIsNotNone(entry.stats)
@@ -409,10 +403,10 @@ class TestRunBatchGenericExceptions(unittest.TestCase):
         bp.make_poll_client.side_effect = RuntimeError("auth failed")
         ext.batch_provider = bp
 
-        batch = run_batch(ext, [gz_a, gz_b])
+        batch, files = run_batch_collected(ext, [gz_a, gz_b])
 
-        self.assertEqual(len(batch.files), 2)
-        for entry in batch.files:
+        self.assertEqual(batch.n_failed, 2)
+        for entry in files:
             self.assertEqual(entry.outcome, ExtractionOutcome.FAILED)
             self.assertIn("auth failed", entry.error)
             self.assertIsNotNone(entry.stats)
@@ -446,11 +440,12 @@ class TestRunBatchGenericExceptions(unittest.TestCase):
         ext.batch_provider = bp
 
         # batch_size=1 forces each file into its own batch
-        batch = run_batch(ext, [gz_a, gz_b], batch_size=1)
+        batch, files = run_batch_collected(ext, [gz_a, gz_b], batch_size=1)
 
-        self.assertEqual(len(batch.files), 2)
-        alpha = next(f for f in batch.files if f.gz_path == gz_a)
-        bravo = next(f for f in batch.files if f.gz_path == gz_b)
+        self.assertEqual(batch.n_succeeded, 1)
+        self.assertEqual(batch.n_failed, 1)
+        alpha = next(f for f in files if f.gz_path == gz_a)
+        bravo = next(f for f in files if f.gz_path == gz_b)
         self.assertEqual(alpha.outcome, ExtractionOutcome.SUCCESS)
         self.assertEqual(bravo.outcome, ExtractionOutcome.FAILED)
         self.assertIn("lost connection", bravo.error)
@@ -490,10 +485,10 @@ class TestRunDispatcher(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        batch = run(ext, [gz], batch_size=50)
+        batch, files = run_collected(ext, [gz], batch_size=50)
 
-        self.assertEqual(len(batch.files), 1)
-        self.assertEqual(batch.files[0].outcome, ExtractionOutcome.SUCCESS)
+        self.assertEqual(batch.n_succeeded, 1)
+        self.assertEqual(files[0].outcome, ExtractionOutcome.SUCCESS)
 
     def test_sequential_fallback(self):
         """No batch_size and jobs=1 runs sequentially."""
@@ -502,10 +497,10 @@ class TestRunDispatcher(unittest.TestCase):
         result.gz_path = "/fake/a.1.gz"
         ext.extract.return_value = result
 
-        batch = run(ext, ["/fake/a.1.gz"])
+        batch, files = run_collected(ext, ["/fake/a.1.gz"])
 
         ext.extract.assert_called_once_with("/fake/a.1.gz")
-        self.assertEqual(len(batch.files), 1)
+        self.assertEqual(batch.n_succeeded, 1)
 
     def test_parallel_mode(self):
         """jobs > 1 runs in parallel."""
@@ -514,10 +509,10 @@ class TestRunDispatcher(unittest.TestCase):
         result.gz_path = "/fake/a.1.gz"
         ext.extract.return_value = result
 
-        batch = run(ext, ["/fake/a.1.gz"], jobs=2)
+        batch, files = run_collected(ext, ["/fake/a.1.gz"], jobs=2)
 
         ext.extract.assert_called_once_with("/fake/a.1.gz")
-        self.assertEqual(len(batch.files), 1)
+        self.assertEqual(batch.n_succeeded, 1)
 
     def test_callbacks_forwarded(self):
         """on_start and on_result callbacks are forwarded through run()."""
@@ -550,11 +545,11 @@ class TestRunDispatcher(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        batch = run(ext, [gz], batch_size=50, jobs=4)
+        batch, files = run_collected(ext, [gz], batch_size=50, jobs=4)
 
         # batch_provider was used (batch mode), not thread pool
         bp.submit_batch.assert_called_once()
-        self.assertEqual(len(batch.files), 1)
+        self.assertEqual(batch.n_succeeded, 1)
 
 
 class TestGroupWorkItems(unittest.TestCase):

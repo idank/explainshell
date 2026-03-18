@@ -87,7 +87,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
                     raw=MagicMock(),
                     stats=ExtractionStats(),
                 )
-                batch.files.append(entry)
+                batch.n_succeeded += 1
                 if on_result:
                     writes_at_callback.append(mock_store.add_manpage.call_count)
                     on_result(gz_path, entry)
@@ -162,7 +162,10 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
                         outcome=ExtractionOutcome.FAILED,
                         error="batch failed",
                     )
-                batch.files.append(entry)
+                if entry.outcome == ExtractionOutcome.SUCCESS:
+                    batch.n_succeeded += 1
+                else:
+                    batch.n_failed += 1
                 if on_result:
                     on_result(gz_path, entry)
             return batch
@@ -215,6 +218,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
     ):
         mock_collect.return_value = ["/fake/echo.1.gz"]
         fake_result = MagicMock()
+        fake_result.outcome = ExtractionOutcome.SUCCESS
         fake_result.mp.options = [MagicMock(), MagicMock()]
         fake_result.stats = ExtractionStats(elapsed_seconds=0)
         mock_ext = MagicMock()
@@ -322,7 +326,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
                     raw=fake_raw,
                     stats=ExtractionStats(),
                 )
-                batch.files.append(entry)
+                batch.n_succeeded += 1
                 if on_result:
                     on_result(gz_path, entry)
             return batch
@@ -355,8 +359,7 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
         mock_source.side_effect = lambda p: p.split("/")[-1]
         from explainshell.extraction.types import BatchResult
 
-        left_batch = BatchResult()
-        left_batch.files = [
+        left_files = [
             ExtractionResult(
                 gz_path="/fake/a.1.gz",
                 outcome=ExtractionOutcome.SUCCESS,
@@ -370,8 +373,7 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
             ),
         ]
 
-        right_batch = BatchResult()
-        right_batch.files = [
+        right_files = [
             ExtractionResult(
                 gz_path="/fake/a.1.gz",
                 outcome=ExtractionOutcome.SUCCESS,
@@ -386,7 +388,15 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
             ),
         ]
 
-        mock_run_seq.side_effect = [left_batch, right_batch]
+        def _fake_run_seq(ext, gz_files, **kwargs):
+            files = left_files if mock_run_seq.call_count == 1 else right_files
+            on_result = kwargs.get("on_result")
+            if on_result:
+                for f in files:
+                    on_result(f.gz_path, f)
+            return BatchResult()
+
+        mock_run_seq.side_effect = _fake_run_seq
 
         from explainshell.manager import _run_diff_extractors
 
@@ -401,8 +411,8 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
         # File b: left FAILED, right OK → right's 150 tokens preserved
         self.assertEqual(result.stats.input_tokens, 100 + 200 + 150)
         self.assertEqual(result.stats.output_tokens, 50 + 80 + 60)
-        self.assertEqual(len(result.succeeded), 1)
-        self.assertEqual(len(result.failed), 1)
+        self.assertEqual(result.n_succeeded, 1)
+        self.assertEqual(result.n_failed, 1)
 
     @patch("explainshell.manager.run_sequential")
     @patch("explainshell.manager.make_extractor")
@@ -414,8 +424,7 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
         mock_source.side_effect = lambda p: p.split("/")[-1]
         from explainshell.extraction.types import BatchResult
 
-        left_batch = BatchResult()
-        left_batch.files = [
+        left_files = [
             ExtractionResult(
                 gz_path="/fake/a.1.gz",
                 outcome=ExtractionOutcome.SKIPPED,
@@ -423,8 +432,7 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
             ),
         ]
 
-        right_batch = BatchResult()
-        right_batch.files = [
+        right_files = [
             ExtractionResult(
                 gz_path="/fake/a.1.gz",
                 outcome=ExtractionOutcome.FAILED,
@@ -432,7 +440,15 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
             ),
         ]
 
-        mock_run_seq.side_effect = [left_batch, right_batch]
+        def _fake_run_seq(ext, gz_files, **kwargs):
+            files = left_files if mock_run_seq.call_count == 1 else right_files
+            on_result = kwargs.get("on_result")
+            if on_result:
+                for f in files:
+                    on_result(f.gz_path, f)
+            return BatchResult()
+
+        mock_run_seq.side_effect = _fake_run_seq
 
         from explainshell.manager import _run_diff_extractors
 
@@ -443,10 +459,8 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
             None,
         )
 
-        self.assertEqual(len(result.failed), 1)
-        self.assertEqual(len(result.skipped), 0)
-        self.assertEqual(result.files[0].outcome, ExtractionOutcome.FAILED)
-        self.assertEqual(result.files[0].error, "parse error")
+        self.assertEqual(result.n_failed, 1)
+        self.assertEqual(result.n_skipped, 0)
 
     @patch("explainshell.manager.run_sequential")
     @patch("explainshell.manager.make_extractor")
@@ -458,8 +472,7 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
         mock_source.side_effect = lambda p: p.split("/")[-1]
         from explainshell.extraction.types import BatchResult
 
-        left_batch = BatchResult()
-        left_batch.files = [
+        left_files = [
             ExtractionResult(
                 gz_path="/fake/a.1.gz",
                 outcome=ExtractionOutcome.SKIPPED,
@@ -467,8 +480,7 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
             ),
         ]
 
-        right_batch = BatchResult()
-        right_batch.files = [
+        right_files = [
             ExtractionResult(
                 gz_path="/fake/a.1.gz",
                 outcome=ExtractionOutcome.SKIPPED,
@@ -476,7 +488,15 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
             ),
         ]
 
-        mock_run_seq.side_effect = [left_batch, right_batch]
+        def _fake_run_seq(ext, gz_files, **kwargs):
+            files = left_files if mock_run_seq.call_count == 1 else right_files
+            on_result = kwargs.get("on_result")
+            if on_result:
+                for f in files:
+                    on_result(f.gz_path, f)
+            return BatchResult()
+
+        mock_run_seq.side_effect = _fake_run_seq
 
         from explainshell.manager import _run_diff_extractors
 
@@ -487,9 +507,8 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
             None,
         )
 
-        self.assertEqual(len(result.skipped), 1)
-        self.assertEqual(len(result.failed), 0)
-        self.assertEqual(result.files[0].outcome, ExtractionOutcome.SKIPPED)
+        self.assertEqual(result.n_skipped, 1)
+        self.assertEqual(result.n_failed, 0)
 
 
 class TestDiffExtractorLabels(unittest.TestCase):
@@ -508,8 +527,7 @@ class TestDiffExtractorLabels(unittest.TestCase):
         mp = MagicMock()
         mp.options = []
 
-        left_batch = BatchResult()
-        left_batch.files = [
+        left_files = [
             ExtractionResult(
                 gz_path="/fake/a.1.gz",
                 outcome=ExtractionOutcome.SUCCESS,
@@ -518,8 +536,7 @@ class TestDiffExtractorLabels(unittest.TestCase):
             ),
         ]
 
-        right_batch = BatchResult()
-        right_batch.files = [
+        right_files = [
             ExtractionResult(
                 gz_path="/fake/a.1.gz",
                 outcome=ExtractionOutcome.SUCCESS,
@@ -528,7 +545,15 @@ class TestDiffExtractorLabels(unittest.TestCase):
             ),
         ]
 
-        mock_run_seq.side_effect = [left_batch, right_batch]
+        def _fake_run_seq(ext, gz_files, **kwargs):
+            files = left_files if mock_run_seq.call_count == 1 else right_files
+            on_result = kwargs.get("on_result")
+            if on_result:
+                for f in files:
+                    on_result(f.gz_path, f)
+            return BatchResult()
+
+        mock_run_seq.side_effect = _fake_run_seq
 
         from explainshell.manager import _run_diff_extractors
 
