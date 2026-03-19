@@ -1,6 +1,8 @@
 .gitignore
 .git/
 .github/
+.claude/
+__pycache__/
 misc/
 tests/
 tools/
@@ -8,6 +10,9 @@ venv/
 .venv/
 data/
 dump/
+dump.gz
+ignore/
+logs/
 docs/
 logs/
 manpages/
