@@ -72,4 +72,34 @@ arch-archive:
 	python tools/fetch_manned.py --log INFO extract --data-dir $(MANNED_DATA_DIR) \
 		--distro arch --sections 1,8 --output-dir manpages
 
-.PHONY: tests e2e e2e-db e2e-update test-llm tests-all lint serve parsing-regression parsing-update db-check ubuntu-archive arch-archive
+LIVE_DB := explainshell.db
+LIVE_DB_RELEASE := db-latest
+LIVE_DB_REPO := idank/explainshell
+LIVE_DB_CDN_URL := https://github.com/$(LIVE_DB_REPO)/releases/download/$(LIVE_DB_RELEASE)/$(LIVE_DB)
+
+download-live-db:
+	gh release download $(LIVE_DB_RELEASE) -R $(LIVE_DB_REPO) -p $(LIVE_DB) -D . --clobber
+
+upload-live-db:
+	@test -f $(LIVE_DB) || (echo "$(LIVE_DB) not found"; exit 1)
+	@asset_id=$$(gh api repos/$(LIVE_DB_REPO)/releases/tags/$(LIVE_DB_RELEASE) --jq '.assets[] | select(.name == "$(LIVE_DB)") | .id'); \
+	if [ -n "$$asset_id" ]; then \
+		upload_date=$$(gh api repos/$(LIVE_DB_REPO)/releases/tags/$(LIVE_DB_RELEASE) --jq '.assets[] | select(.name == "$(LIVE_DB)") | .updated_at' | tr -d 'Z' | tr 'T:' '-'); \
+		archive_name="explainshell-$$upload_date.db"; \
+		echo "Renaming existing asset to $$archive_name..."; \
+		gh api repos/$(LIVE_DB_REPO)/releases/assets/$$asset_id -X PATCH -f name="$$archive_name" --silent; \
+	fi
+	gh release upload $(LIVE_DB_RELEASE) $(LIVE_DB) -R $(LIVE_DB_REPO)
+	@expected_size=$$(wc -c < $(LIVE_DB)); \
+	echo "Waiting for CDN to serve the new file ($$expected_size bytes)..."; \
+	while true; do \
+		cdn_size=$$(curl -sI -L "$(LIVE_DB_CDN_URL)" | grep -i content-length | tail -1 | tr -d '[:space:]' | cut -d: -f2); \
+		if [ "$$cdn_size" = "$$expected_size" ]; then \
+			echo "CDN updated."; \
+			break; \
+		fi; \
+		echo "  CDN still serving $$cdn_size bytes, expected $$expected_size. Retrying in 10s..."; \
+		sleep 10; \
+	done
+
+.PHONY: tests e2e e2e-db e2e-update test-llm tests-all lint serve parsing-regression parsing-update db-check ubuntu-archive arch-archive download-live-db upload-live-db
