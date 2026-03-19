@@ -1,17 +1,17 @@
 # [explainshell.com](http://www.explainshell.com) - match command-line arguments to their help text
 
-explainshell is a tool (with a web interface) capable of parsing man pages, extracting options and
-explaining a given command-line by matching each argument to the relevant help text in the man page.
+explainshell is a tool (with a web interface) capable of parsing manpages, extracting options and
+explaining a given command-line by matching each argument to the relevant help text in the manpage.
 
 ## How?
 
 explainshell is built from the following components:
 
-1. man page reader which converts a given man page from raw format to html (manpage.py)
-2. an options extractor that parses roff macros or uses an LLM to extract options (source_extractor.py, llm_extractor.py)
-3. a storage backend that saves processed man pages to sqlite (store.py)
-4. a matcher that walks the command's AST (parsed by [bashlex](https://github.com/idank/bashlex)) and contextually matches each node
-   to the relevant help text (matcher.py)
+1. manpage reader which extracts metadata (name, synopsis, aliases) from a given manpage (manpage.py)
+2. an options extractor that parses roff macros or uses an LLM to extract options (extraction/)
+3. a storage backend that saves processed manpages to sqlite (store.py)
+4. a matcher that walks the command's AST (parsed by [bashlex](https://github.com/idank/bashlex)) and contextually
+   matches each node to the relevant help text (matcher.py)
 
 When querying explainshell, it:
 
@@ -25,19 +25,6 @@ When querying explainshell, it:
    list of known options
 4. returns a list of matches that are rendered with Flask
 
-## Manpages
-
-explainshell.com contains manpages from the [Ubuntu archive](https://manpages.ubuntu.com/). The manpage archive is generated using a Go pipeline in the `manpages/ubuntu-manpages-operator` submodule, which fetches Ubuntu packages, extracts manpages, and converts them to markdown.
-
-To generate the archive locally:
-
-```bash
-$ git submodule update --init --recursive
-$ make ubuntu-archive RELEASES=questing
-```
-
-This outputs markdown and gzipped manpages under `manpages/ubuntu-manpages-operator/output/`.
-
 ## Running explainshell locally
 
 ```bash
@@ -50,18 +37,66 @@ $ python3 -m venv .venv
 $ source .venv/bin/activate
 $ pip install -r requirements.txt
 
-# Run the web server (requires explainshell.db in the repo root)
+# Download the live db, or parse a manpage.
+$ make download-live-db
+$ python -m explainshell.manager --mode source manpages/ubuntu/26.04/1/tar.1.gz
+
+# Run the web server
 $ make serve
 # open http://localhost:5000
 ```
 
-### Processing a man page
+## Storage
 
-Use the manager to parse and save a gzipped man page in raw format:
+Processed manpages live in a single SQLite database (`explainshell.db`) with three tables:
+
+- **manpages** — zlib-compressed manpage source text (typically markdown produced by `mandoc -T markdown`). Keyed by a `source` path in the format `distro/release/section/name.section.gz` (e.g. `ubuntu/25.10/1/tar.1.gz`).
+- **parsed_manpages** — extracted options, synopsis, aliases, and behavioral flags for each manpage. Options are stored as a JSON list.
+- **mappings** — maps command names to `parsed_manpages` rows (many-to-one, with a score for preference). A single manpage can have multiple mappings — one per alias and one per sub-command form (e.g. `git commit` maps to the `git-commit` manpage).
+
+The `source` path is the primary key across both `manpages` and `parsed_manpages`, and doubles as a namespace: queries can be scoped to a specific distro/release by filtering on the path prefix.
+
+The db for the live service is saved in a Github release.
+
+## Manpage archives
+
+explainshell.com sources manpages from known archives (currently the Ubuntu archive and manned.org). All manpage sources
+(gz files) are committed to explainshell-manpages (a git submodule of this repo). It's not necessary to clone this repo
+to run explainshell locally.
+
+To generate the archive locally:
 
 ```bash
-$ python -m explainshell.manager --mode source /usr/share/man/man1/echo.1.gz
+$ git submodule update --init --recursive
+$ make ubuntu-archive UBUNTU_RELEASE=questing
+$ make arch-archive # Arch only has a 'latest' archive
 ```
+
+This outputs gzipped manpages under `manpages/<distro>/<release>/`.
+
+### Processing manpages
+
+Use the manager to extract options from gzipped manpages and save them to the database:
+
+```bash
+$ python -m explainshell.manager --mode source manpages/ubuntu/26.04/1/tar.1.gz
+
+# LLM extraction requires an API key
+$ python -m explainshell.manager --mode llm:openai/gpt-5-mini manpages/ubuntu/26.04/1/find.1.gz
+$ python -m explainshell.manager --mode llm:openai/gpt-5-mini --batch 50 manpages/ubuntu/26.04/
+```
+
+The `--mode` flag selects the extraction strategy:
+
+- `source` — parses roff macros directly. Fast, no external dependencies beyond `lexgrog`, but struggles with some manpage formats.
+- `llm:<provider/model>` — sends the manpage text (converted to markdown via `mandoc -T markdown`) to an LLM for extraction. More accurate, especially for complex or non-standard manpages. LLM output is postprocessed to sanitize LLM weirdness. Example: `--mode llm:openai/gpt-5-mini`.
+
+To process an entire directory of manpages (the manager accepts both files and directories):
+
+```bash
+```
+
+Other useful flags: `--overwrite` (re-process existing entries), `--dry-run` (extract without writing to DB), `--diff` (compare against DB or between extractors), `-j <N>` (parallel workers), `--batch <N>` (provider batch API for LLM modes).
 
 ## Tests
 
@@ -78,24 +113,23 @@ $ make parsing-regression           # run with the source (roff) extractor
 $ make parsing-update               # regenerate the source baseline DB
 ```
 
-### Deployment
+### LLM benchmarking
 
-The app is deployed to [Fly.io](https://fly.io) with two machines for availability. The SQLite database is stored on persistent Fly volumes mounted at `/data`.
+The benchmark tool (`tools/llm_bench.py`) runs the LLM extractor on a corpus of manpages and produces a JSON metrics report (extracted/failed files, total options, token usage, etc.). Reports are auto-saved with timestamps to `tests/regression/llm-bench/` and include git metadata.
 
-**Deploy code changes:**
-
-```bash
-$ fly deploy
-```
-
-**Update the database:**
+The idea is to run it before making changes that affect the LLM extractor pipeline (producing a baseline), and then again
+with the changes. Some variance between runs is expected due to LLM indeterminism.
 
 ```bash
-# Upload to each machine
-$ fly machines list
-$ fly ssh sftp shell -s <machine-id>
-# put explainshell.db /data/explainshell.db
+# Run on the default 10-file corpus
+$ python tools/llm_bench.py run --model openai/gpt-5-mini
 
-# Restart to pick up the new DB
-$ fly machines restart <machine-id>
+# Run with batch API
+$ python tools/llm_bench.py run --model openai/gpt-5-mini --batch 50
+
+# Compare the two most recent reports
+$ python tools/llm_bench.py compare
+
+# List all saved reports
+$ python tools/llm_bench.py list
 ```
