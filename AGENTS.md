@@ -225,9 +225,8 @@ fly deploy
 
 **Update the database:**
 
-1. Upload the new DB to the `db-latest` GitHub release (use `gh release upload db-latest explainshell.db -R idank/explainshell --clobber`)
-2. **Wait for the GitHub CDN cache to clear** — download the URL with `wget` and verify the file has the expected size/tables before deploying. This can take a few minutes.
-3. Bump `DB_VERSION` in `fly.toml`
-4. `fly deploy`
+1. `make upload-live-db` (uploads `explainshell.db` to the GitHub release and waits for the CDN to update)
+2. Bump `DB_VERSION` in `fly.toml`
+3. `fly deploy`
 
 On startup, `start.sh` compares `DB_VERSION` against a marker file on the volume. If they differ, it downloads the DB from `DB_URL` and updates the marker. Normal restarts skip the download.
