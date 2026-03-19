@@ -4,7 +4,7 @@ A web tool that parses man pages and explains command-line arguments by matching
 
 ## Tech Stack
 
-- Python 3.12, Flask, SQLite, bashlex, LiteLLM
+- Python 3.12, Flask, SQLite, bashlex, OpenAI SDK, Google Gemini SDK, LiteLLM (fallback)
 - Linting: ruff (Python), biome (JS)
 - Testing: pytest (unit + doctests + parsing regression), JS Playwright Test (e2e)
 - Dependencies: `requirements.txt` (main), `package.json` (Playwright e2e)
@@ -30,7 +30,7 @@ Each run accepts an optional `-d "..."` to label what this run represents. When 
 
 ```bash
 # 1. Stash your changes to get a clean baseline
-git stash push -- explainshell/llm_extractor.py
+git stash push -- explainshell/extraction/llm/
 
 # 2. Run benchmark on the old code
 python tools/llm_bench.py run --model openai/gpt-5-mini --batch 50 -d "baseline before <short summary of change>"
@@ -121,8 +121,11 @@ make db-check
 # Run web server locally
 make serve
 
-# Generate Ubuntu manpage archive (requires Go, RELEASES is required)
-make ubuntu-archive RELEASES=questing
+# Generate Ubuntu manpage archive (requires Go)
+make ubuntu-archive UBUNTU_RELEASE=questing
+
+# Generate Arch Linux manpage archive (requires manned.org dump)
+make arch-archive
 
 # Process a man page into the database
 python -m explainshell.manager --mode source /path/to/manpage.1.gz
@@ -133,22 +136,38 @@ python -m explainshell.manager --mode source /path/to/manpage.1.gz
 - `explainshell/` - Main package
   - `manager.py` - CLI entry point for man page processing (`python -m explainshell.manager`)
   - `matcher.py` - Core logic: walks bash AST and matches tokens to help text
-  - `store.py` - SQLite storage layer and data classes (ParsedManpage, Option)
-  - `errors.py` - Exception hierarchy (ProgramDoesNotExist, DuplicateManpage, InvalidSourcePath, ExtractionError, LowConfidenceError)
-  - `llm_extractor.py` - LLM-based option extraction (via LiteLLM)
-  - `source_extractor.py` - Direct roff parsing extractor
-  - `mandoc_extractor.py` - mandoc -T tree based extractor
-  - `tree_parser.py` - Mandoc tree parser with confidence assessment
+  - `models.py` - Core domain types (Option, ParsedManpage, RawManpage) as Pydantic/dataclass models
+  - `store.py` - SQLite storage layer
+  - `errors.py` - Exception hierarchy (ProgramDoesNotExist, DuplicateManpage, InvalidSourcePath, ExtractionError, SkippedExtraction, LowConfidenceError)
+  - `diff.py` - Man page comparison and diff formatting
+  - `tree_parser.py` - Mandoc -T tree output parser with confidence assessment
   - `roff_parser.py` - Roff macro parser (man/mdoc dialects)
+  - `roff_utils.py` - Roff source detection (dashless opts, nested cmd)
   - `manpage.py` - Man page reading and HTML conversion
   - `help_constants.py` - Shell constant definitions for help text
   - `util.py` - Shared utilities (group_continuous, Peekable, name_section)
-  - `web/views.py` - Flask routes with URL-based distro/release routing
   - `config.py` - Configuration (DB_PATH, HOST_IP, DEBUG, MANPAGE_URLS)
+  - `extraction/` - Man page option extraction pipeline
+    - `__init__.py` - Public API: `make_extractor(mode)` factory
+    - `types.py` - Shared types (ExtractionResult, ExtractionStats, BatchResult, ExtractorConfig, Extractor protocol)
+    - `source.py` - Roff-based extractor (via `roff_parser.py`)
+    - `mandoc.py` - Mandoc-based extractor (via `tree_parser.py`)
+    - `hybrid.py` - Hybrid extractor: mandoc with LLM fallback
+    - `runner.py` - Execution orchestration (sequential, parallel, batch)
+    - `common.py` - Shared metadata assembly for all extractors
+    - `postprocess.py` - Extractor-agnostic option post-processing
+    - `llm/` - LLM-based extraction subpackage
+      - `extractor.py` - LLM extractor orchestration
+      - `prompt.py` - Prompt construction
+      - `response.py` - LLM response parsing
+      - `text.py` - Man page text preparation and chunking
+      - `providers/` - LLM provider implementations (OpenAI, Gemini, LiteLLM fallback)
+  - `web/views.py` - Flask routes with URL-based distro/release routing
 - `tools/` - Standalone scripts
   - `db_check.py` - DB integrity checker (malformed paths, shadowed duplicates, orphans)
   - `llm_bench.py` - LLM extractor benchmark tool (run/compare metrics reports)
-  - `store_extraction.py` - Store LLM-ref extraction JSON into database
+  - `fetch_manned.py` - Fetch man pages from manned.org weekly dump
+  - `mandoc-with-markdown` - Custom mandoc binary with markdown output support
 - `tests/` - Unit tests (`test_*.py`), fixtures
 - `tests/e2e/` - Playwright e2e tests, snapshots, and dedicated `e2e.db`
 - `tests/regression/` - Parsing regression tests and manpage .gz fixtures
@@ -163,24 +182,24 @@ python -m explainshell.manager --mode source /path/to/manpage.1.gz
 `manager.py` orchestrates: raw .gz → parse → extract options → store in SQLite.
 
 Extraction modes controlled by `--mode`:
-- `--mode source` - Parses roff macros directly via `roff_parser.py` + `source_extractor.py`
-- `--mode mandoc` - Uses mandoc -T tree parser via `mandoc_extractor.py`
-- `--mode llm:<model>` - Sends man page text to an LLM via LiteLLM (e.g., `llm:gpt-5-mini`)
-- `--mode hybrid:<model>` - Tries mandoc first, falls back to LLM on low confidence
+- `--mode source` - Parses roff macros directly via `roff_parser.py` + `extraction/source.py`
+- `--mode mandoc` - Uses mandoc -T tree parser via `extraction/mandoc.py`
+- `--mode llm:<provider/model>` - Sends man page text to an LLM (e.g., `llm:openai/gpt-5-mini`). Supports OpenAI, Gemini, and LiteLLM (fallback) providers.
+- `--mode hybrid:<provider/model>` - Tries mandoc first, falls back to LLM on low confidence
 
 Manager key flags: `--overwrite`, `--dry-run`, `--diff [db|A..B]`, `--debug-dir`, `--drop`, `-j/--jobs <int>` (parallel extraction, default 1)
 
 Flag validation: `--mode` and `--dry-run` cannot be combined with `--diff A..B`; `--drop`, `--overwrite`, and `--diff` are mutually exclusive with each other and with `--dry-run`.
 
-### Data Model (store.py)
+### Data Model (models.py, store.py)
 
 SQLite with two tables:
 - **manpage** - source (unique basename), name, synopsis, options (JSON), aliases, flags
 - **mapping** - command name → manpage id lookup (many-to-one, with score for preference)
 
-Key classes (Pydantic models):
-- `Option` - text, short/long flag lists, expects_arg, argument, nested_cmd
-- `ParsedManpage` - container with options/arguments properties and `find_option(flag)` lookup
+Key classes (Pydantic models in models.py):
+- `Option` - text, short/long flag lists, has_argument, positional, nested_cmd
+- `ParsedManpage` - container with options/positionals properties and `find_option(flag)` lookup
 
 ### Command Matching (matcher.py)
 
@@ -193,3 +212,22 @@ Uses bashlex AST visitor pattern:
 ### E2E Tests
 
 Hermetic setup: uses a dedicated `tests/e2e/e2e.db` and random port selection. Server is started fresh per run (`reuseExistingServer: false`).
+
+### Deployment
+
+The app is deployed to [Fly.io](https://fly.io) with two machines for availability. The SQLite database is stored on persistent Fly volumes mounted at `/data`.
+
+**Deploy code changes:**
+
+```bash
+fly deploy
+```
+
+**Update the database:**
+
+1. Upload the new DB to the `db-latest` GitHub release (use `gh release upload db-latest explainshell.db -R idank/explainshell --clobber`)
+2. **Wait for the GitHub CDN cache to clear** — download the URL with `wget` and verify the file has the expected size/tables before deploying. This can take a few minutes.
+3. Bump `DB_VERSION` in `fly.toml`
+4. `fly deploy`
+
+On startup, `start.sh` compares `DB_VERSION` against a marker file on the volume. If they differ, it downloads the DB from `DB_URL` and updates the marker. Normal restarts skip the download.
