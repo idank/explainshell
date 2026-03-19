@@ -11,6 +11,7 @@ primary_region = 'iad'
 [env]
   DB_PATH = '/data/explainshell.db'
   DB_URL = 'https://github.com/idank/explainshell/releases/download/db-latest/explainshell.db'
+  DB_VERSION = '3'
   DEBUG = 'false'
   HOST_IP = '0.0.0.0'
   PORT = '8080'
