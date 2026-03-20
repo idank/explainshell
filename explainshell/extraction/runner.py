@@ -317,7 +317,7 @@ def run_batch(
                     )
                     continue
 
-                logger.info(
+                logger.debug(
                     "[%s] done: %d option(s)", gz_path, len(finalize_result.mp.options)
                 )
                 _finalize(gz_path, finalize_result)

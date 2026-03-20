@@ -134,14 +134,14 @@ class Store:
         when distro and release are set, filter results to manpages whose
         source starts with ``distro/release/``."""
         if name.endswith(".gz"):
-            logger.info("name ends with .gz, looking up an exact match by source")
+            logger.debug("name ends with .gz, looking up an exact match by source")
             row = self._conn.execute(
                 "SELECT * FROM parsed_manpages WHERE source = ?", (name,)
             ).fetchone()
             if not row:
                 raise errors.ProgramDoesNotExist(name)
             m = ParsedManpage.from_store(dict(row))
-            logger.info("returning %s", m)
+            logger.debug("returning %s", m)
             return [m]
 
         section = None
@@ -154,7 +154,7 @@ class Store:
             if len(splitted) > 1:
                 section = splitted[1]
 
-        logger.info("looking up manpage in mappings with src %r", name)
+        logger.debug("looking up manpage in mappings with src %r", name)
         mapping_rows = self._conn.execute(
             "SELECT dst, score FROM mappings WHERE src = ?", (name,)
         ).fetchall()
@@ -195,7 +195,7 @@ class Store:
             for row in manpage_rows
         ]
         results.sort(key=lambda x: dsts.get(x[0], 0), reverse=True)
-        logger.info(
+        logger.debug(
             "found %d candidates: %s",
             len(results),
             [(src, m.name_section) for src, m in results],
@@ -206,7 +206,7 @@ class Store:
                 results.sort(
                     key=lambda src_m: src_m[1].section == section, reverse=True
                 )
-                logger.info("sorted candidates so section %s is first", section)
+                logger.debug("sorted candidates so section %s is first", section)
             if results[0][1].section != section:
                 raise errors.ProgramDoesNotExist(orig_name)
             results.extend(
@@ -317,13 +317,13 @@ class Store:
             "SELECT source FROM parsed_manpages WHERE source = ?", (m.source,)
         ).fetchone()
         if existing:
-            logger.info("removing old manpage %s", m.source)
+            logger.debug("removing old manpage %s", m.source)
             # ON DELETE CASCADE removes all mappings rows for this manpage
             self._conn.execute(
                 "DELETE FROM parsed_manpages WHERE source = ?", (m.source,)
             )
             self._conn.commit()
-            logger.info("removed manpage and its mappings for %s", m.source)
+            logger.debug("removed manpage and its mappings for %s", m.source)
         else:
             # Check for duplicate: same distro/release + name + section but different source
             distro, release = config.parse_distro_release(m.source)
@@ -363,7 +363,7 @@ class Store:
                 "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)",
                 (alias, m.source, score),
             )
-            logger.info(
+            logger.debug(
                 "inserting mapping (alias) %s -> %s with score %d",
                 alias,
                 m.name,
@@ -416,11 +416,11 @@ class Store:
 
         for src, dst in mappings_to_add:
             self.add_mapping(src, dst, 1)
-            logger.info("inserting mapping (subcommand) %s -> %s", src, dst)
+            logger.debug("inserting mapping (subcommand) %s -> %s", src, dst)
 
         for name, _id in parents.items():
             self.set_has_subcommands(_id)
-            logger.info("marking %r as has_subcommands", name)
+            logger.debug("marking %r as has_subcommands", name)
 
         return mappings_to_add, parents
 

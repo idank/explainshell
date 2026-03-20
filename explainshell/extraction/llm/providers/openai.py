@@ -103,6 +103,7 @@ class OpenAIProvider:
     def poll_batch(self, client: OpenAI, job_id: str, poll_interval: int = 30) -> Batch:
         consecutive_errors = 0
         max_consecutive_errors = 5
+        prev_counts: tuple[int, int] = (0, 0)
         while True:
             try:
                 batch = client.batches.retrieve(job_id)
@@ -138,13 +139,23 @@ class OpenAIProvider:
             if status == "expired":
                 raise ExtractionError(f"Batch job expired: {job_id}")
 
-            logger.info(
-                "batch %s: status=%s%s, polling again in %ds...",
-                job_id,
-                status,
-                counts_str,
-                poll_interval,
-            )
+            curr_counts = (counts.completed, counts.failed) if counts else (0, 0)
+            if curr_counts != prev_counts:
+                logger.info(
+                    "batch %s: status=%s%s",
+                    job_id,
+                    status,
+                    counts_str,
+                )
+                prev_counts = curr_counts
+            else:
+                logger.debug(
+                    "batch %s: status=%s%s, polling again in %ds...",
+                    job_id,
+                    status,
+                    counts_str,
+                    poll_interval,
+                )
             time.sleep(poll_interval)
 
     def collect_results(self, job: Batch) -> BatchResults:

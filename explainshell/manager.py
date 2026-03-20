@@ -28,7 +28,7 @@ from explainshell.extraction import (
 )
 from explainshell.extraction.runner import run, run_sequential
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("explainshell.manager")
 
 # ANSI color helpers.
 _RED = "\033[31m"
@@ -328,12 +328,14 @@ def _run_dry_run(
 
 
 def main(args: argparse.Namespace) -> int:
+    log_level = getattr(logging, args.log.upper())
     logging.basicConfig(
-        level=getattr(logging, args.log.upper()),
+        level=logging.WARNING,
         stream=sys.stdout,
-        format="[%(asctime)s] %(message)s",
+        format="%(asctime)s %(levelname)-5s [%(name)s] %(message)s",
         datefmt="%H:%M:%S",
     )
+    logging.getLogger("explainshell").setLevel(log_level)
 
     if args.jobs < 1:
         print("error: --jobs must be >= 1", file=sys.stderr)
@@ -585,8 +587,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--log",
-        default="INFO",
-        help="Log level (default: INFO)",
+        default="DEBUG",
+        help="Log level (default: DEBUG)",
     )
     parser.add_argument("files", nargs="*", help=".gz files or directories")
     return parser
