@@ -114,7 +114,7 @@ class TestExtractIntegration(unittest.TestCase):
         mock_llm.return_value = ChunkResult(
             data={
                 "options": [
-                    {"short": "not-a-list", "long": [], "lines": [1, 3]},
+                    {"short": ["-x"], "long": [], "lines": "bad"},
                     {
                         "short": ["-v"],
                         "long": [],
