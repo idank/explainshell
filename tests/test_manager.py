@@ -575,5 +575,115 @@ class TestDiffExtractorLabels(unittest.TestCase):
         self.assertIn("llm (gemini/2.5-flash)", log_text)
 
 
+# ---------------------------------------------------------------------------
+# TestDiffDbSourceMatch
+# ---------------------------------------------------------------------------
+
+
+class TestDiffDbSourceMatch(unittest.TestCase):
+    """Tests for _run_diff_db preferring exact source path over name lookup."""
+
+    def _run_diff_db_with_store(
+        self, gz_path: str, short_path: str, store_mock: MagicMock
+    ) -> list[str]:
+        """Run _run_diff_db and return captured log lines."""
+        from explainshell.manager import _run_diff_db
+        from explainshell.extraction.types import BatchResult
+
+        fake_mp = MagicMock()
+        fake_mp.options = []
+
+        entry = ExtractionResult(
+            gz_path=gz_path,
+            outcome=ExtractionOutcome.SUCCESS,
+            mp=fake_mp,
+            raw=MagicMock(),
+            stats=ExtractionStats(),
+        )
+
+        with (
+            patch("explainshell.manager.make_extractor") as mock_ext,
+            patch(
+                "explainshell.manager.config.source_from_path",
+                return_value=short_path,
+            ),
+            patch("explainshell.manager.run_sequential") as mock_run,
+        ):
+            mock_ext.return_value = MagicMock()
+
+            def _fake_run(ext, files, **kwargs):
+                on_result = kwargs.get("on_result")
+                if on_result:
+                    on_result(gz_path, entry)
+                return BatchResult()
+
+            mock_run.side_effect = _fake_run
+
+            import logging
+
+            with self.assertLogs("explainshell.manager", level=logging.INFO) as cm:
+                _run_diff_db([gz_path], "source", None, None, False, store_mock)
+
+        return cm.output
+
+    def test_exact_source_match_preferred(self):
+        """When the exact source path exists in DB, use it directly."""
+        store_mock = MagicMock()
+        stored_mp = MagicMock()
+        stored_mp.options = []
+        # First call with short_path (ending in .gz) succeeds.
+        store_mock.find_man_page.return_value = [stored_mp]
+
+        self._run_diff_db_with_store(
+            "/manpages/ubuntu/26.04/1/find.1.gz",
+            "ubuntu/26.04/1/find.1.gz",
+            store_mock,
+        )
+
+        # Should be called with the full source path first.
+        store_mock.find_man_page.assert_called_once_with("ubuntu/26.04/1/find.1.gz")
+
+    def test_falls_back_to_name_when_source_not_found(self):
+        """When exact source is not in DB, fall back to name lookup."""
+        from explainshell import errors
+
+        store_mock = MagicMock()
+        stored_mp = MagicMock()
+        stored_mp.options = []
+
+        # First call (source path) raises, second call (name) succeeds.
+        store_mock.find_man_page.side_effect = [
+            errors.ProgramDoesNotExist("ubuntu/26.04/1/find.1.gz"),
+            [stored_mp],
+        ]
+
+        self._run_diff_db_with_store(
+            "/manpages/ubuntu/26.04/1/find.1.gz",
+            "ubuntu/26.04/1/find.1.gz",
+            store_mock,
+        )
+
+        self.assertEqual(store_mock.find_man_page.call_count, 2)
+        calls = store_mock.find_man_page.call_args_list
+        self.assertEqual(calls[0].args[0], "ubuntu/26.04/1/find.1.gz")
+        self.assertEqual(calls[1].args[0], "find")
+
+    def test_both_lookups_fail_logs_not_in_db(self):
+        """When neither source nor name is in DB, log 'not in DB'."""
+        from explainshell import errors
+
+        store_mock = MagicMock()
+        store_mock.find_man_page.side_effect = errors.ProgramDoesNotExist("x")
+
+        logs = self._run_diff_db_with_store(
+            "/manpages/ubuntu/26.04/1/find.1.gz",
+            "ubuntu/26.04/1/find.1.gz",
+            store_mock,
+        )
+
+        log_text = "\n".join(logs)
+        self.assertIn("not in DB", log_text)
+
+
 if __name__ == "__main__":
     unittest.main()
