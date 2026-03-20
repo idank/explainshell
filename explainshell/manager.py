@@ -254,7 +254,11 @@ def _run_diff_db(
         name = _manpage.extract_name(gz_path)
         logger.info("=== %s ===", short_path)
         try:
-            results = s.find_man_page(name)
+            # Prefer exact source match (fully populated) over name lookup.
+            try:
+                results = s.find_man_page(short_path)
+            except errors.ProgramDoesNotExist:
+                results = s.find_man_page(name)
             stored_mp = results[0]
         except errors.ProgramDoesNotExist:
             logger.info("  (not in DB, nothing to diff)")
