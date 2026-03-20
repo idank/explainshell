@@ -92,13 +92,14 @@ def _git_metadata() -> dict:
 def _auto_output_path(report_dir: str) -> str:
     """Generate a timestamped output path in the report directory."""
     ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
-    os.makedirs(report_dir, exist_ok=True)
-    return os.path.join(report_dir, f"{ts}.json")
+    run_dir = os.path.join(report_dir, ts)
+    os.makedirs(run_dir, exist_ok=True)
+    return os.path.join(run_dir, "report.json")
 
 
 def _list_reports(report_dir: str) -> list[str]:
     """Return report files sorted newest first (by filename)."""
-    pattern = os.path.join(report_dir, "*.json")
+    pattern = os.path.join(report_dir, "*/report.json")
     return sorted(glob.glob(pattern), reverse=True)
 
 
@@ -125,7 +126,11 @@ def run_bench(args: argparse.Namespace) -> int:
 
     logger.info("benchmarking %d file(s)...", len(gz_files))
 
-    config = ExtractorConfig(model=args.model)
+    output = args.output or _auto_output_path(args.report_dir)
+    run_dir = os.path.dirname(output)
+    os.makedirs(run_dir, exist_ok=True)
+
+    config = ExtractorConfig(model=args.model, debug_dir=run_dir)
     extractor = make_extractor("llm", config)
 
     # Build per-file metrics via on_result callback.
@@ -198,11 +203,10 @@ def run_bench(args: argparse.Namespace) -> int:
 
     _print_summary(report)
 
-    output = args.output or _auto_output_path(args.report_dir)
-    os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
     with open(output, "w") as f:
         json.dump(report, f, indent=2)
         f.write("\n")
+    print(f"  Run directory: {run_dir}")
     print(f"  Report saved to {output}")
     print()
 
