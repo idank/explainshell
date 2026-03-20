@@ -5,6 +5,7 @@ import unittest
 from explainshell import models
 from explainshell.errors import ExtractionError
 from explainshell.extraction.llm.response import (
+    normalize_option_fields,
     dedup_options,
     dedup_ref_options,
     extract_text_from_lines,
@@ -342,6 +343,89 @@ class TestDedupRefOptions(unittest.TestCase):
         result = dedup_ref_options(opts)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["lines"], [1, 10])
+
+
+# ---------------------------------------------------------------------------
+# TestNormalizeOptionFields
+# ---------------------------------------------------------------------------
+
+
+class TestNormalizeOptionFields(unittest.TestCase):
+    def test_has_argument_null_becomes_false(self):
+        raw = {"has_argument": None}
+        result = normalize_option_fields(raw)
+        self.assertIs(result["has_argument"], False)
+
+    def test_has_argument_null_not_in_raw_unchanged(self):
+        """If has_argument key is absent, don't inject False."""
+        raw = {"short": ["-v"]}
+        result = normalize_option_fields(raw)
+        self.assertNotIn("has_argument", result)
+
+    def test_has_argument_list_of_ints_becomes_strings(self):
+        raw = {"has_argument": [512, 520, 4096]}
+        result = normalize_option_fields(raw)
+        self.assertEqual(result["has_argument"], ["512", "520", "4096"])
+
+    def test_has_argument_list_of_strings_unchanged(self):
+        raw = {"has_argument": ["val1", "val2"]}
+        result = normalize_option_fields(raw)
+        self.assertEqual(result["has_argument"], ["val1", "val2"])
+
+    def test_passthrough_valid_types(self):
+        raw = {
+            "short": ["-v"],
+            "long": ["--verbose"],
+            "has_argument": True,
+            "nested_cmd": False,
+        }
+        result = normalize_option_fields(raw)
+        self.assertEqual(result, raw)
+
+    def test_does_not_mutate_input(self):
+        raw = {"has_argument": None}
+        normalize_option_fields(raw)
+        self.assertIsNone(raw["has_argument"])
+
+
+# ---------------------------------------------------------------------------
+# TestCoercionIntegration
+# ---------------------------------------------------------------------------
+
+
+class TestCoercionIntegration(unittest.TestCase):
+    """Verify coercion recovers options that would otherwise be rejected."""
+
+    def setUp(self):
+        self.orig = {
+            10: "**-v**, **--verbose**",
+            11: "",
+            12: "Enable verbose output.",
+        }
+
+    def test_null_has_argument_positional_recovered(self):
+        """Real case: LLM returns has_argument=null for positional args."""
+        raw = {
+            "short": [],
+            "long": [],
+            "has_argument": None,
+            "positional": "interface",
+            "lines": [10, 12],
+        }
+        opt = llm_option_to_store_option(raw, self.orig)
+        self.assertIs(opt.has_argument, False)
+        self.assertEqual(opt.positional, "interface")
+
+    def test_int_list_has_argument_recovered(self):
+        """Real case: hdparm --set-sector-size with int enum values."""
+        raw = {
+            "short": [],
+            "long": ["--set-sector-size"],
+            "has_argument": [512, 520, 528, 4096],
+            "lines": [10, 12],
+        }
+        opt = llm_option_to_store_option(raw, self.orig)
+        self.assertEqual(opt.has_argument, ["512", "520", "528", "4096"])
 
 
 if __name__ == "__main__":

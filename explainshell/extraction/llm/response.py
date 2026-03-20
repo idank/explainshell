@@ -106,6 +106,26 @@ def extract_text_from_lines(
     return flag_line
 
 
+def normalize_option_fields(raw: dict) -> dict:
+    """Normalize known LLM type mistakes in a raw option dict before validation.
+
+    Fixes observed in the top-1000 corpus run:
+    - ``has_argument: null`` → ``False`` (8 positional-arg options)
+    - ``has_argument`` list with int elements → stringified (hdparm --set-sector-size)
+    """
+    raw = dict(raw)  # shallow copy to avoid mutating caller's data
+
+    if raw.get("has_argument") is None and "has_argument" in raw:
+        raw["has_argument"] = False
+
+    # Normalize list elements to str (LLM sometimes returns ints for enum values).
+    ha = raw.get("has_argument")
+    if isinstance(ha, list) and ha and not all(isinstance(x, str) for x in ha):
+        raw["has_argument"] = [str(x) for x in ha]
+
+    return raw
+
+
 def sanitize_option_fields(
     short: list[str],
     long: list[str],
@@ -136,6 +156,7 @@ def llm_option_to_store_option(
 
     Uses the "lines" field to slice the description from original_lines.
     """
+    raw = normalize_option_fields(raw)
     short = raw.get("short") or []
     long = raw.get("long") or []
     has_argument = raw.get("has_argument", False)

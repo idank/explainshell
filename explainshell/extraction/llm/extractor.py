@@ -52,6 +52,7 @@ from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 import dotenv
+from pydantic import ValidationError
 
 from explainshell import manpage
 from explainshell.errors import ExtractionError, SkippedExtraction
@@ -65,6 +66,7 @@ from explainshell.extraction.llm.providers import (
     make_provider,
 )
 from explainshell.extraction.llm.response import (
+    normalize_option_fields,
     dedup_ref_options,
     llm_option_to_store_option,
     process_llm_result,
@@ -367,9 +369,17 @@ class LLMExtractor:
         options = []
         for idx, raw_opt in enumerate(all_raw):
             try:
+                if normalize_option_fields(raw_opt) != raw_opt:
+                    stats.normalized_options += 1
                 options.append(llm_option_to_store_option(raw_opt, original_lines))
-            except ValueError as e:
-                logger.warning("skipping malformed option %d: %s", idx, e)
+            except (ValueError, ValidationError) as e:
+                logger.warning(
+                    "%s: skipping malformed option %d: %s\n  raw: %s",
+                    basename,
+                    idx,
+                    e,
+                    json.dumps(raw_opt, default=str)[:200],
+                )
                 stats.malformed_options += 1
 
         options, pp_stats = postprocess(options)

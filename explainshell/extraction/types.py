@@ -30,9 +30,12 @@ class ExtractionStats:
     plain_text_len: int = 0
     # Wall-clock time for extraction.
     elapsed_seconds: float = 0.0
-    # Options skipped due to invalid LLM output (e.g. bad has_argument,
-    # missing lines). Counted at parse time in llm_option_to_store_option.
+    # Options skipped due to invalid LLM output that could not be recovered
+    # by normalization (e.g. missing lines, structurally broken dicts).
     malformed_options: int = 0
+    # Options recovered by normalize_option_fields (e.g. has_argument: null → False,
+    # list[int] → list[str]).
+    normalized_options: int = 0
     # Options removed by drop_empty in postprocessing because they had no
     # flags (short/long) and no positional name — typically caused by the
     # LLM omitting the flag from its response.
@@ -54,6 +57,7 @@ class ExtractionStats:
         self.plain_text_len += other.plain_text_len
         self.elapsed_seconds += other.elapsed_seconds
         self.malformed_options += other.malformed_options
+        self.normalized_options += other.normalized_options
         self.dropped_empty += other.dropped_empty
         self.deduped_options += other.deduped_options
         self.fallback_used = self.fallback_used or other.fallback_used
