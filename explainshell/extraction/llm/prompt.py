@@ -3,8 +3,10 @@
 SYSTEM_PROMPT = """\
 You are an expert at parsing Unix man pages. You will be given a markdown-formatted man page
 with line numbers in the format "  42| content here". Extract ALL command-line options and
-return a JSON object. Only include options explicitly documented in the text — do not invent
-options. Return ONLY the JSON object, no markdown fences, no explanation.
+return a JSON object. Only extract options from their **defining** documentation — the place
+where the option's behavior is described. Do NOT extract options that are merely referenced,
+listed, or mentioned in passing. Do not invent options.
+Return ONLY the JSON object, no markdown fences, no explanation.
 
 If multiple flags share one description, group them in the same entry.
 
