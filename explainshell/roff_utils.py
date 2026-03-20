@@ -137,7 +137,7 @@ def detect_nested_cmd(gz_path: str) -> bool:
         # Strip option-name occurrences (e.g. --rsh-command) and recheck
         stripped = _COMMAND_IN_OPT.sub("", cleaned)
         if _COMMAND_WORD.search(stripped):
-            logger.info("nested_cmd: found 'command' in SYNOPSIS of %s", gz_path)
+            logger.debug("nested_cmd: found 'command' in SYNOPSIS of %s", gz_path)
             return True
 
     return False

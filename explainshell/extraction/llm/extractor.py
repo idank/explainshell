@@ -260,7 +260,7 @@ class LLMExtractor:
 
         filtered_text, removal_counts = filter_sections(plain_text)
         if removal_counts:
-            logger.info(
+            logger.debug(
                 "%s: filtered sections: %s (saved %d chars)",
                 basename,
                 ", ".join(f"{k} ({v})" for k, v in sorted(removal_counts.items())),
@@ -386,7 +386,7 @@ class LLMExtractor:
         stats.deduped_options += pp_stats.deduped_options
         stats.dropped_empty += pp_stats.dropped_empty
 
-        logger.info("%s: extracted %d option(s) total", basename, len(options))
+        logger.debug("%s: extracted %d option(s) total", basename, len(options))
 
         mp = build_manpage_metadata(
             gz_path,
