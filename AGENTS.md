@@ -22,7 +22,7 @@ A web tool that parses man pages and explains command-line arguments by matching
 
 ### LLM Benchmarking
 
-Use the benchmark tool (`tools/llm_bench.py`) to compare before/after metrics when making changes to the LLM extractor. It runs extraction on a default 10-file corpus (`tests/regression/llm-bench/manpages/`) and produces a JSON report with aggregate metrics: extracted files, failed files, total options, zero-option pages, multi-chunk pages, and token usage. Reports are auto-saved with timestamps to `tests/regression/llm-bench/` and include git metadata (commit, dirty state).
+Use the benchmark tool (`tools/llm_bench.py`) to compare before/after metrics when making changes to the LLM extractor. It runs extraction on a default 10-file corpus (`tests/regression/llm-bench/manpages/`) and produces a JSON report with aggregate metrics: extracted files, failed files, total options, zero-option pages, multi-chunk pages, and token usage. Each run creates a timestamped directory under `tests/regression/llm-bench/` containing the report and raw LLM responses (prompts and response text per chunk) for post-hoc investigation. Reports include git metadata (commit, dirty state).
 
 Each run accepts an optional `-d "..."` to label what this run represents. When running benchmarks, always provide a description inferred from context — e.g. the task you're working on, the nature of local changes, or "baseline (clean)" for a pre-change run. This makes `list` and `compare` output self-explanatory.
 
@@ -57,8 +57,8 @@ python tools/llm_bench.py run --model openai/gpt-5-mini --batch 50
 # Run on specific files
 python tools/llm_bench.py run --model openai/gpt-5-mini path/to/file.1.gz
 
-# Save to a specific path instead of the report directory
-python tools/llm_bench.py run --model openai/gpt-5-mini -o report.json tests/regression/manpages/
+# Save to a specific directory instead of the default report directory
+python tools/llm_bench.py run --model openai/gpt-5-mini -o runs/my-test/report.json tests/regression/manpages/
 
 # Compare the two most recent reports
 python tools/llm_bench.py compare
