@@ -29,11 +29,10 @@ def parse_json_response(content: str) -> dict:
     start = content.find("{")
     end = content.rfind("}")
     if start == -1 or end == -1 or end <= start:
-        err = ExtractionError(
-            f"No JSON object found in LLM response: {content[:200]!r}"
+        raise ExtractionError(
+            f"No JSON object found in LLM response: {content[:200]!r}",
+            raw_response=content,
         )
-        err.raw_response = content  # type: ignore[attr-defined]
-        raise err
 
     raw = content[start : end + 1]
     try:
@@ -44,9 +43,9 @@ def parse_json_response(content: str) -> dict:
     try:
         return json.loads(fix_invalid_escapes(raw))
     except json.JSONDecodeError as e:
-        err = ExtractionError(f"Invalid JSON from LLM: {e}")
-        err.raw_response = content  # type: ignore[attr-defined]
-        raise err from e
+        raise ExtractionError(
+            f"Invalid JSON from LLM: {e}", raw_response=content
+        ) from e
 
 
 def validate_llm_response(data: dict) -> None:
@@ -64,9 +63,13 @@ def process_llm_result(content: str) -> tuple[dict, str]:
     """Parse and validate a raw LLM response string.
 
     Returns (data_dict, raw_content).
+    Raises ExtractionError on parse failure or validation failure.
     """
     data = parse_json_response(content)
-    validate_llm_response(data)
+    try:
+        validate_llm_response(data)
+    except ValueError as e:
+        raise ExtractionError(str(e), raw_response=content) from e
     return data, content
 
 

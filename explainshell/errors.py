@@ -11,7 +11,12 @@ class InvalidSourcePath(Exception):
 
 
 class ExtractionError(Exception):
-    pass
+    def __init__(self, message: str, raw_response: str | None = None) -> None:
+        super().__init__(message)
+        #: The raw LLM response text that caused the error.  Populated only
+        #: by the LLM extractor (parse/validation failures); ``None`` for
+        #: errors raised by other extractors or generic callers.
+        self.raw_response = raw_response
 
 
 class SkippedExtraction(ExtractionError):

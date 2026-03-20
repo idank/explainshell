@@ -1,4 +1,42 @@
-"""LLM-based extractor: orchestration only.
+"""LLM extractor orchestration and design notes.
+
+This module is the coordinator for the LLM extraction path. It does not own
+provider-specific API details, JSON parsing, or text chunking logic; instead it
+glues together the other LLM submodules into one extraction pipeline:
+
+1. ``prepare()`` reads the man page, strips mandoc artifacts, removes known
+   low-value sections, numbers the remaining lines, and chunks the text.
+2. ``extract()`` sends one request per chunk through the configured provider
+   and accumulates token/latency stats.
+3. ``finalize()`` parses each raw JSON response, converts line references back
+   into option text, dedups cross-chunk overlap, runs extractor-agnostic
+   postprocessing, and builds ``ParsedManpage`` / ``RawManpage`` results.
+
+Some important design choices are easy to miss when looking only at the public
+methods:
+
+- The LLM does *not* return option descriptions directly. It returns line
+  ranges into the numbered source text, and ``response.py`` reconstructs the
+  final help text locally. This keeps the model output smaller and makes the
+  final stored text deterministic.
+- Chunking happens on the filtered plain text, but line numbers are relative to
+  the original filtered document. That lets multiple chunk responses be merged
+  later without renumbering.
+- Dedup is intentionally two-layered: ``dedup_ref_options()`` removes obvious
+  chunk-overlap duplicates while the data is still in raw dict form, then
+  ``postprocess()`` handles higher-level cleanup on validated ``Option``
+  objects.
+- ``PreparedFile`` is the contract between the normal per-file path and the
+  batch runner. Batch mode reuses ``prepare()`` and ``finalize()`` so the
+  interactive and batch paths stay behaviorally aligned.
+
+A few experiments are worth recording here because they affect future changes:
+
+- OpenAI Structured Outputs and "minified JSON" were both tried as output-token
+  optimizations. They did not reliably reduce billed output enough to justify
+  the added complexity, so the OpenAI path still uses ``json_object`` mode.
+- We benchmarked lowering OpenAI reasoning effort, but it performed significantly
+  worse than the default.
 
 Public API:
     LLMExtractor(config).extract(gz_path) -> ExtractionResult
@@ -29,9 +67,7 @@ from explainshell.extraction.llm.providers import (
 from explainshell.extraction.llm.response import (
     dedup_ref_options,
     llm_option_to_store_option,
-    parse_json_response,
     process_llm_result,
-    validate_llm_response,
 )
 from explainshell.extraction.llm.text import (
     MAX_MANPAGE_CHARS,
@@ -180,11 +216,8 @@ class LLMExtractor:
             try:
                 cr = self._call_llm(user_content)
             except ExtractionError as e:
-                raw = getattr(e, "raw_response", None) or getattr(
-                    e.__cause__, "raw_response", None
-                )
-                if raw:
-                    self._dump_failed_response(basename, i, raw)
+                if e.raw_response:
+                    self._dump_failed_response(basename, i, e.raw_response)
                 raise
 
             stats.input_tokens += cr.usage.input_tokens
@@ -274,9 +307,10 @@ class LLMExtractor:
             try:
                 chunk_data, raw = process_llm_result(response_text)
             except ExtractionError as e:
-                raw_resp = getattr(e, "raw_response", None)
-                if raw_resp:
-                    self._dump_failed_response(prepared.basename, chunk_idx, raw_resp)
+                if e.raw_response:
+                    self._dump_failed_response(
+                        prepared.basename, chunk_idx, e.raw_response
+                    )
                 raise
 
             messages = self._build_messages(prepared.requests[chunk_idx])
@@ -367,12 +401,11 @@ class LLMExtractor:
         for attempt in range(3):
             try:
                 content, usage = provider.call(user_content)
-                data = parse_json_response(content)
-                validate_llm_response(data)
+                data, raw = process_llm_result(content)
                 return ChunkResult(
                     data=data,
                     messages=messages,
-                    raw_response=content,
+                    raw_response=raw,
                     usage=usage,
                 )
             except ExtractionError:
@@ -398,7 +431,14 @@ class LLMExtractor:
     def _build_user_content(chunk: str, chunk_info: str) -> str:
         """Build the user prompt string for a single chunk."""
         if chunk_info:
-            return f"Man page{chunk_info}:\n\n{chunk}"
+            return (
+                f"Man page{chunk_info}.\n\n"
+                "Extract ALL options documented in THIS part only. "
+                "Each part is processed independently — do not wait for "
+                "other parts. If this part contains no options, return "
+                '{"options": []}.\n\n'
+                f"{chunk}"
+            )
         return chunk
 
     @staticmethod

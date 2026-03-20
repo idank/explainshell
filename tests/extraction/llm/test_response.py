@@ -10,6 +10,7 @@ from explainshell.extraction.llm.response import (
     extract_text_from_lines,
     llm_option_to_store_option,
     parse_json_response,
+    process_llm_result,
     sanitize_option_fields,
     validate_llm_response,
 )
@@ -65,6 +66,29 @@ class TestValidateLlmResponse(unittest.TestCase):
     def test_option_not_dict_raises(self):
         with self.assertRaises(ValueError):
             validate_llm_response({"options": ["string"]})
+
+
+# ---------------------------------------------------------------------------
+# TestProcessLlmResult
+# ---------------------------------------------------------------------------
+
+
+class TestProcessLlmResult(unittest.TestCase):
+    def test_valid_response(self):
+        data, raw = process_llm_result('{"options": []}')
+        self.assertEqual(data, {"options": []})
+        self.assertEqual(raw, '{"options": []}')
+
+    def test_missing_options_raises_extraction_error(self):
+        bad_input = '{"error": "waiting for more parts"}'
+        with self.assertRaises(ExtractionError) as ctx:
+            process_llm_result(bad_input)
+        self.assertIn("missing 'options' key", str(ctx.exception))
+        self.assertEqual(ctx.exception.raw_response, bad_input)
+
+    def test_no_json_raises_extraction_error(self):
+        with self.assertRaises(ExtractionError):
+            process_llm_result("no json here")
 
 
 # ---------------------------------------------------------------------------
