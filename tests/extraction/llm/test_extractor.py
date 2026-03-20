@@ -1,14 +1,20 @@
 """Tests for explainshell.extraction.llm.LLMExtractor — integration and LLM extraction."""
 
 import os
+import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from tests.helpers import TESTS_DIR
 
 from explainshell import models
+from explainshell.errors import ExtractionError
 from explainshell.extraction import ExtractorConfig
-from explainshell.extraction.llm.extractor import ChunkResult, LLMExtractor
+from explainshell.extraction.llm.extractor import (
+    ChunkResult,
+    LLMExtractor,
+    PreparedFile,
+)
 from explainshell.extraction.llm.providers import TokenUsage
 
 
@@ -147,8 +153,6 @@ class TestExtractIntegration(unittest.TestCase):
         mock_common_synopsis,
         mock_nested_cmd,
     ):
-        import tempfile
-
         mock_synopsis.return_value = ("a test tool", [("dummy", 10)])
         mock_common_synopsis.return_value = ("a test tool", [("dummy", 10)])
         mock_text.return_value = "**-v**\n\nVerbose."
@@ -192,6 +196,185 @@ class TestExtractIntegration(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# TestMultiChunk — interactive extract() and batch finalize()
+# ---------------------------------------------------------------------------
+
+# Shared helpers for multi-chunk tests.
+_PLAIN_TEXT = "**-a**\n\nOption a.\n\n**-b**\n\nOption b."
+_ORIGINAL_LINES: dict[int, str] = {
+    1: "**-a**",
+    2: "",
+    3: "Option a.",
+    4: "",
+    5: "**-b**",
+    6: "",
+    7: "Option b.",
+}
+
+
+def _make_prepared(n_chunks: int = 2) -> PreparedFile:
+    return PreparedFile(
+        synopsis="test tool",
+        aliases=[("dummy", 10)],
+        original_lines=_ORIGINAL_LINES,
+        basename="dummy",
+        numbered_text="   1| **-a**\n   2| ...",
+        plain_text_len=len(_PLAIN_TEXT),
+        plain_text=_PLAIN_TEXT,
+        requests=["chunk0 content", "chunk1 content"][:n_chunks],
+    )
+
+
+def _chunk_result(options: list[dict]) -> ChunkResult:
+    return ChunkResult(
+        data={"options": options},
+        messages=[
+            {"role": "system", "content": "..."},
+            {"role": "user", "content": "..."},
+        ],
+        raw_response='{"options": []}',
+        usage=TokenUsage(0, 0),
+    )
+
+
+_CHUNK0_OPTIONS: list[dict] = [
+    {"short": ["-a"], "long": [], "has_argument": False, "lines": [1, 3]},
+]
+_CHUNK1_OPTIONS: list[dict] = [
+    {"short": ["-b"], "long": [], "has_argument": False, "lines": [5, 7]},
+]
+
+_CHUNK0_JSON = (
+    '{"options": [{"short": ["-a"], "long": [], '
+    '"has_argument": false, "lines": [1, 3]}]}'
+)
+_CHUNK1_JSON = (
+    '{"options": [{"short": ["-b"], "long": [], '
+    '"has_argument": false, "lines": [5, 7]}]}'
+)
+
+
+class TestMultiChunkExtract(unittest.TestCase):
+    """Interactive extract() path with multiple chunks."""
+
+    def _make_extractor(self) -> LLMExtractor:
+        cfg = ExtractorConfig(model="test-model")
+        return LLMExtractor(cfg)
+
+    @patch(
+        "explainshell.extraction.common.roff_utils.detect_nested_cmd",
+        return_value=False,
+    )
+    @patch("explainshell.extraction.common.manpage.get_synopsis_and_aliases")
+    @patch("explainshell.extraction.common.gz_sha256", return_value="abc123")
+    @patch("explainshell.extraction.llm.extractor.LLMExtractor._call_llm")
+    @patch("explainshell.extraction.llm.extractor.LLMExtractor.prepare")
+    def test_multi_chunk_merges_options(
+        self,
+        mock_prepare,
+        mock_llm,
+        mock_sha,
+        mock_common_synopsis,
+        mock_nested_cmd,
+    ):
+        mock_prepare.return_value = _make_prepared(2)
+        mock_common_synopsis.return_value = ("test tool", [("dummy", 10)])
+        mock_llm.side_effect = [
+            _chunk_result(_CHUNK0_OPTIONS),
+            _chunk_result(_CHUNK1_OPTIONS),
+        ]
+
+        ext = self._make_extractor()
+        result = ext.extract("dummy.1.gz")
+        self.assertEqual(len(result.mp.options), 2)
+        flags = {opt.short[0] for opt in result.mp.options}
+        self.assertEqual(flags, {"-a", "-b"})
+        self.assertEqual(mock_llm.call_count, 2)
+
+    def test_call_llm_invalid_response_preserves_raw(self):
+        """_call_llm propagates raw_response when the LLM returns invalid JSON structure."""
+        bad_response = '{"error": "waiting for remaining parts"}'
+        mock_provider = MagicMock()
+        mock_provider.call.return_value = (bad_response, TokenUsage(10, 5))
+        mock_provider.retryable_exceptions = (ConnectionError,)
+
+        ext = self._make_extractor()
+        ext._provider_instance = mock_provider
+
+        with self.assertRaises(ExtractionError) as ctx:
+            ext._call_llm("some user content")
+        self.assertIn("missing 'options' key", str(ctx.exception))
+        self.assertEqual(ctx.exception.raw_response, bad_response)
+
+    @patch("explainshell.extraction.llm.extractor.LLMExtractor.prepare")
+    def test_extract_invalid_chunk0_dumps_failed_response(self, mock_prepare):
+        """Interactive extract() dumps the raw response when chunk 0 fails validation."""
+        bad_response = '{"error": "waiting for remaining parts"}'
+        mock_provider = MagicMock()
+        mock_provider.call.return_value = (bad_response, TokenUsage(10, 5))
+        mock_provider.retryable_exceptions = (ConnectionError,)
+
+        mock_prepare.return_value = _make_prepared(1)
+
+        with tempfile.TemporaryDirectory() as fail_dir:
+            cfg = ExtractorConfig(model="test-model", fail_dir=fail_dir)
+            ext = LLMExtractor(cfg)
+            ext._provider_instance = mock_provider
+
+            with self.assertRaises(ExtractionError):
+                ext.extract("dummy.1.gz")
+
+            failed_files = os.listdir(fail_dir)
+            self.assertEqual(len(failed_files), 1)
+            with open(os.path.join(fail_dir, failed_files[0])) as f:
+                self.assertEqual(f.read(), bad_response)
+
+
+class TestMultiChunkFinalize(unittest.TestCase):
+    """Batch finalize() path with multiple chunks."""
+
+    def _make_extractor(self, fail_dir: str | None = None) -> LLMExtractor:
+        cfg = ExtractorConfig(model="test-model", fail_dir=fail_dir)
+        return LLMExtractor(cfg)
+
+    @patch(
+        "explainshell.extraction.common.roff_utils.detect_nested_cmd",
+        return_value=False,
+    )
+    @patch("explainshell.extraction.common.manpage.get_synopsis_and_aliases")
+    @patch("explainshell.extraction.common.gz_sha256", return_value="abc123")
+    def test_multi_chunk_merges_options(
+        self, mock_sha, mock_common_synopsis, mock_nested_cmd
+    ):
+        mock_common_synopsis.return_value = ("test tool", [("dummy", 10)])
+        prepared = _make_prepared(2)
+        ext = self._make_extractor()
+        result = ext.finalize("dummy.1.gz", prepared, [_CHUNK0_JSON, _CHUNK1_JSON])
+        self.assertEqual(len(result.mp.options), 2)
+        flags = {opt.short[0] for opt in result.mp.options}
+        self.assertEqual(flags, {"-a", "-b"})
+
+    @patch(
+        "explainshell.extraction.common.roff_utils.detect_nested_cmd",
+        return_value=False,
+    )
+    @patch("explainshell.extraction.common.manpage.get_synopsis_and_aliases")
+    @patch("explainshell.extraction.common.gz_sha256", return_value="abc123")
+    def test_chunk0_invalid_raises_extraction_error(
+        self, mock_sha, mock_common_synopsis, mock_nested_cmd
+    ):
+        """A chunk-0 response missing 'options' raises ExtractionError, not ValueError."""
+        mock_common_synopsis.return_value = ("test tool", [("dummy", 10)])
+        prepared = _make_prepared(2)
+        bad_chunk0 = '{"error": "waiting for remaining parts"}'
+        ext = self._make_extractor()
+        with self.assertRaises(ExtractionError) as ctx:
+            ext.finalize("dummy.1.gz", prepared, [bad_chunk0, _CHUNK1_JSON])
+        self.assertIn("missing 'options' key", str(ctx.exception))
+        self.assertIsNotNone(ctx.exception.raw_response)
+
+
+# ---------------------------------------------------------------------------
 # TestBuildUserContent
 # ---------------------------------------------------------------------------
 
@@ -204,6 +387,10 @@ class TestBuildUserContent(unittest.TestCase):
     def test_chunk_info_included(self):
         content = LLMExtractor._build_user_content("chunk", " (part 1 of 3)")
         self.assertIn("(part 1 of 3)", content)
+        self.assertIn("Extract ALL options documented in THIS part only", content)
+        self.assertIn("do not wait for other parts", content)
+        self.assertIn('{"options": []}', content)
+        self.assertIn("chunk", content)
 
 
 # ---------------------------------------------------------------------------
