@@ -1,5 +1,8 @@
 """Unit tests for explainshell.manager."""
 
+import datetime
+import os
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -10,6 +13,8 @@ from explainshell.extraction.types import (
     ExtractionStats,
     ExtractionOutcome,
 )
+from explainshell.models import Option, ParsedManpage, RawManpage
+from explainshell.store import Store
 
 
 # ---------------------------------------------------------------------------
@@ -416,7 +421,16 @@ class TestDiffDbCli(unittest.TestCase):
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["diff", "db", "--mode", "source", "--dry-run", "/fake/a.1.gz"],
+            [
+                "--db",
+                "/tmp/test.db",
+                "diff",
+                "db",
+                "--mode",
+                "source",
+                "--dry-run",
+                "/fake/a.1.gz",
+            ],
         )
 
         self.assertEqual(result.exit_code, 0)
@@ -842,6 +856,256 @@ class TestDiffDbSourceMatch(unittest.TestCase):
 
         log_text = "\n".join(logs)
         self.assertIn("not in DB", log_text)
+
+
+# ---------------------------------------------------------------------------
+# TestDbPathValidation
+# ---------------------------------------------------------------------------
+
+
+class TestDbPathValidation(unittest.TestCase):
+    """CLI gives clean errors for missing/nonexistent --db."""
+
+    def test_no_db_set(self):
+        """Commands that need a DB fail cleanly when --db is not set."""
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["show", "stats"])
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("No database path", result.output)
+
+    def test_nonexistent_db(self):
+        """Read-only commands fail cleanly when DB file doesn't exist."""
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--db", "/tmp/does-not-exist-12345.db", "show", "stats"]
+        )
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("Database not found", result.output)
+
+    def test_dry_run_without_db(self):
+        """extract --dry-run should not require a DB path."""
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        with (
+            patch("explainshell.manager.make_extractor") as mock_ext,
+            patch("explainshell.util.collect_gz_files", return_value=["/fake/a.1.gz"]),
+            patch(
+                "explainshell.manager.config.source_from_path",
+                return_value="fake/a.1.gz",
+            ),
+        ):
+            fake_result = MagicMock()
+            fake_result.outcome = ExtractionOutcome.SUCCESS
+            fake_result.mp.options = []
+            fake_result.stats = ExtractionStats(elapsed_seconds=0)
+            mock_ext.return_value = MagicMock()
+            mock_ext.return_value.extract.return_value = fake_result
+
+            result = runner.invoke(
+                cli,
+                ["extract", "--mode", "source", "--dry-run", "/fake/a.1.gz"],
+            )
+
+        self.assertEqual(result.exit_code, 0)
+
+
+# ---------------------------------------------------------------------------
+# TestShowCli — uses real temp DB
+# ---------------------------------------------------------------------------
+
+
+def _make_raw() -> RawManpage:
+    return RawManpage(
+        source_text="test manpage content",
+        generated_at=datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc),
+        generator="test",
+    )
+
+
+def _make_manpage(
+    name: str,
+    section: str = "1",
+    distro: str = "ubuntu",
+    release: str = "25.10",
+    aliases: list[tuple[str, int]] | None = None,
+    options: list[Option] | None = None,
+) -> ParsedManpage:
+    source = f"{distro}/{release}/{section}/{name}.{section}.gz"
+    if aliases is None:
+        aliases = [(name, 10)]
+    return ParsedManpage(
+        source=source,
+        name=name,
+        synopsis=f"{name} - do things",
+        aliases=aliases,
+        options=options or [],
+        extractor="source",
+    )
+
+
+class TestShowCli(unittest.TestCase):
+    """CliRunner tests for the ``show`` command group."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.db_path = os.path.join(self.tmp, "test.db")
+        self.store = Store.create(self.db_path)
+        self.store.add_manpage(
+            _make_manpage(
+                "tar",
+                options=[
+                    Option(text="create archive", short=["-c"], long=["--create"]),
+                    Option(text="extract", short=["-x"], long=["--extract"]),
+                ],
+            ),
+            _make_raw(),
+        )
+        self.store.add_manpage(_make_manpage("echo"), _make_raw())
+
+    def tearDown(self):
+        self.store.close()
+        os.unlink(self.db_path)
+        os.rmdir(self.tmp)
+
+    def test_show_stats(self):
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--db", self.db_path, "show", "stats"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("parsed_manpages:   2", result.output)
+        self.assertIn("ubuntu/25.10", result.output)
+
+    def test_show_distros(self):
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--db", self.db_path, "show", "distros"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("ubuntu/25.10", result.output)
+
+    def test_show_manpage(self):
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--db", self.db_path, "show", "manpage", "tar"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("name: tar", result.output)
+        self.assertIn("options: 2", result.output)
+        self.assertIn("--create", result.output)
+
+    def test_show_manpage_not_found(self):
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--db", self.db_path, "show", "manpage", "nonexistent"]
+        )
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("Not found", result.output)
+
+    def test_show_sections(self):
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--db", self.db_path, "show", "sections", "ubuntu", "25.10"]
+        )
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("1", result.output)
+
+    def test_show_manpages(self):
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--db", self.db_path, "show", "manpages", "ubuntu/25.10/1/"]
+        )
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("tar.1.gz", result.output)
+        self.assertIn("echo.1.gz", result.output)
+
+    def test_show_mappings(self):
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--db", self.db_path, "show", "mappings"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("tar ->", result.output)
+        self.assertIn("echo ->", result.output)
+
+
+# ---------------------------------------------------------------------------
+# TestDbCheckCli
+# ---------------------------------------------------------------------------
+
+
+class TestDbCheckCli(unittest.TestCase):
+    """CliRunner tests for the ``db-check`` command."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.db_path = os.path.join(self.tmp, "test.db")
+        self.store = Store.create(self.db_path)
+
+    def tearDown(self):
+        self.store.close()
+        os.unlink(self.db_path)
+        os.rmdir(self.tmp)
+
+    def test_clean_db(self):
+        self.store.add_manpage(_make_manpage("tar"), _make_raw())
+
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--db", self.db_path, "db-check"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("No issues found", result.output)
+
+    def test_reports_issues(self):
+        """Insert an orphaned mapping so db-check has something to report."""
+        self.store._conn.execute("PRAGMA foreign_keys = OFF")
+        self.store._conn.execute(
+            "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)",
+            ("ghost", "ubuntu/25.10/1/ghost.1.gz", 10),
+        )
+        self.store._conn.commit()
+        self.store._conn.execute("PRAGMA foreign_keys = ON")
+
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--db", self.db_path, "db-check"])
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("orphaned mapping", result.output)
+
+    def test_nonexistent_db(self):
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--db", "/tmp/does-not-exist-12345.db", "db-check"]
+        )
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("Database not found", result.output)
 
 
 if __name__ == "__main__":

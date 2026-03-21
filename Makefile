@@ -45,7 +45,7 @@ serve:
 	DB_PATH=$(or $(DB_PATH),explainshell.db) python runserver.py
 
 db-check:
-	python tools/db_check.py --db $(or $(DB_PATH),explainshell.db)
+	python -m explainshell.manager --db $(or $(DB_PATH),explainshell.db) db-check
 
 UBUNTU_ARCHIVE_DIR := manpages/ubuntu-manpages-operator
 UBUNTU_ARCHIVE_OUTPUT := $(UBUNTU_ARCHIVE_DIR)/output

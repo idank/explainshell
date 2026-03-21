@@ -1,7 +1,4 @@
-"""Check a manpage database for integrity issues.
-
-Usage:
-    python tools/db_check.py [--db PATH]
+"""Database integrity checks for explainshell.
 
 Checks:
     - Malformed source paths (must be distro/release/section/name.section.gz)
@@ -11,28 +8,20 @@ Checks:
     - positional set on flagged options (positional should only be on positional operands)
 """
 
-import argparse
 import json
 import os
 import sqlite3
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from explainshell import config, errors, util
 from explainshell.store import validate_source_path
 
-_RED = "\033[31m"
-_CYAN = "\033[36m"
-_RESET = "\033[0m"
 
-
-def check(db_path):
+def check(db_path: str) -> list[tuple[str, str]]:
     """Run integrity checks and return a list of (severity, message) tuples."""
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
 
-    issues = []
+    issues: list[tuple[str, str]] = []
 
     # 1. Malformed source paths.
     for row in conn.execute("SELECT source, name FROM parsed_manpages"):
@@ -49,7 +38,7 @@ def check(db_path):
 
     # 2. Shadowed duplicates: same name+section+distro from different sources.
     rows = conn.execute("SELECT source, name FROM parsed_manpages").fetchall()
-    seen = {}  # (name, section, distro, release) -> source
+    seen: dict[tuple[str, str, str, str], str] = {}
     for row in rows:
         source = row["source"]
         name = row["name"]
@@ -91,7 +80,13 @@ def check(db_path):
             continue
         try:
             opts = json.loads(opts_json)
-        except (json.JSONDecodeError, TypeError):
+        except (json.JSONDecodeError, TypeError) as exc:
+            issues.append(
+                (
+                    "error",
+                    f"corrupt options JSON: {row['name']!r} ({row['source']!r}): {exc}",
+                )
+            )
             continue
         for o in opts:
             short = o.get("short") or []
@@ -123,30 +118,3 @@ def check(db_path):
 
     conn.close()
     return issues
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="Check a manpage database for integrity issues."
-    )
-    parser.add_argument("--db", default=config.DB_PATH, help="SQLite DB path")
-    args = parser.parse_args()
-
-    issues = check(args.db)
-    if not issues:
-        print("No issues found.")
-        return 0
-
-    errors_count = sum(1 for sev, _ in issues if sev == "error")
-    warnings_count = sum(1 for sev, _ in issues if sev == "warning")
-    for severity, msg in issues:
-        label = (
-            f"{_RED}ERROR{_RESET}" if severity == "error" else f"{_CYAN}WARNING{_RESET}"
-        )
-        print(f"  {label}: {msg}")
-    print(f"\n{errors_count} error(s), {warnings_count} warning(s)")
-    return 1 if errors_count else 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
