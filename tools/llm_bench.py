@@ -47,7 +47,7 @@ from explainshell.extraction.types import ExtractionResult
 from explainshell.extraction.runner import run
 from explainshell.util import collect_gz_files
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("explainshell.tools.llm_bench")
 
 _RED = "\033[31m"
 _GREEN = "\033[32m"
@@ -498,12 +498,14 @@ if __name__ == "__main__":
     parser = _build_parser()
     args = parser.parse_args()
 
+    log_level = getattr(logging, args.log.upper())
     logging.basicConfig(
-        level=getattr(logging, args.log.upper()),
+        level=logging.WARNING,
         stream=sys.stdout,
-        format="[%(asctime)s] %(message)s",
+        format="%(asctime)s %(levelname)-5s [%(name)s] %(message)s",
         datefmt="%H:%M:%S",
     )
+    logging.getLogger("explainshell").setLevel(log_level)
 
     if args.command == "run":
         sys.exit(run_bench(args))
