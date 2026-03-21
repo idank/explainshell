@@ -39,7 +39,7 @@ $ pip install -r requirements.txt
 
 # Download the live db, or parse a manpage.
 $ make download-live-db
-$ python -m explainshell.manager --mode source manpages/ubuntu/26.04/1/tar.1.gz
+$ python -m explainshell.manager extract --mode source manpages/ubuntu/26.04/1/tar.1.gz
 
 # Run the web server
 $ make serve
@@ -79,11 +79,11 @@ This outputs gzipped manpages under `manpages/<distro>/<release>/`.
 Use the manager to extract options from gzipped manpages and save them to the database:
 
 ```bash
-$ python -m explainshell.manager --mode source manpages/ubuntu/26.04/1/tar.1.gz
+$ python -m explainshell.manager extract --mode source manpages/ubuntu/26.04/1/tar.1.gz
 
 # LLM extraction requires an API key
-$ python -m explainshell.manager --mode llm:openai/gpt-5-mini manpages/ubuntu/26.04/1/find.1.gz
-$ python -m explainshell.manager --mode llm:openai/gpt-5-mini --batch 50 manpages/ubuntu/26.04/
+$ python -m explainshell.manager extract --mode llm:openai/gpt-5-mini manpages/ubuntu/26.04/1/find.1.gz
+$ python -m explainshell.manager extract --mode llm:openai/gpt-5-mini --batch 50 manpages/ubuntu/26.04/
 ```
 
 The `--mode` flag selects the extraction strategy:
@@ -91,12 +91,17 @@ The `--mode` flag selects the extraction strategy:
 - `source` — parses roff macros directly. Fast, no external dependencies beyond `lexgrog`, but struggles with some manpage formats.
 - `llm:<provider/model>` — sends the manpage text (converted to markdown via `mandoc -T markdown`) to an LLM for extraction. More accurate, especially for complex or non-standard manpages. LLM output is postprocessed to sanitize LLM weirdness. Example: `--mode llm:openai/gpt-5-mini`.
 
-To process an entire directory of manpages (the manager accepts both files and directories):
+Other `extract` flags: `--overwrite` (re-process existing entries), `--dry-run` (extract without writing to DB), `-j <N>` (parallel workers), `--batch <N>` (provider batch API for LLM modes).
+
+To compare extraction results, use the `diff` subcommand:
 
 ```bash
-```
+# Diff against the database
+$ python -m explainshell.manager diff db --mode source manpages/ubuntu/26.04/1/tar.1.gz
 
-Other useful flags: `--overwrite` (re-process existing entries), `--dry-run` (extract without writing to DB), `--diff` (compare against DB or between extractors), `-j <N>` (parallel workers), `--batch <N>` (provider batch API for LLM modes).
+# Compare two extractors head-to-head
+$ python -m explainshell.manager diff extractors source..llm:openai/gpt-5-mini manpages/ubuntu/26.04/1/tar.1.gz
+```
 
 ## Tests
 

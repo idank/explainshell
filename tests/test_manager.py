@@ -1,8 +1,9 @@
 """Unit tests for explainshell.manager."""
 
-import argparse
 import unittest
 from unittest.mock import MagicMock, patch
+
+from click.testing import CliRunner
 
 from explainshell.extraction.types import (
     ExtractionResult,
@@ -19,21 +20,6 @@ from explainshell.extraction.types import (
 class TestBatchPerBatchDbWrites(unittest.TestCase):
     """Verify the manager writes results to the DB via on_result callback
     from run()."""
-
-    def _make_args(self, batch_size=2):
-        return argparse.Namespace(
-            mode="llm:openai/test-model",
-            db="/tmp/test.db",
-            overwrite=False,
-            drop=False,
-            dry_run=False,
-            diff=None,
-            debug_dir=None,
-            log="WARNING",
-            jobs=1,
-            batch=batch_size,
-            files=[],
-        )
 
     @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
@@ -95,11 +81,24 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
 
         mock_run.side_effect = _fake_run
 
-        from explainshell.manager import main
+        from explainshell.manager import cli
 
-        args = self._make_args(batch_size=2)
-        main(args)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--db",
+                "/tmp/test.db",
+                "extract",
+                "--mode",
+                "llm:openai/test-model",
+                "--batch",
+                "2",
+                "/fake/file.gz",
+            ],
+        )
 
+        self.assertEqual(result.exit_code, 0)
         # on_result is called 4 times (once per file), and each call writes to DB
         self.assertEqual(mock_store.add_manpage.call_count, 4)
         # Writes are incremental: 0 before first, 1 before second, etc.
@@ -172,15 +171,27 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
 
         mock_run.side_effect = _fake_run
 
-        from explainshell.manager import main
+        from explainshell.manager import cli
 
-        args = self._make_args(batch_size=2)
-        ret = main(args)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--db",
+                "/tmp/test.db",
+                "extract",
+                "--mode",
+                "llm:openai/test-model",
+                "--batch",
+                "2",
+                "/fake/file.gz",
+            ],
+        )
 
         # Only 2 successful files were written
         self.assertEqual(mock_store.add_manpage.call_count, 2)
         # Return code is non-zero because some files failed
-        self.assertNotEqual(ret, 0)
+        self.assertNotEqual(result.exit_code, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -190,22 +201,6 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
 
 class TestLlmManagerDryRun(unittest.TestCase):
     """Tests for --dry-run: extractor is called, DB is not written."""
-
-    def _make_args(self, dry_run=True, overwrite=False, mode="llm:test-model"):
-        args = argparse.Namespace(
-            mode=mode,
-            db="/tmp/test.db",
-            overwrite=overwrite,
-            drop=False,
-            dry_run=dry_run,
-            diff=None,
-            debug_dir="debug-output",
-            log="WARNING",
-            jobs=1,
-            batch=None,
-            files=[],
-        )
-        return args
 
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
@@ -225,14 +220,17 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_ext.extract.return_value = fake_result
         mock_make_ext.return_value = mock_ext
 
-        from explainshell.manager import main
+        from explainshell.manager import cli
 
-        args = self._make_args(dry_run=True)
-        ret = main(args)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["extract", "--mode", "llm:test-model", "--dry-run", "/fake/echo.1.gz"],
+        )
 
         mock_ext.extract.assert_called_once_with("/fake/echo.1.gz")
         mock_store_create.assert_not_called()
-        self.assertEqual(ret, 0)
+        self.assertEqual(result.exit_code, 0)
 
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
@@ -251,14 +249,17 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_ext.extract.side_effect = SkippedExtraction("no OPTIONS section")
         mock_make_ext.return_value = mock_ext
 
-        from explainshell.manager import main
+        from explainshell.manager import cli
 
-        args = self._make_args(dry_run=True)
-        ret = main(args)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["extract", "--mode", "llm:test-model", "--dry-run", "/fake/echo.1.gz"],
+        )
 
         mock_ext.extract.assert_called_once_with("/fake/echo.1.gz")
         mock_store_create.assert_not_called()
-        self.assertEqual(ret, 0)
+        self.assertEqual(result.exit_code, 0)
 
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
@@ -277,14 +278,17 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_ext.extract.side_effect = ExtractionError("parse error")
         mock_make_ext.return_value = mock_ext
 
-        from explainshell.manager import main
+        from explainshell.manager import cli
 
-        args = self._make_args(dry_run=True)
-        ret = main(args)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["extract", "--mode", "llm:test-model", "--dry-run", "/fake/echo.1.gz"],
+        )
 
         mock_ext.extract.assert_called_once_with("/fake/echo.1.gz")
         mock_store_create.assert_not_called()
-        self.assertEqual(ret, 1)
+        self.assertNotEqual(result.exit_code, 0)
 
     @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
@@ -333,12 +337,167 @@ class TestLlmManagerDryRun(unittest.TestCase):
 
         mock_run.side_effect = _fake_run
 
-        from explainshell.manager import main
+        from explainshell.manager import cli
 
-        args = self._make_args(dry_run=False)
-        main(args)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--db",
+                "/tmp/test.db",
+                "extract",
+                "--mode",
+                "llm:test-model",
+                "/fake/echo.1.gz",
+            ],
+        )
 
+        self.assertEqual(result.exit_code, 0)
         mock_store.add_manpage.assert_called_once_with(fake_mp, fake_raw)
+
+
+# ---------------------------------------------------------------------------
+# TestDiffDbCli
+# ---------------------------------------------------------------------------
+
+
+class TestDiffDbCli(unittest.TestCase):
+    """CliRunner tests for the ``diff db`` command surface."""
+
+    @patch("explainshell.manager.run_sequential")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch("explainshell.util.collect_gz_files")
+    @patch("explainshell.manager.config.source_from_path", return_value="fake/a.1.gz")
+    def test_diff_db_success(
+        self, mock_source, mock_collect, mock_store_create, mock_make_ext, mock_run_seq
+    ):
+        """Basic diff db invocation succeeds."""
+        mock_collect.return_value = ["/fake/a.1.gz"]
+        mock_store = MagicMock()
+        mock_store_create.return_value = mock_store
+        mock_make_ext.return_value = MagicMock()
+
+        from explainshell.extraction.types import BatchResult
+
+        mock_run_seq.return_value = BatchResult()
+
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--db", "/tmp/test.db", "diff", "db", "--mode", "source", "/fake/a.1.gz"],
+        )
+
+        self.assertEqual(result.exit_code, 0)
+        mock_store_create.assert_called_once_with("/tmp/test.db")
+        mock_make_ext.assert_called_once()
+
+    @patch("explainshell.manager.run_sequential")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch("explainshell.util.collect_gz_files")
+    @patch("explainshell.manager.config.source_from_path", return_value="fake/a.1.gz")
+    def test_diff_db_dry_run_threads_through(
+        self, mock_source, mock_collect, mock_store_create, mock_make_ext, mock_run_seq
+    ):
+        """--dry-run is forwarded to _run_diff_db."""
+        mock_collect.return_value = ["/fake/a.1.gz"]
+        mock_store_create.return_value = MagicMock()
+        mock_make_ext.return_value = MagicMock()
+
+        from explainshell.extraction.types import BatchResult
+
+        mock_run_seq.return_value = BatchResult()
+
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["diff", "db", "--mode", "source", "--dry-run", "/fake/a.1.gz"],
+        )
+
+        self.assertEqual(result.exit_code, 0)
+        # When dry_run=True, ExtractorConfig receives debug_dir=debug_dir
+        # (the default "debug-output") instead of None.
+        from explainshell.extraction import ExtractorConfig
+
+        call_args = mock_make_ext.call_args
+        cfg = call_args[0][1] if len(call_args[0]) > 1 else call_args[1].get("cfg")
+        if isinstance(cfg, ExtractorConfig):
+            self.assertEqual(cfg.debug_dir, "debug-output")
+
+    def test_diff_db_invalid_mode(self):
+        """Invalid mode is rejected."""
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["diff", "db", "--mode", "bogus", "/fake/a.1.gz"])
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("invalid mode", result.output)
+
+
+# ---------------------------------------------------------------------------
+# TestDiffExtractorsCli
+# ---------------------------------------------------------------------------
+
+
+class TestDiffExtractorsCli(unittest.TestCase):
+    """CliRunner tests for the ``diff extractors`` command surface."""
+
+    @patch("explainshell.manager.run_sequential")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.util.collect_gz_files")
+    @patch("explainshell.manager.config.source_from_path", return_value="fake/a.1.gz")
+    def test_diff_extractors_success(
+        self, mock_source, mock_collect, mock_make_ext, mock_run_seq
+    ):
+        """Basic diff extractors invocation succeeds."""
+        mock_collect.return_value = ["/fake/a.1.gz"]
+        mock_make_ext.return_value = MagicMock()
+
+        from explainshell.extraction.types import BatchResult
+
+        mock_run_seq.return_value = BatchResult()
+
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["diff", "extractors", "source..mandoc", "/fake/a.1.gz"],
+        )
+
+        self.assertEqual(result.exit_code, 0)
+        # Two extractors should be created (left and right).
+        self.assertEqual(mock_make_ext.call_count, 2)
+
+    def test_diff_extractors_invalid_spec_no_dots(self):
+        """Spec without '..' is rejected."""
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["diff", "extractors", "source-mandoc", "/fake/a.1.gz"]
+        )
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("invalid spec", result.output)
+
+    def test_diff_extractors_invalid_mode_in_spec(self):
+        """Invalid mode inside A..B spec is rejected."""
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["diff", "extractors", "source..bogus", "/fake/a.1.gz"]
+        )
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("invalid mode", result.output)
 
 
 # ---------------------------------------------------------------------------

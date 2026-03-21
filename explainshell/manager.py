@@ -2,20 +2,26 @@
 CLI entry point for man page extraction.
 
 Usage:
-    python -m explainshell.manager --mode <mode> [options] files...
+    python -m explainshell.manager <command> [options]
 
-Modes:
+Commands:
+    extract --mode <mode> files...       Extract options from manpages and store in DB
+    diff db --mode <mode> files...       Diff fresh extraction against the database
+    diff extractors <A..B> files...      Compare two extractors head-to-head
+
+Extraction modes (--mode):
     source              Use the roff parser
     mandoc              Use mandoc -T tree parser
     llm:<model>         Use an LLM (e.g. llm:openai/gpt-5-mini)
     hybrid:<model>      Try tree parser first, fall back to LLM when confidence is low
 """
 
-import argparse
 import logging
 import sys
 import threading
 import time
+
+import click
 
 from explainshell import config, errors, store, util
 from explainshell.diff import format_diff
@@ -55,7 +61,7 @@ def _already_stored(s: store.Store, short_path: str, name: str) -> bool:
 
 
 def _parse_mode(raw: str | None) -> tuple[str | None, str | None]:
-    """Parse a --mode value into (mode, model).
+    """Parse a mode value into (mode, model).
 
     Returns ("source", None), ("mandoc", None), ("llm", "<model>"),
     or ("hybrid", "<model>").
@@ -71,47 +77,18 @@ def _parse_mode(raw: str | None) -> tuple[str | None, str | None]:
     if raw.startswith("llm:"):
         model = raw[4:]
         if not model:
-            raise ValueError(
-                "--mode llm:<model> requires a model name (e.g. llm:gpt-5-mini)"
-            )
+            raise ValueError("llm:<model> requires a model name (e.g. llm:gpt-5-mini)")
         return "llm", model
     if raw.startswith("hybrid:"):
         model = raw[7:]
         if not model:
             raise ValueError(
-                "--mode hybrid:<model> requires a model name (e.g. hybrid:gpt-5-mini)"
+                "hybrid:<model> requires a model name (e.g. hybrid:gpt-5-mini)"
             )
         return "hybrid", model
     raise ValueError(
-        f"invalid --mode value: {raw!r} "
+        f"invalid mode value: {raw!r} "
         f"(expected 'source', 'mandoc', 'llm:<model>', or 'hybrid:<model>')"
-    )
-
-
-def _parse_diff(
-    raw: str | None,
-) -> tuple[str | None, tuple | None, tuple | None]:
-    """Parse a --diff value into a structured result.
-
-    Returns:
-        (None, None, None)                              for None/False (no diff)
-        ("db", None, None)                              for "db"
-        ("extractors", (modeA, modelA), (modeB, modelB))  for "A..B"
-
-    Raises ValueError on invalid input.
-    """
-    if not raw:
-        return (None, None, None)
-    if raw == "db":
-        return ("db", None, None)
-    if ".." in raw:
-        parts = raw.split("..", 1)
-        left_mode, left_model = _parse_mode(parts[0])
-        right_mode, right_model = _parse_mode(parts[1])
-        return ("extractors", (left_mode, left_model), (right_mode, right_model))
-    raise ValueError(
-        f"invalid --diff value: {raw!r} "
-        f"(expected 'db' or 'A..B' where A and B are extractor specs like 'source', 'mandoc', 'llm:<model>')"
     )
 
 
@@ -323,193 +300,22 @@ def _run_dry_run(
 
 
 # ---------------------------------------------------------------------------
-# Main
+# Summary helper
 # ---------------------------------------------------------------------------
 
 
-def main(args: argparse.Namespace) -> int:
-    log_level = getattr(logging, args.log.upper())
-    logging.basicConfig(
-        level=logging.WARNING,
-        stream=sys.stdout,
-        format="%(asctime)s %(levelname)-5s [%(name)s] %(message)s",
-        datefmt="%H:%M:%S",
-    )
-    logging.getLogger("explainshell").setLevel(log_level)
-
-    if args.jobs < 1:
-        print("error: --jobs must be >= 1", file=sys.stderr)
-        return 1
-
-    try:
-        mode, model = _parse_mode(args.mode)
-    except ValueError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 1
-
-    try:
-        diff_kind, diff_left, diff_right = _parse_diff(args.diff)
-    except ValueError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 1
-
-    is_extractor_diff = diff_kind == "extractors"
-
-    if is_extractor_diff and mode:
-        print("error: --mode is not allowed when using --diff A..B", file=sys.stderr)
-        return 1
-
-    if is_extractor_diff and args.dry_run:
-        print("error: --dry-run is not allowed when using --diff A..B", file=sys.stderr)
-        return 1
-
-    if not is_extractor_diff and args.diff is not None and not mode:
-        print("error: --mode is required when using --diff db", file=sys.stderr)
-        return 1
-
-    if not is_extractor_diff and not args.diff and not mode:
-        print("error: --mode is required", file=sys.stderr)
-        return 1
-
-    if args.drop and args.dry_run:
-        print("error: --drop and --dry-run are mutually exclusive", file=sys.stderr)
-        return 1
-
-    if args.drop and args.diff is not None:
-        print("error: --drop and --diff are mutually exclusive", file=sys.stderr)
-        return 1
-
-    if args.overwrite and args.dry_run:
-        print(
-            "error: --overwrite and --dry-run are mutually exclusive", file=sys.stderr
-        )
-        return 1
-
-    if args.overwrite and args.diff is not None:
-        print("error: --overwrite and --diff are mutually exclusive", file=sys.stderr)
-        return 1
-
-    if args.batch is not None:
-        if args.batch < 1:
-            print("error: --batch must be >= 1", file=sys.stderr)
-            return 1
-        if not model:
-            print(
-                "error: --batch requires a model in --mode (e.g. llm:gemini/<model> or llm:openai/<model>)",
-                file=sys.stderr,
-            )
-            return 1
-        if not model.startswith(("gemini/", "openai/")):
-            print(
-                "error: --batch only supports gemini/ and openai/ models",
-                file=sys.stderr,
-            )
-            return 1
-        if mode != "llm":
-            print("error: --batch only works with --mode llm:<model>", file=sys.stderr)
-            return 1
-        if args.diff is not None:
-            print("error: --batch and --diff are mutually exclusive", file=sys.stderr)
-            return 1
-
-    db_path = args.db
-
-    if args.drop and not args.dry_run:
-        answer = input("Really drop all data? (y/n) ").strip().lower()
-        if answer != "y":
-            print("Aborted.")
-            return 0
-
-    gz_files = util.collect_gz_files(args.files)
-    if not gz_files:
-        print("No .gz files found.", file=sys.stderr)
-        return 1
-
-    s = store.Store.create(db_path) if not args.dry_run or diff_kind == "db" else None
-    if s and args.drop:
-        s.drop(confirm=True)
-
-    t0 = time.monotonic()
-    prefilter_skipped = 0
-
-    from explainshell import manpage as _manpage
-
-    if is_extractor_diff:
-        batch_result = _run_diff_extractors(
-            gz_files, diff_left, diff_right, args.debug_dir
-        )
-    elif diff_kind == "db":
-        batch_result = _run_diff_db(
-            gz_files, mode, model, args.debug_dir, args.dry_run, s
-        )
-    elif args.dry_run:
-        batch_result = _run_dry_run(gz_files, mode, model, args.debug_dir)
-    else:
-        # Normal extraction: use runners.
-        debug_dir = args.debug_dir if args.dry_run else None
-        cfg = ExtractorConfig(model=model, debug_dir=debug_dir, fail_dir=args.debug_dir)
-        extractor = make_extractor(mode, cfg)
-
-        # Pre-filter already-stored files.
-        work_files: list[str] = []
-        for gz_path in gz_files:
-            short_path = config.source_from_path(gz_path)
-            name = _manpage.extract_name(gz_path)
-            if s and not args.overwrite and _already_stored(s, short_path, name):
-                logger.info("skipping %s (already stored)", short_path)
-                prefilter_skipped += 1
-            else:
-                work_files.append(gz_path)
-
-        total = len(gz_files)
-        file_counter = {"n": 0}
-        counter_lock = threading.Lock()
-
-        def on_start(gz_path: str) -> None:
-            with counter_lock:
-                file_counter["n"] += 1
-                n = file_counter["n"]
-            short_path = config.source_from_path(gz_path)
-            progress = f"[{n + prefilter_skipped}/{total}]"
-            logger.info("%s [%s] extracting...", progress, short_path)
-
-        def on_result(gz_path: str, entry: ExtractionResult) -> None:
-            if entry.outcome == ExtractionOutcome.SUCCESS:
-                if s:
-                    s.add_manpage(entry.mp, entry.raw)
-                short_path = config.source_from_path(gz_path)
-                logger.info(
-                    "[%s] done: %d option(s)",
-                    short_path,
-                    len(entry.mp.options),
-                )
-            elif entry.outcome == ExtractionOutcome.SKIPPED:
-                short_path = config.source_from_path(gz_path)
-                logger.info(
-                    "[%s] skipped: %s",
-                    short_path,
-                    entry.error or "unknown reason",
-                )
-
-        batch_result = run(
-            extractor,
-            work_files,
-            batch_size=args.batch,
-            jobs=args.jobs,
-            on_start=on_start,
-            on_result=on_result,
-        )
-
+def _log_summary(
+    batch_result: BatchResult,
+    prefilter_skipped: int,
+    elapsed: float,
+    dry_run: bool = False,
+) -> int:
+    """Log a summary of batch results and return the exit code."""
     added = batch_result.n_succeeded
     skipped = batch_result.n_skipped + prefilter_skipped
     failed = batch_result.n_failed
 
-    # Update multi-cmd mappings (only when writing to DB).
-    if s and added > 0 and not args.dry_run and not args.diff:
-        s.update_subcommand_mappings()
-
-    elapsed = time.monotonic() - t0
-    dry_run_note = " (dry run)" if args.dry_run else ""
+    dry_run_note = " (dry run)" if dry_run else ""
     token_note = ""
     if batch_result.stats.input_tokens:
         parts = [
@@ -533,68 +339,289 @@ def main(args: argparse.Namespace) -> int:
     return 0 if failed == 0 else 1
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Extract man page options and store the results."
+# ---------------------------------------------------------------------------
+# Logging setup
+# ---------------------------------------------------------------------------
+
+
+def _setup_logging(log_level_str: str) -> None:
+    """Configure logging for the CLI."""
+    log_level = getattr(logging, log_level_str.upper())
+    logging.basicConfig(
+        level=logging.WARNING,
+        stream=sys.stdout,
+        format="%(asctime)s %(levelname)-5s [%(name)s] %(message)s",
+        datefmt="%H:%M:%S",
     )
-    parser.add_argument(
-        "--mode",
-        help="Extraction mode: 'source', 'mandoc', 'llm:<model>', or 'hybrid:<model>'. Required unless --diff A..B.",
+    logging.getLogger("explainshell").setLevel(log_level)
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
+@click.group()
+@click.option("--db", default=config.DB_PATH, help="SQLite DB path.")
+@click.option("--log", "log_level", default="DEBUG", help="Log level (default: DEBUG).")
+@click.pass_context
+def cli(ctx: click.Context, db: str, log_level: str) -> None:
+    """Manage the explainshell manpage database."""
+    ctx.ensure_object(dict)
+    ctx.obj["db"] = db
+    ctx.obj["log_level"] = log_level
+    _setup_logging(log_level)
+
+
+@cli.command()
+@click.option(
+    "-m",
+    "--mode",
+    required=True,
+    help="Extraction strategy: source, mandoc, llm:<model>, or hybrid:<model>.",
+)
+@click.option("--dry-run", is_flag=True, help="Extract but don't write to DB.")
+@click.option(
+    "--overwrite", is_flag=True, help="Re-process pages already in the store."
+)
+@click.option(
+    "--drop",
+    is_flag=True,
+    help="Drop all data before processing (prompts for confirmation).",
+)
+@click.option(
+    "-j", "--jobs", type=int, default=1, help="Number of parallel workers (default: 1)."
+)
+@click.option(
+    "--batch",
+    type=int,
+    default=None,
+    help="Batch size for provider batch API (gemini/ and openai/ models).",
+)
+@click.option(
+    "--debug-dir",
+    default="debug-output",
+    help="Directory for debug files (default: debug-output).",
+)
+@click.argument("files", nargs=-1, required=True)
+@click.pass_context
+def extract(
+    ctx: click.Context,
+    mode: str,
+    files: tuple[str, ...],
+    dry_run: bool,
+    overwrite: bool,
+    drop: bool,
+    jobs: int,
+    batch: int | None,
+    debug_dir: str,
+) -> None:
+    """Extract options from manpages and store in DB."""
+    try:
+        parsed_mode, model = _parse_mode(mode)
+    except ValueError as e:
+        raise click.UsageError(str(e))
+
+    if jobs < 1:
+        raise click.UsageError("--jobs must be >= 1")
+    if drop and dry_run:
+        raise click.UsageError("--drop and --dry-run are mutually exclusive")
+    if overwrite and dry_run:
+        raise click.UsageError("--overwrite and --dry-run are mutually exclusive")
+    if batch is not None:
+        if batch < 1:
+            raise click.UsageError("--batch must be >= 1")
+        if not model:
+            raise click.UsageError(
+                "--batch requires a model (e.g. llm:gemini/<model> or llm:openai/<model>)"
+            )
+        if not model.startswith(("gemini/", "openai/")):
+            raise click.UsageError("--batch only supports gemini/ and openai/ models")
+        if parsed_mode != "llm":
+            raise click.UsageError("--batch only works with llm:<model> mode")
+
+    db_path = ctx.obj["db"]
+    gz_files = util.collect_gz_files(list(files))
+    if not gz_files:
+        raise click.UsageError("No .gz files found.")
+
+    if drop:
+        answer = input("Really drop all data? (y/n) ").strip().lower()
+        if answer != "y":
+            click.echo("Aborted.")
+            return
+
+    if dry_run:
+        t0 = time.monotonic()
+        batch_result = _run_dry_run(gz_files, parsed_mode, model, debug_dir)
+        elapsed = time.monotonic() - t0
+        rc = _log_summary(batch_result, 0, elapsed, dry_run=True)
+        if rc != 0:
+            sys.exit(rc)
+        return
+
+    s = store.Store.create(db_path)
+    if drop:
+        s.drop(confirm=True)
+
+    t0 = time.monotonic()
+    prefilter_skipped = 0
+
+    from explainshell import manpage as _manpage
+
+    cfg = ExtractorConfig(model=model, fail_dir=debug_dir)
+    extractor = make_extractor(parsed_mode, cfg)
+
+    # Pre-filter already-stored files.
+    work_files: list[str] = []
+    for gz_path in gz_files:
+        short_path = config.source_from_path(gz_path)
+        name = _manpage.extract_name(gz_path)
+        if not overwrite and _already_stored(s, short_path, name):
+            logger.info("skipping %s (already stored)", short_path)
+            prefilter_skipped += 1
+        else:
+            work_files.append(gz_path)
+
+    total = len(gz_files)
+    file_counter = {"n": 0}
+    counter_lock = threading.Lock()
+
+    def on_start(gz_path: str) -> None:
+        with counter_lock:
+            file_counter["n"] += 1
+            n = file_counter["n"]
+        short_path = config.source_from_path(gz_path)
+        progress = f"[{n + prefilter_skipped}/{total}]"
+        logger.info("%s [%s] extracting...", progress, short_path)
+
+    def on_result(gz_path: str, entry: ExtractionResult) -> None:
+        if entry.outcome == ExtractionOutcome.SUCCESS:
+            s.add_manpage(entry.mp, entry.raw)
+            short_path = config.source_from_path(gz_path)
+            logger.info(
+                "[%s] done: %d option(s)",
+                short_path,
+                len(entry.mp.options),
+            )
+        elif entry.outcome == ExtractionOutcome.SKIPPED:
+            short_path = config.source_from_path(gz_path)
+            logger.info(
+                "[%s] skipped: %s",
+                short_path,
+                entry.error or "unknown reason",
+            )
+
+    batch_result = run(
+        extractor,
+        work_files,
+        batch_size=batch,
+        jobs=jobs,
+        on_start=on_start,
+        on_result=on_result,
     )
-    parser.add_argument("--db", default=config.DB_PATH, help="SQLite DB path")
-    parser.add_argument(
-        "--overwrite",
-        action="store_true",
-        default=False,
-        help="Re-process pages already in the store",
-    )
-    parser.add_argument(
-        "--drop",
-        action="store_true",
-        default=False,
-        help="Drop all data before processing (prompts for confirmation)",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Run LLM extraction but do not write results to the DB",
-    )
-    parser.add_argument(
-        "--diff",
-        nargs="?",
-        const="db",
-        help="Diff mode: 'db' (default) compares fresh extraction against the DB; "
-        "'A..B' compares two extractors (e.g. source..mandoc, source..llm:gpt-5-mini)",
-    )
-    parser.add_argument(
-        "--debug-dir",
-        default="debug-output",
-        help="Directory for debug files in dry-run mode (default: debug-output)",
-    )
-    parser.add_argument(
-        "-j",
-        "--jobs",
-        type=int,
-        default=1,
-        help="Number of parallel workers (default: 1)",
-    )
-    parser.add_argument(
-        "--batch",
-        type=int,
-        default=None,
-        help="Batch size for provider batch API (works with gemini/ and openai/ models)",
-    )
-    parser.add_argument(
-        "--log",
-        default="DEBUG",
-        help="Log level (default: DEBUG)",
-    )
-    parser.add_argument("files", nargs="*", help=".gz files or directories")
-    return parser
+
+    added = batch_result.n_succeeded
+    if added > 0:
+        s.update_subcommand_mappings()
+
+    elapsed = time.monotonic() - t0
+    rc = _log_summary(batch_result, prefilter_skipped, elapsed)
+    if rc != 0:
+        sys.exit(rc)
+
+
+# ---------------------------------------------------------------------------
+# diff command group
+# ---------------------------------------------------------------------------
+
+
+@cli.group()
+def diff() -> None:
+    """Compare extraction results."""
+
+
+@diff.command("db")
+@click.option(
+    "-m",
+    "--mode",
+    required=True,
+    help="Extraction strategy: source, mandoc, llm:<model>, or hybrid:<model>.",
+)
+@click.option("--dry-run", is_flag=True, help="Enable extractor debug output.")
+@click.option(
+    "--debug-dir",
+    default="debug-output",
+    help="Directory for debug files (default: debug-output).",
+)
+@click.argument("files", nargs=-1, required=True)
+@click.pass_context
+def diff_db_cmd(
+    ctx: click.Context,
+    mode: str,
+    files: tuple[str, ...],
+    dry_run: bool,
+    debug_dir: str,
+) -> None:
+    """Diff fresh extraction against the database."""
+    try:
+        parsed_mode, model = _parse_mode(mode)
+    except ValueError as e:
+        raise click.UsageError(str(e))
+
+    db_path = ctx.obj["db"]
+    gz_files = util.collect_gz_files(list(files))
+    if not gz_files:
+        raise click.UsageError("No .gz files found.")
+
+    s = store.Store.create(db_path)
+    t0 = time.monotonic()
+    batch_result = _run_diff_db(gz_files, parsed_mode, model, debug_dir, dry_run, s)
+    elapsed = time.monotonic() - t0
+    rc = _log_summary(batch_result, 0, elapsed)
+    if rc != 0:
+        sys.exit(rc)
+
+
+@diff.command("extractors")
+@click.argument("spec")
+@click.argument("files", nargs=-1, required=True)
+@click.option(
+    "--debug-dir",
+    default="debug-output",
+    help="Directory for debug files (default: debug-output).",
+)
+def diff_extractors_cmd(
+    spec: str,
+    files: tuple[str, ...],
+    debug_dir: str,
+) -> None:
+    """Compare two extractors head-to-head.
+
+    SPEC is A..B format (e.g. source..mandoc, source..llm:openai/gpt-5-mini).
+    """
+    if ".." not in spec:
+        raise click.UsageError(
+            f"invalid spec: {spec!r} (expected A..B, e.g. source..mandoc)"
+        )
+    parts = spec.split("..", 1)
+    try:
+        left = _parse_mode(parts[0])
+        right = _parse_mode(parts[1])
+    except ValueError as e:
+        raise click.UsageError(str(e))
+
+    gz_files = util.collect_gz_files(list(files))
+    if not gz_files:
+        raise click.UsageError("No .gz files found.")
+
+    t0 = time.monotonic()
+    batch_result = _run_diff_extractors(gz_files, left, right, debug_dir)
+    elapsed = time.monotonic() - t0
+    rc = _log_summary(batch_result, 0, elapsed)
+    if rc != 0:
+        sys.exit(rc)
 
 
 if __name__ == "__main__":
-    parser = _build_parser()
-    args = parser.parse_args()
-    sys.exit(main(args))
+    cli()

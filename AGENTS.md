@@ -128,13 +128,13 @@ make ubuntu-archive UBUNTU_RELEASE=questing
 make arch-archive
 
 # Process a man page into the database
-python -m explainshell.manager --mode source /path/to/manpage.1.gz
+python -m explainshell.manager extract --mode source /path/to/manpage.1.gz
 ```
 
 ## Project Structure
 
 - `explainshell/` - Main package
-  - `manager.py` - CLI entry point for man page processing (`python -m explainshell.manager`)
+  - `manager.py` - CLI entry point for man page processing (`python -m explainshell.manager <command>`)
   - `matcher.py` - Core logic: walks bash AST and matches tokens to help text
   - `models.py` - Core domain types (Option, ParsedManpage, RawManpage) as Pydantic/dataclass models
   - `store.py` - SQLite storage layer
@@ -181,15 +181,19 @@ python -m explainshell.manager --mode source /path/to/manpage.1.gz
 
 `manager.py` orchestrates: raw .gz → parse → extract options → store in SQLite.
 
-Extraction modes controlled by `--mode`:
-- `--mode source` - Parses roff macros directly via `roff_parser.py` + `extraction/source.py`
-- `--mode mandoc` - Uses mandoc -T tree parser via `extraction/mandoc.py`
-- `--mode llm:<provider/model>` - Sends man page text to an LLM (e.g., `llm:openai/gpt-5-mini`). Supports OpenAI, Gemini, and LiteLLM (fallback) providers.
-- `--mode hybrid:<provider/model>` - Tries mandoc first, falls back to LLM on low confidence
+The CLI uses subcommands. Main commands:
 
-Manager key flags: `--overwrite`, `--dry-run`, `--diff [db|A..B]`, `--debug-dir`, `--drop`, `-j/--jobs <int>` (parallel extraction, default 1)
+- `extract --mode <mode> [options] files...` — Extract options from manpages and store in DB
+- `diff db --mode <mode> files...` — Diff fresh extraction against the database
+- `diff extractors <A..B> files...` — Compare two extractors head-to-head
 
-Flag validation: `--mode` and `--dry-run` cannot be combined with `--diff A..B`; `--drop`, `--overwrite`, and `--diff` are mutually exclusive with each other and with `--dry-run`.
+Extraction modes (passed via `--mode` to `extract` or `diff db`):
+- `source` - Parses roff macros directly via `roff_parser.py` + `extraction/source.py`
+- `mandoc` - Uses mandoc -T tree parser via `extraction/mandoc.py`
+- `llm:<provider/model>` - Sends man page text to an LLM (e.g., `llm:openai/gpt-5-mini`). Supports OpenAI, Gemini, and LiteLLM (fallback) providers.
+- `hybrid:<provider/model>` - Tries mandoc first, falls back to LLM on low confidence
+
+Extract flags: `--overwrite`, `--dry-run`, `--debug-dir`, `--drop`, `-j/--jobs <int>` (parallel extraction, default 1), `--batch <int>` (provider batch API)
 
 ### Data Model (models.py, store.py)
 
