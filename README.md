@@ -76,10 +76,16 @@ This outputs gzipped manpages under `manpages/<distro>/<release>/`.
 
 ### Processing manpages
 
+The manager CLI requires a database path for most commands. Set it via the `DB_PATH` environment variable or pass `--db <path>` on the command line. Commands that don't need a database (e.g. `extract --dry-run`, `diff extractors`) work without it.
+
 Use the manager to extract options from gzipped manpages and save them to the database:
 
 ```bash
-$ python -m explainshell.manager extract --mode source manpages/ubuntu/26.04/1/tar.1.gz
+# Uses the source extractor and writes the result to test.db.
+$ python -m explainshell.manager --db test.db extract --mode source manpages/ubuntu/26.04/1/tar.1.gz
+
+# Or set DB_PATH:
+$ export DB_PATH=$(pwd)/test.db
 
 # LLM extraction requires an API key
 $ python -m explainshell.manager extract --mode llm:openai/gpt-5-mini manpages/ubuntu/26.04/1/find.1.gz
@@ -101,6 +107,22 @@ $ python -m explainshell.manager diff db --mode source manpages/ubuntu/26.04/1/t
 
 # Compare two extractors head-to-head
 $ python -m explainshell.manager diff extractors source..llm:openai/gpt-5-mini manpages/ubuntu/26.04/1/tar.1.gz
+```
+
+### Querying the database
+
+```bash
+# Show aggregate stats
+$ python -m explainshell.manager show stats
+
+# Look up a command
+$ python -m explainshell.manager show manpage tar
+
+# List available distros
+$ python -m explainshell.manager show distros
+
+# Run integrity checks
+$ python -m explainshell.manager db-check
 ```
 
 ## Tests

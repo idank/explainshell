@@ -17,6 +17,7 @@ Extraction modes (--mode):
 """
 
 import logging
+import os
 import sys
 import threading
 import time
@@ -365,12 +366,25 @@ def _setup_logging(log_level_str: str) -> None:
 @click.option("--db", default=config.DB_PATH, help="SQLite DB path.")
 @click.option("--log", "log_level", default="DEBUG", help="Log level (default: DEBUG).")
 @click.pass_context
-def cli(ctx: click.Context, db: str, log_level: str) -> None:
+def cli(ctx: click.Context, db: str | None, log_level: str) -> None:
     """Manage the explainshell manpage database."""
     ctx.ensure_object(dict)
     ctx.obj["db"] = db
     ctx.obj["log_level"] = log_level
     _setup_logging(log_level)
+
+
+def _require_db(ctx: click.Context, *, must_exist: bool = False) -> str:
+    """Return the --db path or raise a UsageError if not set.
+
+    When *must_exist* is True, also verify the file is present on disk.
+    """
+    db = ctx.obj["db"]
+    if not db:
+        raise click.UsageError("No database path. Set DB_PATH or pass --db.")
+    if must_exist and not os.path.isfile(db):
+        raise click.UsageError(f"Database not found: {db}")
+    return db
 
 
 @cli.command()
@@ -440,7 +454,6 @@ def extract(
         if parsed_mode != "llm":
             raise click.UsageError("--batch only works with llm:<model> mode")
 
-    db_path = ctx.obj["db"]
     gz_files = util.collect_gz_files(list(files))
     if not gz_files:
         raise click.UsageError("No .gz files found.")
@@ -460,6 +473,7 @@ def extract(
             sys.exit(rc)
         return
 
+    db_path = _require_db(ctx)
     s = store.Store.create(db_path)
     if drop:
         s.drop(confirm=True)
@@ -569,7 +583,7 @@ def diff_db_cmd(
     except ValueError as e:
         raise click.UsageError(str(e))
 
-    db_path = ctx.obj["db"]
+    db_path = _require_db(ctx)
     gz_files = util.collect_gz_files(list(files))
     if not gz_files:
         raise click.UsageError("No .gz files found.")
@@ -621,6 +635,183 @@ def diff_extractors_cmd(
     rc = _log_summary(batch_result, 0, elapsed)
     if rc != 0:
         sys.exit(rc)
+
+
+# ---------------------------------------------------------------------------
+# show command group
+# ---------------------------------------------------------------------------
+
+
+@cli.group()
+def show() -> None:
+    """Query the manpage database."""
+
+
+@show.command("manpage")
+@click.argument("name")
+@click.option("--raw", is_flag=True, help="Also print raw manpage text.")
+@click.pass_context
+def show_manpage(ctx: click.Context, name: str, raw: bool) -> None:
+    """Look up a command and display its extracted options."""
+    s = store.Store(_require_db(ctx, must_exist=True), read_only=True)
+    try:
+        results = s.find_man_page(name)
+    except errors.ProgramDoesNotExist:
+        click.echo(f"Not found: {name}", err=True)
+        sys.exit(1)
+    mp = results[0]
+    click.echo(f"source: {mp.source}")
+    click.echo(f"name: {mp.name}")
+    click.echo(f"synopsis: {mp.synopsis}")
+    click.echo(f"aliases: {mp.aliases}")
+    click.echo(f"nested_cmd: {mp.nested_cmd}")
+    click.echo(f"has_subcommands: {mp.has_subcommands}")
+    click.echo(f"dashless_opts: {mp.dashless_opts}")
+    click.echo(f"extractor: {mp.extractor}")
+    click.echo(f"options: {len(mp.options)}")
+    click.echo("")
+    for i, opt in enumerate(mp.options):
+        if i > 0:
+            click.echo("")
+        click.echo(f"  [{i}]")
+        click.echo(f"      short: {opt.short}")
+        click.echo(f"      long: {opt.long}")
+        click.echo(f"      has_argument: {opt.has_argument}")
+        if opt.positional:
+            click.echo(f"      positional: {opt.positional}")
+        if opt.nested_cmd:
+            click.echo(f"      nested_cmd: {opt.nested_cmd}")
+        desc = opt.text.strip()
+        for line in desc.split("\n"):
+            click.echo(f"      {line}")
+
+    if raw:
+        raw_mp = s.get_raw_manpage(mp.source)
+        if raw_mp:
+            click.echo("")
+            click.echo("--- raw manpage ---")
+            click.echo(raw_mp.source_text)
+        else:
+            click.echo("")
+            click.echo("(no raw manpage stored)")
+
+    if len(results) > 1:
+        click.echo("")
+        click.echo("also available:")
+        for alt in results[1:]:
+            click.echo(f"  {alt.source} ({alt.name})")
+
+
+@show.command("distros")
+@click.pass_context
+def show_distros(ctx: click.Context) -> None:
+    """List available distributions."""
+    s = store.Store(_require_db(ctx, must_exist=True), read_only=True)
+    for distro, release in s.distros():
+        click.echo(f"{distro}/{release}")
+
+
+@show.command("sections")
+@click.argument("distro")
+@click.argument("release")
+@click.pass_context
+def show_sections(ctx: click.Context, distro: str, release: str) -> None:
+    """List sections for a distro/release."""
+    s = store.Store(_require_db(ctx, must_exist=True), read_only=True)
+    for section in s.list_sections(distro, release):
+        click.echo(section)
+
+
+@show.command("manpages")
+@click.argument("prefix")
+@click.pass_context
+def show_manpages(ctx: click.Context, prefix: str) -> None:
+    """List manpages matching a source prefix."""
+    s = store.Store(_require_db(ctx, must_exist=True), read_only=True)
+    for source in s.list_manpages(prefix):
+        click.echo(source)
+
+
+@show.command("mappings")
+@click.option("--prefix", default=None, help="Filter by source prefix.")
+@click.pass_context
+def show_mappings(ctx: click.Context, prefix: str | None) -> None:
+    """List command->manpage mappings."""
+    s = store.Store(_require_db(ctx, must_exist=True), read_only=True)
+    for src, dst in s.mappings():
+        if prefix is None or dst.startswith(prefix):
+            click.echo(f"{src} -> {dst}")
+
+
+@show.command("stats")
+@click.pass_context
+def show_stats(ctx: click.Context) -> None:
+    """Print aggregate database statistics."""
+    import sqlite3
+
+    db_path = _require_db(ctx, must_exist=True)
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+
+    n_manpages = conn.execute("SELECT COUNT(*) AS c FROM manpages").fetchone()["c"]
+    n_parsed = conn.execute("SELECT COUNT(*) AS c FROM parsed_manpages").fetchone()["c"]
+    n_mappings = conn.execute("SELECT COUNT(*) AS c FROM mappings").fetchone()["c"]
+    click.echo(f"manpages (raw):    {n_manpages}")
+    click.echo(f"parsed_manpages:   {n_parsed}")
+    click.echo(f"mappings:          {n_mappings}")
+
+    # Per-distro breakdown.
+    rows = conn.execute("""
+        SELECT
+            SUBSTR(source, 1, INSTR(source, '/') - 1) as distro,
+            SUBSTR(source, INSTR(source, '/') + 1,
+                   INSTR(SUBSTR(source, INSTR(source, '/') + 1), '/') - 1) as release,
+            COUNT(*) as cnt
+        FROM parsed_manpages
+        GROUP BY distro, release
+        ORDER BY distro, release
+    """).fetchall()
+    if rows:
+        click.echo("")
+        click.echo("per distro/release:")
+        for row in rows:
+            click.echo(f"  {row['distro']}/{row['release']}: {row['cnt']}")
+
+    conn.close()
+
+
+# ---------------------------------------------------------------------------
+# db-check command
+# ---------------------------------------------------------------------------
+
+_DB_CHECK_RED = "\033[31m"
+_DB_CHECK_CYAN = "\033[36m"
+_DB_CHECK_RESET = "\033[0m"
+
+
+@cli.command("db-check")
+@click.pass_context
+def db_check_cmd(ctx: click.Context) -> None:
+    """Run database integrity checks."""
+    from explainshell.db_check import check as run_db_check
+
+    issues = run_db_check(_require_db(ctx, must_exist=True))
+    if not issues:
+        click.echo("No issues found.")
+        return
+
+    n_errors = sum(1 for sev, _ in issues if sev == "error")
+    n_warnings = sum(1 for sev, _ in issues if sev == "warning")
+    for severity, msg in issues:
+        label = (
+            f"{_DB_CHECK_RED}ERROR{_DB_CHECK_RESET}"
+            if severity == "error"
+            else f"{_DB_CHECK_CYAN}WARNING{_DB_CHECK_RESET}"
+        )
+        click.echo(f"  {label}: {msg}")
+    click.echo(f"\n{n_errors} error(s), {n_warnings} warning(s)")
+    if n_errors:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

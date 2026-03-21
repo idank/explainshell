@@ -5,7 +5,7 @@ import pytest
 
 from explainshell.models import ParsedManpage, RawManpage
 from explainshell.store import Store
-from tools.db_check import check as db_check
+from explainshell.db_check import check as db_check
 
 
 def _make_raw():

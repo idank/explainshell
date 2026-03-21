@@ -135,6 +135,7 @@ python -m explainshell.manager extract --mode source /path/to/manpage.1.gz
 
 - `explainshell/` - Main package
   - `manager.py` - CLI entry point for man page processing (`python -m explainshell.manager <command>`)
+  - `db_check.py` - Database integrity checks (used by `manager.py db-check`)
   - `matcher.py` - Core logic: walks bash AST and matches tokens to help text
   - `models.py` - Core domain types (Option, ParsedManpage, RawManpage) as Pydantic/dataclass models
   - `store.py` - SQLite storage layer
@@ -164,7 +165,6 @@ python -m explainshell.manager extract --mode source /path/to/manpage.1.gz
       - `providers/` - LLM provider implementations (OpenAI, Gemini, LiteLLM fallback)
   - `web/views.py` - Flask routes with URL-based distro/release routing
 - `tools/` - Standalone scripts
-  - `db_check.py` - DB integrity checker (malformed paths, shadowed duplicates, orphans)
   - `llm_bench.py` - LLM extractor benchmark tool (run/compare metrics reports)
   - `fetch_manned.py` - Fetch man pages from manned.org weekly dump
   - `mandoc-with-markdown` - Custom mandoc binary with markdown output support
@@ -181,11 +181,13 @@ python -m explainshell.manager extract --mode source /path/to/manpage.1.gz
 
 `manager.py` orchestrates: raw .gz → parse → extract options → store in SQLite.
 
-The CLI uses subcommands. Main commands:
+The CLI uses subcommands. Most commands require a database path, set via `DB_PATH` env var or `--db <path>`. Commands that don't need a database (e.g. `extract --dry-run`, `diff extractors`) work without it. Main commands:
 
 - `extract --mode <mode> [options] files...` — Extract options from manpages and store in DB
 - `diff db --mode <mode> files...` — Diff fresh extraction against the database
 - `diff extractors <A..B> files...` — Compare two extractors head-to-head
+- `show {manpage,distros,sections,manpages,mappings,stats}` — Query the database
+- `db-check` — Run database integrity checks
 
 Extraction modes (passed via `--mode` to `extract` or `diff db`):
 - `source` - Parses roff macros directly via `roff_parser.py` + `extraction/source.py`
