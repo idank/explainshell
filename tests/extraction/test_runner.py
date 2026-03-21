@@ -1,5 +1,6 @@
 """Tests for explainshell.extraction.runner — batch orchestration."""
 
+import threading
 import unittest
 from unittest.mock import MagicMock
 
@@ -549,6 +550,216 @@ class TestRunDispatcher(unittest.TestCase):
         # batch_provider was used (batch mode), not thread pool
         bp.submit_batch.assert_called_once()
         self.assertEqual(batch.n_succeeded, 1)
+
+
+class TestParallelBatchMode(unittest.TestCase):
+    """Tests for run_batch with jobs > 1."""
+
+    def test_parallel_batch_correct_results(self):
+        """With jobs=2 and multiple batches, all files are extracted correctly."""
+        prepared_a = _make_prepared("alpha")
+        prepared_b = _make_prepared("bravo")
+        prepared_c = _make_prepared("charlie")
+        gz_a = "/fake/alpha.1.gz"
+        gz_b = "/fake/bravo.1.gz"
+        gz_c = "/fake/charlie.1.gz"
+
+        ext = _make_extractor({gz_a: prepared_a, gz_b: prepared_b, gz_c: prepared_c})
+
+        # Each batch gets its own make_poll_client + collect_results call.
+        # batch_size=1 → 3 batches, jobs=2 → 2 concurrent.
+        bp = MagicMock()
+        bp.make_poll_client.return_value = MagicMock()
+        bp.submit_batch.return_value = "job-id"
+        bp.poll_batch.return_value = MagicMock()
+        bp.collect_results.return_value = BatchResults(
+            {"0:0": '{"options":[],"dashless_opts":false}'},
+            TokenUsage(100, 50),
+        )
+        ext.batch_provider = bp
+
+        batch, files = run_batch_collected(
+            ext, [gz_a, gz_b, gz_c], batch_size=1, jobs=2
+        )
+
+        self.assertEqual(batch.n_succeeded, 3)
+        self.assertEqual(batch.n_failed, 0)
+        paths = {f.gz_path for f in files}
+        self.assertEqual(paths, {gz_a, gz_b, gz_c})
+        # Token usage accumulated from 3 batches.
+        self.assertEqual(batch.stats.input_tokens, 300)
+        self.assertEqual(batch.stats.output_tokens, 150)
+
+    def test_parallel_batch_failure_isolation(self):
+        """With jobs=2, a failing batch produces FAILED entries while
+        other batches succeed."""
+        prepared_a = _make_prepared("alpha")
+        prepared_b = _make_prepared("bravo")
+        gz_a = "/fake/alpha.1.gz"
+        gz_b = "/fake/bravo.1.gz"
+
+        ext = _make_extractor({gz_a: prepared_a, gz_b: prepared_b})
+        bp = MagicMock()
+        bp.make_poll_client.return_value = MagicMock()
+
+        lock = threading.Lock()
+        call_count = {"n": 0}
+
+        def _submit_batch(requests):
+            with lock:
+                call_count["n"] += 1
+                n = call_count["n"]
+            if n == 2:
+                raise ConnectionError("lost connection")
+            return "job-1"
+
+        bp.submit_batch.side_effect = _submit_batch
+        bp.poll_batch.return_value = MagicMock()
+        bp.collect_results.return_value = BatchResults(
+            {"0:0": '{"options":[],"dashless_opts":false}'},
+            TokenUsage(100, 50),
+        )
+        ext.batch_provider = bp
+
+        # batch_size=1 → 2 batches, jobs=2 → both in parallel.
+        batch, files = run_batch_collected(ext, [gz_a, gz_b], batch_size=1, jobs=2)
+
+        self.assertEqual(batch.n_succeeded, 1)
+        self.assertEqual(batch.n_failed, 1)
+        failed = [f for f in files if f.outcome == ExtractionOutcome.FAILED]
+        self.assertEqual(len(failed), 1)
+        self.assertIn("lost connection", failed[0].error)
+        # Prep stats preserved on failed entry.
+        self.assertIsNotNone(failed[0].stats)
+        self.assertEqual(failed[0].stats.plain_text_len, 100)
+
+    def test_parallel_callbacks_on_main_thread(self):
+        """on_result is always called from the main thread, even with jobs > 1."""
+        prepared_a = _make_prepared("alpha")
+        prepared_b = _make_prepared("bravo")
+        gz_a = "/fake/alpha.1.gz"
+        gz_b = "/fake/bravo.1.gz"
+
+        ext = _make_extractor({gz_a: prepared_a, gz_b: prepared_b})
+        bp = MagicMock()
+        bp.make_poll_client.return_value = MagicMock()
+        bp.submit_batch.return_value = "job-id"
+        bp.poll_batch.return_value = MagicMock()
+        bp.collect_results.return_value = BatchResults(
+            {"0:0": '{"options":[],"dashless_opts":false}'},
+            TokenUsage(100, 50),
+        )
+        ext.batch_provider = bp
+
+        callback_threads: list[threading.Thread] = []
+
+        from explainshell.extraction.runner import run_batch
+
+        run_batch(
+            ext,
+            [gz_a, gz_b],
+            batch_size=1,
+            jobs=2,
+            on_result=lambda _p, _e: callback_threads.append(
+                threading.current_thread()
+            ),
+        )
+
+        main_thread = threading.main_thread()
+        self.assertGreaterEqual(len(callback_threads), 2)
+        for t in callback_threads:
+            self.assertIs(t, main_thread)
+
+    def test_parallel_make_poll_client_failure(self):
+        """make_poll_client failure in a worker produces FAILED entries for
+        that batch; other batches are unaffected."""
+        prepared_a = _make_prepared("alpha")
+        prepared_b = _make_prepared("bravo")
+        gz_a = "/fake/alpha.1.gz"
+        gz_b = "/fake/bravo.1.gz"
+
+        ext = _make_extractor({gz_a: prepared_a, gz_b: prepared_b})
+        bp = MagicMock()
+
+        lock = threading.Lock()
+        call_count = {"n": 0}
+
+        def _make_poll_client():
+            with lock:
+                call_count["n"] += 1
+                n = call_count["n"]
+            if n == 2:
+                raise RuntimeError("auth failed")
+            return MagicMock()
+
+        bp.make_poll_client.side_effect = _make_poll_client
+        bp.submit_batch.return_value = "job-id"
+        bp.poll_batch.return_value = MagicMock()
+        bp.collect_results.return_value = BatchResults(
+            {"0:0": '{"options":[],"dashless_opts":false}'},
+            TokenUsage(100, 50),
+        )
+        ext.batch_provider = bp
+
+        batch, files = run_batch_collected(ext, [gz_a, gz_b], batch_size=1, jobs=2)
+
+        self.assertEqual(batch.n_succeeded, 1)
+        self.assertEqual(batch.n_failed, 1)
+        failed = [f for f in files if f.outcome == ExtractionOutcome.FAILED]
+        self.assertEqual(len(failed), 1)
+        self.assertIn("auth failed", failed[0].error)
+        self.assertIsNotNone(failed[0].stats)
+
+    def test_jobs_one_identical_to_sequential_batch(self):
+        """jobs=1 produces identical results to the default batch path."""
+        prepared_a = _make_prepared("alpha")
+        prepared_b = _make_prepared("bravo")
+        gz_a = "/fake/alpha.1.gz"
+        gz_b = "/fake/bravo.1.gz"
+
+        ext = _make_extractor({gz_a: prepared_a, gz_b: prepared_b})
+        bp = _make_batch_provider(
+            responses={
+                "0:0": '{"options":[],"dashless_opts":false}',
+                "1:0": '{"options":[],"dashless_opts":false}',
+            }
+        )
+        ext.batch_provider = bp
+
+        batch, files = run_batch_collected(ext, [gz_a, gz_b], jobs=1)
+
+        self.assertEqual(batch.n_succeeded, 2)
+        self.assertEqual(batch.n_failed, 0)
+        self.assertEqual(batch.stats.input_tokens, 500)
+        self.assertEqual(batch.stats.output_tokens, 200)
+        for f in files:
+            self.assertEqual(f.outcome, ExtractionOutcome.SUCCESS)
+
+    def test_dispatcher_forwards_jobs_to_batch(self):
+        """run() with batch_size and jobs > 1 forwards jobs to run_batch."""
+        prepared_a = _make_prepared("alpha")
+        prepared_b = _make_prepared("bravo")
+        gz_a = "/fake/alpha.1.gz"
+        gz_b = "/fake/bravo.1.gz"
+
+        ext = _make_extractor({gz_a: prepared_a, gz_b: prepared_b})
+        bp = MagicMock()
+        bp.make_poll_client.return_value = MagicMock()
+        bp.submit_batch.return_value = "job-id"
+        bp.poll_batch.return_value = MagicMock()
+        bp.collect_results.return_value = BatchResults(
+            {"0:0": '{"options":[],"dashless_opts":false}'},
+            TokenUsage(100, 50),
+        )
+        ext.batch_provider = bp
+
+        # batch_size=1 → 2 batches. With jobs=2, both submitted.
+        batch, files = run_collected(ext, [gz_a, gz_b], batch_size=1, jobs=2)
+
+        self.assertEqual(batch.n_succeeded, 2)
+        # make_poll_client called per batch (not once for all).
+        self.assertEqual(bp.make_poll_client.call_count, 2)
+        self.assertEqual(bp.submit_batch.call_count, 2)
 
 
 class TestGroupWorkItems(unittest.TestCase):

@@ -163,7 +163,9 @@ def run_bench(args: argparse.Namespace) -> int:
         file_metrics[name] = entry
 
     t0 = time.monotonic()
-    result = run(extractor, gz_files, batch_size=args.batch, on_result=_on_result)
+    result = run(
+        extractor, gz_files, batch_size=args.batch, jobs=args.jobs, on_result=_on_result
+    )
     elapsed = time.monotonic() - t0
 
     # Build aggregate.
@@ -195,6 +197,7 @@ def run_bench(args: argparse.Namespace) -> int:
         "git": _git_metadata(),
         "batch_mode": args.batch is not None,
         "batch_size": args.batch,
+        "jobs": args.jobs,
         "aggregate": agg,
         "files": file_metrics,
     }
@@ -455,6 +458,13 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Use provider batch API with this batch size (e.g. 50)",
+    )
+    run_p.add_argument(
+        "--jobs",
+        "-j",
+        type=int,
+        default=1,
+        help="Number of concurrent batch jobs (default: 1)",
     )
     run_p.add_argument(
         "--output",
