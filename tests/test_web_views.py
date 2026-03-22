@@ -57,14 +57,9 @@ class TestExplainRouter(unittest.TestCase):
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b"bar", rv.data)
 
-    # -- URL precedence over cookies --
-
-    def test_url_distro_takes_precedence_over_cookies(self):
-        self.client.set_cookie("distro", "debian")
-        self.client.set_cookie("release", "12")
+    def test_url_distro_scoping(self):
         rv = self.client.get("/explain/ubuntu/25.10?cmd=bar+-a")
         self.assertEqual(rv.status_code, 200)
-        # The page should render correctly (using ubuntu/25.10 from URL)
         self.assertIn(b"bar", rv.data)
 
     # -- explain_prefix in rendered HTML --

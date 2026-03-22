@@ -36,13 +36,9 @@ def _explain_prefix(distro, release):
 
 
 def _get_distro_release(url_distro=None, url_release=None):
-    """Resolve distro/release: URL params > cookies > default."""
+    """Resolve distro/release: URL params > default."""
     if url_distro and url_release:
         return url_distro, url_release
-    distro = request.cookies.get("distro")
-    release = request.cookies.get("release")
-    if distro and release:
-        return distro, release
     pairs = list(get_cached_distros())
     if pairs:
         pairs.sort(key=lambda dr: (dr[0] != "ubuntu", dr[1]), reverse=True)
