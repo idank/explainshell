@@ -373,6 +373,64 @@ class TestMultiChunkFinalize(unittest.TestCase):
         self.assertIn("missing 'options' key", str(ctx.exception))
         self.assertIsNotNone(ctx.exception.raw_response)
 
+    @patch(
+        "explainshell.extraction.common.roff_utils.detect_nested_cmd",
+        return_value=False,
+    )
+    @patch("explainshell.extraction.common.manpage.get_synopsis_and_aliases")
+    @patch("explainshell.extraction.common.gz_sha256", return_value="abc123")
+    def test_finalize_normalizes_subcommands(
+        self, mock_sha, mock_common_synopsis, mock_nested_cmd
+    ):
+        """finalize() strips parent prefix from subcommand names."""
+        mock_common_synopsis.return_value = ("test tool", [("dummy", 10)])
+        prepared = _make_prepared(1)
+        prepared = PreparedFile(
+            synopsis=prepared.synopsis,
+            aliases=prepared.aliases,
+            original_lines=prepared.original_lines,
+            basename="git",
+            numbered_text=prepared.numbered_text,
+            plain_text_len=prepared.plain_text_len,
+            plain_text=prepared.plain_text,
+            requests=prepared.requests[:1],
+        )
+        chunk_json = (
+            '{"options": [{"short": ["-v"], "long": [], '
+            '"has_argument": false, "lines": [1, 3]}], '
+            '"subcommands": ["git-add", "git-commit", "push"]}'
+        )
+        ext = self._make_extractor()
+        result = ext.finalize("git.1.gz", prepared, [chunk_json])
+        self.assertEqual(result.mp.subcommands, ["add", "commit", "push"])
+
+
+# ---------------------------------------------------------------------------
+# TestSubcommandNormalization
+# ---------------------------------------------------------------------------
+
+
+class TestSubcommandNormalization(unittest.TestCase):
+    """Tests for normalize_subcommands()."""
+
+    def test_strips_parent_prefix(self):
+        from explainshell.extraction.llm.response import normalize_subcommands
+
+        result = normalize_subcommands("git", ["git-add", "git-commit", "push"])
+        self.assertEqual(result, ["add", "commit", "push"])
+
+    def test_no_prefix_unchanged(self):
+        from explainshell.extraction.llm.response import normalize_subcommands
+
+        result = normalize_subcommands("apt", ["install", "update", "remove"])
+        self.assertEqual(result, ["install", "update", "remove"])
+
+    def test_deduplicates(self):
+        from explainshell.extraction.llm.response import normalize_subcommands
+
+        result = normalize_subcommands("git", ["git-add", "add", "git-add"])
+        self.assertEqual(result, ["add"])
+
 
 # ---------------------------------------------------------------------------
 # TestBuildUserContent

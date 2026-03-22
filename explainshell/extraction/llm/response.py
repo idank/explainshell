@@ -12,6 +12,18 @@ from explainshell.errors import ExtractionError
 logger = logging.getLogger(__name__)
 
 
+def normalize_subcommands(basename: str, raw: list[str]) -> list[str]:
+    """Strip parent-name prefix and deduplicate subcommand names.
+
+    LLMs sometimes return ``["git-add", "git-commit"]`` instead of
+    ``["add", "commit"]``.  This strips the ``{basename}-`` prefix when
+    present and deduplicates while preserving order.
+    """
+    prefix = f"{basename}-"
+    stripped = [s[len(prefix) :] if s.startswith(prefix) else s for s in raw]
+    return list(dict.fromkeys(stripped))
+
+
 def fix_invalid_escapes(s: str) -> str:
     """Replace invalid JSON escape sequences with their escaped form.
 

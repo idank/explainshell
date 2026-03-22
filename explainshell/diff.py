@@ -15,7 +15,7 @@ _MP_FIELDS = (
     "synopsis",
     "aliases",
     "nested_cmd",
-    "has_subcommands",
+    "subcommands",
     "dashless_opts",
     "extractor",
     "extraction_meta",

@@ -28,7 +28,7 @@ class MockStore:
                 name="bar",
                 synopsis="bar synopsis",
                 options=opts,
-                has_subcommands=True,
+                subcommands=["foo"],
             ),
             "baz": sm(
                 source="ubuntu/25.10/1/baz.1.gz",

@@ -14,6 +14,7 @@ def build_manpage_metadata(
     *,
     dashless_opts: bool | None = None,
     nested_cmd: bool | str | None = None,
+    subcommands: list[str] | None = None,
     extractor: str | None = None,
     extraction_meta: dict | None = None,
 ) -> models.ParsedManpage:
@@ -40,6 +41,7 @@ def build_manpage_metadata(
             if nested_cmd is not None
             else roff_utils.detect_nested_cmd(gz_path)
         ),
+        subcommands=subcommands or [],
         extractor=extractor,
         extraction_meta=extraction_meta,
     )

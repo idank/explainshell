@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS parsed_manpages (
     options       TEXT    NOT NULL DEFAULT '[]',  -- JSON list of option dicts
     aliases       TEXT    NOT NULL DEFAULT '[]',  -- JSON list of [alias, score] pairs
     dashless_opts INTEGER NOT NULL DEFAULT 0,      -- allow matching options without leading '-'
-    has_subcommands INTEGER NOT NULL DEFAULT 0,   -- command has sub-commands; matcher looks ahead for "git commit" -> git-commit manpage
+    subcommands   TEXT    NOT NULL DEFAULT '[]',  -- JSON list of subcommand names (e.g. ["build","run","push"])
     updated       INTEGER NOT NULL DEFAULT 0,     -- manually edited, skip during bulk imports
     nested_cmd    TEXT    NOT NULL DEFAULT 'false', -- positional args start a nested command (e.g. sudo, xargs)
     extractor     TEXT,                            -- extractor mode: "source", "mandoc", "llm"
@@ -349,10 +349,10 @@ class Store:
         d = m.to_store()
         self._conn.execute(
             """INSERT INTO parsed_manpages(source, name, synopsis, options, aliases,
-                                   dashless_opts, has_subcommands, updated, nested_cmd,
+                                   dashless_opts, subcommands, updated, nested_cmd,
                                    extractor, extraction_meta)
                VALUES (:source, :name, :synopsis, :options, :aliases,
-                       :dashless_opts, :has_subcommands, :updated, :nested_cmd,
+                       :dashless_opts, :subcommands, :updated, :nested_cmd,
                        :extractor, :extraction_meta)""",
             d,
         )
@@ -380,47 +380,106 @@ class Store:
         for row in self._conn.execute("SELECT src, dst FROM mappings"):
             yield row["src"], row["dst"]
 
-    def set_has_subcommands(self, source):
+    def _set_subcommands(self, source: str, subcommands: list[str]) -> None:
+        import json
+
         self._conn.execute(
-            "UPDATE parsed_manpages SET has_subcommands = 1 WHERE source = ?", (source,)
+            "UPDATE parsed_manpages SET subcommands = ? WHERE source = ?",
+            (json.dumps(subcommands), source),
         )
         self._conn.commit()
 
     def update_subcommand_mappings(self):
         """Discover sub-command relationships and create mappings.
 
-        For every man page whose name contains a hyphen (e.g. ``git-commit``),
-        check whether the prefix (``git``) also exists as a man page.  If so,
-        add a mapping ``git commit`` -> ``git-commit`` and mark the parent as
-        ``has_subcommands``.
+        For LLM-extracted pages with a subcommands list, use the declared
+        subcommands to find matching child manpages.  For source/mandoc
+        extracted pages, fall back to the heuristic: if a manpage name
+        contains a hyphen (e.g. ``git-commit``) and the prefix (``git``)
+        exists as another manpage, create a mapping.
         """
-        manpages = {}
-        potential = []
-        for _id, name in self.names():
+        import json
+
+        manpages: dict[str, str] = {}  # name -> source
+        potential: list[tuple[list[str], str]] = []  # (name parts, source)
+        llm_parents: dict[
+            str, tuple[str, list[str]]
+        ] = {}  # name -> (source, subcommands) — only non-empty
+        llm_extracted: set[str] = set()  # all LLM-extracted parent names
+
+        rows = self._conn.execute(
+            "SELECT source, name, subcommands, extractor FROM parsed_manpages"
+        ).fetchall()
+        for row in rows:
+            name = row["name"]
+            source = row["source"]
+            extractor = row["extractor"]
+            subcommands = json.loads(row["subcommands"])
+
+            if extractor == "llm":
+                llm_extracted.add(name)
+                if subcommands:
+                    llm_parents[name] = (source, subcommands)
             if "-" in name:
-                potential.append((name.split("-"), _id))
+                potential.append((name.split("-"), source))
             else:
-                manpages[name] = _id
+                manpages[name] = source
 
         existing_mappings = {src for src, _ in self.mappings()}
-        mappings_to_add = []
-        parents = {}
+        mappings_to_add: list[tuple[str, str]] = []
+        parents: dict[str, str] = {}
 
-        for parts, _id in potential:
+        # LLM path: use declared subcommands to find children.
+        llm_children: set[str] = set()  # sources handled by LLM path
+        for parent_name, (parent_source, subcommands) in llm_parents.items():
+            for sub in subcommands:
+                child_name = f"{parent_name}-{sub}"
+                # Find the child source by scanning potential entries.
+                child_source = None
+                for parts, src in potential:
+                    if "-".join(parts) == child_name:
+                        child_source = src
+                        break
+                if child_source is None:
+                    continue
+                joined = f"{parent_name} {sub}"
+                if joined in existing_mappings:
+                    continue
+                mappings_to_add.append((joined, child_source))
+                llm_children.add(child_source)
+                parents[parent_name] = parent_source
+
+        # Heuristic path: scan hyphenated children for non-LLM pages.
+        for parts, source in potential:
+            if source in llm_children:
+                continue
             joined = " ".join(parts)
             if joined in existing_mappings:
                 continue
-            if parts[0] in manpages:
-                mappings_to_add.append((joined, _id))
-                parents[parts[0]] = manpages[parts[0]]
+            parent_name = parts[0]
+            if parent_name in manpages:
+                # Skip if parent is LLM-extracted (already handled by LLM path).
+                if parent_name in llm_extracted:
+                    continue
+                mappings_to_add.append((joined, source))
+                parents[parent_name] = manpages[parent_name]
 
         for src, dst in mappings_to_add:
             self.add_mapping(src, dst, 1)
             logger.debug("inserting mapping (subcommand) %s -> %s", src, dst)
 
-        for name, _id in parents.items():
-            self.set_has_subcommands(_id)
-            logger.debug("marking %r as has_subcommands", name)
+        # Set subcommands on heuristic parents that don't already have them.
+        for name, source in parents.items():
+            if name not in llm_parents:
+                # Collect child names for heuristic parents.
+                children = [
+                    "-".join(parts[1:])
+                    for parts, src in potential
+                    if parts[0] == name and src not in llm_children
+                ]
+                if children:
+                    self._set_subcommands(source, children)
+                    logger.debug("setting subcommands on %r: %s", name, children)
 
         return mappings_to_add, parents
 

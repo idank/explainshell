@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS parsed_manpages (
     paragraphs    TEXT    NOT NULL DEFAULT '[]',
     aliases       TEXT    NOT NULL DEFAULT '[]',
     dashless_opts INTEGER NOT NULL DEFAULT 0,
-    has_subcommands INTEGER NOT NULL DEFAULT 0,
+    subcommands   TEXT    NOT NULL DEFAULT '[]',
     updated       INTEGER NOT NULL DEFAULT 0,
     nested_cmd    TEXT    NOT NULL DEFAULT 'false'
 );
@@ -117,6 +117,9 @@ def migrate(manpage_file, mapping_file, db_path):
         has_subcommands = _coerce_bool(
             doc.get("multi_cmd", doc.get("multicommand")), False
         )
+        # Convert legacy boolean to subcommands list — the old MongoDB
+        # data only stored a flag, not actual subcommand names.
+        subcommands_json = json.dumps([]) if not has_subcommands else json.dumps([])
         nested_cmd = doc.get("nested_cmd", doc.get("nestedcmd", False))
         nested_cmd_json = json.dumps(nested_cmd)
 
@@ -124,7 +127,7 @@ def migrate(manpage_file, mapping_file, db_path):
             conn.execute(
                 """INSERT INTO parsed_manpages
                        (source, name, synopsis, paragraphs, aliases,
-                        dashless_opts, has_subcommands, updated, nested_cmd)
+                        dashless_opts, subcommands, updated, nested_cmd)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     doc["source"],
@@ -133,7 +136,7 @@ def migrate(manpage_file, mapping_file, db_path):
                     json.dumps(paragraphs),
                     aliases_json,
                     int(dashless_opts),
-                    int(has_subcommands),
+                    subcommands_json,
                     int(_coerce_bool(doc.get("updated"), False)),
                     nested_cmd_json,
                 ),
