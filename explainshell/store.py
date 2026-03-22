@@ -285,6 +285,22 @@ class Store:
         """).fetchall()
         return [(row["distro"], row["release"]) for row in rows]
 
+    def distros_for_name(self, name: str) -> list[tuple[str, str]]:
+        """Return (distro, release) pairs that have a manpage matching *name*."""
+        rows = self._conn.execute(
+            """
+            SELECT DISTINCT
+                SUBSTR(pm.source, 1, INSTR(pm.source, '/') - 1) as distro,
+                SUBSTR(pm.source, INSTR(pm.source, '/') + 1,
+                       INSTR(SUBSTR(pm.source, INSTR(pm.source, '/') + 1), '/') - 1) as release
+            FROM mappings m
+            JOIN parsed_manpages pm ON pm.source = m.dst
+            WHERE m.src = ?
+            """,
+            (name,),
+        ).fetchall()
+        return [(row["distro"], row["release"]) for row in rows]
+
     def add_mapping(self, src, dst, score):
         self._conn.execute(
             "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)", (src, dst, score)

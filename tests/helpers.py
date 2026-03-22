@@ -123,6 +123,9 @@ class MockStore:
     def distros(self):
         return [("ubuntu", "25.10")]
 
+    def distros_for_name(self, name: str) -> list[tuple[str, str]]:
+        return [("ubuntu", "25.10")]
+
     def get_raw_manpage(self, source: str) -> models.RawManpage | None:
         _now = datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc)
         for mp in self.manpages.values():

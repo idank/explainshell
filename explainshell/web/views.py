@@ -249,12 +249,22 @@ def _handle_explain_cmd(url_distro, url_release):
             explain_prefix=prefix,
         )
         helptext = [(render_markdown(text), id_) for text, id_ in helptext]
+
+        # Compute distros scoped to the matched commands (intersection).
+        cmd_names = [m["name"] for m in matches if "name" in m]
+        if cmd_names:
+            sets = [set(current_app.store.distros_for_name(n)) for n in cmd_names]
+            cmd_distros = sorted(sets[0].intersection(*sets[1:]))
+        else:
+            cmd_distros = list(get_cached_distros())
+
         return render_template(
             "explain.html",
             matches=matches,
             helptext=helptext,
             getargs=command,
             debug_info=debug_info,
+            available_distros=cmd_distros,
         )
 
     except errors.ProgramDoesNotExist as error_msg:
@@ -299,12 +309,14 @@ def _handle_explain_program(section, program, url_distro, url_release):
         mp, suggestions, raw_mp, debug_info = explain_program(
             program, current_app.store, distro=distro, release=release
         )
+        cmd_distros = current_app.store.distros_for_name(raw_mp.name)
         return render_template(
             "options.html",
             mp=mp,
             suggestions=suggestions,
             raw_mp=raw_mp,
             debug_info=debug_info,
+            available_distros=cmd_distros,
         )
     except errors.ProgramDoesNotExist as e:
         return render_template(
