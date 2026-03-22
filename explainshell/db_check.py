@@ -6,6 +6,7 @@ Checks:
     - Orphaned mappings (mapping rows referencing non-existent manpage sources)
     - Unreachable manpages (manpages with no mapping pointing to them)
     - positional set on flagged options (positional should only be on positional operands)
+    - Stale subcommand mappings (mapping for "cmd sub" but parent doesn't declare it)
 """
 
 import json
@@ -102,7 +103,40 @@ def check(db_path: str) -> list[tuple[str, str]]:
                     )
                 )
 
-    # 5. Unreachable manpages: manpages with no mapping pointing to them.
+    # 5. Stale subcommand mappings: subcommand mapping exists but the parent
+    #    manpage doesn't declare that subcommand.
+    subcmd_mappings = conn.execute(
+        "SELECT m.src, m.dst FROM mappings m WHERE m.src LIKE '% %'"
+    ).fetchall()
+    for row in subcmd_mappings:
+        src = row["src"]
+        parent_name = src.split(" ", 1)[0]
+        sub_name = src.split(" ", 1)[1]
+        parent_row = conn.execute(
+            "SELECT subcommands FROM parsed_manpages WHERE name = ? LIMIT 1",
+            (parent_name,),
+        ).fetchone()
+        if parent_row is None:
+            issues.append(
+                (
+                    "error",
+                    f"stale subcommand mapping: {src!r} -> {row['dst']!r} "
+                    f"(parent {parent_name!r} does not exist)",
+                )
+            )
+        else:
+            subcommands = json.loads(parent_row["subcommands"])
+            if sub_name not in subcommands:
+                issues.append(
+                    (
+                        "warning",
+                        f"stale subcommand mapping: {src!r} -> {row['dst']!r} "
+                        f"(parent {parent_name!r} does not declare "
+                        f"{sub_name!r} in subcommands)",
+                    )
+                )
+
+    # 6. Unreachable manpages: manpages with no mapping pointing to them.
     unreachable = conn.execute(
         "SELECT mp.name, mp.source FROM parsed_manpages mp "
         "LEFT JOIN mappings m ON mp.source = m.dst WHERE m.id IS NULL"
