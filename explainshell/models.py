@@ -62,8 +62,8 @@ class ParsedManpage(BaseModel):
     options - a list of options extracted from this man page
     aliases - a list of aliases found for this man page
     dashless_opts - allow interpreting options without a leading '-'
-    has_subcommands - command has sub-commands; when set, the matcher looks ahead for
-        e.g. "git commit" and resolves it to the git-commit manpage
+    subcommands - list of subcommand names extracted from the manpage; when non-empty,
+        the matcher looks ahead for e.g. "git commit" and resolves it to the git-commit manpage
     updated - whether this man page was manually updated
     nested_cmd - specifies if positional arguments to this program can start a nested command,
         e.g. sudo, xargs
@@ -75,7 +75,7 @@ class ParsedManpage(BaseModel):
     options: list[Option] = []
     aliases: list[tuple[str, int]] = []
     dashless_opts: bool = False
-    has_subcommands: bool = False
+    subcommands: list[str] = []
     updated: bool = False
     nested_cmd: bool | str = False
     extractor: str | None = None
@@ -119,7 +119,7 @@ class ParsedManpage(BaseModel):
             "options": json.dumps([o.model_dump() for o in self.options]),
             "aliases": json.dumps(self.aliases),
             "dashless_opts": int(bool(self.dashless_opts)),
-            "has_subcommands": int(bool(self.has_subcommands)),
+            "subcommands": json.dumps(self.subcommands),
             "updated": int(bool(self.updated)),
             "nested_cmd": json.dumps(self.nested_cmd),
             "extractor": self.extractor,
@@ -137,7 +137,7 @@ class ParsedManpage(BaseModel):
             synopsis = help_constants.NO_SYNOPSIS
 
         dashless_opts = bool(d["dashless_opts"])
-        has_subcommands = bool(d["has_subcommands"])
+        subcommands = json.loads(d["subcommands"])
         nested_cmd = json.loads(d["nested_cmd"])
 
         extraction_meta_raw = d["extraction_meta"]
@@ -150,7 +150,7 @@ class ParsedManpage(BaseModel):
             options=options,
             aliases=[tuple(x) for x in json.loads(d["aliases"])],
             dashless_opts=dashless_opts,
-            has_subcommands=has_subcommands,
+            subcommands=subcommands,
             updated=bool(d["updated"]),
             nested_cmd=nested_cmd,
             extractor=d["extractor"],

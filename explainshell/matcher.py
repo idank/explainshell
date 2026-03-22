@@ -379,7 +379,7 @@ class Matcher(bashlex.ast.nodevisitor):
         # - we have another word node
         # - the word node has no expansions in it
         if (
-            manpage.has_subcommands
+            manpage.subcommands
             and idx_next_word_node != -1
             and not parts[idx_next_word_node].parts
         ):

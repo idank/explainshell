@@ -215,7 +215,7 @@ class test_matcher(unittest.TestCase):
 
         self.assertMatchSingle(cmd, s.find_man_page("baz")[0], matchedresult)
 
-    def test_has_subcommands(self):
+    def test_subcommands(self):
         cmd = "bar baz --b foo"
         matchedresult = [
             MR(0, 3, "bar synopsis", "bar"),

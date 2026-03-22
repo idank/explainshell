@@ -14,6 +14,9 @@ JSON schema:
 {
   "dashless_opts": true if the page documents options without a leading dash (e.g. BSD-style
                    "tar xzvf"), false otherwise,
+  "subcommands": [],         // list of subcommand names if the man page documents them (e.g.
+                             // ["build","run","push"]). Look for sections listing available
+                             // subcommands/commands. Omit if none.
   "options": [
     {
       "short": ["-f"],           // short flags (e.g. ["-v"]). Bare names only — no argument

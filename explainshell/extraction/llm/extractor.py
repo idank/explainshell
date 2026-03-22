@@ -67,6 +67,7 @@ from explainshell.extraction.llm.providers import (
 )
 from explainshell.extraction.llm.response import (
     normalize_option_fields,
+    normalize_subcommands,
     dedup_ref_options,
     llm_option_to_store_option,
     process_llm_result,
@@ -347,10 +348,12 @@ class LLMExtractor:
 
         all_raw: list[dict] = []
         dashless_opts = False
+        all_subcommands: list[str] = []
         for i, cr in enumerate(all_chunk_data):
             all_raw.extend(cr.data["options"])
             if cr.data.get("dashless_opts"):
                 dashless_opts = True
+            all_subcommands.extend(cr.data.get("subcommands") or [])
 
             if self._debug_dir:
                 if n_chunks == 1:
@@ -386,12 +389,15 @@ class LLMExtractor:
         stats.deduped_options += pp_stats.deduped_options
         stats.dropped_empty += pp_stats.dropped_empty
 
+        subcommands = normalize_subcommands(basename, all_subcommands)
+
         logger.debug("%s: extracted %d option(s) total", basename, len(options))
 
         mp = build_manpage_metadata(
             gz_path,
             options,
             dashless_opts=dashless_opts,
+            subcommands=subcommands,
             extractor="llm",
             extraction_meta={"model": self._model},
         )

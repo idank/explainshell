@@ -73,11 +73,11 @@ def test_parsing_matches_db(gz_path, db_store, request):
     ext = make_extractor(extractor_mode)
     result = ext.extract(gz_path)
 
-    # has_subcommands is computed post-extraction by update_subcommand_mappings(),
+    # subcommands is computed post-extraction by update_subcommand_mappings(),
     # not by the parser, so exclude it from comparison.
     diffs = compare_manpages(
         stored_mp,
         result.mp,
-        skip_fields=("has_subcommands", "extractor", "extraction_meta"),
+        skip_fields=("subcommands", "extractor", "extraction_meta"),
     )
     assert not diffs, f"Parsing regression for {basename}:\n{_format_diffs(diffs)}"
