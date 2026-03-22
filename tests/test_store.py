@@ -158,6 +158,17 @@ class TestFindManPageNotFound:
         assert results[0].name == "."
 
 
+class TestHasManpageSource:
+    def test_returns_true_for_existing_source(self, store):
+        mp = _make_manpage("tar", "1")
+        store.add_manpage(mp, _make_raw())
+
+        assert store.has_manpage_source("ubuntu/25.10/1/tar.1.gz") is True
+
+    def test_returns_false_for_missing_source(self, store):
+        assert store.has_manpage_source("ubuntu/25.10/1/missing.1.gz") is False
+
+
 class TestParseDistroRelease:
     def test_distro_path(self):
         assert parse_distro_release("ubuntu/25.10/1/ps.1.gz") == ("ubuntu", "25.10")

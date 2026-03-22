@@ -51,9 +51,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
 
         mock_store = MagicMock()
         mock_store_create.return_value = mock_store
-        from explainshell import errors as _errors
-
-        mock_store.find_man_page.side_effect = _errors.ProgramDoesNotExist("x")
+        mock_store.has_manpage_source.return_value = False
 
         mock_make_ext.return_value = MagicMock()
 
@@ -134,9 +132,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
 
         mock_store = MagicMock()
         mock_store_create.return_value = mock_store
-        from explainshell import errors as _errors
-
-        mock_store.find_man_page.side_effect = _errors.ProgramDoesNotExist("x")
+        mock_store.has_manpage_source.return_value = False
         mock_make_ext.return_value = MagicMock()
 
         def _fake_run(
@@ -309,9 +305,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
 
         mock_store = MagicMock()
         mock_store_create.return_value = mock_store
-        from explainshell import errors
-
-        mock_store.find_man_page.side_effect = errors.ProgramDoesNotExist("echo")
+        mock_store.has_manpage_source.return_value = False
 
         fake_mp = MagicMock()
         fake_mp.options = [MagicMock()]
@@ -359,6 +353,8 @@ class TestLlmManagerDryRun(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         mock_store.add_manpage.assert_called_once_with(fake_mp, fake_raw)
+        mock_store.has_manpage_source.assert_called_once_with("fake/echo.1.gz")
+        mock_store.find_man_page.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
