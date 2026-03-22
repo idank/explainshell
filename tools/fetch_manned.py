@@ -404,6 +404,7 @@ def extract_contents(data_dir, content_to_manpages, output_dir):
 
     sections_created = set()
     extracted = 0
+    symlinks_created = 0
     total_needed = len(content_to_manpages)
     remaining = set(content_to_manpages.keys())
 
@@ -438,8 +439,20 @@ def extract_contents(data_dir, content_to_manpages, output_dir):
         if raw_content.endswith("\n"):
             raw_content = raw_content[:-1]
 
-        # Write out as .gz files
-        for name, section in content_to_manpages[content_id]:
+        # Write out as .gz files; first entry is the real file, rest are symlinks
+        pages = content_to_manpages[content_id]
+        canonical_name, canonical_section = pages[0]
+        canonical_section_dir = os.path.join(output_dir, canonical_section)
+        if canonical_section_dir not in sections_created:
+            os.makedirs(canonical_section_dir, exist_ok=True)
+            sections_created.add(canonical_section_dir)
+
+        canonical_gz = f"{canonical_name}.{canonical_section}.gz"
+        canonical_path = os.path.join(canonical_section_dir, canonical_gz)
+        with gzip.open(canonical_path, "wt", encoding="utf-8") as gz_file:
+            gz_file.write(raw_content)
+
+        for name, section in pages[1:]:
             section_dir = os.path.join(output_dir, section)
             if section_dir not in sections_created:
                 os.makedirs(section_dir, exist_ok=True)
@@ -447,8 +460,9 @@ def extract_contents(data_dir, content_to_manpages, output_dir):
 
             gz_filename = f"{name}.{section}.gz"
             gz_path = os.path.join(section_dir, gz_filename)
-            with gzip.open(gz_path, "wt", encoding="utf-8") as gz_file:
-                gz_file.write(raw_content)
+            target = os.path.relpath(canonical_path, section_dir)
+            os.symlink(target, gz_path)
+            symlinks_created += 1
 
         remaining.discard(content_id)
         extracted += 1
@@ -465,7 +479,10 @@ def extract_contents(data_dir, content_to_manpages, output_dir):
     zstd_proc.wait()
 
     logger.info(
-        "Extraction complete: %d / %d content entries written", extracted, total_needed
+        "Extraction complete: %d / %d content entries written, %d symlinks created",
+        extracted,
+        total_needed,
+        symlinks_created,
     )
     if remaining:
         logger.warning("%d content IDs were not found in the dump", len(remaining))
