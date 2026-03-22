@@ -53,14 +53,6 @@ def _fmt_elapsed(seconds: float) -> str:
     return f"{s}s"
 
 
-def _already_stored(s: store.Store, short_path: str, name: str) -> bool:
-    try:
-        results = s.find_man_page(name)
-        return any(mp.source == short_path for mp in results)
-    except errors.ProgramDoesNotExist:
-        return False
-
-
 def _parse_mode(raw: str | None) -> tuple[str | None, str | None]:
     """Parse a mode value into (mode, model).
 
@@ -481,8 +473,6 @@ def extract(
     t0 = time.monotonic()
     prefilter_skipped = 0
 
-    from explainshell import manpage as _manpage
-
     cfg = ExtractorConfig(model=model, fail_dir=debug_dir)
     extractor = make_extractor(parsed_mode, cfg)
 
@@ -490,8 +480,7 @@ def extract(
     work_files: list[str] = []
     for gz_path in gz_files:
         short_path = config.source_from_path(gz_path)
-        name = _manpage.extract_name(gz_path)
-        if not overwrite and _already_stored(s, short_path, name):
+        if not overwrite and s.has_manpage_source(short_path):
             logger.info("skipping %s (already stored)", short_path)
             prefilter_skipped += 1
         else:

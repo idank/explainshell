@@ -226,6 +226,13 @@ class Store:
         results[0] = ParsedManpage.from_store(dict(row))
         return results
 
+    def has_manpage_source(self, source: str) -> bool:
+        """Return whether *source* exists in parsed_manpages."""
+        row = self._conn.execute(
+            "SELECT 1 FROM parsed_manpages WHERE source = ? LIMIT 1", (source,)
+        ).fetchone()
+        return row is not None
+
     def _discover_manpage_suggestions(
         self, source, existing, distro=None, release=None
     ):
