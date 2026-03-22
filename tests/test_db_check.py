@@ -153,3 +153,59 @@ class TestCheck:
         issues = db_check(db_path)
         warnings = [msg for sev, msg in issues if sev == "warning"]
         assert not any("argument on flagged option" in msg for msg in warnings)
+
+    def test_stale_subcommand_mapping_missing_parent(self, store, db_path):
+        """Subcommand mapping whose parent doesn't exist should be an error."""
+        store.add_manpage(_make_manpage("git-commit", "1"), _make_raw())
+        store._conn.execute("PRAGMA foreign_keys = OFF")
+        store._conn.execute(
+            "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)",
+            ("git commit", "ubuntu/25.10/1/git-commit.1.gz", 1),
+        )
+        store._conn.commit()
+        store._conn.execute("PRAGMA foreign_keys = ON")
+        issues = db_check(db_path)
+        errors_list = [msg for sev, msg in issues if sev == "error"]
+        assert any(
+            "stale subcommand mapping" in msg and "does not exist" in msg
+            for msg in errors_list
+        )
+
+    def test_stale_subcommand_mapping_not_declared(self, store, db_path):
+        """Subcommand mapping where parent doesn't declare the subcommand should warn."""
+        store.add_manpage(_make_manpage("cd", "1"), _make_raw())
+        store.add_manpage(_make_manpage("cd-discid", "1"), _make_raw())
+        store._conn.execute("PRAGMA foreign_keys = OFF")
+        store._conn.execute(
+            "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)",
+            ("cd discid", "ubuntu/25.10/1/cd-discid.1.gz", 1),
+        )
+        store._conn.commit()
+        store._conn.execute("PRAGMA foreign_keys = ON")
+        issues = db_check(db_path)
+        warnings = [msg for sev, msg in issues if sev == "warning"]
+        assert any(
+            "stale subcommand mapping" in msg and "does not declare" in msg
+            for msg in warnings
+        )
+
+    def test_valid_subcommand_mapping_ok(self, store, db_path):
+        """Subcommand mapping matching parent's declared subcommands should not warn."""
+        mp = ParsedManpage(
+            source="ubuntu/25.10/1/git.1.gz",
+            name="git",
+            synopsis="git - version control",
+            aliases=[("git", 10)],
+            subcommands=["commit"],
+        )
+        store.add_manpage(mp, _make_raw())
+        store.add_manpage(_make_manpage("git-commit", "1"), _make_raw())
+        store._conn.execute("PRAGMA foreign_keys = OFF")
+        store._conn.execute(
+            "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)",
+            ("git commit", "ubuntu/25.10/1/git-commit.1.gz", 1),
+        )
+        store._conn.commit()
+        store._conn.execute("PRAGMA foreign_keys = ON")
+        issues = db_check(db_path)
+        assert not any("stale subcommand mapping" in msg for _, msg in issues)
