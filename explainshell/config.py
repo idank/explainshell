@@ -4,6 +4,12 @@ import os
 HOST_IP = os.getenv("HOST_IP", "")
 DB_PATH = os.getenv("DB_PATH")
 DEBUG = os.getenv("DEBUG", "true").lower() not in ("0", "false", "no")
+MANDOC_PATH = os.getenv(
+    "MANDOC_PATH",
+    os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), "tools", "mandoc-with-markdown"
+    ),
+)
 
 # Mapping from source-path prefix to external URL template.
 # Templates may use {section} and {name} placeholders.

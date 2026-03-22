@@ -3,10 +3,10 @@ line numbering, and chunking."""
 
 from __future__ import annotations
 
-import os
 import re
 import subprocess
 
+from explainshell import config
 from explainshell.errors import ExtractionError
 
 CHUNK_SIZE_CHARS = 60_000
@@ -34,17 +34,10 @@ _BLACKLISTED_SECTIONS = frozenset(
 )
 
 
-_MANDOC_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-    "tools",
-    "mandoc-with-markdown",
-)
-
-
 def get_manpage_text(gz_path: str) -> str:
     """Run patched ``mandoc -T markdown <gz_path>`` to get markdown directly."""
     result = subprocess.run(
-        [_MANDOC_PATH, "-T", "markdown", gz_path],
+        [config.MANDOC_PATH, "-T", "markdown", gz_path],
         capture_output=True,
         text=True,
         timeout=60,
