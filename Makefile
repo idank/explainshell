@@ -52,17 +52,14 @@ UBUNTU_ARCHIVE_OUTPUT := $(UBUNTU_ARCHIVE_DIR)/output
 UBUNTU_RELEASE ?= 25.10
 
 ubuntu-archive:
-	@test ! -d manpages/ubuntu/$(UBUNTU_RELEASE) || (echo "manpages/ubuntu/$(UBUNTU_RELEASE) already exists, delete it first"; exit 1)
 	cd $(UBUNTU_ARCHIVE_DIR) && go build -o ingest ./cmd/ingest
 	MANPAGES_PUBLIC_HTML_DIR=$(UBUNTU_ARCHIVE_OUTPUT) \
 	MANPAGES_RELEASES=$(UBUNTU_RELEASE) \
 	MANPAGES_GZ_ONLY=true \
 		$(UBUNTU_ARCHIVE_DIR)/ingest
-	mkdir -p manpages/ubuntu
-	cp -r $(UBUNTU_ARCHIVE_OUTPUT)/manpages.gz/$(UBUNTU_RELEASE) manpages/ubuntu/
-	find manpages/ubuntu/$(UBUNTU_RELEASE) -mindepth 1 -maxdepth 1 ! -name man1 ! -name man8 -exec rm -rf {} +
-	find manpages/ubuntu/$(UBUNTU_RELEASE) -mindepth 1 -maxdepth 1 -type d -name 'man*' | while read d; do mv "$$d" "$$(dirname "$$d")/$$(echo "$$(basename "$$d")" | sed 's/^man//')"; done
-	find manpages/ubuntu/$(UBUNTU_RELEASE) -mindepth 2 -maxdepth 2 -type d -exec rm -rf {} +
+	python tools/postprocess_ubuntu_archive.py \
+		$(UBUNTU_ARCHIVE_OUTPUT)/manpages.gz/$(UBUNTU_RELEASE) \
+		manpages/ubuntu/$(UBUNTU_RELEASE)
 
 MANNED_DATA_DIR := ignore/manned
 
