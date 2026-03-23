@@ -60,13 +60,12 @@ CREATE TABLE IF NOT EXISTS parsed_manpages (
 -- For multi-cmd parents, sub-command mappings are also stored here
 -- (e.g. src='git commit' -> dst=<git-commit manpage id>).
 CREATE TABLE IF NOT EXISTS mappings (
-    id    INTEGER PRIMARY KEY,
     src   TEXT    NOT NULL,      -- lookup key (command name or 'cmd subcmd')
     dst   TEXT    NOT NULL REFERENCES parsed_manpages(source) ON DELETE CASCADE,
-    score INTEGER NOT NULL       -- higher score = preferred match
+    score INTEGER NOT NULL,      -- higher score = preferred match
+    PRIMARY KEY (src, dst)
 );
 
-CREATE INDEX IF NOT EXISTS idx_mappings_src ON mappings(src);
 CREATE INDEX IF NOT EXISTS idx_mappings_dst ON mappings(dst);
 
 """
