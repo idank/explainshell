@@ -239,6 +239,71 @@ class TestRunBatchFailedStats(unittest.TestCase):
         self.assertEqual(bravo.stats.plain_text_len, 100)
 
 
+class TestRunBatchPartialResults(unittest.TestCase):
+    """Partial batch results (e.g. after stall-induced cancel) should
+    succeed for files with all chunks present and fail only the rest."""
+
+    def test_partial_batch_succeeds_complete_files(self):
+        """When a batch returns partial results, files whose chunks are
+        all present succeed while files with missing chunks fail."""
+        prepared_a = _make_prepared("alpha")  # 1 chunk → "0:0"
+        prepared_b = _make_prepared("bravo")  # 1 chunk → "1:0"
+        prepared_c = _make_prepared("charlie")  # 1 chunk → "2:0"
+        gz_a = "/fake/alpha.1.gz"
+        gz_b = "/fake/bravo.1.gz"
+        gz_c = "/fake/charlie.1.gz"
+
+        ext = _make_extractor(
+            {gz_a: prepared_a, gz_b: prepared_b, gz_c: prepared_c},
+        )
+        # Only return results for alpha and charlie — bravo is missing.
+        bp = _make_batch_provider(
+            responses={
+                "0:0": '{"options":[],"dashless_opts":false}',
+                "2:0": '{"options":[],"dashless_opts":false}',
+            }
+        )
+        ext.batch_provider = bp
+
+        batch, files = run_batch_collected(ext, [gz_a, gz_b, gz_c])
+
+        self.assertEqual(batch.n_succeeded, 2)
+        self.assertEqual(batch.n_failed, 1)
+        bravo = next(f for f in files if f.gz_path == gz_b)
+        self.assertEqual(bravo.outcome, ExtractionOutcome.FAILED)
+        self.assertIn("missing response", bravo.error)
+
+    def test_multi_chunk_partial_missing(self):
+        """A multi-chunk file with one chunk missing fails, while a
+        single-chunk file in the same batch succeeds."""
+        prepared_big = _make_prepared("big", n_chunks=3)  # "0:0", "0:1", "0:2"
+        prepared_small = _make_prepared("small")  # "1:0"
+        gz_big = "/fake/big.1.gz"
+        gz_small = "/fake/small.1.gz"
+
+        ext = _make_extractor({gz_big: prepared_big, gz_small: prepared_small})
+        # Return all chunks for big except chunk 2, plus the small file.
+        bp = _make_batch_provider(
+            responses={
+                "0:0": '{"options":[],"dashless_opts":false}',
+                "0:1": '{"options":[],"dashless_opts":false}',
+                # "0:2" missing — simulates the stalled request
+                "1:0": '{"options":[],"dashless_opts":false}',
+            }
+        )
+        ext.batch_provider = bp
+
+        batch, files = run_batch_collected(ext, [gz_big, gz_small])
+
+        self.assertEqual(batch.n_succeeded, 1)
+        self.assertEqual(batch.n_failed, 1)
+        big = next(f for f in files if f.gz_path == gz_big)
+        small = next(f for f in files if f.gz_path == gz_small)
+        self.assertEqual(big.outcome, ExtractionOutcome.FAILED)
+        self.assertIn("missing response", big.error)
+        self.assertEqual(small.outcome, ExtractionOutcome.SUCCESS)
+
+
 class TestRunBatchAllOutcomes(unittest.TestCase):
     """Every input file gets exactly one ExtractionResult."""
 
