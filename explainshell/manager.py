@@ -293,6 +293,56 @@ def _run_dry_run(
 
 
 # ---------------------------------------------------------------------------
+# Symlink mapping helper
+# ---------------------------------------------------------------------------
+
+
+def _add_symlink_mapping(
+    s: store.Store,
+    gz_path: str,
+    symlink_source: str,
+    canonical_source: str,
+) -> bool:
+    """Insert or upgrade a mapping from a symlink's command name to the canonical source.
+
+    If a mapping already exists with a lower score (e.g. lexgrog alias at score 1),
+    upgrades it to score 10 since the symlink name is the primary command name.
+
+    Returns True if a mapping was inserted or upgraded, False if unchanged.
+    """
+    from explainshell import manpage
+
+    symlink_name = manpage.extract_name(gz_path)
+    existing_score = s.mapping_score(symlink_name, canonical_source)
+    if existing_score is not None and existing_score >= 10:
+        logger.debug(
+            "symlink mapping %s -> %s already exists (score %d)",
+            symlink_name,
+            canonical_source,
+            existing_score,
+        )
+        return False
+    if existing_score is not None:
+        # Upgrade score from lower value (e.g. lexgrog alias at score 1).
+        s.update_mapping_score(symlink_name, canonical_source, score=10)
+        logger.info(
+            "upgraded symlink mapping %s -> %s score %d -> 10",
+            symlink_source,
+            canonical_source,
+            existing_score,
+        )
+    else:
+        s.add_mapping(symlink_name, canonical_source, score=10)
+        logger.info(
+            "mapped symlink %s -> %s (name: %s)",
+            symlink_source,
+            canonical_source,
+            symlink_name,
+        )
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Summary helper
 # ---------------------------------------------------------------------------
 
@@ -302,9 +352,10 @@ def _log_summary(
     prefilter_skipped: int,
     elapsed: float,
     dry_run: bool = False,
+    symlinks_mapped: int = 0,
 ) -> int:
     """Log a summary of batch results and return the exit code."""
-    added = batch_result.n_succeeded
+    added = batch_result.n_succeeded + symlinks_mapped
     skipped = batch_result.n_skipped + prefilter_skipped
     failed = batch_result.n_failed
 
@@ -472,21 +523,31 @@ def extract(
 
     t0 = time.monotonic()
     prefilter_skipped = 0
+    symlinks_mapped = 0
+    symlink_files: list[tuple[str, str, str]] = []  # (gz_path, source, canonical)
 
     cfg = ExtractorConfig(model=model, fail_dir=debug_dir)
     extractor = make_extractor(parsed_mode, cfg)
 
-    # Pre-filter already-stored files.
+    # Pre-filter already-stored files and separate symlinks.
     work_files: list[str] = []
     for gz_path in gz_files:
         short_path = config.source_from_path(gz_path)
         if not overwrite and s.has_manpage_source(short_path):
             logger.info("skipping %s (already stored)", short_path)
             prefilter_skipped += 1
-        else:
-            work_files.append(gz_path)
+            continue
 
-    total = len(gz_files)
+        if os.path.islink(gz_path):
+            canonical_path = os.path.realpath(gz_path)
+            canonical_source = config.source_from_path(canonical_path)
+            if canonical_source != short_path:
+                symlink_files.append((gz_path, short_path, canonical_source))
+                continue
+
+        work_files.append(gz_path)
+
+    extract_total = len(work_files) + prefilter_skipped
     file_counter = {"n": 0}
     counter_lock = threading.Lock()
 
@@ -495,7 +556,7 @@ def extract(
             file_counter["n"] += 1
             n = file_counter["n"]
         short_path = config.source_from_path(gz_path)
-        progress = f"[{n + prefilter_skipped}/{total}]"
+        progress = f"[{n + prefilter_skipped}/{extract_total}]"
         logger.info("%s [%s] extracting...", progress, short_path)
 
     def on_result(gz_path: str, entry: ExtractionResult) -> None:
@@ -524,12 +585,30 @@ def extract(
         on_result=on_result,
     )
 
+    # Map symlinks to their canonical manpages (now that extraction is done).
+    # Note: has_manpage_source checks the DB, not extraction outcomes. If a
+    # canonical existed from a prior run and the current --overwrite attempt
+    # failed, the old data is still valid and the symlink mapping is correct.
+    # The extraction failure is reported separately in the summary.
+    for gz_path, symlink_source, canonical_source in symlink_files:
+        if s.has_manpage_source(canonical_source):
+            if _add_symlink_mapping(s, gz_path, symlink_source, canonical_source):
+                symlinks_mapped += 1
+        else:
+            logger.warning(
+                "symlink %s -> %s: canonical not in DB, skipping",
+                symlink_source,
+                canonical_source,
+            )
+
     added = batch_result.n_succeeded
-    if added > 0:
+    if added > 0 or symlinks_mapped > 0:
         s.update_subcommand_mappings()
 
     elapsed = time.monotonic() - t0
-    rc = _log_summary(batch_result, prefilter_skipped, elapsed)
+    rc = _log_summary(
+        batch_result, prefilter_skipped, elapsed, symlinks_mapped=symlinks_mapped
+    )
     if rc != 0:
         sys.exit(rc)
 
