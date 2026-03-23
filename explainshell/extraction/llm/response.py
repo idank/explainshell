@@ -124,6 +124,7 @@ def normalize_option_fields(raw: dict) -> dict:
     Fixes observed in the top-1000 corpus run:
     - ``has_argument: null`` → ``False`` (8 positional-arg options)
     - ``has_argument`` list with int elements → stringified (hdparm --set-sector-size)
+    - ``has_argument`` bare string (e.g. ``"1..99"``) → ``True`` (avrdude range params)
     """
     raw = dict(raw)  # shallow copy to avoid mutating caller's data
 
@@ -134,6 +135,10 @@ def normalize_option_fields(raw: dict) -> dict:
     ha = raw.get("has_argument")
     if isinstance(ha, list) and ha and not all(isinstance(x, str) for x in ha):
         raw["has_argument"] = [str(x) for x in ha]
+
+    # Coerce bare strings (e.g. range expressions like "0..7") to True.
+    if isinstance(ha, str):
+        raw["has_argument"] = True
 
     return raw
 
