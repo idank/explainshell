@@ -24,6 +24,8 @@ _BLACKLISTED_SECTIONS = frozenset(
         "COPYING",
         "COPYRIGHT",
         "COPYRIGHT AND LICENSE",
+        "ENVIRONMENT",
+        "ENVIRONMENT VARIABLES",
         "EXIT STATUS",
         "HISTORY",
         "LICENSE",
