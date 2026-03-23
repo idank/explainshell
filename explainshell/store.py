@@ -313,6 +313,28 @@ class Store:
         )
         self._conn.commit()
 
+    def has_mapping(self, src: str, dst: str) -> bool:
+        """Return whether a mapping from *src* to *dst* already exists."""
+        row = self._conn.execute(
+            "SELECT 1 FROM mappings WHERE src = ? AND dst = ? LIMIT 1", (src, dst)
+        ).fetchone()
+        return row is not None
+
+    def mapping_score(self, src: str, dst: str) -> int | None:
+        """Return the score of the mapping from *src* to *dst*, or None."""
+        row = self._conn.execute(
+            "SELECT score FROM mappings WHERE src = ? AND dst = ? LIMIT 1", (src, dst)
+        ).fetchone()
+        return row["score"] if row else None
+
+    def update_mapping_score(self, src: str, dst: str, score: int) -> None:
+        """Update the score of an existing mapping."""
+        self._conn.execute(
+            "UPDATE mappings SET score = ? WHERE src = ? AND dst = ?",
+            (score, src, dst),
+        )
+        self._conn.commit()
+
     def _upsert_raw_manpage(self, source, raw):
         """Insert or replace a RawManpage into the manpages table."""
         self._conn.execute(
@@ -340,7 +362,25 @@ class Store:
         ).fetchone()
         if existing:
             logger.debug("removing old manpage %s", m.source)
-            # ON DELETE CASCADE removes all mappings rows for this manpage
+            # Warn about non-alias mappings (e.g. symlink-derived) that will
+            # be lost to the CASCADE delete.  Re-running extraction with the
+            # symlink paths in the input will recreate them.
+            alias_srcs = {a for a, _ in m.aliases}
+            lost = [
+                row["src"]
+                for row in self._conn.execute(
+                    "SELECT src FROM mappings WHERE dst = ?", (m.source,)
+                ).fetchall()
+                if row["src"] not in alias_srcs
+            ]
+            if lost:
+                logger.warning(
+                    "re-importing %s will drop non-alias mappings: %s "
+                    "(rerun extraction with symlink paths to restore them)",
+                    m.source,
+                    ", ".join(sorted(lost)),
+                )
+            # ON DELETE CASCADE removes all mappings rows for this manpage.
             self._conn.execute(
                 "DELETE FROM parsed_manpages WHERE source = ?", (m.source,)
             )
@@ -391,6 +431,7 @@ class Store:
                 m.name,
                 score,
             )
+
         self._conn.commit()
         return m
 

@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
 
 from explainshell.extraction.types import (
+    BatchResult,
     ExtractionResult,
     ExtractionStats,
     ExtractionOutcome,
@@ -355,6 +356,263 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_store.add_manpage.assert_called_once_with(fake_mp, fake_raw)
         mock_store.has_manpage_source.assert_called_once_with("fake/echo.1.gz")
         mock_store.find_man_page.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# TestSymlinkMapping
+# ---------------------------------------------------------------------------
+
+
+class TestSymlinkMapping(unittest.TestCase):
+    """Verify symlinks are mapped to their canonical manpage instead of extracted."""
+
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch("explainshell.util.collect_gz_files")
+    def test_symlink_mapped_after_extraction(
+        self,
+        mock_collect,
+        mock_store_create,
+        mock_make_ext,
+        mock_run,
+    ):
+        """A symlink whose canonical is extracted in the same batch gets mapped."""
+        canonical = "/fake/distro/release/1/bio-eagle.1.gz"
+        symlink = "/fake/distro/release/1/eagle.1.gz"
+        mock_collect.return_value = [canonical, symlink]
+
+        mock_store = MagicMock()
+        mock_store_create.return_value = mock_store
+        mock_store.mapping_score.return_value = None  # no existing mapping
+
+        mock_make_ext.return_value = MagicMock()
+
+        # Track which sources have been "stored" via add_manpage.
+        stored: set[str] = set()
+
+        def _has_manpage_source(source: str) -> bool:
+            return source in stored
+
+        mock_store.has_manpage_source.side_effect = _has_manpage_source
+
+        def _fake_run(
+            ext, files, batch_size=None, jobs=1, on_start=None, on_result=None
+        ):
+            batch = BatchResult()
+            for gz_path in files:
+                if on_start:
+                    on_start(gz_path)
+                mp = MagicMock(options=[], source="distro/release/1/bio-eagle.1.gz")
+                entry = ExtractionResult(
+                    gz_path=gz_path,
+                    outcome=ExtractionOutcome.SUCCESS,
+                    mp=mp,
+                    raw=MagicMock(),
+                    stats=ExtractionStats(),
+                )
+                batch.n_succeeded += 1
+                # Simulate add_manpage storing the source.
+                stored.add(mp.source)
+                if on_result:
+                    on_result(gz_path, entry)
+            return batch
+
+        mock_run.side_effect = _fake_run
+
+        with (
+            patch("os.path.islink", side_effect=lambda p: p == symlink),
+            patch(
+                "os.path.realpath",
+                side_effect=lambda p: canonical if p == symlink else p,
+            ),
+        ):
+            from explainshell.manager import cli
+
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--db",
+                    "/tmp/test.db",
+                    "extract",
+                    "--mode",
+                    "llm:openai/test-model",
+                    "--batch",
+                    "2",
+                    "/fake/file.gz",
+                ],
+            )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        # Only the canonical should be passed to run(), not the symlink.
+        (_, call_files), call_kwargs = mock_run.call_args
+        self.assertEqual(call_files, [canonical])
+        # Mapping inserted for symlink.
+        mock_store.add_mapping.assert_called_once_with(
+            "eagle", "distro/release/1/bio-eagle.1.gz", score=10
+        )
+
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch("explainshell.util.collect_gz_files")
+    def test_symlink_skipped_when_canonical_missing(
+        self,
+        mock_collect,
+        mock_store_create,
+        mock_make_ext,
+        mock_run,
+    ):
+        """A symlink whose canonical is not in the DB gets a warning, not a mapping."""
+        symlink = "/fake/distro/release/1/eagle.1.gz"
+        mock_collect.return_value = [symlink]
+
+        mock_store = MagicMock()
+        mock_store_create.return_value = mock_store
+        mock_store.has_manpage_source.return_value = False
+        mock_store.mapping_score.return_value = None
+
+        mock_make_ext.return_value = MagicMock()
+        mock_run.return_value = BatchResult()
+
+        with (
+            patch("os.path.islink", return_value=True),
+            patch(
+                "os.path.realpath", return_value="/fake/distro/release/1/bio-eagle.1.gz"
+            ),
+        ):
+            from explainshell.manager import cli
+
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--db",
+                    "/tmp/test.db",
+                    "extract",
+                    "--mode",
+                    "llm:openai/test-model",
+                    "--batch",
+                    "2",
+                    "/fake/file.gz",
+                ],
+            )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        # No mapping should be inserted.
+        mock_store.add_mapping.assert_not_called()
+
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch("explainshell.util.collect_gz_files")
+    def test_symlink_already_mapped_at_score_10(
+        self,
+        mock_collect,
+        mock_store_create,
+        mock_make_ext,
+        mock_run,
+    ):
+        """Re-run: symlink mapping already exists at score 10, no change needed."""
+        canonical = "/fake/distro/release/1/bio-eagle.1.gz"
+        symlink = "/fake/distro/release/1/eagle.1.gz"
+        mock_collect.return_value = [symlink]
+
+        mock_store = MagicMock()
+        mock_store_create.return_value = mock_store
+        mock_store.has_manpage_source.side_effect = (
+            lambda s: s == "distro/release/1/bio-eagle.1.gz"
+        )
+        mock_store.mapping_score.return_value = 10  # already at score 10
+
+        mock_make_ext.return_value = MagicMock()
+        mock_run.return_value = BatchResult()
+
+        with (
+            patch("os.path.islink", side_effect=lambda p: p == symlink),
+            patch(
+                "os.path.realpath",
+                side_effect=lambda p: canonical if p == symlink else p,
+            ),
+        ):
+            from explainshell.manager import cli
+
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--db",
+                    "/tmp/test.db",
+                    "extract",
+                    "--mode",
+                    "llm:openai/test-model",
+                    "--batch",
+                    "2",
+                    "/fake/file.gz",
+                ],
+            )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        mock_store.add_mapping.assert_not_called()
+        mock_store.update_mapping_score.assert_not_called()
+
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch("explainshell.util.collect_gz_files")
+    def test_symlink_upgrades_lexgrog_alias_score(
+        self,
+        mock_collect,
+        mock_store_create,
+        mock_make_ext,
+        mock_run,
+    ):
+        """A lexgrog alias at score 1 is upgraded to score 10 by symlink mapping."""
+        canonical = "/fake/distro/release/1/bio-eagle.1.gz"
+        symlink = "/fake/distro/release/1/eagle.1.gz"
+        mock_collect.return_value = [symlink]
+
+        mock_store = MagicMock()
+        mock_store_create.return_value = mock_store
+        mock_store.has_manpage_source.side_effect = (
+            lambda s: s == "distro/release/1/bio-eagle.1.gz"
+        )
+        mock_store.mapping_score.return_value = 1  # lexgrog alias at low score
+
+        mock_make_ext.return_value = MagicMock()
+        mock_run.return_value = BatchResult()
+
+        with (
+            patch("os.path.islink", side_effect=lambda p: p == symlink),
+            patch(
+                "os.path.realpath",
+                side_effect=lambda p: canonical if p == symlink else p,
+            ),
+        ):
+            from explainshell.manager import cli
+
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--db",
+                    "/tmp/test.db",
+                    "extract",
+                    "--mode",
+                    "llm:openai/test-model",
+                    "--batch",
+                    "2",
+                    "/fake/file.gz",
+                ],
+            )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        # Score should be upgraded, not a new insert.
+        mock_store.add_mapping.assert_not_called()
+        mock_store.update_mapping_score.assert_called_once_with(
+            "eagle", "distro/release/1/bio-eagle.1.gz", score=10
+        )
 
 
 # ---------------------------------------------------------------------------
