@@ -18,6 +18,7 @@ from explainshell.extraction.llm.providers import BatchEntry, BatchResults, Toke
 logger = logging.getLogger(__name__)
 
 LLM_TIMEOUT_SECONDS = 300
+CANCEL_WAIT_TIMEOUT = 600  # max seconds to wait for cancellation to finalize
 
 
 def _openai_input(user_content: str) -> list[dict[str, str]]:
@@ -100,10 +101,19 @@ class OpenAIProvider:
     def make_poll_client(self) -> OpenAI:
         return OpenAI(timeout=LLM_TIMEOUT_SECONDS)
 
-    def poll_batch(self, client: OpenAI, job_id: str, poll_interval: int = 30) -> Batch:
+    def poll_batch(
+        self,
+        client: OpenAI,
+        job_id: str,
+        poll_interval: int = 30,
+        stall_timeout: int = 86400,
+    ) -> Batch:
         consecutive_errors = 0
         max_consecutive_errors = 5
         prev_counts: tuple[int, int] = (0, 0)
+        prev_status: str | None = None
+        last_progress_time = time.monotonic()
+        cancel_initiated_at: float | None = None
         while True:
             try:
                 batch = client.batches.retrieve(job_id)
@@ -135,12 +145,19 @@ class OpenAIProvider:
             if status == "failed":
                 raise ExtractionError(f"Batch job failed: {job_id}")
             if status == "cancelled":
+                if cancel_initiated_at is not None:
+                    # We cancelled it due to stall — return for partial result collection.
+                    return batch
                 raise ExtractionError(f"Batch job cancelled: {job_id}")
             if status == "expired":
                 raise ExtractionError(f"Batch job expired: {job_id}")
 
+            # Detect progress: either request counts changed or the batch
+            # transitioned to a new status (e.g. validating → in_progress,
+            # in_progress → finalizing).  Both count as forward progress.
             curr_counts = (counts.completed, counts.failed) if counts else (0, 0)
-            if curr_counts != prev_counts:
+            made_progress = curr_counts != prev_counts or status != prev_status
+            if made_progress:
                 logger.info(
                     "batch %s: status=%s%s",
                     job_id,
@@ -148,6 +165,8 @@ class OpenAIProvider:
                     counts_str,
                 )
                 prev_counts = curr_counts
+                prev_status = status
+                last_progress_time = time.monotonic()
             else:
                 logger.debug(
                     "batch %s: status=%s%s, polling again in %ds...",
@@ -156,6 +175,39 @@ class OpenAIProvider:
                     counts_str,
                     poll_interval,
                 )
+
+            now = time.monotonic()
+
+            # Stall detection: cancel the batch if no progress for too long.
+            if cancel_initiated_at is None:
+                stalled_for = now - last_progress_time
+                if stalled_for >= stall_timeout:
+                    stall_min = int(stalled_for // 60)
+                    logger.warning(
+                        "batch %s: no progress for %d minutes%s, cancelling...",
+                        job_id,
+                        stall_min,
+                        counts_str,
+                    )
+                    try:
+                        client.batches.cancel(job_id)
+                    except Exception as e:
+                        raise ExtractionError(
+                            f"Batch stalled and cancel failed: {e}"
+                        ) from e
+                    cancel_initiated_at = now
+            else:
+                # Already cancelled — give up if no progress since cancel or
+                # since the last count change (whichever is later).
+                reference_time = max(cancel_initiated_at, last_progress_time)
+                cancel_wait = now - reference_time
+                if cancel_wait >= CANCEL_WAIT_TIMEOUT:
+                    cancel_min = int(cancel_wait // 60)
+                    raise ExtractionError(
+                        f"Batch {job_id} cancellation did not complete "
+                        f"after {cancel_min} minutes"
+                    )
+
             time.sleep(poll_interval)
 
     def collect_results(self, job: Batch) -> BatchResults:
