@@ -62,7 +62,7 @@ def check(db_path: str) -> list[tuple[str, str]]:
 
     # 3. Orphaned mappings: mapping rows referencing non-existent manpage sources.
     orphans = conn.execute(
-        "SELECT m.id, m.src, m.dst FROM mappings m "
+        "SELECT m.src, m.dst FROM mappings m "
         "LEFT JOIN parsed_manpages mp ON m.dst = mp.source WHERE mp.source IS NULL"
     ).fetchall()
     for row in orphans:
@@ -139,7 +139,7 @@ def check(db_path: str) -> list[tuple[str, str]]:
     # 6. Unreachable manpages: manpages with no mapping pointing to them.
     unreachable = conn.execute(
         "SELECT mp.name, mp.source FROM parsed_manpages mp "
-        "LEFT JOIN mappings m ON mp.source = m.dst WHERE m.id IS NULL"
+        "LEFT JOIN mappings m ON mp.source = m.dst WHERE m.src IS NULL"
     ).fetchall()
     for row in unreachable:
         issues.append(

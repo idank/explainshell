@@ -32,13 +32,12 @@ CREATE TABLE IF NOT EXISTS parsed_manpages (
 );
 
 CREATE TABLE IF NOT EXISTS mappings (
-    id    INTEGER PRIMARY KEY,
     src   TEXT    NOT NULL,
     dst   TEXT    NOT NULL REFERENCES parsed_manpages(source) ON DELETE CASCADE,
-    score INTEGER NOT NULL
+    score INTEGER NOT NULL,
+    PRIMARY KEY (src, dst)
 );
 
-CREATE INDEX IF NOT EXISTS idx_mappings_src ON mappings(src);
 CREATE INDEX IF NOT EXISTS idx_mappings_dst ON mappings(dst);
 """
 
