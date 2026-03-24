@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 
 import httpx
@@ -83,10 +84,23 @@ class GeminiProvider:
         client.batches.cancel(name=job_id)
 
     def poll_batch(
-        self, client: Client, job_id: str, poll_interval: int = 30
+        self,
+        client: Client,
+        job_id: str,
+        poll_interval: int = 30,
+        stop_event: threading.Event | None = None,
     ) -> BatchJob:
         consecutive_errors = 0
         max_consecutive_errors = 5
+
+        def _wait() -> None:
+            if stop_event is not None:
+                stop_event.wait(poll_interval)
+                if stop_event.is_set():
+                    raise KeyboardInterrupt
+            else:
+                time.sleep(poll_interval)
+
         while True:
             try:
                 job = client.batches.get(name=job_id)
@@ -104,7 +118,7 @@ class GeminiProvider:
                     raise ExtractionError(
                         f"Batch poll failed after {max_consecutive_errors} consecutive errors: {e}"
                     ) from e
-                time.sleep(poll_interval)
+                _wait()
                 continue
 
             state = job.state.name if hasattr(job.state, "name") else str(job.state)
@@ -124,7 +138,7 @@ class GeminiProvider:
                 state,
                 poll_interval,
             )
-            time.sleep(poll_interval)
+            _wait()
 
     def collect_results(self, job: BatchJob) -> BatchResults:
         results: dict[str, str] = {}

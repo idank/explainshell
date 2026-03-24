@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from typing import Any, NamedTuple, Protocol
 
 
@@ -57,7 +58,13 @@ class BatchProvider(Protocol):
 
     def make_poll_client(self) -> Any: ...
 
-    def poll_batch(self, client: Any, job_id: str, poll_interval: int = 30) -> Any: ...
+    def poll_batch(
+        self,
+        client: Any,
+        job_id: str,
+        poll_interval: int = 30,
+        stop_event: threading.Event | None = None,
+    ) -> Any: ...
 
     def collect_results(self, job: Any) -> BatchResults: ...
 
