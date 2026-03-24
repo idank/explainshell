@@ -36,6 +36,7 @@ class _InflightBatches:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._batches: list[tuple[Any, Any, str]] = []  # (bp, client, job_id)
+        self.stop_event = threading.Event()
 
     def register(self, bp: Any, client: Any, job_id: str) -> None:
         with self._lock:
@@ -46,6 +47,7 @@ class _InflightBatches:
             self._batches = [(b, c, j) for b, c, j in self._batches if j != job_id]
 
     def cancel_all(self) -> None:
+        self.stop_event.set()
         with self._lock:
             batches = list(self._batches)
             self._batches.clear()
@@ -198,7 +200,7 @@ def _process_one_batch(
     batch_idx: int,
     total_batches: int,
     batch_items: list[_WorkItem],
-    inflight: _InflightBatches | None = None,
+    inflight: _InflightBatches,
 ) -> _BatchOutput:
     """Process a single provider batch: submit -> poll -> collect -> finalize.
 
@@ -234,21 +236,20 @@ def _process_one_batch(
         client = bp.make_poll_client()
         job_id = bp.submit_batch(requests)
         logger.info("batch %d/%d submitted: %s", batch_idx, total_batches, job_id)
-        if inflight is not None:
-            inflight.register(bp, client, job_id)
+        inflight.register(bp, client, job_id)
 
         try:
-            completed_job = bp.poll_batch(client, job_id)
+            completed_job = bp.poll_batch(
+                client, job_id, stop_event=inflight.stop_event
+            )
         except KeyboardInterrupt:
             # Leave registered so cancel_all() can cancel the provider batch.
             raise
         except Exception:
-            if inflight is not None:
-                inflight.deregister(job_id)
+            inflight.deregister(job_id)
             raise
         else:
-            if inflight is not None:
-                inflight.deregister(job_id)
+            inflight.deregister(job_id)
         collected = bp.collect_results(completed_job)
         usage = collected.usage
 
