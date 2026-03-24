@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 LLM_TIMEOUT_SECONDS = 300
 CANCEL_WAIT_TIMEOUT = 600  # max seconds to wait for cancellation to finalize
+STALL_TIMEOUT = 86400  # max seconds with no progress before cancelling a batch
 
 
 def _openai_input(user_content: str) -> list[dict[str, str]]:
@@ -33,9 +34,10 @@ def _openai_input(user_content: str) -> list[dict[str, str]]:
 class OpenAIProvider:
     """Implements LLMProvider + BatchProvider for OpenAI."""
 
-    def __init__(self, model: str) -> None:
+    def __init__(self, model: str, stall_timeout: int = STALL_TIMEOUT) -> None:
         self._model = model
         self._openai_model = model.removeprefix("openai/")
+        self._stall_timeout = stall_timeout
 
     def call(self, user_content: str) -> tuple[str, TokenUsage]:
         client = OpenAI(timeout=LLM_TIMEOUT_SECONDS)
@@ -109,9 +111,8 @@ class OpenAIProvider:
         self,
         client: OpenAI,
         job_id: str,
-        poll_interval: int = 30,
-        stall_timeout: int = 86400,
-        stop_event: threading.Event | None = None,
+        poll_interval: int,
+        stop_event: threading.Event | None,
     ) -> Batch:
         consecutive_errors = 0
         max_consecutive_errors = 5
@@ -191,7 +192,7 @@ class OpenAIProvider:
             # Stall detection: cancel the batch if no progress for too long.
             if cancel_initiated_at is None:
                 stalled_for = now - last_progress_time
-                if stalled_for >= stall_timeout:
+                if stalled_for >= self._stall_timeout:
                     stall_min = int(stalled_for // 60)
                     logger.warning(
                         "batch %s: no progress for %d minutes%s, cancelling...",

@@ -38,7 +38,6 @@ class TestPollBatchStallDetection(unittest.TestCase):
     """poll_batch should cancel the batch when progress stalls."""
 
     def setUp(self) -> None:
-        self.provider = OpenAIProvider("openai/gpt-5-mini")
         self.client = MagicMock()
 
     @patch("explainshell.extraction.llm.providers.openai.time")
@@ -46,6 +45,7 @@ class TestPollBatchStallDetection(unittest.TestCase):
         """After stall_timeout with no progress, the batch is cancelled and
         the cancelled batch is returned for partial result collection."""
         stall_timeout = 60
+        provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=stall_timeout)
         clock = [0.0]
 
         mock_time.monotonic = lambda: clock[0]
@@ -72,8 +72,11 @@ class TestPollBatchStallDetection(unittest.TestCase):
 
         mock_time.sleep.side_effect = advance_clock
 
-        result = self.provider.poll_batch(
-            self.client, "batch-123", poll_interval=30, stall_timeout=stall_timeout
+        result = provider.poll_batch(
+            self.client,
+            "batch-123",
+            poll_interval=30,
+            stop_event=None,
         )
 
         self.assertEqual(result.status, "cancelled")
@@ -84,6 +87,7 @@ class TestPollBatchStallDetection(unittest.TestCase):
     def test_progress_resets_stall_timer(self, mock_time: MagicMock) -> None:
         """When progress is made, the stall timer resets."""
         stall_timeout = 100
+        provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=stall_timeout)
         clock = [0.0]
         mock_time.monotonic = lambda: clock[0]
         mock_time.sleep = MagicMock()
@@ -112,8 +116,11 @@ class TestPollBatchStallDetection(unittest.TestCase):
 
         mock_time.sleep.side_effect = advance_clock
 
-        result = self.provider.poll_batch(
-            self.client, "batch-x", poll_interval=30, stall_timeout=stall_timeout
+        result = provider.poll_batch(
+            self.client,
+            "batch-x",
+            poll_interval=30,
+            stop_event=None,
         )
 
         self.assertEqual(result.status, "cancelled")
@@ -123,6 +130,7 @@ class TestPollBatchStallDetection(unittest.TestCase):
     def test_cancel_wait_timeout_raises(self, mock_time: MagicMock) -> None:
         """If cancellation itself stalls beyond CANCEL_WAIT_TIMEOUT, raise."""
         stall_timeout = 60
+        provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=stall_timeout)
         clock = [0.0]
         mock_time.monotonic = lambda: clock[0]
         mock_time.sleep = MagicMock()
@@ -151,11 +159,11 @@ class TestPollBatchStallDetection(unittest.TestCase):
         mock_time.sleep.side_effect = advance_clock
 
         with self.assertRaises(ExtractionError) as ctx:
-            self.provider.poll_batch(
+            provider.poll_batch(
                 self.client,
                 "batch-stuck",
                 poll_interval=30,
-                stall_timeout=stall_timeout,
+                stop_event=None,
             )
 
         self.assertIn("cancellation did not complete", str(ctx.exception))
@@ -165,6 +173,7 @@ class TestPollBatchStallDetection(unittest.TestCase):
     def test_cancel_api_failure_raises(self, mock_time: MagicMock) -> None:
         """If the cancel API call itself fails, raise ExtractionError."""
         stall_timeout = 60
+        provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=stall_timeout)
         clock = [0.0]
         mock_time.monotonic = lambda: clock[0]
         mock_time.sleep = MagicMock()
@@ -182,8 +191,11 @@ class TestPollBatchStallDetection(unittest.TestCase):
         mock_time.sleep.side_effect = advance_clock
 
         with self.assertRaises(ExtractionError) as ctx:
-            self.provider.poll_batch(
-                self.client, "batch-err", poll_interval=30, stall_timeout=stall_timeout
+            provider.poll_batch(
+                self.client,
+                "batch-err",
+                poll_interval=30,
+                stop_event=None,
             )
 
         self.assertIn("cancel failed", str(ctx.exception))
@@ -191,6 +203,7 @@ class TestPollBatchStallDetection(unittest.TestCase):
     @patch("explainshell.extraction.llm.providers.openai.time")
     def test_external_cancel_still_raises(self, mock_time: MagicMock) -> None:
         """A cancelled batch that we did NOT cancel should still raise."""
+        provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=9999)
         clock = [0.0]
         mock_time.monotonic = lambda: clock[0]
         mock_time.sleep = MagicMock(side_effect=lambda _: None)
@@ -202,8 +215,11 @@ class TestPollBatchStallDetection(unittest.TestCase):
         self.client.batches.retrieve = MagicMock(side_effect=poll_results)
 
         with self.assertRaises(ExtractionError) as ctx:
-            self.provider.poll_batch(
-                self.client, "batch-ext", poll_interval=30, stall_timeout=9999
+            provider.poll_batch(
+                self.client,
+                "batch-ext",
+                poll_interval=30,
+                stop_event=None,
             )
 
         self.assertIn("cancelled", str(ctx.exception))
@@ -212,6 +228,7 @@ class TestPollBatchStallDetection(unittest.TestCase):
     def test_completed_during_cancel_wait(self, mock_time: MagicMock) -> None:
         """If the batch completes while we're waiting for cancel, return it."""
         stall_timeout = 60
+        provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=stall_timeout)
         clock = [0.0]
         mock_time.monotonic = lambda: clock[0]
         mock_time.sleep = MagicMock()
@@ -240,8 +257,11 @@ class TestPollBatchStallDetection(unittest.TestCase):
 
         mock_time.sleep.side_effect = advance_clock
 
-        result = self.provider.poll_batch(
-            self.client, "batch-race", poll_interval=30, stall_timeout=stall_timeout
+        result = provider.poll_batch(
+            self.client,
+            "batch-race",
+            poll_interval=30,
+            stop_event=None,
         )
 
         self.assertEqual(result.status, "completed")
@@ -250,6 +270,7 @@ class TestPollBatchStallDetection(unittest.TestCase):
     @patch("explainshell.extraction.llm.providers.openai.time")
     def test_no_stall_completes_normally(self, mock_time: MagicMock) -> None:
         """When progress is steady, the batch completes without cancellation."""
+        provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=1800)
         clock = [0.0]
         mock_time.monotonic = lambda: clock[0]
         mock_time.sleep = MagicMock(
@@ -268,8 +289,11 @@ class TestPollBatchStallDetection(unittest.TestCase):
         ]
         self.client.batches.retrieve = MagicMock(side_effect=poll_results)
 
-        result = self.provider.poll_batch(
-            self.client, "batch-ok", poll_interval=30, stall_timeout=1800
+        result = provider.poll_batch(
+            self.client,
+            "batch-ok",
+            poll_interval=30,
+            stop_event=None,
         )
 
         self.assertEqual(result.status, "completed")
@@ -280,6 +304,7 @@ class TestPollBatchStallDetection(unittest.TestCase):
         """Status changes (e.g. validating → in_progress → finalizing)
         count as progress even when request counts don't change."""
         stall_timeout = 60
+        provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=stall_timeout)
         clock = [0.0]
         mock_time.monotonic = lambda: clock[0]
         mock_time.sleep = MagicMock()
@@ -318,11 +343,11 @@ class TestPollBatchStallDetection(unittest.TestCase):
 
         mock_time.sleep.side_effect = advance_clock
 
-        result = self.provider.poll_batch(
+        result = provider.poll_batch(
             self.client,
             "batch-lifecycle",
             poll_interval=30,
-            stall_timeout=stall_timeout,
+            stop_event=None,
         )
 
         self.assertEqual(result.status, "completed")
@@ -335,6 +360,7 @@ class TestPollBatchStallDetection(unittest.TestCase):
         """A batch stuck in validating with no status or count changes
         should still be detected as stalled."""
         stall_timeout = 60
+        provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=stall_timeout)
         clock = [0.0]
         mock_time.monotonic = lambda: clock[0]
         mock_time.sleep = MagicMock()
@@ -357,11 +383,11 @@ class TestPollBatchStallDetection(unittest.TestCase):
 
         mock_time.sleep.side_effect = advance_clock
 
-        result = self.provider.poll_batch(
+        result = provider.poll_batch(
             self.client,
             "batch-val-stuck",
             poll_interval=30,
-            stall_timeout=stall_timeout,
+            stop_event=None,
         )
 
         self.assertEqual(result.status, "cancelled")
@@ -374,6 +400,7 @@ class TestPollBatchStallDetection(unittest.TestCase):
         """After cancel, if request counts keep increasing the cancel-wait
         timeout resets so we don't discard recoverable results."""
         stall_timeout = 60
+        provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=stall_timeout)
         clock = [0.0]
         mock_time.monotonic = lambda: clock[0]
         mock_time.sleep = MagicMock()
@@ -415,11 +442,11 @@ class TestPollBatchStallDetection(unittest.TestCase):
 
         mock_time.sleep.side_effect = advance_clock
 
-        result = self.provider.poll_batch(
+        result = provider.poll_batch(
             self.client,
             "batch-slow-cancel",
             poll_interval=30,
-            stall_timeout=stall_timeout,
+            stop_event=None,
         )
 
         self.assertEqual(result.status, "cancelled")

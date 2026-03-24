@@ -87,8 +87,8 @@ class GeminiProvider:
         self,
         client: Client,
         job_id: str,
-        poll_interval: int = 30,
-        stop_event: threading.Event | None = None,
+        poll_interval: int,
+        stop_event: threading.Event | None,
     ) -> BatchJob:
         consecutive_errors = 0
         max_consecutive_errors = 5

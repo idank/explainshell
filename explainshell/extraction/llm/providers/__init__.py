@@ -62,8 +62,8 @@ class BatchProvider(Protocol):
         self,
         client: Any,
         job_id: str,
-        poll_interval: int = 30,
-        stop_event: threading.Event | None = None,
+        poll_interval: int,
+        stop_event: threading.Event | None,
     ) -> Any: ...
 
     def collect_results(self, job: Any) -> BatchResults: ...
