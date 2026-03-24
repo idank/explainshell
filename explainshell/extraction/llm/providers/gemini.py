@@ -79,6 +79,9 @@ class GeminiProvider:
     def make_poll_client(self) -> Client:
         return genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
+    def cancel_batch(self, client: Client, job_id: str) -> None:
+        client.batches.cancel(name=job_id)
+
     def poll_batch(
         self, client: Client, job_id: str, poll_interval: int = 30
     ) -> BatchJob:

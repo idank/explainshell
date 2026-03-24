@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import concurrent.futures
 import logging
+import threading
 from collections.abc import Callable
-from typing import NamedTuple
+from typing import Any, NamedTuple
 from explainshell.errors import ExtractionError, SkippedExtraction
 from explainshell.util import fmt_tokens
 from explainshell.extraction.llm.extractor import BatchExtractor, PreparedFile
@@ -23,6 +24,37 @@ from explainshell.extraction.types import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class _InflightBatches:
+    """Thread-safe registry of in-flight provider batches.
+
+    Used to cancel batches on KeyboardInterrupt so they don't linger
+    on the provider side after the process exits.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._batches: list[tuple[Any, Any, str]] = []  # (bp, client, job_id)
+
+    def register(self, bp: Any, client: Any, job_id: str) -> None:
+        with self._lock:
+            self._batches.append((bp, client, job_id))
+
+    def deregister(self, job_id: str) -> None:
+        with self._lock:
+            self._batches = [(b, c, j) for b, c, j in self._batches if j != job_id]
+
+    def cancel_all(self) -> None:
+        with self._lock:
+            batches = list(self._batches)
+            self._batches.clear()
+        for bp, client, job_id in batches:
+            try:
+                bp.cancel_batch(client, job_id)
+                logger.info("cancelled in-flight batch %s", job_id)
+            except Exception as e:
+                logger.warning("failed to cancel batch %s: %s", job_id, e)
 
 
 class _WorkItem(NamedTuple):
@@ -166,6 +198,7 @@ def _process_one_batch(
     batch_idx: int,
     total_batches: int,
     batch_items: list[_WorkItem],
+    inflight: _InflightBatches | None = None,
 ) -> _BatchOutput:
     """Process a single provider batch: submit -> poll -> collect -> finalize.
 
@@ -201,8 +234,21 @@ def _process_one_batch(
         client = bp.make_poll_client()
         job_id = bp.submit_batch(requests)
         logger.info("batch %d/%d submitted: %s", batch_idx, total_batches, job_id)
+        if inflight is not None:
+            inflight.register(bp, client, job_id)
 
-        completed_job = bp.poll_batch(client, job_id)
+        try:
+            completed_job = bp.poll_batch(client, job_id)
+        except KeyboardInterrupt:
+            # Leave registered so cancel_all() can cancel the provider batch.
+            raise
+        except Exception:
+            if inflight is not None:
+                inflight.deregister(job_id)
+            raise
+        else:
+            if inflight is not None:
+                inflight.deregister(job_id)
         collected = bp.collect_results(completed_job)
         usage = collected.usage
 
@@ -373,13 +419,24 @@ def run_batch(
             if on_result:
                 on_result(entry.gz_path, entry)
 
+    inflight = _InflightBatches()
+
     if jobs <= 1:
         # Sequential: process batches inline.
-        for batch_idx, batch_items in enumerate(batches, 1):
-            output = _process_one_batch(
-                extractor, batch_idx, total_batches, batch_items
-            )
-            _handle_output(output)
+        try:
+            for batch_idx, batch_items in enumerate(batches, 1):
+                output = _process_one_batch(
+                    extractor, batch_idx, total_batches, batch_items, inflight
+                )
+                _handle_output(output)
+        except KeyboardInterrupt:
+            # Cancel remote batches and exit quickly. We don't attempt
+            # to collect partial results from cancelled batches — the
+            # token loss is negligible and keeping the interrupt path
+            # simple is more important.
+            logger.info("interrupted, cancelling in-flight batches...")
+            inflight.cancel_all()
+            raise
     else:
         # Parallel: rolling thread pool — at most `jobs` batches in flight.
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=jobs)
@@ -395,7 +452,12 @@ def run_batch(
                 idx, items = item
                 batches[idx - 1] = None  # type: ignore[call-overload]  # release ref
                 f = executor.submit(
-                    _process_one_batch, extractor, idx, total_batches, items
+                    _process_one_batch,
+                    extractor,
+                    idx,
+                    total_batches,
+                    items,
+                    inflight,
                 )
                 pending[f] = idx
                 return True
@@ -415,6 +477,12 @@ def run_batch(
                     del pending[f]
                     _submit_next()
         except KeyboardInterrupt:
+            # Cancel remote batches and exit quickly. We don't attempt
+            # to collect partial results from cancelled batches — the
+            # token loss is negligible and keeping the interrupt path
+            # simple is more important.
+            logger.info("interrupted, cancelling in-flight batches...")
+            inflight.cancel_all()
             executor.shutdown(wait=False, cancel_futures=True)
             raise
         else:

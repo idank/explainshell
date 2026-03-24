@@ -101,6 +101,9 @@ class OpenAIProvider:
     def make_poll_client(self) -> OpenAI:
         return OpenAI(timeout=LLM_TIMEOUT_SECONDS)
 
+    def cancel_batch(self, client: OpenAI, job_id: str) -> None:
+        client.batches.cancel(job_id)
+
     def poll_batch(
         self,
         client: OpenAI,
