@@ -240,7 +240,7 @@ def _process_one_batch(
 
         try:
             completed_job = bp.poll_batch(
-                client, job_id, stop_event=inflight.stop_event
+                client, job_id, poll_interval=30, stop_event=inflight.stop_event
             )
         except KeyboardInterrupt:
             # Leave registered so cancel_all() can cancel the provider batch.
