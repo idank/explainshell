@@ -61,6 +61,8 @@ class BatchProvider(Protocol):
 
     def collect_results(self, job: Any) -> BatchResults: ...
 
+    def cancel_batch(self, client: Any, job_id: str) -> None: ...
+
 
 def make_provider(model: str) -> LLMProvider:
     """Create a provider for the given model string."""
