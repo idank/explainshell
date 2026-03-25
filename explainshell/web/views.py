@@ -17,8 +17,6 @@ logger = logging.getLogger(__name__)
 
 bp = Blueprint("main", __name__)
 
-_md = markdown_lib.Markdown()
-
 
 def _is_known_distro(name):
     """Return True if *name* matches a distro in the cached distros list."""
@@ -65,12 +63,11 @@ def _get_current_url_distro_release():
 def render_markdown(text: str) -> str:
     """Convert markdown text to HTML. Falls through to escaped text on error."""
     try:
-        _md.reset()
         # Escape bare <word> placeholders (e.g. <newbase>, <file>) so the
         # markdown library doesn't swallow them as HTML tags.  Leave
         # blockquote '>' at line starts and already-escaped &lt;/&gt; alone.
         text = re.sub(r"<([^>]+)>", r"&lt;\1&gt;", text)
-        return _md.convert(text)
+        return markdown_lib.markdown(text)
     except Exception:
         return markupsafe.escape(text)
 
