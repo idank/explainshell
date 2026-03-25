@@ -1362,5 +1362,138 @@ class TestDbCheckCli(unittest.TestCase):
         self.assertIn("Database not found", result.output)
 
 
+# ---------------------------------------------------------------------------
+# TestAtFileExpansion
+# ---------------------------------------------------------------------------
+
+
+class TestAtFileExpansion(unittest.TestCase):
+    """Tests that @file arguments are expanded through the CLI."""
+
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch(
+        "explainshell.manager.config.source_from_path", return_value="fake/echo.1.gz"
+    )
+    def test_extract_expands_at_file(
+        self,
+        mock_source: MagicMock,
+        mock_store_create: MagicMock,
+        mock_make_ext: MagicMock,
+    ) -> None:
+        """@file arg is expanded to the file's contents and passed to extraction."""
+        fake_result = MagicMock()
+        fake_result.outcome = ExtractionOutcome.SUCCESS
+        fake_result.mp.options = [MagicMock()]
+        fake_result.stats = ExtractionStats(elapsed_seconds=0)
+        mock_ext = MagicMock()
+        mock_ext.extract.return_value = fake_result
+        mock_make_ext.return_value = mock_ext
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("/fake/echo.1.gz\n")
+            f.flush()
+            list_path = f.name
+
+        try:
+            from explainshell.manager import cli
+
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                ["extract", "--mode", "llm:test-model", "--dry-run", f"@{list_path}"],
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            mock_ext.extract.assert_called_once_with("/fake/echo.1.gz")
+        finally:
+            os.unlink(list_path)
+
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch(
+        "explainshell.manager.config.source_from_path", return_value="fake/echo.1.gz"
+    )
+    def test_extract_at_file_skips_blanks_and_comments(
+        self,
+        mock_source: MagicMock,
+        mock_store_create: MagicMock,
+        mock_make_ext: MagicMock,
+    ) -> None:
+        fake_result = MagicMock()
+        fake_result.outcome = ExtractionOutcome.SUCCESS
+        fake_result.mp.options = [MagicMock()]
+        fake_result.stats = ExtractionStats(elapsed_seconds=0)
+        mock_ext = MagicMock()
+        mock_ext.extract.return_value = fake_result
+        mock_make_ext.return_value = mock_ext
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("/fake/echo.1.gz\n\n# comment\n  \n")
+            f.flush()
+            list_path = f.name
+
+        try:
+            from explainshell.manager import cli
+
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                ["extract", "--mode", "llm:test-model", "--dry-run", f"@{list_path}"],
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            mock_ext.extract.assert_called_once_with("/fake/echo.1.gz")
+        finally:
+            os.unlink(list_path)
+
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch(
+        "explainshell.manager.config.source_from_path", return_value="fake/echo.1.gz"
+    )
+    def test_extract_mixed_plain_and_at_file(
+        self,
+        mock_source: MagicMock,
+        mock_store_create: MagicMock,
+        mock_make_ext: MagicMock,
+    ) -> None:
+        fake_result = MagicMock()
+        fake_result.outcome = ExtractionOutcome.SUCCESS
+        fake_result.mp.options = [MagicMock()]
+        fake_result.stats = ExtractionStats(elapsed_seconds=0)
+        mock_ext = MagicMock()
+        mock_ext.extract.return_value = fake_result
+        mock_make_ext.return_value = mock_ext
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("/fake/echo.1.gz\n")
+            f.flush()
+            list_path = f.name
+
+        try:
+            from explainshell.manager import cli
+
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "extract",
+                    "--mode",
+                    "llm:test-model",
+                    "--dry-run",
+                    "/fake/other.1.gz",
+                    f"@{list_path}",
+                ],
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            calls = [c.args[0] for c in mock_ext.extract.call_args_list]
+            self.assertIn("/fake/other.1.gz", calls)
+            self.assertIn("/fake/echo.1.gz", calls)
+        finally:
+            os.unlink(list_path)
+
+
 if __name__ == "__main__":
     unittest.main()
