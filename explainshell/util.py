@@ -89,10 +89,34 @@ def name_section(path):
     return name, section
 
 
-def collect_gz_files(paths: list[str]) -> list[str]:
-    """Expand a list of files/directories into absolute .gz file paths."""
+def _expand_file_lists(paths: list[str]) -> list[str]:
+    """Expand @file references to their contents.
+
+    A path starting with '@' is treated as a file containing one path per line.
+    Blank lines and lines starting with '#' are skipped.
+    """
     result: list[str] = []
     for path in paths:
+        if path.startswith("@"):
+            list_file = path[1:]
+            with open(list_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        result.append(line)
+        else:
+            result.append(path)
+    return result
+
+
+def collect_gz_files(paths: list[str]) -> list[str]:
+    """Expand a list of files/directories into absolute .gz file paths.
+
+    Paths starting with '@' are treated as files containing one path per line.
+    """
+    expanded = _expand_file_lists(paths)
+    result: list[str] = []
+    for path in expanded:
         if os.path.isdir(path):
             result.extend(
                 sorted(glob.glob(os.path.join(path, "**", "*.gz"), recursive=True))
