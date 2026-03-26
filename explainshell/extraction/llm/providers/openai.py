@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 LLM_TIMEOUT_SECONDS = 300
 CANCEL_WAIT_TIMEOUT = 600  # max seconds to wait for cancellation to finalize
-STALL_TIMEOUT = 86400  # max seconds with no progress before cancelling a batch
+STALL_TIMEOUT = 79200  # max seconds (22h) with no progress before cancelling a batch
 
 
 def _openai_input(user_content: str) -> list[dict[str, str]]:
@@ -118,7 +118,7 @@ class OpenAIProvider:
         max_consecutive_errors = 5
         prev_counts: tuple[int, int] = (0, 0)
         prev_status: str | None = None
-        last_progress_time = time.monotonic()
+        start_time = time.monotonic()
         cancel_initiated_at: float | None = None
         while True:
             try:
@@ -161,14 +161,16 @@ class OpenAIProvider:
                     return batch
                 raise ExtractionError(f"Batch job cancelled: {job_id}")
             if status == "expired":
-                raise ExtractionError(f"Batch job expired: {job_id}")
+                logger.warning(
+                    "batch %s: expired%s, collecting partial results...",
+                    job_id,
+                    counts_str,
+                )
+                return batch
 
-            # Detect progress: either request counts changed or the batch
-            # transitioned to a new status (e.g. validating → in_progress,
-            # in_progress → finalizing).  Both count as forward progress.
+            # Log progress changes at INFO, unchanged polls at DEBUG.
             curr_counts = (counts.completed, counts.failed) if counts else (0, 0)
-            made_progress = curr_counts != prev_counts or status != prev_status
-            if made_progress:
+            if curr_counts != prev_counts or status != prev_status:
                 logger.info(
                     "batch %s: status=%s%s",
                     job_id,
@@ -177,7 +179,6 @@ class OpenAIProvider:
                 )
                 prev_counts = curr_counts
                 prev_status = status
-                last_progress_time = time.monotonic()
             else:
                 logger.debug(
                     "batch %s: status=%s%s, polling again in %ds...",
@@ -189,35 +190,37 @@ class OpenAIProvider:
 
             now = time.monotonic()
 
-            # Stall detection: cancel the batch if no progress for too long.
+            # Wall-time deadline: the API caps batches at 24h, so cancel
+            # before that to attempt partial result collection.
             if cancel_initiated_at is None:
-                stalled_for = now - last_progress_time
-                if stalled_for >= self._stall_timeout:
-                    stall_min = int(stalled_for // 60)
+                elapsed = now - start_time
+                if elapsed >= self._stall_timeout:
+                    elapsed_min = int(elapsed // 60)
                     logger.warning(
-                        "batch %s: no progress for %d minutes%s, cancelling...",
+                        "batch %s: wall-time limit reached (%d minutes)%s, cancelling...",
                         job_id,
-                        stall_min,
+                        elapsed_min,
                         counts_str,
                     )
                     try:
                         client.batches.cancel(job_id)
                     except Exception as e:
                         raise ExtractionError(
-                            f"Batch stalled and cancel failed: {e}"
+                            f"Batch wall-time limit reached and cancel failed: {e}"
                         ) from e
                     cancel_initiated_at = now
             else:
-                # Already cancelled — give up if no progress since cancel or
-                # since the last count change (whichever is later).
-                reference_time = max(cancel_initiated_at, last_progress_time)
-                cancel_wait = now - reference_time
+                cancel_wait = now - cancel_initiated_at
                 if cancel_wait >= CANCEL_WAIT_TIMEOUT:
                     cancel_min = int(cancel_wait // 60)
-                    raise ExtractionError(
-                        f"Batch {job_id} cancellation did not complete "
-                        f"after {cancel_min} minutes"
+                    logger.warning(
+                        "batch %s: cancellation did not complete after "
+                        "%d minutes%s, collecting partial results...",
+                        job_id,
+                        cancel_min,
+                        counts_str,
                     )
+                    return batch
 
             if stop_event is not None:
                 stop_event.wait(poll_interval)
