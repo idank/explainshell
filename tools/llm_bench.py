@@ -43,6 +43,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from explainshell.extraction import ExtractorConfig, ExtractionOutcome, make_extractor
+from explainshell.extraction.manifest import BatchManifest
 from explainshell.extraction.types import ExtractionResult
 from explainshell.extraction.runner import run
 from explainshell.util import collect_gz_files
@@ -162,9 +163,19 @@ def run_bench(args: argparse.Namespace) -> int:
 
         file_metrics[name] = entry
 
+    manifest = None
+    if args.batch is not None:
+        manifest_path = os.path.join(run_dir, "batch-manifest.json")
+        manifest = BatchManifest(manifest_path, model=args.model, batch_size=args.batch)
+
     t0 = time.monotonic()
     result = run(
-        extractor, gz_files, batch_size=args.batch, jobs=args.jobs, on_result=_on_result
+        extractor,
+        gz_files,
+        batch_size=args.batch,
+        jobs=args.jobs,
+        on_result=_on_result,
+        manifest=manifest,
     )
     elapsed = time.monotonic() - t0
 

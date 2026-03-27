@@ -1,6 +1,7 @@
 """Unit tests for explainshell.manager."""
 
 import datetime
+import json
 import os
 import tempfile
 import unittest
@@ -8,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
+from explainshell.extraction.manifest import ManifestData
 from explainshell.extraction.types import (
     BatchResult,
     ExtractionResult,
@@ -60,7 +62,13 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
         writes_at_callback = []
 
         def _fake_run(
-            ext, files, batch_size=None, jobs=1, on_start=None, on_result=None
+            ext,
+            files,
+            batch_size=None,
+            jobs=1,
+            on_start=None,
+            on_result=None,
+            manifest=None,
         ):
             from explainshell.extraction.types import BatchResult
 
@@ -137,7 +145,13 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
         mock_make_ext.return_value = MagicMock()
 
         def _fake_run(
-            ext, files, batch_size=None, jobs=1, on_start=None, on_result=None
+            ext,
+            files,
+            batch_size=None,
+            jobs=1,
+            on_start=None,
+            on_result=None,
+            manifest=None,
         ):
             from explainshell.extraction.types import BatchResult
 
@@ -315,7 +329,13 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_make_ext.return_value = MagicMock()
 
         def _fake_run(
-            ext, files, batch_size=None, jobs=1, on_start=None, on_result=None
+            ext,
+            files,
+            batch_size=None,
+            jobs=1,
+            on_start=None,
+            on_result=None,
+            manifest=None,
         ):
             from explainshell.extraction.types import BatchResult
 
@@ -397,7 +417,13 @@ class TestSymlinkMapping(unittest.TestCase):
         mock_store.has_manpage_source.side_effect = _has_manpage_source
 
         def _fake_run(
-            ext, files, batch_size=None, jobs=1, on_start=None, on_result=None
+            ext,
+            files,
+            batch_size=None,
+            jobs=1,
+            on_start=None,
+            on_result=None,
+            manifest=None,
         ):
             batch = BatchResult()
             for gz_path in files:
@@ -1493,6 +1519,243 @@ class TestAtFileExpansion(unittest.TestCase):
             self.assertIn("/fake/echo.1.gz", calls)
         finally:
             os.unlink(list_path)
+
+
+# ---------------------------------------------------------------------------
+# TestRunSalvage
+# ---------------------------------------------------------------------------
+
+
+class TestRunSalvage(unittest.TestCase):
+    """Tests for the manifest-based _run_salvage function."""
+
+    def _make_manifest_data(
+        self,
+        batches: list[dict],
+        model: str = "openai/gpt-5-mini",
+    ) -> ManifestData:
+        return ManifestData(
+            version=1,
+            model=model,
+            batch_size=50,
+            total_batches=len(batches),
+            batches=batches,
+        )
+
+    def test_no_failed_batches(self) -> None:
+        """When all batches completed, _run_salvage returns empty result."""
+        from explainshell.manager import _run_salvage
+
+        manifest_data = self._make_manifest_data(
+            [
+                {
+                    "batch_idx": 1,
+                    "batch_id": "b1",
+                    "status": "completed",
+                    "error": None,
+                    "files": ["/fake/a.gz"],
+                },
+            ]
+        )
+
+        ext = MagicMock()
+        result = _run_salvage(ext, manifest_data, s=None, dry_run=True)
+
+        self.assertEqual(result.n_succeeded, 0)
+        self.assertEqual(result.n_failed, 0)
+
+    def test_salvage_failed_batch(self) -> None:
+        """Failed batch files are re-prepared, finalized, and counted as succeeded."""
+        from explainshell.extraction.llm.providers import BatchResults, TokenUsage
+        from explainshell.manager import _run_salvage
+
+        manifest_data = self._make_manifest_data(
+            [
+                {
+                    "batch_idx": 1,
+                    "batch_id": "b1",
+                    "status": "failed",
+                    "error": "expired",
+                    "files": ["/fake/a.gz"],
+                },
+            ]
+        )
+
+        ext = MagicMock()
+        job = MagicMock()
+        ext.batch_provider.retrieve_batch.return_value = job
+        ext.batch_provider.collect_results.return_value = BatchResults(
+            {"0:0": '{"options":[]}'}, TokenUsage(100, 50)
+        )
+        fake_mp = MagicMock(options=[MagicMock()])
+        fake_entry = ExtractionResult(
+            gz_path="/fake/a.gz",
+            mp=fake_mp,
+            raw=MagicMock(),
+            stats=ExtractionStats(chunks=1, plain_text_len=100),
+        )
+        ext.finalize.return_value = fake_entry
+
+        prepared = MagicMock()
+        prepared.n_chunks = 1
+        ext.prepare.return_value = prepared
+
+        result = _run_salvage(ext, manifest_data, s=None, dry_run=True)
+
+        self.assertEqual(result.n_succeeded, 1)
+        self.assertEqual(result.n_failed, 0)
+        # Failed batches are already terminal — retrieve, don't poll.
+        ext.batch_provider.retrieve_batch.assert_called_once_with("b1")
+        ext.batch_provider.poll_batch.assert_not_called()
+        ext.prepare.assert_called_once_with("/fake/a.gz")
+
+    def test_null_batch_id_skipped(self) -> None:
+        """Batches with null batch_id (submit failed) are skipped, files counted as failed."""
+        from explainshell.manager import _run_salvage
+
+        manifest_data = self._make_manifest_data(
+            [
+                {
+                    "batch_idx": 1,
+                    "batch_id": None,
+                    "status": "failed",
+                    "error": "submit failed",
+                    "files": ["/fake/a.gz", "/fake/b.gz"],
+                },
+            ]
+        )
+
+        ext = MagicMock()
+        result = _run_salvage(ext, manifest_data, s=None, dry_run=True)
+
+        self.assertEqual(result.n_failed, 2)
+        self.assertEqual(result.n_succeeded, 0)
+        ext.batch_provider.retrieve_batch.assert_not_called()
+
+    def test_submitted_status_polls_before_collecting(self) -> None:
+        """Batches in 'submitted' status are polled to terminal state, not just retrieved."""
+        from explainshell.extraction.llm.providers import BatchResults, TokenUsage
+        from explainshell.manager import _run_salvage
+
+        manifest_data = self._make_manifest_data(
+            [
+                {
+                    "batch_idx": 1,
+                    "batch_id": "b1",
+                    "status": "submitted",
+                    "error": None,
+                    "files": ["/fake/a.gz"],
+                },
+            ]
+        )
+
+        ext = MagicMock()
+        poll_client = MagicMock()
+        ext.batch_provider.make_poll_client.return_value = poll_client
+        polled_job = MagicMock()
+        ext.batch_provider.poll_batch.return_value = polled_job
+        ext.batch_provider.collect_results.return_value = BatchResults(
+            {"0:0": '{"options":[]}'}, TokenUsage(100, 50)
+        )
+        fake_mp = MagicMock(options=[MagicMock()])
+        fake_entry = ExtractionResult(
+            gz_path="/fake/a.gz",
+            mp=fake_mp,
+            raw=MagicMock(),
+            stats=ExtractionStats(chunks=1, plain_text_len=100),
+        )
+        ext.finalize.return_value = fake_entry
+
+        prepared = MagicMock()
+        prepared.n_chunks = 1
+        ext.prepare.return_value = prepared
+
+        result = _run_salvage(ext, manifest_data, s=None, dry_run=True)
+
+        self.assertEqual(result.n_succeeded, 1)
+        # Must poll, not just retrieve.
+        ext.batch_provider.make_poll_client.assert_called_once()
+        ext.batch_provider.poll_batch.assert_called_once_with(
+            poll_client, "b1", poll_interval=30, stop_event=None
+        )
+        ext.batch_provider.retrieve_batch.assert_not_called()
+        # collect_results called with the polled job, not a retrieved one.
+        ext.batch_provider.collect_results.assert_called_once_with(polled_job)
+
+
+class TestSalvageCliValidation(unittest.TestCase):
+    """CLI-level validation for the salvage command."""
+
+    def test_manifest_model_mismatch_fails(self) -> None:
+        """salvage rejects a manifest whose model differs from --mode."""
+        manifest_data = {
+            "version": 1,
+            "model": "openai/gpt-5-mini",
+            "batch_size": 50,
+            "total_batches": 0,
+            "batches": [],
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(manifest_data, f)
+            manifest_path = f.name
+
+        try:
+            from explainshell.manager import cli
+
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "salvage",
+                    "--mode",
+                    "llm:openai/gpt-4o",
+                    "--manifest",
+                    manifest_path,
+                    "--dry-run",
+                ],
+            )
+
+            self.assertNotEqual(result.exit_code, 0)
+            self.assertIn("does not match", result.output)
+        finally:
+            os.unlink(manifest_path)
+
+    def test_manifest_bad_version_fails(self) -> None:
+        """salvage rejects a manifest with unsupported version."""
+        manifest_data = {
+            "version": 999,
+            "model": "openai/gpt-5-mini",
+            "batch_size": 50,
+            "total_batches": 0,
+            "batches": [],
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(manifest_data, f)
+            manifest_path = f.name
+
+        try:
+            from explainshell.manager import cli
+
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "salvage",
+                    "--mode",
+                    "llm:openai/gpt-5-mini",
+                    "--manifest",
+                    manifest_path,
+                    "--dry-run",
+                ],
+            )
+
+            self.assertNotEqual(result.exit_code, 0)
+            # Pydantic rejects version=999 since only 1 is allowed.
+            self.assertIn("version", result.output)
+        finally:
+            os.unlink(manifest_path)
 
 
 if __name__ == "__main__":
