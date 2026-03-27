@@ -16,11 +16,18 @@ Extraction modes (--mode):
     hybrid:<model>      Try tree parser first, fall back to LLM when confidence is low
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import sys
 import threading
 import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from explainshell.extraction.llm.extractor import BatchExtractor
+    from explainshell.extraction.salvage import BatchLogInfo
 
 import click
 
@@ -33,7 +40,12 @@ from explainshell.extraction import (
     ExtractionResult,
     make_extractor,
 )
-from explainshell.extraction.runner import run, run_sequential
+from explainshell.extraction.runner import (
+    run,
+    run_sequential,
+    group_work_items,
+    WorkItem,
+)
 
 logger = logging.getLogger("explainshell.manager")
 
@@ -609,6 +621,270 @@ def extract(
     rc = _log_summary(
         batch_result, prefilter_skipped, elapsed, symlinks_mapped=symlinks_mapped
     )
+    if rc != 0:
+        sys.exit(rc)
+
+
+# ---------------------------------------------------------------------------
+# salvage command
+# ---------------------------------------------------------------------------
+
+
+def _run_salvage(
+    extractor: BatchExtractor,
+    work_files: list[str],
+    batch_size: int,
+    log_info: BatchLogInfo,
+    s: store.Store | None,
+    dry_run: bool,
+) -> BatchResult:
+    """Salvage partial results from failed batches.
+
+    Re-prepares files to reconstruct the batch grouping from the original run,
+    then retrieves and finalizes results for failed batches only.
+    """
+    from explainshell.errors import SkippedExtraction
+    from explainshell.extraction.salvage import salvageable_batches
+
+    bp = extractor.batch_provider
+    targets = salvageable_batches(log_info)
+    if not targets:
+        logger.info("no salvageable batches found in log")
+        return BatchResult()
+
+    logger.info(
+        "found %d salvageable batch(es): %s",
+        len(targets),
+        ", ".join(f"{idx}" for idx in sorted(targets)),
+    )
+
+    # Phase 1: re-prepare all files to reconstruct the identical batch grouping.
+    work_items: list[WorkItem] = []
+    skipped_paths: list[str] = []
+    for gz_path in work_files:
+        try:
+            prepared = extractor.prepare(gz_path)
+        except SkippedExtraction:
+            skipped_paths.append(gz_path)
+            continue
+        except Exception as e:
+            logger.error("failed to prepare %s: %s", gz_path, e)
+            skipped_paths.append(gz_path)
+            continue
+        work_items.append(WorkItem(gz_path, prepared))
+
+    if not work_items:
+        logger.warning("no files could be prepared")
+        return BatchResult()
+
+    batches = group_work_items(work_items, batch_size)
+    total_batches = len(batches)
+    del work_items
+
+    if total_batches != log_info.total_batches:
+        logger.error(
+            "batch count mismatch: reconstructed %d batches but log says %d. "
+            "Make sure you pass the same files and --batch-size as the original run.",
+            total_batches,
+            log_info.total_batches,
+        )
+        return BatchResult()
+
+    logger.info(
+        "reconstructed %d batch(es), salvaging %d failed batch(es)...",
+        total_batches,
+        len(targets),
+    )
+
+    # Phase 2: retrieve and finalize failed batches.
+    result = BatchResult()
+    for batch_idx, batch_id in sorted(targets.items()):
+        batch_items = batches[batch_idx - 1]  # 1-based → 0-based
+        logger.info(
+            "salvaging batch %d/%d (%s, %d file(s))...",
+            batch_idx,
+            total_batches,
+            batch_id,
+            len(batch_items),
+        )
+
+        try:
+            job = bp.retrieve_batch(batch_id)
+        except Exception as e:
+            logger.error("failed to retrieve batch %s: %s", batch_id, e)
+            result.n_failed += len(batch_items)
+            continue
+
+        try:
+            collected = bp.collect_results(job)
+        except Exception as e:
+            logger.error("failed to collect results for batch %s: %s", batch_id, e)
+            result.n_failed += len(batch_items)
+            continue
+
+        result.stats.input_tokens += collected.usage.input_tokens
+        result.stats.output_tokens += collected.usage.output_tokens
+        result.stats.reasoning_tokens += collected.usage.reasoning_tokens
+
+        logger.info(
+            "batch %d: collected %d result(s) from provider",
+            batch_idx,
+            len(collected.responses),
+        )
+
+        for item_idx, (gz_path, prepared) in enumerate(batch_items):
+            short_path = config.source_from_path(gz_path)
+
+            # Skip files already in DB (from a prior successful run or partial salvage).
+            if not dry_run and s.has_manpage_source(short_path):
+                logger.info("[%s] already in DB, skipping", short_path)
+                result.n_skipped += 1
+                continue
+
+            n_chunks = prepared.n_chunks
+            responses: list[str] = []
+            file_failed = False
+
+            for chunk_idx in range(n_chunks):
+                key_str = f"{item_idx}:{chunk_idx}"
+                response_text = collected.responses.get(key_str)
+                if response_text is None:
+                    logger.warning(
+                        "[%s] missing result for chunk %d (key %s)",
+                        short_path,
+                        chunk_idx,
+                        key_str,
+                    )
+                    file_failed = True
+                    break
+                responses.append(response_text)
+
+            if file_failed:
+                result.n_failed += 1
+                continue
+
+            try:
+                entry = extractor.finalize(gz_path, prepared, responses)
+            except Exception as e:
+                logger.error("[%s] failed to finalize: %s", short_path, e)
+                result.n_failed += 1
+                continue
+
+            if not dry_run:
+                s.add_manpage(entry.mp, entry.raw)
+            logger.info(
+                "[%s] salvaged: %d option(s)", short_path, len(entry.mp.options)
+            )
+            result.stats += entry.stats
+            result.n_succeeded += 1
+
+    return result
+
+
+@cli.command()
+@click.option(
+    "-m",
+    "--mode",
+    required=True,
+    help="Must match the original run's mode (e.g. llm:openai/gpt-5-mini).",
+)
+@click.option(
+    "--batch-size",
+    type=int,
+    required=True,
+    help="Must match the original run's --batch value.",
+)
+@click.option(
+    "--log-file",
+    required=True,
+    type=click.Path(exists=True),
+    help="Log file from the failed extract --batch run.",
+)
+@click.option(
+    "--dry-run", is_flag=True, help="Show what would be salvaged without writing to DB."
+)
+@click.option(
+    "--debug-dir",
+    default=None,
+    help="Directory for debug files.",
+)
+@click.argument("files", nargs=-1, required=True)
+@click.pass_context
+def salvage(
+    ctx: click.Context,
+    mode: str,
+    batch_size: int,
+    log_file: str,
+    dry_run: bool,
+    debug_dir: str | None,
+    files: tuple[str, ...],
+) -> None:
+    """Salvage partial results from failed batch extraction runs.
+
+    Re-prepares the same input files to reconstruct the batch grouping,
+    then retrieves and finalizes results for batches that failed during
+    the original run (expired, connection errors, cancellation timeouts).
+
+    The FILES argument must match exactly what was passed to the original
+    extract command.
+    """
+    from explainshell.extraction.llm.extractor import BatchExtractor
+    from explainshell.extraction.salvage import parse_batch_log
+
+    try:
+        parsed_mode, model = _parse_mode(mode)
+    except ValueError as e:
+        raise click.UsageError(str(e))
+
+    if parsed_mode != "llm" or not model:
+        raise click.UsageError("salvage only works with llm:<model> mode")
+    if not model.startswith(("gemini/", "openai/")):
+        raise click.UsageError("salvage only supports gemini/ and openai/ models")
+
+    gz_files = util.collect_gz_files(list(files))
+    if not gz_files:
+        raise click.UsageError("No .gz files found.")
+
+    log_info = parse_batch_log(log_file)
+    if not log_info.submitted:
+        raise click.UsageError("No submitted batches found in the log file.")
+    if not log_info.failed:
+        click.echo("No failed batches found in the log file. Nothing to salvage.")
+        return
+
+    if not dry_run:
+        db_path = _require_db(ctx)
+        s = store.Store.create(db_path)
+    else:
+        db_path = None
+        s = None
+
+    cfg = ExtractorConfig(model=model, debug_dir=debug_dir)
+    extractor = make_extractor(parsed_mode, cfg)
+    if not isinstance(extractor, BatchExtractor):
+        raise click.UsageError("extractor does not support batch mode")
+
+    # Replicate the same pre-filtering as the original extract command:
+    # skip symlinks and files that were "already stored" at the time of the
+    # original run (parsed from the log).  This is necessary to reconstruct
+    # the identical batch grouping.
+    work_files: list[str] = []
+    for gz_path in gz_files:
+        if os.path.islink(gz_path):
+            continue
+        short_path = config.source_from_path(gz_path)
+        if short_path in log_info.already_stored:
+            continue
+        work_files.append(gz_path)
+
+    t0 = time.monotonic()
+    batch_result = _run_salvage(extractor, work_files, batch_size, log_info, s, dry_run)
+
+    if not dry_run and s is not None and batch_result.n_succeeded > 0:
+        s.update_subcommand_mappings()
+
+    elapsed = time.monotonic() - t0
+    rc = _log_summary(batch_result, 0, elapsed, dry_run=dry_run)
     if rc != 0:
         sys.exit(rc)
 
