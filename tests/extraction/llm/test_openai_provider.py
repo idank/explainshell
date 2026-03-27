@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import threading
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import openai
+
 from explainshell.errors import ExtractionError
 from explainshell.extraction.llm.providers.openai import (
     CANCEL_WAIT_TIMEOUT,
+    MAX_ERROR_BACKOFF,
+    MAX_POLL_ERRORS,
     OpenAIProvider,
 )
 
@@ -424,6 +429,202 @@ class TestPollBatchStallDetection(unittest.TestCase):
 
         self.assertEqual(result.status, "cancelling")
         self.client.batches.cancel.assert_called_once()
+
+    @patch("explainshell.extraction.llm.providers.openai.time")
+    def test_poll_errors_use_exponential_backoff(self, mock_time: MagicMock) -> None:
+        """Poll errors should back off exponentially up to MAX_ERROR_BACKOFF."""
+        provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=9999)
+        clock = [0.0]
+        mock_time.monotonic = lambda: clock[0]
+        sleep_durations: list[float] = []
+
+        def record_sleep(duration: float) -> None:
+            sleep_durations.append(duration)
+            clock[0] += duration
+
+        mock_time.sleep = MagicMock(side_effect=record_sleep)
+
+        # 4 errors then success.
+        error = openai.APIConnectionError(request=MagicMock())
+        self.client.batches.retrieve = MagicMock(
+            side_effect=[
+                error,
+                error,
+                error,
+                error,
+                _make_batch(
+                    status="completed",
+                    completed=10,
+                    total=10,
+                    output_file_id="file-ok",
+                ),
+            ]
+        )
+
+        result = provider.poll_batch(
+            self.client, "batch-backoff", poll_interval=30, stop_event=None
+        )
+
+        self.assertEqual(result.status, "completed")
+        # Backoff: 30*2^0=30, 30*2^1=60, 30*2^2=120, 30*2^3=240
+        self.assertEqual(sleep_durations, [30, 60, 120, 240])
+
+    @patch("explainshell.extraction.llm.providers.openai.time")
+    def test_poll_error_backoff_capped(self, mock_time: MagicMock) -> None:
+        """Backoff should be capped at MAX_ERROR_BACKOFF."""
+        provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=9999)
+        clock = [0.0]
+        mock_time.monotonic = lambda: clock[0]
+        sleep_durations: list[float] = []
+
+        def record_sleep(duration: float) -> None:
+            sleep_durations.append(duration)
+            clock[0] += duration
+
+        mock_time.sleep = MagicMock(side_effect=record_sleep)
+
+        # 6 errors then success. With poll_interval=30:
+        # 30, 60, 120, 240, cap, cap
+        error = openai.APIConnectionError(request=MagicMock())
+        self.client.batches.retrieve = MagicMock(
+            side_effect=[error] * 6
+            + [
+                _make_batch(
+                    status="completed",
+                    completed=10,
+                    total=10,
+                    output_file_id="file-ok",
+                ),
+            ]
+        )
+
+        result = provider.poll_batch(
+            self.client, "batch-cap", poll_interval=30, stop_event=None
+        )
+
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(
+            sleep_durations,
+            [30, 60, 120, 240, MAX_ERROR_BACKOFF, MAX_ERROR_BACKOFF],
+        )
+
+    @patch("explainshell.extraction.llm.providers.openai.time")
+    def test_poll_errors_reset_on_success(self, mock_time: MagicMock) -> None:
+        """A successful poll should reset the consecutive error counter."""
+        provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=9999)
+        clock = [0.0]
+        mock_time.monotonic = lambda: clock[0]
+        sleep_durations: list[float] = []
+
+        def record_sleep(duration: float) -> None:
+            sleep_durations.append(duration)
+            clock[0] += duration
+
+        mock_time.sleep = MagicMock(side_effect=record_sleep)
+
+        error = openai.APIConnectionError(request=MagicMock())
+        self.client.batches.retrieve = MagicMock(
+            side_effect=[
+                # 3 errors, then a successful poll (in_progress), then 2 more errors, then done
+                error,
+                error,
+                error,
+                _make_batch(status="in_progress", completed=5, total=10),
+                error,
+                error,
+                _make_batch(
+                    status="completed",
+                    completed=10,
+                    total=10,
+                    output_file_id="file-ok",
+                ),
+            ]
+        )
+
+        result = provider.poll_batch(
+            self.client, "batch-reset", poll_interval=30, stop_event=None
+        )
+
+        self.assertEqual(result.status, "completed")
+        # First burst: 30, 60, 120 (errors 1-3)
+        # Successful poll sleeps poll_interval=30
+        # Second burst starts from 1 again: 30, 60 (errors 1-2)
+        self.assertEqual(sleep_durations, [30, 60, 120, 30, 30, 60])
+
+    @patch("explainshell.extraction.llm.providers.openai.time")
+    def test_poll_errors_exhaust_budget_raises(self, mock_time: MagicMock) -> None:
+        """After MAX_POLL_ERRORS consecutive failures, raise ExtractionError."""
+        provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=9999)
+        clock = [0.0]
+        mock_time.monotonic = lambda: clock[0]
+        mock_time.sleep = MagicMock(
+            side_effect=lambda d: clock.__setitem__(0, clock[0] + d)
+        )
+
+        error = openai.APIConnectionError(request=MagicMock())
+        self.client.batches.retrieve = MagicMock(side_effect=error)
+
+        with self.assertRaises(ExtractionError) as ctx:
+            provider.poll_batch(
+                self.client, "batch-fail", poll_interval=30, stop_event=None
+            )
+
+        self.assertIn(f"after {MAX_POLL_ERRORS} consecutive errors", str(ctx.exception))
+        self.assertEqual(self.client.batches.retrieve.call_count, MAX_POLL_ERRORS)
+
+    @patch("explainshell.extraction.llm.providers.openai.time")
+    def test_non_retryable_error_fails_fast(self, mock_time: MagicMock) -> None:
+        """Non-retryable exceptions (e.g. auth errors) should raise immediately
+        without any retries or backoff."""
+        provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=9999)
+        clock = [0.0]
+        mock_time.monotonic = lambda: clock[0]
+        mock_time.sleep = MagicMock()
+
+        # AuthenticationError is not in retryable_exceptions.
+        error = openai.AuthenticationError(
+            message="invalid api key",
+            response=MagicMock(status_code=401),
+            body=None,
+        )
+        self.client.batches.retrieve = MagicMock(side_effect=error)
+
+        with self.assertRaises(ExtractionError) as ctx:
+            provider.poll_batch(
+                self.client, "batch-auth", poll_interval=30, stop_event=None
+            )
+
+        self.assertIn("non-retryable", str(ctx.exception))
+        # Should fail on first call, no retries.
+        self.assertEqual(self.client.batches.retrieve.call_count, 1)
+        mock_time.sleep.assert_not_called()
+
+    @patch("explainshell.extraction.llm.providers.openai.time")
+    def test_stop_event_during_error_backoff(self, mock_time: MagicMock) -> None:
+        """A stop_event set during error backoff should raise KeyboardInterrupt."""
+        provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=9999)
+        clock = [0.0]
+        mock_time.monotonic = lambda: clock[0]
+
+        stop = threading.Event()
+
+        error = openai.APIConnectionError(request=MagicMock())
+        self.client.batches.retrieve = MagicMock(side_effect=error)
+
+        def set_stop_on_wait(timeout: float) -> bool:
+            stop.set()
+            return True
+
+        stop.wait = MagicMock(side_effect=set_stop_on_wait)
+
+        with self.assertRaises(KeyboardInterrupt):
+            provider.poll_batch(
+                self.client, "batch-stop", poll_interval=30, stop_event=stop
+            )
+
+        # Only one poll attempt before the stop_event was checked.
+        self.assertEqual(self.client.batches.retrieve.call_count, 1)
+        stop.wait.assert_called_once_with(30)
 
 
 if __name__ == "__main__":

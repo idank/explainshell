@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 LLM_TIMEOUT_SECONDS = 300
 CANCEL_WAIT_TIMEOUT = 600  # max seconds to wait for cancellation to finalize
 STALL_TIMEOUT = 79200  # max seconds (22h) with no progress before cancelling a batch
+MAX_POLL_ERRORS = 10  # consecutive poll errors before giving up
+MAX_ERROR_BACKOFF = 300  # max seconds between poll error retries
 
 
 def _openai_input(user_content: str) -> list[dict[str, str]]:
@@ -120,7 +122,6 @@ class OpenAIProvider:
         stop_event: threading.Event | None,
     ) -> Batch:
         consecutive_errors = 0
-        max_consecutive_errors = 5
         prev_counts: tuple[int, int] = (0, 0)
         prev_status: str | None = None
         start_time = time.monotonic()
@@ -129,26 +130,35 @@ class OpenAIProvider:
             try:
                 batch = client.batches.retrieve(job_id)
                 consecutive_errors = 0
-            except Exception as e:
+            except self.retryable_exceptions as e:
                 consecutive_errors += 1
+                backoff = min(
+                    poll_interval * 2 ** (consecutive_errors - 1),
+                    MAX_ERROR_BACKOFF,
+                )
                 logger.warning(
-                    "batch %s: poll error (%d/%d): %s",
+                    "batch %s: poll error (%d/%d), retrying in %ds: %s",
                     job_id,
                     consecutive_errors,
-                    max_consecutive_errors,
+                    MAX_POLL_ERRORS,
+                    backoff,
                     e,
                 )
-                if consecutive_errors >= max_consecutive_errors:
+                if consecutive_errors >= MAX_POLL_ERRORS:
                     raise ExtractionError(
-                        f"Batch poll failed after {max_consecutive_errors} consecutive errors: {e}"
+                        f"Batch poll failed after {MAX_POLL_ERRORS} consecutive errors: {e}"
                     ) from e
                 if stop_event is not None:
-                    stop_event.wait(poll_interval)
+                    stop_event.wait(backoff)
                     if stop_event.is_set():
                         raise KeyboardInterrupt
                 else:
-                    time.sleep(poll_interval)
+                    time.sleep(backoff)
                 continue
+            except Exception as e:
+                raise ExtractionError(
+                    f"Batch poll failed with non-retryable error: {e}"
+                ) from e
 
             status = batch.status
             counts = batch.request_counts
