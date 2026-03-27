@@ -319,9 +319,6 @@ def _process_one_batch(
                 )
                 continue
 
-            logger.debug(
-                "[%s] done: %d option(s)", gz_path, len(finalize_result.mp.options)
-            )
             _add(finalize_result)
 
     except Exception as e:
