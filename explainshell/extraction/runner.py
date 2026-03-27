@@ -198,11 +198,11 @@ def _prep_stats(prepared: PreparedFile) -> ExtractionStats:
 
 def _process_one_batch(
     extractor: BatchExtractor,
+    manifest: BatchManifest,
     batch_idx: int,
     total_batches: int,
     batch_items: list[WorkItem],
     inflight: _InflightBatches,
-    manifest: BatchManifest,
 ) -> _BatchOutput:
     """Process a single provider batch: submit -> poll -> collect -> finalize.
 
@@ -368,12 +368,12 @@ def _process_one_batch(
 def run_batch(
     extractor: BatchExtractor,
     gz_files: list[str],
+    *,
+    manifest: BatchManifest,
     batch_size: int = 50,
     jobs: int = 1,
     on_start: Callable[[str], None] | None = None,
     on_result: Callable[[str, ExtractionResult], None] | None = None,
-    *,
-    manifest: BatchManifest,
 ) -> BatchResult:
     """Run LLM extraction via provider batch API.
 
@@ -454,11 +454,11 @@ def run_batch(
             for batch_idx, batch_items in enumerate(batches, 1):
                 output = _process_one_batch(
                     extractor,
+                    manifest,
                     batch_idx,
                     total_batches,
                     batch_items,
                     inflight,
-                    manifest,
                 )
                 _handle_output(output)
         except KeyboardInterrupt:
@@ -486,11 +486,11 @@ def run_batch(
                 f = executor.submit(
                     _process_one_batch,
                     extractor,
+                    manifest,
                     idx,
                     total_batches,
                     items,
                     inflight,
-                    manifest,
                 )
                 pending[f] = idx
                 return True
@@ -534,11 +534,11 @@ def run(
     extractor: Extractor,
     gz_files: list[str],
     *,
+    manifest: BatchManifest | None = None,
     batch_size: int | None = None,
     jobs: int = 1,
     on_start: Callable[[str], None] | None = None,
     on_result: Callable[[str, ExtractionResult], None] | None = None,
-    manifest: BatchManifest | None = None,
 ) -> BatchResult:
     """Unified dispatcher for all execution modes.
 
@@ -582,10 +582,10 @@ def run_collected(
     extractor: Extractor,
     gz_files: list[str],
     *,
+    manifest: BatchManifest | None = None,
     batch_size: int | None = None,
     jobs: int = 1,
     on_start: Callable[[str], None] | None = None,
-    manifest: BatchManifest | None = None,
 ) -> tuple[BatchResult, list[ExtractionResult]]:
     """Like ``run``, but collects per-file results into a list."""
     files: list[ExtractionResult] = []
@@ -604,11 +604,11 @@ def run_collected(
 def run_batch_collected(
     extractor: BatchExtractor,
     gz_files: list[str],
+    *,
+    manifest: BatchManifest,
     batch_size: int = 50,
     jobs: int = 1,
     on_start: Callable[[str], None] | None = None,
-    *,
-    manifest: BatchManifest,
 ) -> tuple[BatchResult, list[ExtractionResult]]:
     """Like ``run_batch``, but collects per-file results into a list."""
     files: list[ExtractionResult] = []
