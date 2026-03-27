@@ -399,15 +399,36 @@ def _log_summary(
 
 
 def _setup_logging(log_level_str: str) -> None:
-    """Configure logging for the CLI."""
+    """Configure logging for the CLI.
+
+    Adds a timestamped log file under logs/ alongside the console handler.
+    """
+    import datetime
+
     log_level = getattr(logging, log_level_str.upper())
+    fmt = "%(asctime)s %(levelname)-5s [%(name)s] %(message)s"
+    datefmt = "%H:%M:%S"
+
     logging.basicConfig(
         level=logging.WARNING,
         stream=sys.stdout,
-        format="%(asctime)s %(levelname)-5s [%(name)s] %(message)s",
-        datefmt="%H:%M:%S",
+        format=fmt,
+        datefmt=datefmt,
     )
+
+    log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = os.path.join(log_dir, f"{timestamp}.log")
+
+    file_handler = logging.FileHandler(log_path)
+    file_handler.setLevel(log_level)
+    file_handler.setFormatter(logging.Formatter(fmt, datefmt=datefmt))
+    logging.getLogger("explainshell").addHandler(file_handler)
+
     logging.getLogger("explainshell").setLevel(log_level)
+    logger.info("command line: %s", " ".join(sys.argv))
+    logger.info("logging to %s", log_path)
 
 
 # ---------------------------------------------------------------------------
@@ -558,6 +579,7 @@ def extract(
         work_files.append(gz_path)
 
     extract_total = len(work_files) + prefilter_skipped
+
     file_counter = {"n": 0}
     counter_lock = threading.Lock()
 
