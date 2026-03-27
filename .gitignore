@@ -2,6 +2,7 @@ node_modules/
 *.pyc
 *.swp
 *.log
+logs/
 .env
 .venv/
 __pycache__
