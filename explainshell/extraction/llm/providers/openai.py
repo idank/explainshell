@@ -107,6 +107,11 @@ class OpenAIProvider:
     def cancel_batch(self, client: OpenAI, job_id: str) -> None:
         client.batches.cancel(job_id)
 
+    def retrieve_batch(self, batch_id: str) -> Batch:
+        """Retrieve a batch by ID (for salvage/inspection)."""
+        client = OpenAI(timeout=LLM_TIMEOUT_SECONDS)
+        return client.batches.retrieve(batch_id)
+
     def poll_batch(
         self,
         client: OpenAI,

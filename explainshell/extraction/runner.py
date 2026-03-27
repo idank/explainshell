@@ -59,7 +59,7 @@ class _InflightBatches:
                 logger.warning("failed to cancel batch %s: %s", job_id, e)
 
 
-class _WorkItem(NamedTuple):
+class WorkItem(NamedTuple):
     """A file that passed the prepare phase and is ready for batch extraction."""
 
     gz_path: str
@@ -162,17 +162,17 @@ def run_parallel(
     return batch
 
 
-def _group_work_items(
-    work_items: list[_WorkItem],
+def group_work_items(
+    work_items: list[WorkItem],
     batch_size: int,
-) -> list[list[_WorkItem]]:
+) -> list[list[WorkItem]]:
     """Group work items into batches, respecting batch_size as a request count limit.
 
     Each work item stays whole (all its chunks in one batch).  A batch may
     exceed ``batch_size`` when a single file has more chunks than the limit.
     """
-    batches: list[list[_WorkItem]] = []
-    current: list[_WorkItem] = []
+    batches: list[list[WorkItem]] = []
+    current: list[WorkItem] = []
     current_size = 0
     for item in work_items:
         n = item.prepared.n_chunks
@@ -199,7 +199,7 @@ def _process_one_batch(
     extractor: BatchExtractor,
     batch_idx: int,
     total_batches: int,
-    batch_items: list[_WorkItem],
+    batch_items: list[WorkItem],
     inflight: _InflightBatches,
 ) -> _BatchOutput:
     """Process a single provider batch: submit -> poll -> collect -> finalize.
@@ -364,7 +364,7 @@ def run_batch(
     result = BatchResult()
 
     # Phase 1: prepare all files.
-    work_items: list[_WorkItem] = []
+    work_items: list[WorkItem] = []
     for gz_path in gz_files:
         if on_start:
             on_start(gz_path)
@@ -392,7 +392,7 @@ def run_batch(
             if on_result:
                 on_result(gz_path, entry)
             continue
-        work_items.append(_WorkItem(gz_path, prepared))
+        work_items.append(WorkItem(gz_path, prepared))
 
     if not work_items:
         return result
@@ -400,7 +400,7 @@ def run_batch(
     # Phase 2: submit in batches, finalizing files per-batch.
     total_requests = sum(item.prepared.n_chunks for item in work_items)
     total_files = len(work_items)
-    batches = _group_work_items(work_items, batch_size)
+    batches = group_work_items(work_items, batch_size)
     del work_items  # references now owned by batches
     total_batches = len(batches)
     logger.info(

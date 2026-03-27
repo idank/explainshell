@@ -83,6 +83,11 @@ class GeminiProvider:
     def cancel_batch(self, client: Client, job_id: str) -> None:
         client.batches.cancel(name=job_id)
 
+    def retrieve_batch(self, batch_id: str) -> BatchJob:
+        """Retrieve a batch by ID (for salvage/inspection)."""
+        client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+        return client.batches.get(name=batch_id)
+
     def poll_batch(
         self,
         client: Client,

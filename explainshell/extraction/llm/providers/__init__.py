@@ -70,6 +70,8 @@ class BatchProvider(Protocol):
 
     def cancel_batch(self, client: Any, job_id: str) -> None: ...
 
+    def retrieve_batch(self, batch_id: str) -> Any: ...
+
 
 def make_provider(model: str) -> LLMProvider:
     """Create a provider for the given model string."""
