@@ -15,6 +15,7 @@ from explainshell.errors import ExtractionError, SkippedExtraction
 from explainshell.util import fmt_tokens
 from explainshell.extraction.llm.extractor import BatchExtractor, PreparedFile
 from explainshell.extraction.llm.providers import BatchEntry, TokenUsage
+from explainshell.extraction.manifest import BatchManifest
 from explainshell.extraction.types import (
     BatchResult,
     Extractor,
@@ -201,6 +202,7 @@ def _process_one_batch(
     total_batches: int,
     batch_items: list[WorkItem],
     inflight: _InflightBatches,
+    manifest: BatchManifest,
 ) -> _BatchOutput:
     """Process a single provider batch: submit -> poll -> collect -> finalize.
 
@@ -212,6 +214,8 @@ def _process_one_batch(
     entries: list[ExtractionResult] = []
     finalized: set[str] = set()
     usage = TokenUsage()
+    job_id: str | None = None
+    batch_error: str | None = None
 
     def _add(entry: ExtractionResult) -> None:
         finalized.add(entry.gz_path)
@@ -237,6 +241,14 @@ def _process_one_batch(
         job_id = bp.submit_batch(requests)
         logger.info("batch %d/%d submitted: %s", batch_idx, total_batches, job_id)
         inflight.register(bp, client, job_id)
+
+        # Persist the batch ID immediately so it survives crashes/interrupts.
+        manifest.record_batch(
+            batch_idx=batch_idx,
+            batch_id=job_id,
+            status="submitted",
+            files=[item.gz_path for item in batch_items],
+        )
 
         try:
             completed_job = bp.poll_batch(
@@ -314,6 +326,7 @@ def _process_one_batch(
 
     except Exception as e:
         # FAILED entries for all unfinalized files in this batch.
+        batch_error = str(e)
         logger.error("batch %d failed: %s", batch_idx, e)
         for gz_path, prepared in batch_items:
             if gz_path not in finalized:
@@ -325,6 +338,15 @@ def _process_one_batch(
                         stats=_prep_stats(prepared),
                     ),
                 )
+
+    # Record to manifest before releasing batch items.
+    manifest.record_batch(
+        batch_idx=batch_idx,
+        batch_id=job_id,
+        status="failed" if batch_error else "completed",
+        files=[item.gz_path for item in batch_items],
+        error=batch_error,
+    )
 
     # Sanity check: every file in this batch should be finalized.
     batch_paths = {item.gz_path for item in batch_items}
@@ -350,6 +372,8 @@ def run_batch(
     jobs: int = 1,
     on_start: Callable[[str], None] | None = None,
     on_result: Callable[[str, ExtractionResult], None] | None = None,
+    *,
+    manifest: BatchManifest,
 ) -> BatchResult:
     """Run LLM extraction via provider batch API.
 
@@ -410,6 +434,8 @@ def run_batch(
         total_batches,
     )
 
+    manifest.set_total_batches(total_batches)
+
     def _handle_output(output: _BatchOutput) -> None:
         """Tally results and invoke callbacks in the main thread."""
         result.stats.input_tokens += output.usage.input_tokens
@@ -427,7 +453,12 @@ def run_batch(
         try:
             for batch_idx, batch_items in enumerate(batches, 1):
                 output = _process_one_batch(
-                    extractor, batch_idx, total_batches, batch_items, inflight
+                    extractor,
+                    batch_idx,
+                    total_batches,
+                    batch_items,
+                    inflight,
+                    manifest,
                 )
                 _handle_output(output)
         except KeyboardInterrupt:
@@ -459,6 +490,7 @@ def run_batch(
                     total_batches,
                     items,
                     inflight,
+                    manifest,
                 )
                 pending[f] = idx
                 return True
@@ -506,6 +538,7 @@ def run(
     jobs: int = 1,
     on_start: Callable[[str], None] | None = None,
     on_result: Callable[[str, ExtractionResult], None] | None = None,
+    manifest: BatchManifest | None = None,
 ) -> BatchResult:
     """Unified dispatcher for all execution modes.
 
@@ -527,6 +560,7 @@ def run(
             jobs=jobs,
             on_start=on_start,
             on_result=on_result,
+            manifest=manifest,
         )
     if jobs > 1:
         return run_parallel(
@@ -551,6 +585,7 @@ def run_collected(
     batch_size: int | None = None,
     jobs: int = 1,
     on_start: Callable[[str], None] | None = None,
+    manifest: BatchManifest | None = None,
 ) -> tuple[BatchResult, list[ExtractionResult]]:
     """Like ``run``, but collects per-file results into a list."""
     files: list[ExtractionResult] = []
@@ -561,6 +596,7 @@ def run_collected(
         jobs=jobs,
         on_start=on_start,
         on_result=lambda _p, e: files.append(e),
+        manifest=manifest,
     )
     return batch, files
 
@@ -571,6 +607,8 @@ def run_batch_collected(
     batch_size: int = 50,
     jobs: int = 1,
     on_start: Callable[[str], None] | None = None,
+    *,
+    manifest: BatchManifest,
 ) -> tuple[BatchResult, list[ExtractionResult]]:
     """Like ``run_batch``, but collects per-file results into a list."""
     files: list[ExtractionResult] = []
@@ -581,5 +619,6 @@ def run_batch_collected(
         jobs=jobs,
         on_start=on_start,
         on_result=lambda _p, e: files.append(e),
+        manifest=manifest,
     )
     return batch, files
