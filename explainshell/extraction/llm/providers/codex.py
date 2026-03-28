@@ -23,12 +23,16 @@ class CodexProvider:
     """
 
     def __init__(self, model: str, *, codex_bin: str | Sequence[str] = "codex") -> None:
-        # model must be "codex/<underlying-model>", e.g. "codex/gpt-5.4-mini".
-        if "/" not in model:
+        # model format: "codex/<model>" or "codex/<model>/<reasoning_effort>"
+        # e.g. "codex/gpt-5.4-mini" or "codex/gpt-5.4-mini/high"
+        parts = model.split("/", 2)
+        if len(parts) < 2 or not parts[1]:
             raise ValueError(
                 f"codex provider requires a model name (e.g. codex/gpt-5.4-mini), got: {model!r}"
             )
         self._model = model
+        self._underlying = parts[1]
+        self._reasoning_effort = parts[2] if len(parts) == 3 else None
         self._codex_bin = [codex_bin] if isinstance(codex_bin, str) else list(codex_bin)
 
     def call(self, user_content: str) -> tuple[str, TokenUsage]:
@@ -49,8 +53,10 @@ class CodexProvider:
             response_path,
         ]
 
-        underlying = self._model.split("/", 1)[1]
-        cmd.extend(["--model", underlying])
+        cmd.extend(["--model", self._underlying])
+
+        if self._reasoning_effort:
+            cmd.extend(["-c", f'model_reasoning_effort="{self._reasoning_effort}"'])
 
         # Pass prompt on stdin (the "-" argument tells codex to read from stdin).
         cmd.append("-")

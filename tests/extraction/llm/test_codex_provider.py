@@ -139,6 +139,40 @@ class TestCodexProviderCall(unittest.TestCase):
         )
         provider.call("test")
 
+    def test_reasoning_effort_passed(self) -> None:
+        """'codex/gpt-5.4-mini/high' should pass -c model_reasoning_effort."""
+        provider = CodexProvider(
+            "codex/gpt-5.4-mini/high",
+            codex_bin=_fake_codex(
+                # Fail unless -c with reasoning effort is present.
+                "found=\n"
+                'shift  # skip "exec"\n'
+                "while [ $# -gt 0 ]; do\n"
+                '    case "$1" in\n'
+                '        -c) shift; case "$1" in *model_reasoning_effort*high*) found=1 ;; esac; shift ;;\n'
+                '        -o) shift; OUT="$1"; shift ;;\n'
+                "        *) shift ;;\n"
+                "    esac\n"
+                "done\n"
+                '[ -n "$found" ] || { echo "expected reasoning effort" >&2; exit 1; }\n'
+                'echo -n "{}" > "$OUT"\n'
+            ),
+        )
+        provider.call("test")
+
+    def test_no_reasoning_effort_without_third_segment(self) -> None:
+        """'codex/o3' should not pass -c model_reasoning_effort."""
+        provider = CodexProvider(
+            "codex/o3",
+            codex_bin=_fake_codex(
+                # Fail if -c appears in args.
+                'for arg in "$@"; do\n'
+                '    [ "$arg" = "-c" ] && { echo "unexpected -c flag" >&2; exit 1; }\n'
+                "done\n" + _WRITE_RESPONSE + 'echo -n "{}" > "$OUT"\n'
+            ),
+        )
+        provider.call("test")
+
     def test_nonzero_exit_raises(self) -> None:
         provider = CodexProvider(
             "codex/test",
@@ -190,13 +224,17 @@ class TestRetryableExceptions(unittest.TestCase):
 class TestMakeProviderRouting(unittest.TestCase):
     """make_provider routes codex models to CodexProvider."""
 
-    def test_bare_codex_not_routed(self) -> None:
-        """Bare 'codex' without a model falls through to litellm."""
-        provider = make_provider("codex")
-        assert not isinstance(provider, CodexProvider)
+    def test_bare_codex_raises(self) -> None:
+        """Bare 'codex' routes to CodexProvider which rejects it."""
+        with self.assertRaises(ValueError):
+            make_provider("codex")
 
     def test_codex_with_model(self) -> None:
         provider = make_provider("codex/o3")
+        assert isinstance(provider, CodexProvider)
+
+    def test_codex_with_reasoning_effort(self) -> None:
+        provider = make_provider("codex/gpt-5.4-mini/high")
         assert isinstance(provider, CodexProvider)
 
 
