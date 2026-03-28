@@ -9,6 +9,11 @@ import subprocess
 from explainshell import config
 from explainshell.errors import ExtractionError
 
+# 60K chars ≈ 15-20K tokens. This is deliberately conservative: benchmarking at
+# 100K showed that pages fitting in one larger chunk (e.g. avrdude at 68K chars)
+# lost dozens of dashless/positional options buried deep in the text ("lost in
+# the middle" effect).  At 60K only ~2% of section-1 manpages need multi-chunk
+# splitting, and the cross-chunk dedup handles those well.
 CHUNK_SIZE_CHARS = 60_000
 MAX_MANPAGE_CHARS = 500_000
 
