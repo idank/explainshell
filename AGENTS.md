@@ -13,8 +13,11 @@ A web tool that parses man pages and explains command-line arguments by matching
 
 **Before finishing any task**, always:
 
-1. Run `make format; make lint`
-1. Run `make tests-all` (unit + e2e + parsing regression) — all tests must pass
+1. Run `make format`
+1. Run tests — choose the right suite based on what changed:
+   - `make tests-quick` (lint + unit + parsing regression) — use when changes clearly cannot affect what the web app serves (e.g., extraction pipeline, CLI tooling, tests themselves)
+   - `make tests-all` (lint + unit + e2e + parsing regression) — use when changes might affect the web serving path (rendering, matching, storage, templates, static assets, config)
+   - When in doubt, run `make tests-all`
    - If e2e tests fail due to snapshot diffs, assess whether the diff is expected, and get user confirmation before running `make e2e-update`
 1. Update README.md if the change adds/removes/renames CLI commands, env vars, or user-facing features
 1. Update AGENTS.md if the change affects structure, convention, workflow, etc.
@@ -111,6 +114,9 @@ make parsing-regression
 
 # Update DB to accept current parser output for regression manpages
 make parsing-update
+
+# Run quick tests (unit + parsing regression, no e2e)
+make tests-quick
 
 # Run all tests (unit + e2e + parsing regression)
 make tests-all

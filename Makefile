@@ -32,6 +32,8 @@ parsing-update:
 
 tests-all: lint tests e2e parsing-regression
 
+tests-quick: lint tests parsing-regression
+
 lint:
 	ruff check explainshell tests tools
 	ruff format --check explainshell tests tools
@@ -99,4 +101,4 @@ upload-live-db:
 		sleep 10; \
 	done
 
-.PHONY: tests e2e e2e-db e2e-update test-llm tests-all lint serve parsing-regression parsing-update db-check ubuntu-archive arch-archive download-live-db upload-live-db
+.PHONY: tests e2e e2e-db e2e-update test-llm tests-all tests-quick lint serve parsing-regression parsing-update db-check ubuntu-archive arch-archive download-live-db upload-live-db
