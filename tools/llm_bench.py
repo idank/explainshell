@@ -23,8 +23,11 @@ Usage:
     # Compare the two most recent reports:
     python tools/llm_bench.py compare
 
+    # Compare against a specific baseline:
+    python tools/llm_bench.py compare --baseline tests/regression/llm-bench/20260328-064159/report.json
+
     # Compare two specific reports:
-    python tools/llm_bench.py compare report1.json report2.json
+    python tools/llm_bench.py compare baseline.json current.json
 
     # List all saved reports:
     python tools/llm_bench.py list
@@ -284,25 +287,6 @@ def _format_report_label(report: dict) -> str:
     return label
 
 
-def _resolve_baseline(baseline_ref: str, report_dir: str) -> str:
-    """Resolve a baseline reference to a report file path.
-
-    Accepts either a file path or '#N' (1-based index from ``list``).
-    """
-    if baseline_ref.startswith("#"):
-        try:
-            idx = int(baseline_ref[1:]) - 1
-        except ValueError:
-            raise SystemExit(f"error: invalid baseline reference: {baseline_ref}")
-        reports = _list_reports(report_dir)
-        if idx < 0 or idx >= len(reports):
-            raise SystemExit(
-                f"error: baseline #{idx + 1} out of range (have {len(reports)} reports)"
-            )
-        return reports[idx]
-    return baseline_ref
-
-
 def compare_reports(args: argparse.Namespace) -> int:
     # Determine which files to compare.
     if len(args.reports) == 2:
@@ -316,7 +300,7 @@ def compare_reports(args: argparse.Namespace) -> int:
     elif len(args.reports) == 0:
         reports = _list_reports(args.report_dir)
         if args.baseline:
-            baseline_path = _resolve_baseline(args.baseline, args.report_dir)
+            baseline_path = args.baseline
             if len(reports) < 1:
                 print(
                     f"No reports in {args.report_dir} to compare.",
@@ -455,13 +439,9 @@ def list_reports(args: argparse.Namespace) -> int:
         print(f"No reports found in {args.report_dir}.", file=sys.stderr)
         return 1
 
-    print()
-    print(f"  {_BOLD}LLM Bench Reports{_RESET} ({args.report_dir})")
-    print()
-    print(f"  {'#':<4} {'Date':<22} {'Git':<10} {'Options':>8}  {'Description'}")
-    print(f"  {'-' * 72}")
-
-    for i, path in enumerate(reports):
+    # Pre-read all reports to compute column widths.
+    rows: list[tuple[str, str, str, str, str, str]] = []
+    for path in reports:
         with open(path) as f:
             report = json.load(f)
 
@@ -470,17 +450,33 @@ def list_reports(args: argparse.Namespace) -> int:
         dirty = "*" if git.get("dirty") else ""
         git_str = f"{commit}{dirty}"
 
-        agg = report.get("aggregate", {})
         ts = report.get("timestamp", "?")
-        # Truncate to seconds for display.
         if len(ts) > 19:
             ts = ts[:19]
 
+        model = report.get("model", "?")
+        agg = report.get("aggregate", {})
+        opts = str(agg.get("total_options", "?"))
         desc = report.get("description", "")
 
+        rows.append((path, ts, git_str, model, opts, desc))
+
+    pw = max(len(r[0]) for r in rows)
+    mw = max(len(r[3]) for r in rows)
+
+    print()
+    print(f"  {_BOLD}LLM Bench Reports{_RESET} ({args.report_dir})")
+    print()
+    header = (
+        f"  {'Path':<{pw}}  {'Date':<19}  {'Git':<10}  {'Model':<{mw}}  "
+        f"{'Options':>7}  Description"
+    )
+    print(header)
+    print(f"  {'-' * (len(header) - 2)}")
+
+    for path, ts, git_str, model, opts, desc in rows:
         print(
-            f"  {i + 1:<4} {ts:<22} {git_str:<10} "
-            f"{agg.get('total_options', '?'):>8}  {desc}"
+            f"  {path:<{pw}}  {ts:<19}  {git_str:<10}  {model:<{mw}}  {opts:>7}  {desc}"
         )
 
     print()
@@ -532,7 +528,7 @@ def _build_parser() -> argparse.ArgumentParser:
     cmp_p.add_argument(
         "--baseline",
         "-b",
-        help="Baseline report to compare against (path or '#N' from list)",
+        help="Baseline report path to compare against",
     )
     cmp_p.add_argument(
         "reports",
