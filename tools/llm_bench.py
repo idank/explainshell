@@ -284,21 +284,56 @@ def _format_report_label(report: dict) -> str:
     return label
 
 
+def _resolve_baseline(baseline_ref: str, report_dir: str) -> str:
+    """Resolve a baseline reference to a report file path.
+
+    Accepts either a file path or '#N' (1-based index from ``list``).
+    """
+    if baseline_ref.startswith("#"):
+        try:
+            idx = int(baseline_ref[1:]) - 1
+        except ValueError:
+            raise SystemExit(f"error: invalid baseline reference: {baseline_ref}")
+        reports = _list_reports(report_dir)
+        if idx < 0 or idx >= len(reports):
+            raise SystemExit(
+                f"error: baseline #{idx + 1} out of range (have {len(reports)} reports)"
+            )
+        return reports[idx]
+    return baseline_ref
+
+
 def compare_reports(args: argparse.Namespace) -> int:
     # Determine which files to compare.
     if len(args.reports) == 2:
-        baseline_path, current_path = args.reports
-    elif len(args.reports) == 0:
-        reports = _list_reports(args.report_dir)
-        if len(reports) < 2:
+        if args.baseline:
             print(
-                f"Need at least 2 reports in {args.report_dir} to compare. "
-                f"Found {len(reports)}.",
+                "error: --baseline cannot be used with two positional reports.",
                 file=sys.stderr,
             )
             return 1
-        current_path = reports[0]  # newest
-        baseline_path = reports[1]  # second newest
+        baseline_path, current_path = args.reports
+    elif len(args.reports) == 0:
+        reports = _list_reports(args.report_dir)
+        if args.baseline:
+            baseline_path = _resolve_baseline(args.baseline, args.report_dir)
+            if len(reports) < 1:
+                print(
+                    f"No reports in {args.report_dir} to compare.",
+                    file=sys.stderr,
+                )
+                return 1
+            current_path = reports[0]  # newest
+        else:
+            if len(reports) < 2:
+                print(
+                    f"Need at least 2 reports in {args.report_dir} to compare. "
+                    f"Found {len(reports)}.",
+                    file=sys.stderr,
+                )
+                return 1
+            current_path = reports[0]  # newest
+            baseline_path = reports[1]  # second newest
     else:
         print("Expected 0 or 2 report files.", file=sys.stderr)
         return 1
@@ -494,6 +529,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     cmp_p = sub.add_parser("compare", help="Compare two benchmark reports")
+    cmp_p.add_argument(
+        "--baseline",
+        "-b",
+        help="Baseline report to compare against (path or '#N' from list)",
+    )
     cmp_p.add_argument(
         "reports",
         nargs="*",

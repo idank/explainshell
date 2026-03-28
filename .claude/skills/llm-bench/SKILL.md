@@ -11,7 +11,7 @@ Run the LLM extractor benchmark tool and compare results against previous runs.
 ## Usage
 
 ```
-/llm-bench [--model <model>] [--batch <size>] [-d <description>] [files...]
+/llm-bench [--model <model>] [--batch <size>] [-d <description>] [--baseline <ref>] [files...]
 ```
 
 ## Arguments
@@ -19,6 +19,7 @@ Run the LLM extractor benchmark tool and compare results against previous runs.
 - **model** (optional): LLM model to use. Defaults to `openai/gpt-5-mini`.
 - **batch** (optional): Batch size for provider batch API. Defaults to `50`.
 - **description** (optional): Short description tag for this run.
+- **baseline** (optional): Baseline report to compare against. Can be a file path or `#N` (1-based index from `list`). When omitted, compares against the most recent previous report.
 - **files** (optional): Specific .gz files or directories. Defaults to the built-in corpus.
 
 ## Steps
@@ -29,10 +30,10 @@ Run the LLM extractor benchmark tool and compare results against previous runs.
 source /home/idank/dev/vibe/explainshell/.venv/bin/activate && python /home/idank/dev/vibe/explainshell/tools/llm_bench.py run --model <model> --batch <size> -d '<description>' [files...]
 ```
 
-2. Once the background task completes, compare against the previous report:
+2. Once the background task completes, compare against a report. If the user specified `--baseline`, use `--baseline <ref>` (a file path or `#N` index from `list`). Otherwise omit to compare against the previous report.
 
 ```bash
-source /home/idank/dev/vibe/explainshell/.venv/bin/activate && python /home/idank/dev/vibe/explainshell/tools/llm_bench.py compare
+source /home/idank/dev/vibe/explainshell/.venv/bin/activate && python /home/idank/dev/vibe/explainshell/tools/llm_bench.py compare [--baseline <ref>]
 ```
 
 3. Think how changes in the current session (if there are any) could affect the LLM extraction pipeline, and whether the results make sense.
