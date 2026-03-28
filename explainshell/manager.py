@@ -12,7 +12,7 @@ Commands:
 Extraction modes (--mode):
     source              Use the roff parser
     mandoc              Use mandoc -T tree parser
-    llm:<model>         Use an LLM (e.g. llm:openai/gpt-5-mini)
+    llm:<model>         Use an LLM (e.g. llm:openai/gpt-5-mini, llm:codex/gpt-5.4-mini)
     hybrid:<model>      Try tree parser first, fall back to LLM when confidence is low
 """
 
@@ -406,12 +406,12 @@ def _setup_logging(log_level_str: str) -> None:
     import datetime
 
     log_level = getattr(logging, log_level_str.upper())
-    fmt = "%(asctime)s %(levelname)-5s [%(name)s] %(message)s"
+    fmt = "%(asctime)s %(levelname)-5s [%(name)s:%(lineno)d] %(message)s"
     datefmt = "%H:%M:%S"
 
     logging.basicConfig(
         level=logging.WARNING,
-        stream=sys.stdout,
+        stream=sys.stderr,
         format=fmt,
         datefmt=datefmt,
     )

@@ -75,6 +75,10 @@ class BatchProvider(Protocol):
 
 def make_provider(model: str) -> LLMProvider:
     """Create a provider for the given model string."""
+    if model.startswith("codex/"):
+        from explainshell.extraction.llm.providers.codex import CodexProvider
+
+        return CodexProvider(model)
     if model.startswith("gemini/"):
         from explainshell.extraction.llm.providers.gemini import GeminiProvider
 
