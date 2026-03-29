@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from tests.helpers import TESTS_DIR
 
 from explainshell import models
@@ -455,56 +457,45 @@ class TestBuildUserContent(unittest.TestCase):
 # Real-LLM integration test (skipped unless RUN_LLM_TESTS=1)
 # ---------------------------------------------------------------------------
 
-# Map model prefixes to the environment variable they need.
-_MODEL_KEY_ENV = {
-    "gemini/": "GEMINI_API_KEY",
-    "openai/": "OPENAI_API_KEY",
-}
+# Models to test against.  Each entry is (model_string, env_var_required).
+# codex/ models authenticate via the CLI itself (no env var needed).
+_REAL_LLM_MODELS = [
+    ("openai/gpt-5-mini", "OPENAI_API_KEY"),
+    ("codex/gpt-5.4-mini", None),
+]
 
-_DEFAULT_LLM_MODEL = "gemini/gemini-3-flash-preview"
+ECHO_GZ = os.path.join(TESTS_DIR, "echo.1.gz")
 
 
-@unittest.skipUnless(
-    os.environ.get("RUN_LLM_TESTS") == "1", "set RUN_LLM_TESTS=1 to run"
+def _ensure_echo_gz() -> None:
+    if not os.path.exists(ECHO_GZ):
+        import shutil
+
+        src = os.path.join(TESTS_DIR, "manpages", "ubuntu", "12.04", "1", "echo.1.gz")
+        shutil.copy(src, ECHO_GZ)
+
+
+@pytest.mark.parametrize(
+    "model,env_var",
+    _REAL_LLM_MODELS,
+    ids=[m for m, _ in _REAL_LLM_MODELS],
 )
-class TestRealLlm(unittest.TestCase):
-    ECHO_GZ = os.path.join(TESTS_DIR, "echo.1.gz")
+def test_real_llm_echo_manpage(model: str, env_var: str | None) -> None:
+    if os.environ.get("RUN_LLM_TESTS") != "1":
+        pytest.skip("set RUN_LLM_TESTS=1 to run")
+    if env_var and not os.environ.get(env_var):
+        pytest.skip(f"{env_var} not set")
 
-    def setUp(self):
-        if not os.path.exists(self.ECHO_GZ):
-            # copy from manpages dir if not present
-            import shutil
+    _ensure_echo_gz()
 
-            src = os.path.join(
-                TESTS_DIR,
-                "manpages",
-                "ubuntu",
-                "12.04",
-                "1",
-                "echo.1.gz",
-            )
-            shutil.copy(src, self.ECHO_GZ)
-
-        model = os.environ.get("LLM_MODEL", _DEFAULT_LLM_MODEL)
-        for prefix, env_var in _MODEL_KEY_ENV.items():
-            if model.startswith(prefix):
-                if not os.environ.get(env_var):
-                    self.fail(
-                        f"LLM model '{model}' requires {env_var} to be set. "
-                        f"Either set it in .env or choose a different model via LLM_MODEL."
-                    )
-                break
-
-    def test_echo_manpage(self):
-        model = os.environ.get("LLM_MODEL", _DEFAULT_LLM_MODEL)
-        cfg = ExtractorConfig(model=model)
-        ext = LLMExtractor(cfg)
-        result = ext.extract(self.ECHO_GZ)
-        flags = set()
-        for opt in result.mp.options:
-            flags.update(opt.short)
-        self.assertIn("-n", flags, f"Expected -n in options, got: {flags}")
-        self.assertIn("-e", flags, f"Expected -e in options, got: {flags}")
+    cfg = ExtractorConfig(model=model)
+    ext = LLMExtractor(cfg)
+    result = ext.extract(ECHO_GZ)
+    flags: set[str] = set()
+    for opt in result.mp.options:
+        flags.update(opt.short)
+    assert "-n" in flags, f"Expected -n in options, got: {flags}"
+    assert "-e" in flags, f"Expected -e in options, got: {flags}"
 
 
 if __name__ == "__main__":
