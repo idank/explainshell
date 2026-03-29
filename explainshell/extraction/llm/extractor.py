@@ -186,16 +186,12 @@ class LLMExtractor:
         n_chunks = prepared.n_chunks
 
         logger.info(
-            "%s: %d chars, %d chunk(s)", basename, prepared.plain_text_len, n_chunks
+            "%s: %d chars (%d numbered), %d chunk(s)",
+            basename,
+            prepared.plain_text_len,
+            len(prepared.numbered_text),
+            n_chunks,
         )
-
-        if n_chunks > 1:
-            logger.info(
-                "%s: %d chars, %d chunks",
-                basename,
-                len(prepared.numbered_text),
-                n_chunks,
-            )
 
         stats = ExtractionStats(
             chunks=n_chunks,
