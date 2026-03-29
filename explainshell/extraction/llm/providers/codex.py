@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 from collections.abc import Sequence
 
+from explainshell.errors import FatalExtractionError
 from explainshell.extraction.llm.prompt import SYSTEM_PROMPT
 from explainshell.extraction.llm.providers import TokenUsage
 
@@ -70,8 +71,11 @@ class CodexProvider:
                 timeout=CODEX_TIMEOUT_SECONDS,
             )
             if result.returncode != 0:
+                detail = result.stderr.strip() or result.stdout.strip()
+                if "usage limit" in detail.lower():
+                    raise FatalExtractionError(f"codex usage limit reached: {detail}")
                 raise RuntimeError(
-                    f"codex exec failed (exit {result.returncode}): {result.stderr.strip()}"
+                    f"codex exec failed (exit {result.returncode}): {detail}"
                 )
 
             with open(response_path) as f:
