@@ -585,37 +585,41 @@ def extract(
 
     extract_total = len(work_files) + prefilter_skipped
 
-    file_counter = {"n": 0}
+    start_counter = {"n": 0}
+    result_counter = {"n": 0}
     counter_lock = threading.Lock()
 
     def on_start(gz_path: str) -> None:
         with counter_lock:
-            file_counter["n"] += 1
-            n = file_counter["n"]
+            start_counter["n"] += 1
+            n = start_counter["n"]
         short_path = config.source_from_path(gz_path)
         progress = f"[{n + prefilter_skipped}/{extract_total}]"
         logger.info("%s [%s] extracting...", progress, short_path)
 
     def on_result(gz_path: str, entry: ExtractionResult) -> None:
+        result_counter["n"] += 1
+        short_path = config.source_from_path(gz_path)
+        progress = f"[{result_counter['n'] + prefilter_skipped}/{extract_total}]"
         if entry.outcome == ExtractionOutcome.SUCCESS:
             s.add_manpage(entry.mp, entry.raw)
-            short_path = config.source_from_path(gz_path)
             logger.info(
-                "[%s] done: %d option(s)",
+                "%s [%s] done: %d option(s)",
+                progress,
                 short_path,
                 len(entry.mp.options),
             )
         elif entry.outcome == ExtractionOutcome.SKIPPED:
-            short_path = config.source_from_path(gz_path)
             logger.info(
-                "[%s] skipped: %s",
+                "%s [%s] skipped: %s",
+                progress,
                 short_path,
                 entry.error or "unknown reason",
             )
         elif entry.outcome == ExtractionOutcome.FAILED:
-            short_path = config.source_from_path(gz_path)
             logger.error(
-                "[%s] FAILED: %s",
+                "%s [%s] FAILED: %s",
+                progress,
                 short_path,
                 entry.error or "unknown error",
             )
@@ -657,7 +661,7 @@ def extract(
             if _add_symlink_mapping(s, gz_path, symlink_source, canonical_source):
                 symlinks_mapped += 1
         else:
-            logger.warning(
+            logger.debug(
                 "symlink %s -> %s: canonical not in DB, skipping",
                 symlink_source,
                 canonical_source,
