@@ -126,13 +126,18 @@ def run_sequential(
     batch = BatchResult()
 
     for gz_path in gz_files:
-        if on_start:
-            on_start(gz_path)
+        try:
+            if on_start:
+                on_start(gz_path)
 
-        entry = _extract_one(extractor, gz_path)
-        _tally(batch, entry)
-        if on_result:
-            on_result(gz_path, entry)
+            entry = _extract_one(extractor, gz_path)
+            _tally(batch, entry)
+            if on_result:
+                on_result(gz_path, entry)
+        except KeyboardInterrupt:
+            logger.info("interrupted by user")
+            batch.interrupted = True
+            break
 
     return batch
 
@@ -160,7 +165,11 @@ def run_parallel(
             _tally(batch, entry)
             if on_result:
                 on_result(entry.gz_path, entry)
-    except (KeyboardInterrupt, FatalExtractionError):
+    except KeyboardInterrupt:
+        logger.info("interrupted by user")
+        batch.interrupted = True
+        executor.shutdown(wait=False, cancel_futures=True)
+    except FatalExtractionError:
         executor.shutdown(wait=False, cancel_futures=True)
         raise
     else:
@@ -465,13 +474,9 @@ def run_batch(
                 )
                 _handle_output(output)
         except KeyboardInterrupt:
-            # Cancel remote batches and exit quickly. We don't attempt
-            # to collect partial results from cancelled batches — the
-            # token loss is negligible and keeping the interrupt path
-            # simple is more important.
             logger.info("interrupted, cancelling in-flight batches...")
             inflight.cancel_all()
-            raise
+            result.interrupted = True
     else:
         # Parallel: rolling thread pool — at most `jobs` batches in flight.
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=jobs)
@@ -513,14 +518,10 @@ def run_batch(
                     del pending[f]
                     _submit_next()
         except KeyboardInterrupt:
-            # Cancel remote batches and exit quickly. We don't attempt
-            # to collect partial results from cancelled batches — the
-            # token loss is negligible and keeping the interrupt path
-            # simple is more important.
             logger.info("interrupted, cancelling in-flight batches...")
             inflight.cancel_all()
             executor.shutdown(wait=False, cancel_futures=True)
-            raise
+            result.interrupted = True
         else:
             executor.shutdown(wait=True)
 

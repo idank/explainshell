@@ -369,6 +369,7 @@ def _log_summary(
     skipped = batch_result.n_skipped + prefilter_skipped
     failed = batch_result.n_failed
 
+    status = "Interrupted" if batch_result.interrupted else "Done"
     dry_run_note = " (dry run)" if dry_run else ""
     token_note = ""
     if batch_result.stats.input_tokens:
@@ -382,7 +383,8 @@ def _log_summary(
             )
         token_note = f" Tokens: {' / '.join(parts)}."
     logger.info(
-        "Done%s: %d extracted, %d skipped, %d failed.%s Total time: %s",
+        "%s%s: %d extracted, %d skipped, %d failed.%s Total time: %s",
+        status,
         dry_run_note,
         added,
         skipped,
@@ -635,6 +637,9 @@ def extract(
             on_result=on_result,
             manifest=manifest,
         )
+    except KeyboardInterrupt:
+        logger.info("interrupted by user (Ctrl+C)")
+        batch_result = BatchResult(interrupted=True)
     except errors.FatalExtractionError as e:
         logger.error("FATAL: %s", e)
         sys.exit(1)
