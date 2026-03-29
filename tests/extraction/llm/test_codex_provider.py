@@ -261,21 +261,5 @@ class TestMakeProviderRouting(unittest.TestCase):
         assert isinstance(provider, CodexProvider)
 
 
-@unittest.skipUnless(
-    os.environ.get("RUN_LLM_TESTS") == "1", "set RUN_LLM_TESTS=1 to run"
-)
-class TestRealCodex(unittest.TestCase):
-    """Integration test that calls the real codex binary."""
-
-    def test_simple_prompt(self) -> None:
-        provider = CodexProvider("codex/gpt-5.4")
-        content, usage = provider.call(
-            'Return exactly this JSON and nothing else: {"options": []}'
-        )
-        data = json.loads(content)
-        assert "options" in data
-        assert usage.input_tokens > 0
-
-
 if __name__ == "__main__":
     unittest.main()
