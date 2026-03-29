@@ -18,10 +18,9 @@ def _make_raw():
 
 
 @pytest.fixture
-def store(tmp_path):
-    """Create a Store backed by a temporary SQLite database."""
-    db_path = str(tmp_path / "test.db")
-    s = Store.create(db_path)
+def store():
+    """Create a Store backed by an in-memory SQLite database."""
+    s = Store.create(":memory:")
     yield s
     s.close()
 
