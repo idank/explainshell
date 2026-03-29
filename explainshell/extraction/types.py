@@ -105,6 +105,7 @@ class BatchResult:
     n_succeeded: int = 0
     n_skipped: int = 0
     n_failed: int = 0
+    interrupted: bool = False
 
 
 @dataclass(frozen=True)
