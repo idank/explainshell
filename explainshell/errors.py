@@ -28,6 +28,12 @@ class SkippedExtraction(ExtractionError):
         self.stats = stats
 
 
+class FatalExtractionError(ExtractionError):
+    """Unrecoverable error that should abort the entire run."""
+
+    pass
+
+
 class LowConfidenceError(ExtractionError):
     """Extractor produced a result but with low confidence."""
 

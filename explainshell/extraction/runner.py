@@ -11,7 +11,7 @@ import logging
 import threading
 from collections.abc import Callable
 from typing import Any, NamedTuple
-from explainshell.errors import ExtractionError, SkippedExtraction
+from explainshell.errors import ExtractionError, FatalExtractionError, SkippedExtraction
 from explainshell.util import fmt_tokens
 from explainshell.extraction.llm.extractor import BatchExtractor, PreparedFile
 from explainshell.extraction.llm.providers import BatchEntry, TokenUsage
@@ -92,9 +92,15 @@ def _tally(batch: BatchResult, entry: ExtractionResult) -> None:
 
 
 def _extract_one(extractor: Extractor, gz_path: str) -> ExtractionResult:
-    """Run extractor on a single file, catching all expected errors."""
+    """Run extractor on a single file, catching all expected errors.
+
+    FatalExtractionError is intentionally not caught — it propagates to
+    abort the entire run.
+    """
     try:
         return extractor.extract(gz_path)
+    except FatalExtractionError:
+        raise
     except SkippedExtraction as e:
         return ExtractionResult(
             gz_path=gz_path,
@@ -150,11 +156,11 @@ def run_parallel(
     try:
         futures = {executor.submit(_do_one, gz_path): gz_path for gz_path in gz_files}
         for future in concurrent.futures.as_completed(futures):
-            entry = future.result()
+            entry = future.result()  # raises FatalExtractionError if the task hit one
             _tally(batch, entry)
             if on_result:
                 on_result(entry.gz_path, entry)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, FatalExtractionError):
         executor.shutdown(wait=False, cancel_futures=True)
         raise
     else:

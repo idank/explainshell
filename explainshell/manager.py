@@ -438,7 +438,7 @@ def _setup_logging(log_level_str: str) -> None:
 
 @click.group()
 @click.option("--db", default=config.DB_PATH, help="SQLite DB path.")
-@click.option("--log", "log_level", default="DEBUG", help="Log level (default: DEBUG).")
+@click.option("--log", "log_level", default="INFO", help="Log level (default: INFO).")
 @click.pass_context
 def cli(ctx: click.Context, db: str | None, log_level: str) -> None:
     """Manage the explainshell manpage database."""
@@ -565,7 +565,7 @@ def extract(
     for gz_path in gz_files:
         short_path = config.source_from_path(gz_path)
         if not overwrite and s.has_manpage_source(short_path):
-            logger.info("skipping %s (already stored)", short_path)
+            logger.debug("skipping %s (already stored)", short_path)
             prefilter_skipped += 1
             continue
 
@@ -577,6 +577,9 @@ def extract(
                 continue
 
         work_files.append(gz_path)
+
+    if prefilter_skipped:
+        logger.info("skipped %d already stored file(s)", prefilter_skipped)
 
     extract_total = len(work_files) + prefilter_skipped
 
@@ -607,6 +610,13 @@ def extract(
                 short_path,
                 entry.error or "unknown reason",
             )
+        elif entry.outcome == ExtractionOutcome.FAILED:
+            short_path = config.source_from_path(gz_path)
+            logger.error(
+                "[%s] FAILED: %s",
+                short_path,
+                entry.error or "unknown error",
+            )
 
     manifest = None
     if batch is not None:
@@ -615,15 +625,19 @@ def extract(
         manifest_path = os.path.join(debug_dir, "batch-manifest.json")
         manifest = BatchManifest(manifest_path, model=model, batch_size=batch)
 
-    batch_result = run(
-        extractor,
-        work_files,
-        batch_size=batch,
-        jobs=jobs,
-        on_start=on_start,
-        on_result=on_result,
-        manifest=manifest,
-    )
+    try:
+        batch_result = run(
+            extractor,
+            work_files,
+            batch_size=batch,
+            jobs=jobs,
+            on_start=on_start,
+            on_result=on_result,
+            manifest=manifest,
+        )
+    except errors.FatalExtractionError as e:
+        logger.error("FATAL: %s", e)
+        sys.exit(1)
 
     if manifest is not None and os.path.isfile(manifest_path):
         logger.info("batch manifest written to %s", manifest_path)

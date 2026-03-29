@@ -248,12 +248,6 @@ class LLMExtractor:
         basename = os.path.splitext(os.path.splitext(os.path.basename(gz_path))[0])[0]
 
         if len(plain_text) > MAX_MANPAGE_CHARS:
-            logger.warning(
-                "%s: skipping, manpage too large for LLM extraction (%s chars, limit %s)",
-                basename,
-                f"{len(plain_text):,}",
-                f"{MAX_MANPAGE_CHARS:,}",
-            )
             raise SkippedExtraction(
                 f"manpage too large ({len(plain_text):,} chars, limit {MAX_MANPAGE_CHARS:,})",
                 stats=ExtractionStats(plain_text_len=len(plain_text)),
