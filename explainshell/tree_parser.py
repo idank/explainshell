@@ -294,6 +294,8 @@ def _get_mandoc_env():
 
 def run_mandoc_tree(gz_path: str) -> tuple[str, str]:
     """Run mandoc -T tree on a .gz manpage file, return (stdout, stderr)."""
+    if not os.path.isfile(gz_path):
+        raise FileNotFoundError(f"manpage file not found: {gz_path}")
     env = _get_mandoc_env()
     result = subprocess.run(
         ["mandoc", "-T", "tree", gz_path],

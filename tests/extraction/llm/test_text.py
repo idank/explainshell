@@ -23,9 +23,10 @@ from explainshell.extraction.llm.text import (
 # ---------------------------------------------------------------------------
 
 
+@patch("explainshell.extraction.llm.text.os.path.isfile", return_value=True)
 class TestGetManpageText(unittest.TestCase):
     @patch("explainshell.extraction.llm.text.subprocess.run")
-    def test_success_returns_markdown(self, mock_run):
+    def test_success_returns_markdown(self, mock_run, _mock_isfile):
         md_output = (
             "# NAME\n\ngrep - search for patterns\n\n**-v**, **--invert-match**\n"
         )
@@ -38,13 +39,13 @@ class TestGetManpageText(unittest.TestCase):
         self.assertEqual(result, md_output.strip())
 
     @patch("explainshell.extraction.llm.text.subprocess.run")
-    def test_empty_output_raises(self, mock_run):
+    def test_empty_output_raises(self, mock_run, _mock_isfile):
         mock_run.return_value = MagicMock(returncode=0, stdout="   ", stderr="")
         with self.assertRaises(ExtractionError):
             get_manpage_text("dummy.1.gz")
 
     @patch("explainshell.extraction.llm.text.subprocess.run")
-    def test_nonzero_exit_raises(self, mock_run):
+    def test_nonzero_exit_raises(self, mock_run, _mock_isfile):
         mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error msg")
         with self.assertRaises(ExtractionError):
             get_manpage_text("dummy.1.gz")
