@@ -176,16 +176,20 @@ def cmd_extract(args):
         # Pick the latest release by sorting version strings
         releases = set(r for _, r, _ in distro_systems.values() if r)
         if not releases:
-            # Rolling-release distro (e.g. Arch Linux) — no versioned releases
-            release = ""
-            logger.info("Rolling-release distro, no version to select")
+            # Rolling-release distro (e.g. Arch Linux) — no versioned releases.
+            # Use "latest" as a synthetic release label so the on-disk layout
+            # keeps the distro/release/section/file.gz convention expected by
+            # source_from_path().
+            release = "latest"
+            logger.info("Rolling-release distro, using 'latest' as release label")
         else:
             release = sorted(releases, key=parse_version)[-1]
             logger.info("Auto-selected latest release: %s", release)
 
     matching_sys_ids = set()
+    match_release = "" if release == "latest" else release
     for sys_id, (name, r, short) in distro_systems.items():
-        if r == release:
+        if r == match_release:
             matching_sys_ids.add(sys_id)
     if not matching_sys_ids:
         available = sorted(set(r for _, r, _ in distro_systems.values() if r))

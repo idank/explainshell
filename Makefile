@@ -66,7 +66,7 @@ ubuntu-archive:
 MANNED_DATA_DIR := ignore/manned
 
 arch-archive:
-	@test ! -d manpages/arch || (echo "manpages/arch already exists, delete it first"; exit 1)
+	@test ! -d manpages/arch/latest || (echo "manpages/arch/latest already exists, delete it first"; exit 1)
 	@test -d $(MANNED_DATA_DIR) || (echo "Manned.org dump not found. Download it first with:"; echo "  python tools/fetch_manned.py download --data-dir $(MANNED_DATA_DIR)"; exit 1)
 	python tools/fetch_manned.py --log INFO extract --data-dir $(MANNED_DATA_DIR) \
 		--distro arch --sections 1,8 --output-dir manpages
