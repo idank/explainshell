@@ -42,22 +42,25 @@ def _parse_synopsis(base, synopsis):
     return SPLIT_SYNOP.match(synopsis).groups()
 
 
-def _run_lexgrog(gz_path, name):
-    """Run lexgrog on a man page and return the raw synopsis string or None."""
-    try:
-        proc = subprocess.run(
-            ["lexgrog", gz_path], capture_output=True, text=True, timeout=300
-        )
-        if proc.stderr:
-            logger.error("lexgrog stderr for %s: %s", name, proc.stderr)
-        if proc.stdout:
-            return proc.stdout.rstrip()
-    except subprocess.CalledProcessError:
-        logger.error("failed to extract synopsis for %s", name)
-    return None
+def _run_lexgrog(gz_path: str, name: str) -> str:
+    """Run lexgrog on a man page and return the raw synopsis string.
+
+    Raises FileNotFoundError if the file does not exist, and RuntimeError
+    if lexgrog fails or produces no output.
+    """
+    if not os.path.isfile(gz_path):
+        raise FileNotFoundError(f"manpage file not found: {gz_path}")
+    proc = subprocess.run(
+        ["lexgrog", gz_path], capture_output=True, text=True, timeout=300
+    )
+    if proc.stderr:
+        logger.error("lexgrog stderr for %s: %s", name, proc.stderr)
+    if not proc.stdout or not proc.stdout.strip():
+        raise RuntimeError(f"lexgrog produced no output for {gz_path}")
+    return proc.stdout.rstrip()
 
 
-def get_synopsis_and_aliases(gz_path):
+def get_synopsis_and_aliases(gz_path: str) -> tuple[str | None, list[tuple[str, int]]]:
     """Extract synopsis text and alias list from a man page via lexgrog.
 
     Returns (synopsis, aliases) where synopsis is a string or None and aliases
@@ -69,18 +72,17 @@ def get_synopsis_and_aliases(gz_path):
     synopsis = None
     aliases = [(name, 10)]
 
-    if raw_synopsis:
-        lines = raw_synopsis.splitlines()
-        parsed = [_parse_synopsis(gz_path, line) for line in lines if line.strip()]
-        parsed = [p for p in parsed if p]
-        if parsed:
-            d = collections.OrderedDict()
-            for prog, text in parsed:
-                d.setdefault(text, []).append(prog)
-            text, progs = list(dict(d).items())[0]
-            synopsis = text
-            alias_names = set(progs)
-            alias_names.discard(name)
-            aliases = [(name, 10)] + [(x, 1) for x in alias_names]
+    lines = raw_synopsis.splitlines()
+    parsed = [_parse_synopsis(gz_path, line) for line in lines if line.strip()]
+    parsed = [p for p in parsed if p]
+    if parsed:
+        d = collections.OrderedDict()
+        for prog, text in parsed:
+            d.setdefault(text, []).append(prog)
+        text, progs = list(dict(d).items())[0]
+        synopsis = text
+        alias_names = set(progs)
+        alias_names.discard(name)
+        aliases = [(name, 10)] + [(x, 1) for x in alias_names]
 
     return synopsis, aliases

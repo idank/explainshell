@@ -3,6 +3,7 @@ line numbering, and chunking."""
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 
@@ -43,6 +44,8 @@ _BLACKLISTED_SECTIONS = frozenset(
 
 def get_manpage_text(gz_path: str) -> str:
     """Run patched ``mandoc -T markdown <gz_path>`` to get markdown directly."""
+    if not os.path.isfile(gz_path):
+        raise FileNotFoundError(f"manpage file not found: {gz_path}")
     result = subprocess.run(
         [config.MANDOC_PATH, "-T", "markdown", gz_path],
         capture_output=True,
