@@ -98,12 +98,11 @@ class Store:
         self._conn.execute("PRAGMA foreign_keys = ON")
 
     @classmethod
-    def create(cls, db_path):
+    def create(cls, db_path: str) -> "Store":
         """Create a new (or open an existing) writable database and return a Store."""
-        conn = sqlite3.connect(db_path, check_same_thread=False)
-        conn.executescript(_CREATE_SCHEMA)
-        conn.close()
-        return cls(db_path)
+        s = cls(db_path)
+        s._conn.executescript(_CREATE_SCHEMA)
+        return s
 
     def close(self):
         if self._conn:
