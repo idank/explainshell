@@ -173,7 +173,7 @@ python -m explainshell.manager extract --mode source /path/to/manpage.1.gz
 - `tools/` - Standalone scripts
   - `llm_bench.py` - LLM extractor benchmark tool (run/compare metrics reports)
   - `fetch_manned.py` - Fetch man pages from manned.org weekly dump
-  - `mandoc-with-markdown` - Custom mandoc binary with markdown output support
+  - `mandoc-md` - Custom mandoc binary with markdown output support
 - `tests/` - Unit tests (`test_*.py`), fixtures
 - `tests/e2e/` - Playwright e2e tests, snapshots, and dedicated `e2e.db`
 - `tests/regression/` - Parsing regression tests and manpage .gz fixtures

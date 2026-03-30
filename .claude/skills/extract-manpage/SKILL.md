@@ -24,7 +24,7 @@ You ARE the extractor. Read a manpage, identify all command-line options, and st
 Run this command to convert the .gz file to markdown and save it to a temp file:
 
 ```bash
-/home/idank/dev/vibe/explainshell/tools/mandoc-with-markdown -T markdown <gz_file> > /tmp/manpage_extract.md
+/home/idank/dev/vibe/explainshell/tools/mandoc-md -T markdown <gz_file> > /tmp/manpage_extract.md
 ```
 
 ## Step 2: Read the markdown
