@@ -15,7 +15,7 @@ from explainshell.errors import ExtractionError, FatalExtractionError, SkippedEx
 from explainshell.util import fmt_tokens
 from explainshell.extraction.llm.extractor import BatchExtractor, PreparedFile
 from explainshell.extraction.llm.providers import BatchEntry, TokenUsage
-from explainshell.extraction.manifest import BatchManifest
+from explainshell.extraction.manifest import BatchManifestWriter
 from explainshell.extraction.types import (
     BatchResult,
     Extractor,
@@ -213,7 +213,7 @@ def _prep_stats(prepared: PreparedFile) -> ExtractionStats:
 
 def _process_one_batch(
     extractor: BatchExtractor,
-    manifest: BatchManifest,
+    manifest: BatchManifestWriter,
     batch_idx: int,
     total_batches: int,
     batch_items: list[WorkItem],
@@ -381,7 +381,7 @@ def run_batch(
     extractor: BatchExtractor,
     gz_files: list[str],
     *,
-    manifest: BatchManifest,
+    manifest: BatchManifestWriter,
     batch_size: int = 50,
     jobs: int = 1,
     on_start: Callable[[str], None] | None = None,
@@ -538,7 +538,7 @@ def run(
     extractor: Extractor,
     gz_files: list[str],
     *,
-    manifest: BatchManifest | None = None,
+    manifest: BatchManifestWriter | None = None,
     batch_size: int | None = None,
     jobs: int = 1,
     on_start: Callable[[str], None] | None = None,
@@ -586,7 +586,7 @@ def run_collected(
     extractor: Extractor,
     gz_files: list[str],
     *,
-    manifest: BatchManifest | None = None,
+    manifest: BatchManifestWriter | None = None,
     batch_size: int | None = None,
     jobs: int = 1,
     on_start: Callable[[str], None] | None = None,
@@ -609,7 +609,7 @@ def run_batch_collected(
     extractor: BatchExtractor,
     gz_files: list[str],
     *,
-    manifest: BatchManifest,
+    manifest: BatchManifestWriter,
     batch_size: int = 50,
     jobs: int = 1,
     on_start: Callable[[str], None] | None = None,

@@ -1,6 +1,7 @@
 import glob
 import itertools
 import os
+import subprocess
 from operator import itemgetter
 
 
@@ -133,3 +134,30 @@ def fmt_tokens(n: int) -> str:
     if n >= 1_000:
         return f"{n / 1_000:.0f}K"
     return str(n)
+
+
+def git_metadata() -> dict:
+    """Capture git commit hash and working-tree state."""
+    meta: dict = {}
+    try:
+        meta["commit"] = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+        meta["commit_short"] = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        meta["commit"] = None
+        meta["commit_short"] = None
+
+    try:
+        status = subprocess.check_output(
+            ["git", "status", "--porcelain"], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+        meta["dirty"] = bool(status)
+    except Exception:
+        meta["dirty"] = None
+
+    return meta
