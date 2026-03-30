@@ -162,8 +162,8 @@ class LLMExtractor:
 
     def __init__(self, config: ExtractorConfig) -> None:
         self._model = config.model or ""
-        self._debug_dir = config.debug_dir
-        self._fail_dir = config.fail_dir
+        self._run_dir = config.run_dir
+        self._debug = config.debug
         self._provider_instance: LLMProvider | None = None
         self._batch_provider_instance: BatchProvider | None = None
 
@@ -331,9 +331,9 @@ class LLMExtractor:
         n_chunks = prepared.n_chunks
         numbered_text = prepared.numbered_text
 
-        if self._debug_dir:
-            os.makedirs(self._debug_dir, exist_ok=True)
-            with open(os.path.join(self._debug_dir, f"{basename}.md"), "w") as f:
+        if self._run_dir and self._debug:
+            os.makedirs(self._run_dir, exist_ok=True)
+            with open(os.path.join(self._run_dir, f"{basename}.md"), "w") as f:
                 f.write(numbered_text)
 
         all_raw: list[dict] = []
@@ -345,16 +345,16 @@ class LLMExtractor:
                 dashless_opts = True
             all_subcommands.extend(cr.data.get("subcommands") or [])
 
-            if self._debug_dir:
+            if self._run_dir and self._debug:
                 if n_chunks == 1:
                     prompt_name = f"{basename}.prompt.json"
                     response_name = f"{basename}.response.txt"
                 else:
                     prompt_name = f"{basename}.chunk-{i}.prompt.json"
                     response_name = f"{basename}.chunk-{i}.response.txt"
-                with open(os.path.join(self._debug_dir, prompt_name), "w") as f:
+                with open(os.path.join(self._run_dir, prompt_name), "w") as f:
                     json.dump(cr.messages, f, indent=2)
-                with open(os.path.join(self._debug_dir, response_name), "w") as f:
+                with open(os.path.join(self._run_dir, response_name), "w") as f:
                     f.write(cr.raw_response)
 
         all_raw = dedup_ref_options(all_raw)
@@ -458,12 +458,12 @@ class LLMExtractor:
     def _dump_failed_response(
         self, basename: str, chunk_idx: int, raw_response: str
     ) -> None:
-        """Write a failed LLM response to fail_dir for inspection."""
-        if not self._fail_dir:
+        """Write a failed LLM response to output_dir for inspection."""
+        if not self._run_dir:
             return
-        os.makedirs(self._fail_dir, exist_ok=True)
+        os.makedirs(self._run_dir, exist_ok=True)
         name = f"{basename}.chunk-{chunk_idx}.failed-response.txt"
-        path = os.path.join(self._fail_dir, name)
+        path = os.path.join(self._run_dir, name)
         with open(path, "w") as f:
             f.write(raw_response)
         logger.error("raw LLM response saved to %s", path)

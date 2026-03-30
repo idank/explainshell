@@ -201,7 +201,7 @@ Extraction modes (passed via `--mode` to `extract` or `diff db`):
 - `llm:<provider/model>` - Sends man page text to an LLM (e.g., `llm:openai/gpt-5-mini`). Supports OpenAI, Gemini, and LiteLLM (fallback) providers.
 - `hybrid:<provider/model>` - Tries mandoc first, falls back to LLM on low confidence
 
-Extract flags: `--overwrite`, `--dry-run`, `--debug-dir`, `--drop`, `-j/--jobs <int>` (parallel extraction, default 1), `--batch <int>` (provider batch API)
+Extract flags: `--overwrite`, `--dry-run`, `--debug`, `--drop`, `-j/--jobs <int>` (parallel extraction, default 1), `--batch <int>` (provider batch API). All run output (logs, debug artifacts, manifests) goes to `logs/{timestamp}/`.
 
 ### Data Model (models.py, store.py)
 
