@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
-from explainshell.extraction.manifest import ManifestData
+from explainshell.extraction.manifest import BatchManifest
 from explainshell.extraction.types import (
     BatchResult,
     ExtractionResult,
@@ -54,6 +54,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
 
         mock_store = MagicMock()
         mock_store_create.return_value = mock_store
+        mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
         mock_store.has_manpage_source.return_value = False
 
         mock_make_ext.return_value = MagicMock()
@@ -141,6 +142,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
 
         mock_store = MagicMock()
         mock_store_create.return_value = mock_store
+        mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
         mock_store.has_manpage_source.return_value = False
         mock_make_ext.return_value = MagicMock()
 
@@ -320,6 +322,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
 
         mock_store = MagicMock()
         mock_store_create.return_value = mock_store
+        mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
         mock_store.has_manpage_source.return_value = False
 
         fake_mp = MagicMock()
@@ -404,6 +407,7 @@ class TestSymlinkMapping(unittest.TestCase):
 
         mock_store = MagicMock()
         mock_store_create.return_value = mock_store
+        mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
         mock_store.mapping_score.return_value = None  # no existing mapping
 
         mock_make_ext.return_value = MagicMock()
@@ -496,6 +500,7 @@ class TestSymlinkMapping(unittest.TestCase):
 
         mock_store = MagicMock()
         mock_store_create.return_value = mock_store
+        mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
         mock_store.has_manpage_source.return_value = False
         mock_store.mapping_score.return_value = None
 
@@ -547,6 +552,7 @@ class TestSymlinkMapping(unittest.TestCase):
 
         mock_store = MagicMock()
         mock_store_create.return_value = mock_store
+        mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
         mock_store.has_manpage_source.side_effect = (
             lambda s: s == "distro/release/1/bio-eagle.1.gz"
         )
@@ -601,6 +607,7 @@ class TestSymlinkMapping(unittest.TestCase):
 
         mock_store = MagicMock()
         mock_store_create.return_value = mock_store
+        mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
         mock_store.has_manpage_source.side_effect = (
             lambda s: s == "distro/release/1/bio-eagle.1.gz"
         )
@@ -661,6 +668,7 @@ class TestDiffDbCli(unittest.TestCase):
         mock_collect.return_value = ["/fake/a.1.gz"]
         mock_store = MagicMock()
         mock_store_create.return_value = mock_store
+        mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
         mock_make_ext.return_value = MagicMock()
 
         from explainshell.extraction.types import BatchResult
@@ -1534,8 +1542,8 @@ class TestRunSalvage(unittest.TestCase):
         self,
         batches: list[dict],
         model: str = "openai/gpt-5-mini",
-    ) -> ManifestData:
-        return ManifestData(
+    ) -> BatchManifest:
+        return BatchManifest(
             version=1,
             model=model,
             batch_size=50,
@@ -1757,6 +1765,144 @@ class TestSalvageCliValidation(unittest.TestCase):
             self.assertIn("version", result.output)
         finally:
             os.unlink(manifest_path)
+
+
+# ---------------------------------------------------------------------------
+# TestExtractionReport
+# ---------------------------------------------------------------------------
+
+
+class TestExtractionReport(unittest.TestCase):
+    """Verify _write_report produces correct report.json files."""
+
+    def setUp(self) -> None:
+        self._run_dir = tempfile.mkdtemp()
+
+    def tearDown(self) -> None:
+        import shutil
+
+        shutil.rmtree(self._run_dir, ignore_errors=True)
+
+    def _read_report(self) -> dict:
+        path = os.path.join(self._run_dir, "report.json")
+        self.assertTrue(
+            os.path.isfile(path), f"report.json not found in {self._run_dir}"
+        )
+        with open(path) as f:
+            return json.load(f)
+
+    def _make_report(self, **overrides):
+        from explainshell.extraction.report import (
+            DbCounts,
+            ExtractConfig,
+            ExtractSummary,
+            ExtractionReport,
+            GitInfo,
+        )
+
+        defaults = dict(
+            timestamp="2026-03-30T12:00:00+00:00",
+            git=GitInfo(commit="abc123", commit_short="abc123", dirty=False),
+            config=ExtractConfig(mode="llm", model="openai/test-model"),
+            elapsed_seconds=1.0,
+            summary=ExtractSummary(succeeded=1, skipped=0, failed=0),
+            db_before=DbCounts(manpages=10, mappings=50),
+            db_after=DbCounts(manpages=11, mappings=55),
+        )
+        defaults.update(overrides)
+        return ExtractionReport(**defaults)
+
+    def test_report_schema(self) -> None:
+        """report.json has the expected top-level fields and values."""
+        from explainshell.manager import _write_report
+
+        report = self._make_report()
+        _write_report(self._run_dir, report)
+
+        data = self._read_report()
+        self.assertEqual(data["version"], 1)
+        self.assertEqual(data["command"], "extract")
+        self.assertEqual(data["timestamp"], "2026-03-30T12:00:00+00:00")
+        self.assertEqual(data["config"]["mode"], "llm")
+        self.assertEqual(data["config"]["model"], "openai/test-model")
+        self.assertEqual(data["elapsed_seconds"], 1.0)
+        self.assertEqual(data["summary"]["succeeded"], 1)
+        self.assertEqual(data["summary"]["failed"], 0)
+        self.assertEqual(data["db_before"], {"manpages": 10, "mappings": 50})
+        self.assertEqual(data["db_after"], {"manpages": 11, "mappings": 55})
+
+    def test_none_fields_excluded(self) -> None:
+        """Fields set to None are omitted from the JSON (exclude_none)."""
+        from explainshell.manager import _write_report
+
+        report = self._make_report(batch_manifest=None)
+        _write_report(self._run_dir, report)
+
+        data = self._read_report()
+        self.assertNotIn("batch_manifest", data)
+
+    def test_batch_manifest_embedded(self) -> None:
+        """batch_manifest dict is included when provided."""
+        from explainshell.manager import _write_report
+
+        manifest_dict = {
+            "version": 1,
+            "model": "openai/test-model",
+            "batch_size": 50,
+            "total_batches": 1,
+            "batches": [],
+        }
+        report = self._make_report(batch_manifest=manifest_dict)
+        _write_report(self._run_dir, report)
+
+        data = self._read_report()
+        self.assertEqual(data["batch_manifest"]["model"], "openai/test-model")
+        self.assertEqual(data["batch_manifest"]["batch_size"], 50)
+
+    def test_standalone_manifest_cleaned_up(self) -> None:
+        """_write_report removes batch-manifest.json if it exists."""
+        from explainshell.manager import _write_report
+
+        standalone = os.path.join(self._run_dir, "batch-manifest.json")
+        with open(standalone, "w") as f:
+            f.write("{}")
+
+        report = self._make_report(batch_manifest={"version": 1})
+        _write_report(self._run_dir, report)
+
+        self.assertFalse(os.path.isfile(standalone))
+
+    def test_interrupted_report(self) -> None:
+        """Interrupted runs record interrupted=true in the summary."""
+        from explainshell.extraction.report import ExtractSummary
+        from explainshell.manager import _write_report
+
+        report = self._make_report(
+            summary=ExtractSummary(succeeded=0, skipped=0, failed=0, interrupted=True),
+        )
+        _write_report(self._run_dir, report)
+
+        data = self._read_report()
+        self.assertTrue(data["summary"]["interrupted"])
+
+    def test_fatal_error_report(self) -> None:
+        """Fatal errors are recorded in summary.fatal_error."""
+        from explainshell.extraction.report import ExtractSummary
+        from explainshell.manager import _write_report
+
+        report = self._make_report(
+            summary=ExtractSummary(
+                succeeded=0,
+                skipped=0,
+                failed=1,
+                fatal_error="provider auth failed",
+            ),
+        )
+        _write_report(self._run_dir, report)
+
+        data = self._read_report()
+        self.assertEqual(data["summary"]["fatal_error"], "provider auth failed")
+        self.assertEqual(data["summary"]["failed"], 1)
 
 
 if __name__ == "__main__":

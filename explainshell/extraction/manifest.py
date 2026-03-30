@@ -24,7 +24,7 @@ class BatchManifestEntry(BaseModel):
     files: list[str]
 
 
-class ManifestData(BaseModel):
+class BatchManifest(BaseModel):
     """Top-level manifest schema — used for reading and validation."""
 
     version: Literal[1]
@@ -34,7 +34,7 @@ class ManifestData(BaseModel):
     batches: list[BatchManifestEntry]
 
 
-class BatchManifest:
+class BatchManifestWriter:
     """Thread-safe manifest writer for batch extraction runs.
 
     Records batch outcomes incrementally and flushes to disk after each update.
@@ -42,16 +42,19 @@ class BatchManifest:
 
     def __init__(self, path: str, model: str, batch_size: int) -> None:
         self._path = path
-        self._model = model
-        self._batch_size = batch_size
-        self._total_batches: int | None = None
-        self._entries: list[BatchManifestEntry] = []
+        self._data = BatchManifest(
+            version=1,
+            model=model,
+            batch_size=batch_size,
+            total_batches=None,
+            batches=[],
+        )
         self._lock = threading.Lock()
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
     def set_total_batches(self, n: int) -> None:
         """Set the total number of batches (called once after grouping)."""
-        self._total_batches = n
+        self._data.total_batches = n
 
     def record_batch(
         self,
@@ -75,23 +78,22 @@ class BatchManifest:
         )
         with self._lock:
             # Replace existing entry for same batch_idx, or append.
-            for i, existing in enumerate(self._entries):
+            for i, existing in enumerate(self._data.batches):
                 if existing.batch_idx == batch_idx:
-                    self._entries[i] = entry
+                    self._data.batches[i] = entry
                     break
             else:
-                self._entries.append(entry)
+                self._data.batches.append(entry)
             self._flush()
+
+    def to_dict(self) -> dict:
+        """Return manifest data as a plain dict for embedding in reports."""
+        with self._lock:
+            return self._data.model_dump()
 
     def _flush(self) -> None:
         """Atomic write: dump to .tmp, then os.replace."""
-        data = {
-            "version": 1,
-            "model": self._model,
-            "batch_size": self._batch_size,
-            "total_batches": self._total_batches,
-            "batches": [e.model_dump() for e in self._entries],
-        }
+        data = self._data.model_dump()
         tmp_path = self._path + ".tmp"
         with open(tmp_path, "w") as f:
             json.dump(data, f, indent=2)
@@ -99,7 +101,7 @@ class BatchManifest:
         os.replace(tmp_path, self._path)
 
 
-def load_manifest(path: str, expected_model: str) -> ManifestData:
+def load_manifest(path: str, expected_model: str) -> BatchManifest:
     """Read, validate, and return parsed manifest.
 
     Raises ``pydantic.ValidationError`` on schema errors and ``ValueError``
@@ -107,7 +109,7 @@ def load_manifest(path: str, expected_model: str) -> ManifestData:
     """
     with open(path) as f:
         raw = json.load(f)
-    data = ManifestData.model_validate(raw)
+    data = BatchManifest.model_validate(raw)
     if data.model != expected_model:
         raise ValueError(
             f"manifest model {data.model!r} does not match "
@@ -116,7 +118,7 @@ def load_manifest(path: str, expected_model: str) -> ManifestData:
     return data
 
 
-def failed_batches(data: ManifestData) -> list[BatchManifestEntry]:
+def failed_batches(data: BatchManifest) -> list[BatchManifestEntry]:
     """Return entries that did not complete successfully.
 
     Includes status "failed" (batch errored) and "submitted" (process

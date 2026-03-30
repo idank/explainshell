@@ -231,6 +231,17 @@ class Store:
         ).fetchone()
         return row is not None
 
+    def counts(self) -> dict[str, int]:
+        """Return row counts for core tables."""
+        return {
+            "manpages": self._conn.execute(
+                "SELECT COUNT(*) FROM parsed_manpages"
+            ).fetchone()[0],
+            "mappings": self._conn.execute("SELECT COUNT(*) FROM mappings").fetchone()[
+                0
+            ],
+        }
+
     def _discover_manpage_suggestions(
         self, source, existing, distro=None, release=None
     ):

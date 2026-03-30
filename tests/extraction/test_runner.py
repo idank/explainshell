@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 from explainshell.errors import ExtractionError, SkippedExtraction
 from explainshell.extraction.llm.providers import BatchResults, TokenUsage
-from explainshell.extraction.manifest import BatchManifest
+from explainshell.extraction.manifest import BatchManifestWriter
 from explainshell.extraction.runner import (
     WorkItem,
     group_work_items,
@@ -24,9 +24,9 @@ from explainshell.extraction.types import (
 )
 
 
-def _tmp_manifest(batch_size: int = 50) -> BatchManifest:
+def _tmp_manifest(batch_size: int = 50) -> BatchManifestWriter:
     """Create a throwaway manifest for tests."""
-    return BatchManifest(
+    return BatchManifestWriter(
         os.path.join(tempfile.mkdtemp(), "manifest.json"),
         model="test",
         batch_size=batch_size,

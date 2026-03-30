@@ -39,17 +39,16 @@ import glob
 import json
 import logging
 import os
-import subprocess
 import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from explainshell.extraction import ExtractorConfig, ExtractionOutcome, make_extractor
-from explainshell.extraction.manifest import BatchManifest
+from explainshell.extraction.manifest import BatchManifestWriter
 from explainshell.extraction.types import ExtractionResult
 from explainshell.extraction.runner import run
-from explainshell.util import collect_gz_files
+from explainshell.util import collect_gz_files, git_metadata as _git_metadata
 
 logger = logging.getLogger("explainshell.tools.llm_bench")
 
@@ -64,33 +63,6 @@ DEFAULT_CORPUS_DIR = "tests/regression/llm-bench/manpages"
 
 def _basename(gz_path: str) -> str:
     return os.path.splitext(os.path.splitext(os.path.basename(gz_path))[0])[0]
-
-
-def _git_metadata() -> dict:
-    """Capture git commit hash and working-tree state."""
-    meta: dict = {}
-    try:
-        meta["commit"] = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
-        ).strip()
-        meta["commit_short"] = subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        ).strip()
-    except Exception:
-        meta["commit"] = None
-        meta["commit_short"] = None
-
-    try:
-        status = subprocess.check_output(
-            ["git", "status", "--porcelain"], text=True, stderr=subprocess.DEVNULL
-        ).strip()
-        meta["dirty"] = bool(status)
-    except Exception:
-        meta["dirty"] = None
-
-    return meta
 
 
 def _auto_output_path(report_dir: str) -> str:
@@ -169,7 +141,9 @@ def run_bench(args: argparse.Namespace) -> int:
     manifest = None
     if args.batch is not None:
         manifest_path = os.path.join(run_dir, "batch-manifest.json")
-        manifest = BatchManifest(manifest_path, model=args.model, batch_size=args.batch)
+        manifest = BatchManifestWriter(
+            manifest_path, model=args.model, batch_size=args.batch
+        )
 
     t0 = time.monotonic()
     result = run(

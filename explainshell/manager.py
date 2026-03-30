@@ -27,7 +27,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from explainshell.extraction.llm.extractor import BatchExtractor
-    from explainshell.extraction.manifest import ManifestData
 
 import click
 
@@ -39,6 +38,19 @@ from explainshell.extraction import (
     ExtractionOutcome,
     ExtractionResult,
     make_extractor,
+)
+from explainshell.extraction.manifest import (
+    BatchManifest,
+    BatchManifestWriter,
+    failed_batches,
+    load_manifest,
+)
+from explainshell.extraction.report import (
+    DbCounts,
+    ExtractConfig,
+    ExtractSummary,
+    ExtractionReport,
+    GitInfo,
 )
 from explainshell.extraction.runner import (
     run,
@@ -394,6 +406,21 @@ def _log_summary(
     return 0 if failed == 0 else 1
 
 
+def _write_report(run_dir: str, report: ExtractionReport) -> None:
+    """Write report.json to the run directory."""
+    path = os.path.join(run_dir, "report.json")
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(report.model_dump_json(indent=2, exclude_none=True))
+        f.write("\n")
+    os.replace(tmp, path)
+    logger.info("report written to %s", path)
+    # Clean up standalone batch manifest (now embedded in report).
+    manifest_path = os.path.join(run_dir, "batch-manifest.json")
+    if os.path.isfile(manifest_path):
+        os.remove(manifest_path)
+
+
 # ---------------------------------------------------------------------------
 # Logging setup
 # ---------------------------------------------------------------------------
@@ -562,6 +589,7 @@ def extract(
     if drop:
         s.drop(confirm=True)
 
+    db_before = s.counts()
     t0 = time.monotonic()
     prefilter_skipped = 0
     symlinks_mapped = 0
@@ -634,11 +662,10 @@ def extract(
 
     manifest = None
     if batch is not None:
-        from explainshell.extraction.manifest import BatchManifest
-
         manifest_path = os.path.join(run_dir, "batch-manifest.json")
-        manifest = BatchManifest(manifest_path, model=model, batch_size=batch)
+        manifest = BatchManifestWriter(manifest_path, model=model, batch_size=batch)
 
+    fatal_error: str | None = None
     try:
         batch_result = run(
             extractor,
@@ -654,10 +681,8 @@ def extract(
         batch_result = BatchResult(interrupted=True)
     except errors.FatalExtractionError as e:
         logger.error("FATAL: %s", e)
-        sys.exit(1)
-
-    if manifest is not None and os.path.isfile(manifest_path):
-        logger.info("batch manifest written to %s", manifest_path)
+        batch_result = BatchResult(n_failed=1)
+        fatal_error = str(e)
 
     # Map symlinks to their canonical manpages (now that extraction is done).
     # Note: has_manpage_source checks the DB, not extraction outcomes. If a
@@ -683,6 +708,37 @@ def extract(
     rc = _log_summary(
         batch_result, prefilter_skipped, elapsed, symlinks_mapped=symlinks_mapped
     )
+
+    import datetime as _dt
+
+    report = ExtractionReport(
+        timestamp=_dt.datetime.now(_dt.timezone.utc).isoformat(),
+        git=GitInfo(**util.git_metadata()),
+        config=ExtractConfig(
+            mode=parsed_mode,
+            model=model,
+            overwrite=overwrite,
+            drop=drop,
+            jobs=jobs,
+            batch_size=batch,
+            debug=debug,
+        ),
+        elapsed_seconds=round(elapsed, 1),
+        summary=ExtractSummary(
+            succeeded=batch_result.n_succeeded,
+            skipped=batch_result.n_skipped + prefilter_skipped,
+            failed=batch_result.n_failed,
+            prefilter_skipped=prefilter_skipped,
+            symlinks_mapped=symlinks_mapped,
+            interrupted=batch_result.interrupted,
+            fatal_error=fatal_error,
+        ),
+        db_before=DbCounts(**db_before),
+        db_after=DbCounts(**s.counts()),
+        batch_manifest=manifest.to_dict() if manifest is not None else None,
+    )
+    _write_report(run_dir, report)
+
     if rc != 0:
         sys.exit(rc)
 
@@ -694,7 +750,7 @@ def extract(
 
 def _run_salvage(
     extractor: BatchExtractor,
-    manifest_data: ManifestData,
+    manifest_data: BatchManifest,
     s: store.Store | None,
     dry_run: bool,
 ) -> BatchResult:
@@ -703,8 +759,6 @@ def _run_salvage(
     For each failed batch, retrieves partial results from the provider,
     re-prepares only the files from that batch, and finalizes them.
     """
-    from explainshell.extraction.manifest import failed_batches
-
     bp = extractor.batch_provider
     entries = failed_batches(manifest_data)
     if not entries:
@@ -864,7 +918,6 @@ def salvage(
     from pydantic import ValidationError
 
     from explainshell.extraction.llm.extractor import BatchExtractor
-    from explainshell.extraction.manifest import load_manifest
 
     try:
         parsed_mode, model = _parse_mode(mode)
