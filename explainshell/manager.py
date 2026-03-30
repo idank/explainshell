@@ -104,7 +104,7 @@ def _run_diff_extractors(
     gz_files: list[str],
     diff_left: tuple,
     diff_right: tuple,
-    debug_dir: str | None,
+    run_dir: str,
 ) -> BatchResult:
     """Run --diff A..B mode: compare two extractors on each file."""
     left_mode, left_model = diff_left
@@ -113,8 +113,8 @@ def _run_diff_extractors(
     right_label = right_mode if not right_model else f"{right_mode} ({right_model})"
     label = f"{left_label} vs {right_label}"
 
-    left_cfg = ExtractorConfig(model=left_model, fail_dir=debug_dir)
-    right_cfg = ExtractorConfig(model=right_model, fail_dir=debug_dir)
+    left_cfg = ExtractorConfig(model=left_model, run_dir=run_dir)
+    right_cfg = ExtractorConfig(model=right_model, run_dir=run_dir)
     left_ext = make_extractor(left_mode, left_cfg)
     right_ext = make_extractor(right_mode, right_cfg)
 
@@ -202,13 +202,12 @@ def _run_diff_db(
     gz_files: list[str],
     mode: str,
     model: str | None,
-    debug_dir: str | None,
-    dry_run: bool,
+    run_dir: str,
+    debug: bool,
     s: store.Store,
 ) -> BatchResult:
     """Run --diff db mode: compare fresh extraction against the DB."""
-    _debug_dir = debug_dir if dry_run else None
-    cfg = ExtractorConfig(model=model, debug_dir=_debug_dir, fail_dir=debug_dir)
+    cfg = ExtractorConfig(model=model, run_dir=run_dir, debug=debug)
     ext = make_extractor(mode, cfg)
 
     from explainshell import manpage as _manpage
@@ -253,10 +252,10 @@ def _run_dry_run(
     gz_files: list[str],
     mode: str,
     model: str | None,
-    debug_dir: str | None,
+    run_dir: str,
 ) -> BatchResult:
     """Run --dry-run mode: extract but don't write to DB."""
-    cfg = ExtractorConfig(model=model, debug_dir=debug_dir, fail_dir=debug_dir)
+    cfg = ExtractorConfig(model=model, run_dir=run_dir, debug=True)
     ext = make_extractor(mode, cfg)
 
     def on_result(gz_path: str, entry: ExtractionResult) -> None:
@@ -400,10 +399,13 @@ def _log_summary(
 # ---------------------------------------------------------------------------
 
 
-def _setup_logging(log_level_str: str) -> None:
+def _setup_logging(log_level_str: str) -> str:
     """Configure logging for the CLI.
 
-    Adds a timestamped log file under logs/ alongside the console handler.
+    Creates a timestamped run directory under ``logs/`` and writes
+    ``run.log`` inside it.  Returns the run directory path so that
+    other artifacts (debug files, manifests) can be placed alongside
+    the log.
     """
     import datetime
 
@@ -418,10 +420,11 @@ def _setup_logging(log_level_str: str) -> None:
         datefmt=datefmt,
     )
 
-    log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
-    os.makedirs(log_dir, exist_ok=True)
+    logs_root = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_path = os.path.join(log_dir, f"{timestamp}.log")
+    run_dir = os.path.join(logs_root, timestamp)
+    os.makedirs(run_dir, exist_ok=True)
+    log_path = os.path.join(run_dir, "run.log")
 
     file_handler = logging.FileHandler(log_path)
     file_handler.setLevel(log_level)
@@ -431,6 +434,8 @@ def _setup_logging(log_level_str: str) -> None:
     logging.getLogger("explainshell").setLevel(log_level)
     logger.info("command line: %s", " ".join(sys.argv))
     logger.info("logging to %s", log_path)
+
+    return run_dir
 
 
 # ---------------------------------------------------------------------------
@@ -447,7 +452,7 @@ def cli(ctx: click.Context, db: str | None, log_level: str) -> None:
     ctx.ensure_object(dict)
     ctx.obj["db"] = db
     ctx.obj["log_level"] = log_level
-    _setup_logging(log_level)
+    ctx.obj["run_dir"] = _setup_logging(log_level)
 
 
 def _require_db(ctx: click.Context, *, must_exist: bool = False) -> str:
@@ -489,9 +494,10 @@ def _require_db(ctx: click.Context, *, must_exist: bool = False) -> str:
     help="Batch size for provider batch API (gemini/ and openai/ models).",
 )
 @click.option(
-    "--debug-dir",
-    default="debug-output",
-    help="Directory for debug files (default: debug-output).",
+    "--debug",
+    "debug",
+    is_flag=True,
+    help="Write full prompt/response debug artifacts.",
 )
 @click.argument("files", nargs=-1, required=True)
 @click.pass_context
@@ -504,7 +510,7 @@ def extract(
     drop: bool,
     jobs: int,
     batch: int | None,
-    debug_dir: str,
+    debug: bool,
 ) -> None:
     """Extract options from manpages and store in DB."""
     try:
@@ -540,9 +546,11 @@ def extract(
             click.echo("Aborted.")
             return
 
+    run_dir: str = ctx.obj["run_dir"]
+
     if dry_run:
         t0 = time.monotonic()
-        batch_result = _run_dry_run(gz_files, parsed_mode, model, debug_dir)
+        batch_result = _run_dry_run(gz_files, parsed_mode, model, run_dir)
         elapsed = time.monotonic() - t0
         rc = _log_summary(batch_result, 0, elapsed, dry_run=True)
         if rc != 0:
@@ -559,7 +567,7 @@ def extract(
     symlinks_mapped = 0
     symlink_files: list[tuple[str, str, str]] = []  # (gz_path, source, canonical)
 
-    cfg = ExtractorConfig(model=model, fail_dir=debug_dir)
+    cfg = ExtractorConfig(model=model, run_dir=run_dir, debug=debug)
     extractor = make_extractor(parsed_mode, cfg)
 
     # Pre-filter already-stored files and separate symlinks.
@@ -628,7 +636,7 @@ def extract(
     if batch is not None:
         from explainshell.extraction.manifest import BatchManifest
 
-        manifest_path = os.path.join(debug_dir, "batch-manifest.json")
+        manifest_path = os.path.join(run_dir, "batch-manifest.json")
         manifest = BatchManifest(manifest_path, model=model, batch_size=batch)
 
     try:
@@ -835,9 +843,10 @@ def _run_salvage(
     "--dry-run", is_flag=True, help="Show what would be salvaged without writing to DB."
 )
 @click.option(
-    "--debug-dir",
-    default=None,
-    help="Directory for debug files.",
+    "--debug",
+    "debug",
+    is_flag=True,
+    help="Write full prompt/response debug artifacts.",
 )
 @click.pass_context
 def salvage(
@@ -845,7 +854,7 @@ def salvage(
     mode: str,
     manifest: str,
     dry_run: bool,
-    debug_dir: str | None,
+    debug: bool,
 ) -> None:
     """Salvage partial results from failed batch extraction runs.
 
@@ -879,7 +888,8 @@ def salvage(
         db_path = None
         s = None
 
-    cfg = ExtractorConfig(model=model, debug_dir=debug_dir)
+    run_dir: str = ctx.obj["run_dir"]
+    cfg = ExtractorConfig(model=model, run_dir=run_dir, debug=debug)
     extractor = make_extractor(parsed_mode, cfg)
     if not isinstance(extractor, BatchExtractor):
         raise click.UsageError("extractor does not support batch mode")
@@ -915,9 +925,10 @@ def diff() -> None:
 )
 @click.option("--dry-run", is_flag=True, help="Enable extractor debug output.")
 @click.option(
-    "--debug-dir",
-    default="debug-output",
-    help="Directory for debug files (default: debug-output).",
+    "--debug",
+    "debug",
+    is_flag=True,
+    help="Write full prompt/response debug artifacts.",
 )
 @click.argument("files", nargs=-1, required=True)
 @click.pass_context
@@ -926,7 +937,7 @@ def diff_db_cmd(
     mode: str,
     files: tuple[str, ...],
     dry_run: bool,
-    debug_dir: str,
+    debug: bool,
 ) -> None:
     """Diff fresh extraction against the database."""
     try:
@@ -939,9 +950,12 @@ def diff_db_cmd(
     if not gz_files:
         raise click.UsageError("No .gz files found.")
 
+    run_dir: str = ctx.obj["run_dir"]
     s = store.Store.create(db_path)
     t0 = time.monotonic()
-    batch_result = _run_diff_db(gz_files, parsed_mode, model, debug_dir, dry_run, s)
+    batch_result = _run_diff_db(
+        gz_files, parsed_mode, model, run_dir, dry_run or debug, s
+    )
     elapsed = time.monotonic() - t0
     rc = _log_summary(batch_result, 0, elapsed)
     if rc != 0:
@@ -951,15 +965,11 @@ def diff_db_cmd(
 @diff.command("extractors")
 @click.argument("spec")
 @click.argument("files", nargs=-1, required=True)
-@click.option(
-    "--debug-dir",
-    default="debug-output",
-    help="Directory for debug files (default: debug-output).",
-)
+@click.pass_context
 def diff_extractors_cmd(
+    ctx: click.Context,
     spec: str,
     files: tuple[str, ...],
-    debug_dir: str,
 ) -> None:
     """Compare two extractors head-to-head.
 
@@ -980,8 +990,9 @@ def diff_extractors_cmd(
     if not gz_files:
         raise click.UsageError("No .gz files found.")
 
+    run_dir: str = ctx.obj["run_dir"]
     t0 = time.monotonic()
-    batch_result = _run_diff_extractors(gz_files, left, right, debug_dir)
+    batch_result = _run_diff_extractors(gz_files, left, right, run_dir)
     elapsed = time.monotonic() - t0
     rc = _log_summary(batch_result, 0, elapsed)
     if rc != 0:

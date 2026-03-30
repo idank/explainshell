@@ -134,7 +134,7 @@ def run_bench(args: argparse.Namespace) -> int:
     run_dir = os.path.dirname(output)
     os.makedirs(run_dir, exist_ok=True)
 
-    config = ExtractorConfig(model=args.model, debug_dir=run_dir)
+    config = ExtractorConfig(model=args.model, run_dir=run_dir, debug=True)
     extractor = make_extractor("llm", config)
 
     # Build per-file metrics via on_result callback.

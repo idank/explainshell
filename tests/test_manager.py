@@ -714,14 +714,15 @@ class TestDiffDbCli(unittest.TestCase):
         )
 
         self.assertEqual(result.exit_code, 0)
-        # When dry_run=True, ExtractorConfig receives debug_dir=debug_dir
-        # (the default "debug-output") instead of None.
+        # When dry_run=True, ExtractorConfig receives debug=True and
+        # output_dir is set to the run directory.
         from explainshell.extraction import ExtractorConfig
 
         call_args = mock_make_ext.call_args
         cfg = call_args[0][1] if len(call_args[0]) > 1 else call_args[1].get("cfg")
         if isinstance(cfg, ExtractorConfig):
-            self.assertEqual(cfg.debug_dir, "debug-output")
+            self.assertIsNotNone(cfg.run_dir)
+            self.assertTrue(cfg.debug)
 
     def test_diff_db_invalid_mode(self):
         """Invalid mode is rejected."""

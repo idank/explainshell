@@ -112,16 +112,17 @@ class BatchResult:
 class ExtractorConfig:
     """Shared configuration for all extractors.
 
-    ``debug_dir``: full prompt/response debug artifacts. The manager only
-    populates this in dry-run mode.
+    ``run_dir``: single directory for all run artifacts (logs, debug
+    files, failed responses).
 
-    ``fail_dir``: dump raw LLM responses that fail JSON parsing. May be
-    set in any mode so failed responses can be inspected after the fact.
+    ``debug``: when True, ``_finalize()`` writes full prompt/response
+    artifacts (.md, .prompt.json, .response.txt) into *run_dir*.
+    Failed responses are always written when *run_dir* is set.
     """
 
     model: str | None = None
-    debug_dir: str | None = None
-    fail_dir: str | None = None
+    run_dir: str | None = None
+    debug: bool = False
 
 
 @runtime_checkable

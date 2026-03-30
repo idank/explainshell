@@ -26,8 +26,8 @@ from explainshell.extraction.llm.providers import TokenUsage
 
 
 class TestExtractIntegration(unittest.TestCase):
-    def _make_extractor(self, model="test-model", debug_dir=None, fail_dir=None):
-        cfg = ExtractorConfig(model=model, debug_dir=debug_dir, fail_dir=fail_dir)
+    def _make_extractor(self, model="test-model", run_dir=None, debug=False):
+        cfg = ExtractorConfig(model=model, run_dir=run_dir, debug=debug)
         return LLMExtractor(cfg)
 
     @patch(
@@ -178,7 +178,7 @@ class TestExtractIntegration(unittest.TestCase):
             usage=TokenUsage(0, 0),
         )
         with tempfile.TemporaryDirectory() as tmpdir:
-            ext = self._make_extractor(debug_dir=tmpdir)
+            ext = self._make_extractor(run_dir=tmpdir, debug=True)
             result = ext.extract("dummy.1.gz")
             self.assertEqual(len(result.mp.options), 1)
             md_path = os.path.join(tmpdir, "dummy.md")
@@ -319,7 +319,7 @@ class TestMultiChunkExtract(unittest.TestCase):
         mock_prepare.return_value = _make_prepared(1)
 
         with tempfile.TemporaryDirectory() as fail_dir:
-            cfg = ExtractorConfig(model="test-model", fail_dir=fail_dir)
+            cfg = ExtractorConfig(model="test-model", run_dir=fail_dir)
             ext = LLMExtractor(cfg)
             ext._provider_instance = mock_provider
 
@@ -335,8 +335,8 @@ class TestMultiChunkExtract(unittest.TestCase):
 class TestMultiChunkFinalize(unittest.TestCase):
     """Batch finalize() path with multiple chunks."""
 
-    def _make_extractor(self, fail_dir: str | None = None) -> LLMExtractor:
-        cfg = ExtractorConfig(model="test-model", fail_dir=fail_dir)
+    def _make_extractor(self, run_dir: str | None = None) -> LLMExtractor:
+        cfg = ExtractorConfig(model="test-model", run_dir=run_dir)
         return LLMExtractor(cfg)
 
     @patch(
