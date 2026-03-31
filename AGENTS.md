@@ -198,7 +198,7 @@ The CLI uses subcommands. Most commands require a database path, set via `DB_PAT
 Extraction modes (passed via `--mode` to `extract` or `diff db`):
 - `source` - Parses roff macros directly via `roff_parser.py` + `extraction/source.py`
 - `mandoc` - Uses mandoc -T tree parser via `extraction/mandoc.py`
-- `llm:<provider/model>` - Sends man page text to an LLM (e.g., `llm:openai/gpt-5-mini`). Supports OpenAI, Gemini, and LiteLLM (fallback) providers.
+- `llm:<provider/model>` - Sends man page text to an LLM (e.g., `llm:openai/gpt-5-mini`, `llm:azure/my-deployment`). Supports Gemini, OpenAI, Azure OpenAI, and LiteLLM (fallback) providers. For `azure/...`, the model suffix is the Azure deployment name and requires `AZURE_OPENAI_API_KEY` plus either `AZURE_OPENAI_BASE_URL` or `AZURE_OPENAI_ENDPOINT`.
 - `hybrid:<provider/model>` - Tries mandoc first, falls back to LLM on low confidence
 
 Extract flags: `--overwrite`, `--dry-run`, `--debug`, `--drop`, `-j/--jobs <int>` (parallel extraction, default 1), `--batch <int>` (provider batch API). All run output (logs, debug artifacts, manifests) goes to `logs/{timestamp}/`.

@@ -14,6 +14,13 @@ Extraction modes (--mode):
     mandoc              Use mandoc -T tree parser
     llm:<model>         Use an LLM (e.g. llm:openai/gpt-5-mini, llm:codex/gpt-5.4-mini)
     hybrid:<model>      Try tree parser first, fall back to LLM when confidence is low
+
+Reasoning effort can be appended to the model string:
+    openai/<model>/<effort>     e.g. llm:openai/o3/medium (low, medium, high)
+    azure/<model>/<effort>      e.g. llm:azure/o3/high
+    gemini/<model>/<budget>     e.g. llm:gemini/gemini-2.5-flash/8192 (thinking token budget)
+    codex/<model>/<effort>      e.g. llm:codex/o3/high
+    <litellm-model>/<effort>    e.g. llm:anthropic/claude-sonnet-4-20250514/medium (low, medium, high)
 """
 
 from __future__ import annotations
@@ -65,6 +72,7 @@ _GREEN = "\033[32m"
 _DIM = "\033[2m"
 _BOLD = "\033[1m"
 _RESET = "\033[0m"
+_BATCH_MODEL_PREFIXES = ("gemini/", "openai/", "azure/")
 
 
 def _fmt_elapsed(seconds: float) -> str:
@@ -518,7 +526,7 @@ def _require_db(ctx: click.Context, *, must_exist: bool = False) -> str:
     "--batch",
     type=int,
     default=None,
-    help="Batch size for provider batch API (gemini/ and openai/ models).",
+    help="Batch size for provider batch API (gemini/, openai/, and azure/ models).",
 )
 @click.option(
     "--debug",
@@ -556,10 +564,12 @@ def extract(
             raise click.UsageError("--batch must be >= 1")
         if not model:
             raise click.UsageError(
-                "--batch requires a model (e.g. llm:gemini/<model> or llm:openai/<model>)"
+                "--batch requires a model (e.g. llm:gemini/<model>, llm:openai/<model>, or llm:azure/<deployment>)"
             )
-        if not model.startswith(("gemini/", "openai/")):
-            raise click.UsageError("--batch only supports gemini/ and openai/ models")
+        if not model.startswith(_BATCH_MODEL_PREFIXES):
+            raise click.UsageError(
+                "--batch only supports gemini/, openai/, and azure/ models"
+            )
         if parsed_mode != "llm":
             raise click.UsageError("--batch only works with llm:<model> mode")
 
@@ -885,7 +895,7 @@ def _run_salvage(
     "-m",
     "--mode",
     required=True,
-    help="Must match the original run's mode (e.g. llm:openai/gpt-5-mini).",
+    help="Must match the original run's mode (e.g. llm:openai/gpt-5-mini or llm:azure/my-deployment).",
 )
 @click.option(
     "--manifest",
@@ -926,8 +936,10 @@ def salvage(
 
     if parsed_mode != "llm" or not model:
         raise click.UsageError("salvage only works with llm:<model> mode")
-    if not model.startswith(("gemini/", "openai/")):
-        raise click.UsageError("salvage only supports gemini/ and openai/ models")
+    if not model.startswith(_BATCH_MODEL_PREFIXES):
+        raise click.UsageError(
+            "salvage only supports gemini/, openai/, and azure/ models"
+        )
 
     try:
         manifest_data = load_manifest(manifest, expected_model=model)

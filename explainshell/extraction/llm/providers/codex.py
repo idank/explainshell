@@ -21,17 +21,22 @@ class CodexProvider:
     ``turn.completed`` events with token usage.
     """
 
-    def __init__(self, model: str, *, codex_bin: str | Sequence[str] = "codex") -> None:
-        # model format: "codex/<model>" or "codex/<model>/<reasoning_effort>"
-        # e.g. "codex/gpt-5.4-mini" or "codex/gpt-5.4-mini/high"
-        parts = model.split("/", 2)
+    def __init__(
+        self,
+        model: str,
+        *,
+        reasoning_effort: str | None = None,
+        codex_bin: str | Sequence[str] = "codex",
+    ) -> None:
+        # model format: "codex/<model>" (effort is passed separately)
+        parts = model.split("/", 1)
         if len(parts) < 2 or not parts[1]:
             raise ValueError(
                 f"codex provider requires a model name (e.g. codex/gpt-5.4-mini), got: {model!r}"
             )
         self._model = model
         self._underlying = parts[1]
-        self._reasoning_effort = parts[2] if len(parts) == 3 else None
+        self._reasoning_effort = reasoning_effort
         self._codex_bin = [codex_bin] if isinstance(codex_bin, str) else list(codex_bin)
 
     def call(self, user_content: str) -> tuple[str, TokenUsage]:
