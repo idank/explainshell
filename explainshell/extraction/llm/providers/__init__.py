@@ -73,34 +73,67 @@ class BatchProvider(Protocol):
     def retrieve_batch(self, batch_id: str) -> Any: ...
 
 
+def _parse_model(model: str) -> tuple[str, str | None]:
+    """Split a model string into (base_model, reasoning_effort).
+
+    Providers with a known single-segment prefix (openai/, azure/, gemini/,
+    codex/) treat a third ``/``-segment as the effort value::
+
+        openai/gpt-5-mini/medium  →  ("openai/gpt-5-mini", "medium")
+        codex/o3/high             →  ("codex/o3", "high")
+
+    For the LiteLLM catch-all (variable number of ``/`` segments), the last
+    segment is stripped only when it matches a known effort keyword.
+    """
+    _KNOWN_PREFIXES = ("openai/", "azure/", "gemini/", "codex/")
+    for prefix in _KNOWN_PREFIXES:
+        if model.startswith(prefix):
+            rest = model[len(prefix) :]
+            parts = rest.split("/", 1)
+            if len(parts) == 2:
+                return prefix + parts[0], parts[1]
+            return model, None
+
+    # LiteLLM: model strings may already contain slashes
+    # (e.g. "anthropic/claude-sonnet-4-20250514"), so only strip a known
+    # effort keyword from the tail.
+    _EFFORTS = {"low", "medium", "high"}
+    parts = model.rsplit("/", 1)
+    if len(parts) == 2 and parts[1] in _EFFORTS:
+        return parts[0], parts[1]
+    return model, None
+
+
 def make_provider(model: str) -> LLMProvider:
     """Create a provider for the given model string."""
-    if model.startswith("codex"):
+    base, effort = _parse_model(model)
+    if base.startswith("codex"):
         from explainshell.extraction.llm.providers.codex import CodexProvider
 
-        return CodexProvider(model)
-    if model.startswith("gemini/"):
+        return CodexProvider(base, reasoning_effort=effort)
+    if base.startswith("gemini/"):
         from explainshell.extraction.llm.providers.gemini import GeminiProvider
 
-        return GeminiProvider(model)
-    if model.startswith("openai/"):
+        return GeminiProvider(base, reasoning_effort=effort)
+    if base.startswith(("openai/", "azure/")):
         from explainshell.extraction.llm.providers.openai import OpenAIProvider
 
-        return OpenAIProvider(model)
+        return OpenAIProvider(base, reasoning_effort=effort)
 
     from explainshell.extraction.llm.providers.litellm import LiteLLMProvider
 
-    return LiteLLMProvider(model)
+    return LiteLLMProvider(base, reasoning_effort=effort)
 
 
 def make_batch_provider(model: str) -> BatchProvider:
     """Create a batch-capable provider for the given model string."""
-    if model.startswith("gemini/"):
+    base, effort = _parse_model(model)
+    if base.startswith("gemini/"):
         from explainshell.extraction.llm.providers.gemini import GeminiProvider
 
-        return GeminiProvider(model)
-    if model.startswith("openai/"):
+        return GeminiProvider(base, reasoning_effort=effort)
+    if base.startswith(("openai/", "azure/")):
         from explainshell.extraction.llm.providers.openai import OpenAIProvider
 
-        return OpenAIProvider(model)
+        return OpenAIProvider(base, reasoning_effort=effort)
     raise ValueError(f"Batch mode is not supported for model: {model}")

@@ -13,8 +13,9 @@ LLM_TIMEOUT_SECONDS = 300
 class LiteLLMProvider:
     """Implements LLMProvider only (no batch support)."""
 
-    def __init__(self, model: str) -> None:
+    def __init__(self, model: str, *, reasoning_effort: str | None = None) -> None:
         self._model = model
+        self._reasoning_effort = reasoning_effort
 
     def call(self, user_content: str) -> tuple[str, TokenUsage]:
         messages = [
@@ -23,6 +24,8 @@ class LiteLLMProvider:
         ]
 
         kwargs: dict = {"response_format": {"type": "json_object"}}
+        if self._reasoning_effort:
+            kwargs["reasoning_effort"] = self._reasoning_effort
         try:
             info = litellm.get_model_info(self._model)
             max_out = info.get("max_output_tokens")

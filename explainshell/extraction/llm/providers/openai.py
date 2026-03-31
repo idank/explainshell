@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import logging
+import os
 import threading
 import time
 
@@ -33,20 +34,68 @@ def _openai_input(user_content: str) -> list[dict[str, str]]:
     ]
 
 
+def _azure_base_url() -> str:
+    """Return the Azure OpenAI v1 base URL.
+
+    Supports either a fully-qualified base URL or the standard Azure endpoint.
+    """
+    base_url = os.environ.get("AZURE_OPENAI_BASE_URL")
+    if base_url:
+        return base_url.rstrip("/") + "/"
+
+    endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
+    if endpoint:
+        return endpoint.rstrip("/") + "/openai/v1/"
+
+    raise ValueError(
+        "azure/ models require AZURE_OPENAI_BASE_URL or AZURE_OPENAI_ENDPOINT"
+    )
+
+
 class OpenAIProvider:
     """Implements LLMProvider + BatchProvider for OpenAI."""
 
-    def __init__(self, model: str, stall_timeout: int = STALL_TIMEOUT) -> None:
+    def __init__(
+        self,
+        model: str,
+        *,
+        reasoning_effort: str | None = None,
+        stall_timeout: int = STALL_TIMEOUT,
+    ) -> None:
         self._model = model
-        self._openai_model = model.removeprefix("openai/")
+        if model.startswith("openai/"):
+            self._backend = "openai"
+            self._api_model = model.removeprefix("openai/")
+        elif model.startswith("azure/"):
+            self._backend = "azure"
+            self._api_model = model.removeprefix("azure/")
+        else:
+            raise ValueError(f"unsupported OpenAI-compatible model prefix: {model!r}")
+        self._reasoning_effort = reasoning_effort
         self._stall_timeout = stall_timeout
 
+    def _make_client(self) -> OpenAI:
+        if self._backend == "azure":
+            api_key = os.environ.get("AZURE_OPENAI_API_KEY")
+            if not api_key:
+                raise ValueError("azure/ models require AZURE_OPENAI_API_KEY")
+            return OpenAI(
+                api_key=api_key,
+                base_url=_azure_base_url(),
+                timeout=LLM_TIMEOUT_SECONDS,
+            )
+        return OpenAI(timeout=LLM_TIMEOUT_SECONDS)
+
     def call(self, user_content: str) -> tuple[str, TokenUsage]:
-        client = OpenAI(timeout=LLM_TIMEOUT_SECONDS)
+        client = self._make_client()
+        kwargs: dict = {}
+        if self._reasoning_effort:
+            kwargs["reasoning"] = {"effort": self._reasoning_effort}
         response = client.responses.create(
-            model=self._openai_model,
+            model=self._api_model,
             input=_openai_input(user_content),
             text={"format": {"type": "json_object"}},
+            **kwargs,
         )
         usage = TokenUsage()
         if response.usage:
@@ -69,23 +118,26 @@ class OpenAIProvider:
     # -- Batch API --
 
     def submit_batch(self, entries: list[BatchEntry]) -> str:
-        client = OpenAI(timeout=LLM_TIMEOUT_SECONDS)
+        client = self._make_client()
 
         buf = io.BytesIO()
         for req in entries:
+            body: dict = {
+                "model": self._api_model,
+                "input": [
+                    {"role": "developer", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": req.user_content},
+                ],
+                "text": {"format": {"type": "json_object"}},
+            }
+            if self._reasoning_effort:
+                body["reasoning"] = {"effort": self._reasoning_effort}
             line = json.dumps(
                 {
                     "custom_id": req.key,
                     "method": "POST",
                     "url": "/v1/responses",
-                    "body": {
-                        "model": self._openai_model,
-                        "input": [
-                            {"role": "developer", "content": SYSTEM_PROMPT},
-                            {"role": "user", "content": req.user_content},
-                        ],
-                        "text": {"format": {"type": "json_object"}},
-                    },
+                    "body": body,
                 }
             )
             buf.write(line.encode("utf-8"))
@@ -104,14 +156,14 @@ class OpenAIProvider:
         return batch.id
 
     def make_poll_client(self) -> OpenAI:
-        return OpenAI(timeout=LLM_TIMEOUT_SECONDS)
+        return self._make_client()
 
     def cancel_batch(self, client: OpenAI, job_id: str) -> None:
         client.batches.cancel(job_id)
 
     def retrieve_batch(self, batch_id: str) -> Batch:
         """Retrieve a batch by ID (for salvage/inspection)."""
-        client = OpenAI(timeout=LLM_TIMEOUT_SECONDS)
+        client = self._make_client()
         return client.batches.retrieve(batch_id)
 
     def poll_batch(
@@ -255,7 +307,7 @@ class OpenAIProvider:
         if not job.output_file_id:
             return BatchResults(results, usage)
 
-        client = OpenAI(timeout=LLM_TIMEOUT_SECONDS)
+        client = self._make_client()
         content = client.files.content(job.output_file_id)
 
         per_request_input = 0

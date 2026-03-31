@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import threading
 import unittest
 from types import SimpleNamespace
@@ -10,10 +11,12 @@ from unittest.mock import MagicMock, patch
 import openai
 
 from explainshell.errors import ExtractionError
+from explainshell.extraction.llm.providers import make_batch_provider, make_provider
 from explainshell.extraction.llm.providers.openai import (
     CANCEL_WAIT_TIMEOUT,
     MAX_ERROR_BACKOFF,
     MAX_POLL_ERRORS,
+    LLM_TIMEOUT_SECONDS,
     OpenAIProvider,
 )
 
@@ -625,6 +628,105 @@ class TestPollBatchStallDetection(unittest.TestCase):
         # Only one poll attempt before the stop_event was checked.
         self.assertEqual(self.client.batches.retrieve.call_count, 1)
         stop.wait.assert_called_once_with(30)
+
+
+class TestAzureRouting(unittest.TestCase):
+    """Azure-prefixed models should route through the OpenAI-compatible provider."""
+
+    def test_factory_routes_azure_models_to_openai_provider(self) -> None:
+        self.assertIsInstance(make_provider("azure/my-deployment"), OpenAIProvider)
+        self.assertIsInstance(
+            make_batch_provider("azure/my-deployment"), OpenAIProvider
+        )
+
+    @patch.dict(
+        "os.environ",
+        {
+            "AZURE_OPENAI_API_KEY": "azure-key",
+            "AZURE_OPENAI_ENDPOINT": "https://example.openai.azure.com",
+        },
+        clear=True,
+    )
+    @patch("explainshell.extraction.llm.providers.openai.OpenAI")
+    def test_call_uses_azure_endpoint_configuration(
+        self, mock_openai_cls: MagicMock
+    ) -> None:
+        response = SimpleNamespace(output_text='{"options":[]}', usage=None)
+        client = MagicMock()
+        client.responses.create.return_value = response
+        mock_openai_cls.return_value = client
+
+        provider = OpenAIProvider("azure/my-deployment")
+        text, usage = provider.call("man page text")
+
+        self.assertEqual(text, '{"options":[]}')
+        self.assertEqual(usage.input_tokens, 0)
+        mock_openai_cls.assert_called_once_with(
+            api_key="azure-key",
+            base_url="https://example.openai.azure.com/openai/v1/",
+            timeout=LLM_TIMEOUT_SECONDS,
+        )
+        client.responses.create.assert_called_once()
+        self.assertEqual(
+            client.responses.create.call_args.kwargs["model"], "my-deployment"
+        )
+
+    @patch.dict(
+        "os.environ",
+        {
+            "AZURE_OPENAI_API_KEY": "azure-key",
+            "AZURE_OPENAI_BASE_URL": "https://example.openai.azure.com/openai/v1",
+        },
+        clear=True,
+    )
+    @patch("explainshell.extraction.llm.providers.openai.OpenAI")
+    def test_submit_batch_uses_azure_deployment_name(
+        self, mock_openai_cls: MagicMock
+    ) -> None:
+        client = MagicMock()
+        client.files.create.return_value = SimpleNamespace(id="file-123")
+        client.batches.create.return_value = SimpleNamespace(id="batch-123")
+        mock_openai_cls.return_value = client
+
+        provider = OpenAIProvider("azure/my-deployment")
+        job_id = provider.submit_batch(
+            [SimpleNamespace(key="0:0", user_content="chunk text")]
+        )
+
+        self.assertEqual(job_id, "batch-123")
+        mock_openai_cls.assert_called_once_with(
+            api_key="azure-key",
+            base_url="https://example.openai.azure.com/openai/v1/",
+            timeout=LLM_TIMEOUT_SECONDS,
+        )
+        request_buf = client.files.create.call_args.kwargs["file"][1]
+        row = json.loads(request_buf.getvalue().decode("utf-8").strip())
+        self.assertEqual(row["url"], "/v1/responses")
+        self.assertEqual(row["body"]["model"], "my-deployment")
+        client.batches.create.assert_called_once_with(
+            input_file_id="file-123",
+            endpoint="/v1/responses",
+            completion_window="24h",
+            metadata={"source": "explainshell"},
+        )
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_azure_requires_api_key(self) -> None:
+        provider = OpenAIProvider("azure/my-deployment")
+
+        with self.assertRaises(ValueError) as ctx:
+            provider.make_poll_client()
+
+        self.assertIn("AZURE_OPENAI_API_KEY", str(ctx.exception))
+
+    @patch.dict("os.environ", {"AZURE_OPENAI_API_KEY": "azure-key"}, clear=True)
+    def test_azure_requires_base_url_or_endpoint(self) -> None:
+        provider = OpenAIProvider("azure/my-deployment")
+
+        with self.assertRaises(ValueError) as ctx:
+            provider.make_poll_client()
+
+        self.assertIn("AZURE_OPENAI_BASE_URL", str(ctx.exception))
 
 
 if __name__ == "__main__":

@@ -161,9 +161,10 @@ class TestCodexProviderCall(unittest.TestCase):
         provider.call("test")
 
     def test_reasoning_effort_passed(self) -> None:
-        """'codex/gpt-5.4-mini/high' should pass -c model_reasoning_effort."""
+        """reasoning_effort='high' should pass -c model_reasoning_effort."""
         provider = CodexProvider(
-            "codex/gpt-5.4-mini/high",
+            "codex/gpt-5.4-mini",
+            reasoning_effort="high",
             codex_bin=_fake_codex(
                 "found=\n"
                 'shift  # skip "exec"\n'
@@ -259,6 +260,7 @@ class TestMakeProviderRouting(unittest.TestCase):
     def test_codex_with_reasoning_effort(self) -> None:
         provider = make_provider("codex/gpt-5.4-mini/high")
         assert isinstance(provider, CodexProvider)
+        assert provider._reasoning_effort == "high"
 
 
 if __name__ == "__main__":

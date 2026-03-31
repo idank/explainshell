@@ -25,20 +25,32 @@ LLM_TIMEOUT_SECONDS = 300
 class GeminiProvider:
     """Implements LLMProvider + BatchProvider for Gemini."""
 
-    def __init__(self, model: str) -> None:
+    def __init__(self, model: str, *, reasoning_effort: str | None = None) -> None:
         self._model = model
         self._gemini_model = model.removeprefix("gemini/")
+        self._thinking_budget: int | None = (
+            int(reasoning_effort) if reasoning_effort is not None else None
+        )
+
+    def _thinking_config(self) -> types.ThinkingConfig | None:
+        if self._thinking_budget is None:
+            return None
+        return types.ThinkingConfig(thinking_budget=self._thinking_budget)
 
     def call(self, user_content: str) -> tuple[str, TokenUsage]:
         client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+        config_kwargs: dict = {
+            "system_instruction": SYSTEM_PROMPT,
+            "response_mime_type": "application/json",
+            "http_options": types.HttpOptions(timeout=LLM_TIMEOUT_SECONDS * 1000),
+        }
+        thinking = self._thinking_config()
+        if thinking:
+            config_kwargs["thinking_config"] = thinking
         response = client.models.generate_content(
             model=self._gemini_model,
             contents=user_content,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                response_mime_type="application/json",
-                http_options=types.HttpOptions(timeout=LLM_TIMEOUT_SECONDS * 1000),
-            ),
+            config=types.GenerateContentConfig(**config_kwargs),
         )
         usage = TokenUsage()
         um = response.usage_metadata
@@ -57,16 +69,21 @@ class GeminiProvider:
     def submit_batch(self, entries: list[BatchEntry]) -> str:
         client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
+        config_kwargs: dict = {
+            "system_instruction": SYSTEM_PROMPT,
+            "response_mime_type": "application/json",
+        }
+        thinking = self._thinking_config()
+        if thinking:
+            config_kwargs["thinking_config"] = thinking
+
         inline_entries = []
         for entry in entries:
             inline_entries.append(
                 types.InlinedRequest(
                     contents=entry.user_content,
                     metadata={"key": entry.key},
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_PROMPT,
-                        response_mime_type="application/json",
-                    ),
+                    config=types.GenerateContentConfig(**config_kwargs),
                 )
             )
 
