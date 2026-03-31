@@ -47,6 +47,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 import time
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
@@ -167,6 +168,13 @@ class LLMExtractor:
         self._debug = config.debug
         self._provider_instance: LLMProvider | None = None
         self._batch_provider_instance: BatchProvider | None = None
+        self._cancelled = threading.Event()
+
+    def cancel(self) -> None:
+        """Signal all in-progress extract() calls to stop after their current
+        LLM request completes.  Does not abort already in-flight HTTP calls,
+        but prevents the next chunk from being submitted."""
+        self._cancelled.set()
 
     @property
     def provider(self) -> LLMProvider:
@@ -203,6 +211,9 @@ class LLMExtractor:
         t0 = time.monotonic()
 
         for i, user_content in enumerate(prepared.requests):
+            if self._cancelled.is_set():
+                raise ExtractionError("cancelled")
+
             chunk_label = (
                 f"chunk {i + 1}/{n_chunks}" if n_chunks > 1 else "single chunk"
             )

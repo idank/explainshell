@@ -23,6 +23,9 @@ class HybridExtractor:
         self._mandoc = MandocExtractor()
         self._llm = LLMExtractor(config)
 
+    def cancel(self) -> None:
+        self._llm.cancel()
+
     def extract(self, gz_path: str) -> ExtractionResult:
         try:
             return self._mandoc.extract(gz_path)

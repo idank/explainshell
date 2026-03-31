@@ -24,6 +24,9 @@ class MandocExtractor:
     catches it specifically to trigger LLM fallback.
     """
 
+    def cancel(self) -> None:
+        pass
+
     def extract(self, gz_path: str) -> ExtractionResult:
         result = tree_parser.parse_options(gz_path)
         if not result.options:
