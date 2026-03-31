@@ -128,3 +128,9 @@ class ExtractorConfig:
 @runtime_checkable
 class Extractor(Protocol):
     def extract(self, gz_path: str) -> ExtractionResult: ...
+
+    def cancel(self) -> None:
+        """Signal the extractor to stop after the current in-flight work
+        completes.  Does not abort already in-flight calls, but prevents
+        new ones from being submitted."""
+        ...

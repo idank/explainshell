@@ -168,6 +168,7 @@ def run_parallel(
     except KeyboardInterrupt:
         logger.info("interrupted by user")
         batch.interrupted = True
+        extractor.cancel()
         executor.shutdown(wait=False, cancel_futures=True)
     except FatalExtractionError:
         executor.shutdown(wait=False, cancel_futures=True)

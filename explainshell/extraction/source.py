@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 class SourceExtractor:
     """Extracts options from roff source via roff_parser."""
 
+    def cancel(self) -> None:
+        pass
+
     def extract(self, gz_path: str) -> ExtractionResult:
         options = roff_parser.parse_options(gz_path)
         if not options:

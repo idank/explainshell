@@ -71,6 +71,7 @@ class _FakeExtractor:
         self.prepare = MagicMock()
         self.finalize = MagicMock()
         self.batch_provider = MagicMock()
+        self.cancel = MagicMock()
 
 
 def _make_extractor(
