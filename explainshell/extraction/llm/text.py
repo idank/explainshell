@@ -123,8 +123,21 @@ def filter_sections(text: str) -> tuple[str, dict[str, int]]:
     return "\n".join(kept), removal_counts
 
 
+_MAX_PREAMBLE_CHARS = CHUNK_SIZE_CHARS // 2
+
+# Worst-case budget per chunk is CHUNK_SIZE_CHARS - _MAX_PREAMBLE_CHARS (when
+# the preamble is at its cap).  Any chunk count beyond this ratio for a
+# MAX_MANPAGE_CHARS-sized page is a sign of pathological splitting, not a
+# legitimately large manpage.
+MAX_CHUNKS = MAX_MANPAGE_CHARS // (CHUNK_SIZE_CHARS - _MAX_PREAMBLE_CHARS)  # 16
+
+
 def _build_preamble(text: str) -> str:
-    """Extract NAME + SYNOPSIS + first paragraph of DESCRIPTION as preamble."""
+    """Extract NAME + SYNOPSIS + first paragraph of DESCRIPTION as preamble.
+
+    The result is capped at ``_MAX_PREAMBLE_CHARS`` so the chunk budget never
+    goes negative (which would produce one chunk per line).
+    """
     sections = _split_sections(text)
     preamble_headers = {"# NAME", "# SYNOPSIS", "# DESCRIPTION"}
     parts: list[str] = []
@@ -136,7 +149,10 @@ def _build_preamble(text: str) -> str:
                 parts.append("\n\n".join(paras[:2]))
             else:
                 parts.append(section_text)
-    return "\n\n".join(parts)
+    preamble = "\n\n".join(parts)
+    if len(preamble) > _MAX_PREAMBLE_CHARS:
+        preamble = preamble[:_MAX_PREAMBLE_CHARS].rsplit("\n", 1)[0] + "\n[…truncated]"
+    return preamble
 
 
 def number_lines(text: str) -> tuple[str, dict[int, str]]:

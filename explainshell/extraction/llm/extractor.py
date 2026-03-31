@@ -73,6 +73,7 @@ from explainshell.extraction.llm.response import (
     process_llm_result,
 )
 from explainshell.extraction.llm.text import (
+    MAX_CHUNKS,
     MAX_MANPAGE_CHARS,
     chunk_text,
     clean_mandoc_artifacts,
@@ -261,6 +262,9 @@ class LLMExtractor:
         numbered_text, original_lines = number_lines(filtered_text)
         chunks = chunk_text(filtered_text)
         n_chunks = len(chunks)
+
+        if n_chunks > MAX_CHUNKS:
+            raise ExtractionError(f"too many chunks ({n_chunks:,}, limit {MAX_CHUNKS})")
 
         requests: list[str] = []
         for i, chunk in enumerate(chunks):
