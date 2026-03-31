@@ -10,6 +10,8 @@ from explainshell.errors import ExtractionError
 from explainshell.extraction.llm.text import (
     CHUNK_SIZE_CHARS,
     _BLACKLISTED_SECTIONS,
+    _MAX_PREAMBLE_CHARS,
+    _build_preamble,
     chunk_text,
     clean_mandoc_artifacts,
     filter_sections,
@@ -182,6 +184,73 @@ class TestChunkText(unittest.TestCase):
         if len(chunks) >= 2:
             self.assertIn("[Context", chunks[1])
             self.assertIn("test-cmd", chunks[1])
+
+    def test_oversized_preamble_does_not_explode_chunks(self):
+        """A manpage whose NAME section exceeds CHUNK_SIZE_CHARS should not
+        produce one chunk per line (the bwbasic bug)."""
+        # Build a manpage where # NAME alone is larger than CHUNK_SIZE_CHARS.
+        # The content is one long line so it can't be split further.
+        huge_name = "x " * (CHUNK_SIZE_CHARS + 5000)
+        options_body = ("opt line\n") * 200
+        text = f"# NAME\n\n{huge_name}\n\n# OPTIONS\n\n{options_body}"
+        chunks = chunk_text(text)
+        # Without the preamble cap this would produce hundreds of chunks;
+        # with the fix it should be a small, bounded number.
+        self.assertLess(
+            len(chunks),
+            20,
+            f"Expected few chunks but got {len(chunks)} — preamble cap may not be working",
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestBuildPreamble
+# ---------------------------------------------------------------------------
+
+
+class TestBuildPreamble(unittest.TestCase):
+    def test_normal_preamble(self):
+        text = (
+            "# NAME\n\nfoo - a tool\n\n# SYNOPSIS\n\nfoo [opts]\n\n# OPTIONS\n\n**-v**"
+        )
+        preamble = _build_preamble(text)
+        self.assertIn("foo - a tool", preamble)
+        self.assertIn("foo [opts]", preamble)
+        # OPTIONS should not be in preamble
+        self.assertNotIn("-v", preamble)
+
+    def test_description_only_first_paragraph(self):
+        text = (
+            "# NAME\n\nfoo\n\n"
+            "# DESCRIPTION\n\nFirst paragraph.\n\nSecond paragraph.\n\nThird."
+        )
+        preamble = _build_preamble(text)
+        self.assertIn("First paragraph.", preamble)
+        self.assertNotIn("Third.", preamble)
+
+    def test_oversized_name_section_is_truncated(self):
+        huge_name = "word " * (_MAX_PREAMBLE_CHARS // 3)
+        text = f"# NAME\n\n{huge_name}\n\n# OPTIONS\n\n**-v**"
+        preamble = _build_preamble(text)
+        self.assertLessEqual(len(preamble), _MAX_PREAMBLE_CHARS + 50)
+        self.assertTrue(preamble.endswith("[…truncated]"))
+
+    def test_truncation_at_line_boundary(self):
+        """Truncation should not cut in the middle of a line."""
+        lines = [f"line {i} " + "x" * 100 for i in range(_MAX_PREAMBLE_CHARS // 100)]
+        huge_name = "\n".join(lines)
+        text = f"# NAME\n\n{huge_name}\n\n# OPTIONS\n\n**-v**"
+        preamble = _build_preamble(text)
+        # The last real content line (before the marker) should be complete
+        preamble_lines = preamble.split("\n")
+        self.assertEqual(preamble_lines[-1], "[…truncated]")
+        # The second-to-last line should be one of our generated lines
+        self.assertTrue(preamble_lines[-2].startswith("line "))
+
+    def test_no_preamble_sections(self):
+        text = "# OPTIONS\n\n**-v** verbose\n\n# EXAMPLES\n\nfoo -v"
+        preamble = _build_preamble(text)
+        self.assertEqual(preamble, "")
 
 
 # ---------------------------------------------------------------------------

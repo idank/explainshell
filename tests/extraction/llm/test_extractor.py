@@ -308,6 +308,22 @@ class TestMultiChunkExtract(unittest.TestCase):
         self.assertIn("missing 'options' key", str(ctx.exception))
         self.assertEqual(ctx.exception.raw_response, bad_response)
 
+    @patch("explainshell.extraction.llm.extractor.chunk_text")
+    @patch("explainshell.extraction.llm.extractor.get_manpage_text")
+    @patch("explainshell.extraction.llm.extractor.manpage.get_synopsis_and_aliases")
+    def test_too_many_chunks_raises(self, mock_synopsis, mock_text, mock_chunk_text):
+        """prepare() raises ExtractionError when chunk count exceeds MAX_CHUNKS."""
+        from explainshell.extraction.llm.text import MAX_CHUNKS
+
+        mock_synopsis.return_value = ("a tool", [("dummy", 10)])
+        mock_text.return_value = "# NAME\n\nfoo\n\n# OPTIONS\n\n**-v**"
+        mock_chunk_text.return_value = ["chunk"] * (MAX_CHUNKS + 1)
+
+        ext = self._make_extractor()
+        with self.assertRaises(ExtractionError) as ctx:
+            ext.prepare("dummy.1.gz")
+        self.assertIn("too many chunks", str(ctx.exception))
+
     @patch("explainshell.extraction.llm.extractor.LLMExtractor.prepare")
     def test_extract_invalid_chunk0_dumps_failed_response(self, mock_prepare):
         """Interactive extract() dumps the raw response when chunk 0 fails validation."""
