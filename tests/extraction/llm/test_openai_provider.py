@@ -42,6 +42,7 @@ def _make_batch(
     )
 
 
+@patch("explainshell.extraction.llm.providers.openai.OpenAI")
 class TestPollBatchStallDetection(unittest.TestCase):
     """poll_batch should cancel the batch when progress stalls."""
 
@@ -49,7 +50,9 @@ class TestPollBatchStallDetection(unittest.TestCase):
         self.client = MagicMock()
 
     @patch("explainshell.extraction.llm.providers.openai.time")
-    def test_stall_cancels_and_returns_partial(self, mock_time: MagicMock) -> None:
+    def test_stall_cancels_and_returns_partial(
+        self, mock_time: MagicMock, _mock_openai_cls: MagicMock
+    ) -> None:
         """After stall_timeout with no progress, the batch is cancelled and
         the cancelled batch is returned for partial result collection."""
         stall_timeout = 60
@@ -92,7 +95,9 @@ class TestPollBatchStallDetection(unittest.TestCase):
         self.client.batches.cancel.assert_called_once_with("batch-123")
 
     @patch("explainshell.extraction.llm.providers.openai.time")
-    def test_progress_does_not_extend_walltime(self, mock_time: MagicMock) -> None:
+    def test_progress_does_not_extend_walltime(
+        self, mock_time: MagicMock, _mock_openai_cls: MagicMock
+    ) -> None:
         """Wall-time limit triggers cancel even when progress is being made."""
         stall_timeout = 100
         provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=stall_timeout)
@@ -133,7 +138,9 @@ class TestPollBatchStallDetection(unittest.TestCase):
         self.client.batches.cancel.assert_called_once()
 
     @patch("explainshell.extraction.llm.providers.openai.time")
-    def test_cancel_wait_timeout_returns_batch(self, mock_time: MagicMock) -> None:
+    def test_cancel_wait_timeout_returns_batch(
+        self, mock_time: MagicMock, _mock_openai_cls: MagicMock
+    ) -> None:
         """If cancellation stalls beyond CANCEL_WAIT_TIMEOUT, return batch for partial collection."""
         stall_timeout = 60
         provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=stall_timeout)
@@ -176,7 +183,9 @@ class TestPollBatchStallDetection(unittest.TestCase):
         self.client.batches.cancel.assert_called_once()
 
     @patch("explainshell.extraction.llm.providers.openai.time")
-    def test_cancel_api_failure_raises(self, mock_time: MagicMock) -> None:
+    def test_cancel_api_failure_raises(
+        self, mock_time: MagicMock, _mock_openai_cls: MagicMock
+    ) -> None:
         """If the cancel API call itself fails, raise ExtractionError."""
         stall_timeout = 60
         provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=stall_timeout)
@@ -207,7 +216,9 @@ class TestPollBatchStallDetection(unittest.TestCase):
         self.assertIn("cancel failed", str(ctx.exception))
 
     @patch("explainshell.extraction.llm.providers.openai.time")
-    def test_external_cancel_still_raises(self, mock_time: MagicMock) -> None:
+    def test_external_cancel_still_raises(
+        self, mock_time: MagicMock, _mock_openai_cls: MagicMock
+    ) -> None:
         """A cancelled batch that we did NOT cancel should still raise."""
         provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=9999)
         clock = [0.0]
@@ -231,7 +242,9 @@ class TestPollBatchStallDetection(unittest.TestCase):
         self.assertIn("cancelled", str(ctx.exception))
 
     @patch("explainshell.extraction.llm.providers.openai.time")
-    def test_completed_during_cancel_wait(self, mock_time: MagicMock) -> None:
+    def test_completed_during_cancel_wait(
+        self, mock_time: MagicMock, _mock_openai_cls: MagicMock
+    ) -> None:
         """If the batch completes while we're waiting for cancel, return it."""
         stall_timeout = 60
         provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=stall_timeout)
@@ -274,7 +287,9 @@ class TestPollBatchStallDetection(unittest.TestCase):
         self.assertEqual(result.output_file_id, "file-full")
 
     @patch("explainshell.extraction.llm.providers.openai.time")
-    def test_no_stall_completes_normally(self, mock_time: MagicMock) -> None:
+    def test_no_stall_completes_normally(
+        self, mock_time: MagicMock, _mock_openai_cls: MagicMock
+    ) -> None:
         """When progress is steady, the batch completes without cancellation."""
         provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=1800)
         clock = [0.0]
@@ -306,7 +321,9 @@ class TestPollBatchStallDetection(unittest.TestCase):
         self.client.batches.cancel.assert_not_called()
 
     @patch("explainshell.extraction.llm.providers.openai.time")
-    def test_walltime_ignores_status_transitions(self, mock_time: MagicMock) -> None:
+    def test_walltime_ignores_status_transitions(
+        self, mock_time: MagicMock, _mock_openai_cls: MagicMock
+    ) -> None:
         """Status transitions don't affect the wall-time deadline."""
         stall_timeout = 100
         provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=stall_timeout)
@@ -349,7 +366,7 @@ class TestPollBatchStallDetection(unittest.TestCase):
 
     @patch("explainshell.extraction.llm.providers.openai.time")
     def test_long_validating_without_transition_triggers_stall(
-        self, mock_time: MagicMock
+        self, mock_time: MagicMock, _mock_openai_cls: MagicMock
     ) -> None:
         """A batch stuck in validating with no status or count changes
         should still be detected as stalled."""
@@ -388,7 +405,9 @@ class TestPollBatchStallDetection(unittest.TestCase):
         self.client.batches.cancel.assert_called_once()
 
     @patch("explainshell.extraction.llm.providers.openai.time")
-    def test_cancel_wait_measured_from_cancel_time(self, mock_time: MagicMock) -> None:
+    def test_cancel_wait_measured_from_cancel_time(
+        self, mock_time: MagicMock, _mock_openai_cls: MagicMock
+    ) -> None:
         """After cancel, the cancel-wait timeout is measured purely from
         the cancel time, regardless of continued progress."""
         stall_timeout = 60
@@ -434,7 +453,9 @@ class TestPollBatchStallDetection(unittest.TestCase):
         self.client.batches.cancel.assert_called_once()
 
     @patch("explainshell.extraction.llm.providers.openai.time")
-    def test_poll_errors_use_exponential_backoff(self, mock_time: MagicMock) -> None:
+    def test_poll_errors_use_exponential_backoff(
+        self, mock_time: MagicMock, _mock_openai_cls: MagicMock
+    ) -> None:
         """Poll errors should back off exponentially up to MAX_ERROR_BACKOFF."""
         provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=9999)
         clock = [0.0]
@@ -473,7 +494,9 @@ class TestPollBatchStallDetection(unittest.TestCase):
         self.assertEqual(sleep_durations, [30, 60, 120, 240])
 
     @patch("explainshell.extraction.llm.providers.openai.time")
-    def test_poll_error_backoff_capped(self, mock_time: MagicMock) -> None:
+    def test_poll_error_backoff_capped(
+        self, mock_time: MagicMock, _mock_openai_cls: MagicMock
+    ) -> None:
         """Backoff should be capped at MAX_ERROR_BACKOFF."""
         provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=9999)
         clock = [0.0]
@@ -512,7 +535,9 @@ class TestPollBatchStallDetection(unittest.TestCase):
         )
 
     @patch("explainshell.extraction.llm.providers.openai.time")
-    def test_poll_errors_reset_on_success(self, mock_time: MagicMock) -> None:
+    def test_poll_errors_reset_on_success(
+        self, mock_time: MagicMock, _mock_openai_cls: MagicMock
+    ) -> None:
         """A successful poll should reset the consecutive error counter."""
         provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=9999)
         clock = [0.0]
@@ -555,7 +580,9 @@ class TestPollBatchStallDetection(unittest.TestCase):
         self.assertEqual(sleep_durations, [30, 60, 120, 30, 30, 60])
 
     @patch("explainshell.extraction.llm.providers.openai.time")
-    def test_poll_errors_exhaust_budget_raises(self, mock_time: MagicMock) -> None:
+    def test_poll_errors_exhaust_budget_raises(
+        self, mock_time: MagicMock, _mock_openai_cls: MagicMock
+    ) -> None:
         """After MAX_POLL_ERRORS consecutive failures, raise ExtractionError."""
         provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=9999)
         clock = [0.0]
@@ -576,7 +603,9 @@ class TestPollBatchStallDetection(unittest.TestCase):
         self.assertEqual(self.client.batches.retrieve.call_count, MAX_POLL_ERRORS)
 
     @patch("explainshell.extraction.llm.providers.openai.time")
-    def test_non_retryable_error_fails_fast(self, mock_time: MagicMock) -> None:
+    def test_non_retryable_error_fails_fast(
+        self, mock_time: MagicMock, _mock_openai_cls: MagicMock
+    ) -> None:
         """Non-retryable exceptions (e.g. auth errors) should raise immediately
         without any retries or backoff."""
         provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=9999)
@@ -603,7 +632,9 @@ class TestPollBatchStallDetection(unittest.TestCase):
         mock_time.sleep.assert_not_called()
 
     @patch("explainshell.extraction.llm.providers.openai.time")
-    def test_stop_event_during_error_backoff(self, mock_time: MagicMock) -> None:
+    def test_stop_event_during_error_backoff(
+        self, mock_time: MagicMock, _mock_openai_cls: MagicMock
+    ) -> None:
         """A stop_event set during error backoff should raise KeyboardInterrupt."""
         provider = OpenAIProvider("openai/gpt-5-mini", stall_timeout=9999)
         clock = [0.0]
@@ -633,7 +664,17 @@ class TestPollBatchStallDetection(unittest.TestCase):
 class TestAzureRouting(unittest.TestCase):
     """Azure-prefixed models should route through the OpenAI-compatible provider."""
 
-    def test_factory_routes_azure_models_to_openai_provider(self) -> None:
+    @patch.dict(
+        "os.environ",
+        {
+            "AZURE_OPENAI_API_KEY": "azure-key",
+            "AZURE_OPENAI_ENDPOINT": "https://example.openai.azure.com",
+        },
+    )
+    @patch("explainshell.extraction.llm.providers.openai.OpenAI")
+    def test_factory_routes_azure_models_to_openai_provider(
+        self, _mock_openai_cls: MagicMock
+    ) -> None:
         self.assertIsInstance(make_provider("azure/my-deployment"), OpenAIProvider)
         self.assertIsInstance(
             make_batch_provider("azure/my-deployment"), OpenAIProvider
@@ -712,19 +753,15 @@ class TestAzureRouting(unittest.TestCase):
 
     @patch.dict("os.environ", {}, clear=True)
     def test_azure_requires_api_key(self) -> None:
-        provider = OpenAIProvider("azure/my-deployment")
-
         with self.assertRaises(ValueError) as ctx:
-            provider.make_poll_client()
+            OpenAIProvider("azure/my-deployment")
 
         self.assertIn("AZURE_OPENAI_API_KEY", str(ctx.exception))
 
     @patch.dict("os.environ", {"AZURE_OPENAI_API_KEY": "azure-key"}, clear=True)
     def test_azure_requires_base_url_or_endpoint(self) -> None:
-        provider = OpenAIProvider("azure/my-deployment")
-
         with self.assertRaises(ValueError) as ctx:
-            provider.make_poll_client()
+            OpenAIProvider("azure/my-deployment")
 
         self.assertIn("AZURE_OPENAI_BASE_URL", str(ctx.exception))
 

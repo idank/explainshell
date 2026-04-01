@@ -301,7 +301,7 @@ class TestMultiChunkExtract(unittest.TestCase):
         mock_provider.retryable_exceptions = (ConnectionError,)
 
         ext = self._make_extractor()
-        ext._provider_instance = mock_provider
+        ext.provider = mock_provider
 
         with self.assertRaises(ExtractionError) as ctx:
             ext._call_llm("some user content")
@@ -337,7 +337,7 @@ class TestMultiChunkExtract(unittest.TestCase):
         with tempfile.TemporaryDirectory() as fail_dir:
             cfg = ExtractorConfig(model="test-model", run_dir=fail_dir)
             ext = LLMExtractor(cfg)
-            ext._provider_instance = mock_provider
+            ext.provider = mock_provider
 
             with self.assertRaises(ExtractionError):
                 ext.extract("dummy.1.gz")
