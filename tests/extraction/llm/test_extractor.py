@@ -10,12 +10,13 @@ import pytest
 from tests.helpers import TESTS_DIR
 
 from explainshell import models
-from explainshell.errors import ExtractionError
+from explainshell.errors import ExtractionError, SkippedExtraction
 from explainshell.extraction import ExtractorConfig
 from explainshell.extraction.llm.extractor import (
     ChunkResult,
     LLMExtractor,
     PreparedFile,
+    _BLACKLISTED_SOURCES,
 )
 from explainshell.extraction.llm.providers import TokenUsage
 
@@ -323,6 +324,15 @@ class TestMultiChunkExtract(unittest.TestCase):
         with self.assertRaises(ExtractionError) as ctx:
             ext.prepare("dummy.1.gz")
         self.assertIn("too many chunks", str(ctx.exception))
+
+    def test_blacklisted_source_skipped(self):
+        """prepare() raises SkippedExtraction for blacklisted source paths."""
+        # Pick the first blacklisted source and build a matching gz_path.
+        source = next(iter(_BLACKLISTED_SOURCES))
+        ext = self._make_extractor()
+        with self.assertRaises(SkippedExtraction) as ctx:
+            ext.prepare(f"/data/manpages/{source}")
+        self.assertIn("blacklisted", ctx.exception.reason)
 
     @patch("explainshell.extraction.llm.extractor.LLMExtractor.prepare")
     def test_extract_invalid_chunk0_dumps_failed_response(self, mock_prepare):
