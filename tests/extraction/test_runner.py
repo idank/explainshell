@@ -4,9 +4,9 @@ import os
 import tempfile
 import threading
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from explainshell.errors import ExtractionError, SkippedExtraction
+from explainshell.errors import ExtractionError, FatalExtractionError, SkippedExtraction
 from explainshell.extraction.llm.providers import BatchResults, TokenUsage
 from explainshell.extraction.manifest import BatchManifestWriter
 from explainshell.extraction.runner import (
@@ -608,6 +608,157 @@ class TestRunDispatcher(unittest.TestCase):
 
         ext.extract.assert_called_once_with("/fake/a.1.gz")
         self.assertEqual(batch.n_succeeded, 1)
+
+    def test_parallel_mode_submits_only_jobs_initially(self):
+        """The parallel runner keeps only `jobs` tasks submitted at first."""
+        import concurrent.futures
+
+        real_executor = concurrent.futures.ThreadPoolExecutor
+
+        class RecordingExecutor:
+            # Fresh class per test invocation, so this list is also fresh.
+            instances: list["RecordingExecutor"] = []
+
+            def __init__(self, max_workers: int) -> None:
+                self._executor = real_executor(max_workers=max_workers)
+                self.submit_count = 0
+                RecordingExecutor.instances.append(self)
+
+            def submit(self, fn, *args, **kwargs):
+                self.submit_count += 1
+                return self._executor.submit(fn, *args, **kwargs)
+
+            def shutdown(self, wait: bool = True, cancel_futures: bool = False) -> None:
+                self._executor.shutdown(wait=wait, cancel_futures=cancel_futures)
+
+        files = [
+            "/fake/a.1.gz",
+            "/fake/b.1.gz",
+            "/fake/c.1.gz",
+            "/fake/d.1.gz",
+        ]
+        started: list[str] = []
+        started_two = threading.Event()
+        release = threading.Event()
+        lock = threading.Lock()
+
+        ext = MagicMock()
+
+        def _extract(gz_path: str) -> ExtractionResult:
+            with lock:
+                started.append(gz_path)
+                if len(started) == 2:
+                    started_two.set()
+            release.wait(timeout=2)
+            return _make_result(gz_path)
+
+        ext.extract.side_effect = _extract
+
+        run_result: dict[str, object] = {}
+
+        def _run() -> None:
+            try:
+                batch, result_files = run_collected(ext, files, jobs=2)
+            except Exception as e:  # pragma: no cover - test harness plumbing
+                run_result["error"] = e
+                return
+            run_result["batch"] = batch
+            run_result["files"] = result_files
+
+        worker = threading.Thread(target=_run)
+        with patch(
+            "explainshell.extraction.runner.concurrent.futures.ThreadPoolExecutor",
+            RecordingExecutor,
+        ):
+            worker.start()
+            self.assertTrue(started_two.wait(timeout=2), run_result.get("error"))
+            self.assertEqual(len(RecordingExecutor.instances), 1)
+            self.assertEqual(RecordingExecutor.instances[0].submit_count, 2)
+            release.set()
+            worker.join(timeout=2)
+
+        self.assertFalse(worker.is_alive())
+        self.assertNotIn("error", run_result)
+        batch = run_result["batch"]
+        self.assertEqual(batch.n_succeeded, 4)
+        self.assertEqual(len(run_result["files"]), 4)
+
+    def test_parallel_unexpected_exception_aborts_run(self):
+        """Unexpected extractor exceptions are treated as fatal."""
+        files = [
+            "/fake/a.1.gz",
+            "/fake/b.1.gz",
+            "/fake/c.1.gz",
+        ]
+        ext = MagicMock()
+        started = threading.Event()
+        release = threading.Event()
+
+        def _extract(gz_path: str) -> ExtractionResult:
+            if gz_path == "/fake/a.1.gz":
+                raise RuntimeError("unexpected extractor bug")
+            started.set()
+            release.wait(timeout=2)
+            return _make_result(gz_path)
+
+        ext.extract.side_effect = _extract
+
+        with self.assertRaises(FatalExtractionError) as ctx:
+            run_collected(ext, files, jobs=2)
+
+        self.assertIn("unexpected extractor bug", str(ctx.exception))
+        release.set()
+
+    def test_sequential_unexpected_exception_aborts_run(self):
+        """Sequential mode also propagates unexpected extractor exceptions as fatal."""
+        ext = MagicMock()
+
+        def _extract(gz_path: str) -> ExtractionResult:
+            if gz_path == "/fake/b.1.gz":
+                raise RuntimeError("sequential extractor bug")
+            return _make_result(gz_path)
+
+        ext.extract.side_effect = _extract
+
+        with self.assertRaises(FatalExtractionError) as ctx:
+            run_collected(ext, ["/fake/a.1.gz", "/fake/b.1.gz"])
+
+        self.assertIn("sequential extractor bug", str(ctx.exception))
+
+    def test_direct_fatal_extraction_error_propagates(self):
+        """An extractor-raised FatalExtractionError is not swallowed."""
+        ext = MagicMock()
+
+        def _extract(gz_path: str) -> ExtractionResult:
+            if gz_path == "/fake/b.1.gz":
+                raise FatalExtractionError("provider says stop")
+            return _make_result(gz_path)
+
+        ext.extract.side_effect = _extract
+
+        with self.assertRaises(FatalExtractionError) as ctx:
+            run_collected(ext, ["/fake/a.1.gz", "/fake/b.1.gz"])
+
+        self.assertIn("provider says stop", str(ctx.exception))
+
+    def test_parallel_direct_fatal_extraction_error_propagates(self):
+        """Parallel mode also propagates extractor-raised FatalExtractionError."""
+        ext = MagicMock()
+        release = threading.Event()
+
+        def _extract(gz_path: str) -> ExtractionResult:
+            if gz_path == "/fake/b.1.gz":
+                raise FatalExtractionError("provider says stop")
+            release.wait(timeout=2)
+            return _make_result(gz_path)
+
+        ext.extract.side_effect = _extract
+
+        with self.assertRaises(FatalExtractionError) as ctx:
+            run_collected(ext, ["/fake/a.1.gz", "/fake/b.1.gz"], jobs=2)
+
+        self.assertIn("provider says stop", str(ctx.exception))
+        release.set()
 
     def test_callbacks_forwarded(self):
         """on_start and on_result callbacks are forwarded through run()."""

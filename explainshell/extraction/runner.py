@@ -92,13 +92,16 @@ def _tally(batch: BatchResult, entry: ExtractionResult) -> None:
 
 
 def _extract_one(extractor: Extractor, gz_path: str) -> ExtractionResult:
-    """Run extractor on a single file, catching all expected errors.
+    """Run extractor on a single file.
 
-    FatalExtractionError is intentionally not caught — it propagates to
-    abort the entire run.
+    Returns an ``ExtractionResult`` for all expected outcomes.  Raises
+    ``FatalExtractionError`` for both explicit fatal errors from the
+    extractor and unexpected exceptions (wrapped with traceback logged).
     """
     try:
         return extractor.extract(gz_path)
+    # Order matters: FatalExtractionError and SkippedExtraction both inherit
+    # from ExtractionError, so they must be handled before the generic branch.
     except FatalExtractionError:
         raise
     except SkippedExtraction as e:
@@ -108,12 +111,15 @@ def _extract_one(extractor: Extractor, gz_path: str) -> ExtractionResult:
             stats=e.stats,
             error=e.reason,
         )
-    except (ExtractionError, Exception) as e:
+    except ExtractionError as e:
         return ExtractionResult(
             gz_path=gz_path,
             outcome=ExtractionOutcome.FAILED,
             error=str(e),
         )
+    except Exception as e:
+        logger.exception("fatal unexpected exception while extracting %s", gz_path)
+        raise FatalExtractionError(str(e)) from e
 
 
 def run_sequential(
@@ -122,7 +128,11 @@ def run_sequential(
     on_start: Callable[[str], None] | None = None,
     on_result: Callable[[str, ExtractionResult], None] | None = None,
 ) -> BatchResult:
-    """Run extractor on each file sequentially."""
+    """Run extractor on each file sequentially.
+
+    Callback exceptions are treated as fatal, just like unexpected extractor
+    exceptions.
+    """
     batch = BatchResult()
 
     for gz_path in gz_files:
@@ -138,6 +148,14 @@ def run_sequential(
             logger.info("interrupted by user")
             batch.interrupted = True
             break
+        except FatalExtractionError:
+            raise
+        except Exception as e:
+            logger.exception(
+                "fatal unexpected exception in callback while processing %s",
+                gz_path,
+            )
+            raise FatalExtractionError(str(e)) from e
 
     return batch
 
@@ -149,7 +167,14 @@ def run_parallel(
     on_start: Callable[[str], None] | None = None,
     on_result: Callable[[str, ExtractionResult], None] | None = None,
 ) -> BatchResult:
-    """Run extractor on files using a thread pool."""
+    """Run extractor on files using a rolling thread pool.
+
+    Keeps at most ``jobs`` tasks submitted at a time so a late fatal error
+    does not leave the entire remaining corpus pre-queued.
+
+    ``on_start`` runs in worker threads. ``on_result`` runs in the main thread.
+    Callback exceptions are treated as fatal.
+    """
     batch = BatchResult()
 
     def _do_one(gz_path: str) -> ExtractionResult:
@@ -159,18 +184,38 @@ def run_parallel(
 
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=jobs)
     try:
-        futures = {executor.submit(_do_one, gz_path): gz_path for gz_path in gz_files}
-        for future in concurrent.futures.as_completed(futures):
-            entry = future.result()  # raises FatalExtractionError if the task hit one
-            _tally(batch, entry)
-            if on_result:
-                on_result(entry.gz_path, entry)
+        pending: set[concurrent.futures.Future[ExtractionResult]] = set()
+        gz_iter = iter(gz_files)
+
+        def _submit_next() -> bool:
+            gz_path = next(gz_iter, None)
+            if gz_path is None:
+                return False
+            pending.add(executor.submit(_do_one, gz_path))
+            return True
+
+        for _ in range(jobs):
+            if not _submit_next():
+                break
+
+        while pending:
+            done, _ = concurrent.futures.wait(
+                pending, return_when=concurrent.futures.FIRST_COMPLETED
+            )
+            for future in done:
+                pending.remove(future)
+                entry = future.result()  # raises FatalExtractionError on fatal
+                _tally(batch, entry)
+                if on_result:
+                    on_result(entry.gz_path, entry)
+                _submit_next()
     except KeyboardInterrupt:
         logger.info("interrupted by user")
         batch.interrupted = True
         extractor.cancel()
         executor.shutdown(wait=False, cancel_futures=True)
     except FatalExtractionError:
+        extractor.cancel()
         executor.shutdown(wait=False, cancel_futures=True)
         raise
     else:
