@@ -29,6 +29,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
     """Verify the manager writes results to the DB via on_result callback
     from run()."""
 
+    @patch("explainshell.extraction.common.gz_sha256", side_effect=lambda p: p)
     @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
@@ -41,6 +42,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
         mock_store_create,
         mock_make_ext,
         mock_run,
+        _mock_sha,
     ):
         """Verify on_result callback writes to DB for each successful file."""
         gz_files = [
@@ -56,6 +58,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
         mock_store_create.return_value = mock_store
         mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
         mock_store.has_manpage_source.return_value = False
+        mock_store.known_sha256s.return_value = {}
 
         mock_make_ext.return_value = MagicMock()
 
@@ -117,6 +120,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
         # Writes are incremental: 0 before first, 1 before second, etc.
         self.assertEqual(writes_at_callback, [0, 1, 2, 3])
 
+    @patch("explainshell.extraction.common.gz_sha256", side_effect=lambda p: p)
     @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
@@ -129,6 +133,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
         mock_store_create,
         mock_make_ext,
         mock_run,
+        _mock_sha,
     ):
         """If some files fail, successful files must still be in the DB."""
         gz_files = [
@@ -144,6 +149,7 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
         mock_store_create.return_value = mock_store
         mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
         mock_store.has_manpage_source.return_value = False
+        mock_store.known_sha256s.return_value = {}
         mock_make_ext.return_value = MagicMock()
 
         def _fake_run(
@@ -308,6 +314,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_store_create.assert_not_called()
         self.assertNotEqual(result.exit_code, 0)
 
+    @patch("explainshell.extraction.common.gz_sha256", side_effect=lambda p: p)
     @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
@@ -316,7 +323,13 @@ class TestLlmManagerDryRun(unittest.TestCase):
         "explainshell.manager.config.source_from_path", return_value="fake/echo.1.gz"
     )
     def test_normal_run_writes_to_store(
-        self, mock_source, mock_collect, mock_store_create, mock_make_ext, mock_run
+        self,
+        mock_source,
+        mock_collect,
+        mock_store_create,
+        mock_make_ext,
+        mock_run,
+        _mock_sha,
     ):
         mock_collect.return_value = ["/fake/echo.1.gz"]
 
@@ -324,6 +337,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_store_create.return_value = mock_store
         mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
         mock_store.has_manpage_source.return_value = False
+        mock_store.known_sha256s.return_value = {}
 
         fake_mp = MagicMock()
         fake_mp.options = [MagicMock()]
@@ -389,6 +403,7 @@ class TestLlmManagerDryRun(unittest.TestCase):
 class TestSymlinkMapping(unittest.TestCase):
     """Verify symlinks are mapped to their canonical manpage instead of extracted."""
 
+    @patch("explainshell.extraction.common.gz_sha256", side_effect=lambda p: p)
     @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
@@ -399,6 +414,7 @@ class TestSymlinkMapping(unittest.TestCase):
         mock_store_create,
         mock_make_ext,
         mock_run,
+        _mock_sha,
     ):
         """A symlink whose canonical is extracted in the same batch gets mapped."""
         canonical = "/fake/distro/release/1/bio-eagle.1.gz"
@@ -409,6 +425,7 @@ class TestSymlinkMapping(unittest.TestCase):
         mock_store_create.return_value = mock_store
         mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
         mock_store.mapping_score.return_value = None  # no existing mapping
+        mock_store.known_sha256s.return_value = {}
 
         mock_make_ext.return_value = MagicMock()
 
@@ -646,6 +663,385 @@ class TestSymlinkMapping(unittest.TestCase):
         mock_store.update_mapping_score.assert_called_once_with(
             "eagle", "distro/release/1/bio-eagle.1.gz", score=10
         )
+
+
+# ---------------------------------------------------------------------------
+# TestContentDedup
+# ---------------------------------------------------------------------------
+
+
+class TestContentDedup(unittest.TestCase):
+    """Verify content-identical files are deduplicated before LLM extraction."""
+
+    @patch("explainshell.extraction.common.gz_sha256")
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch("explainshell.util.collect_gz_files")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_identical_files_deduped_in_same_run(
+        self,
+        mock_source,
+        mock_collect,
+        mock_store_create,
+        mock_make_ext,
+        mock_run,
+        mock_sha,
+    ):
+        """Content-identical files should extract once and map the rest."""
+        gz_files = [
+            "/fake/distro/release/1/x86_64-linux-gnu-gfortran-16.1.gz",
+            "/fake/distro/release/1/aarch64-linux-gnu-gfortran-16.1.gz",
+            "/fake/distro/release/1/other-tool.1.gz",
+        ]
+        mock_collect.return_value = gz_files
+        mock_source.side_effect = lambda p: "/".join(p.split("/")[-4:])
+        # First two files have the same hash, third is different.
+        mock_sha.side_effect = lambda p: "aaa" if "gfortran" in p else "bbb"
+
+        mock_store = MagicMock()
+        mock_store_create.return_value = mock_store
+        mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
+        mock_store.known_sha256s.return_value = {}
+        mock_store.mapping_score.return_value = None
+
+        # Track which sources have been "stored" via add_manpage.
+        stored: set[str] = set()
+        mock_store.has_manpage_source.side_effect = lambda s: s in stored
+
+        mock_make_ext.return_value = MagicMock()
+
+        def _fake_run(ext, files, **kwargs):
+            batch = BatchResult()
+            for gz_path in files:
+                if kwargs.get("on_start"):
+                    kwargs["on_start"](gz_path)
+                mp = MagicMock(options=[MagicMock()])
+                mp.source = mock_source(gz_path)
+                entry = ExtractionResult(
+                    gz_path=gz_path,
+                    outcome=ExtractionOutcome.SUCCESS,
+                    mp=mp,
+                    raw=MagicMock(),
+                    stats=ExtractionStats(),
+                )
+                batch.n_succeeded += 1
+                stored.add(mp.source)
+                if kwargs.get("on_result"):
+                    kwargs["on_result"](gz_path, entry)
+            return batch
+
+        mock_run.side_effect = _fake_run
+
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--db",
+                "/tmp/test.db",
+                "extract",
+                "--mode",
+                "llm:openai/test-model",
+                "/fake/file.gz",
+            ],
+        )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        # Only 2 files should be passed to run() (x86_64 + other-tool),
+        # aarch64 is deduped.
+        (_, call_files), _ = mock_run.call_args
+        self.assertEqual(len(call_files), 2)
+        self.assertIn(gz_files[0], call_files)
+        self.assertNotIn(gz_files[1], call_files)
+        self.assertIn(gz_files[2], call_files)
+        # aarch64 gets a mapping to the x86_64 canonical source.
+        mock_store.add_mapping.assert_called_once_with(
+            "aarch64-linux-gnu-gfortran-16",
+            "distro/release/1/x86_64-linux-gnu-gfortran-16.1.gz",
+            score=10,
+        )
+
+    @patch("explainshell.extraction.common.gz_sha256", return_value="existing-hash")
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch("explainshell.util.collect_gz_files")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_file_matching_db_hash_gets_mapped(
+        self,
+        mock_source,
+        mock_collect,
+        mock_store_create,
+        mock_make_ext,
+        mock_run,
+        _mock_sha,
+    ):
+        """A new file whose hash matches an already-extracted page gets mapped, not extracted."""
+        gz_files = ["/fake/distro/release/1/aarch64-linux-gnu-gcc-16.1.gz"]
+        mock_collect.return_value = gz_files
+        mock_source.side_effect = lambda p: "/".join(p.split("/")[-4:])
+
+        mock_store = MagicMock()
+        mock_store_create.return_value = mock_store
+        mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
+        mock_store.mapping_score.return_value = None
+        # DB already has a file with this hash from a prior run.
+        mock_store.known_sha256s.return_value = {
+            "existing-hash": "distro/release/1/x86_64-linux-gnu-gcc-16.1.gz"
+        }
+        # The new file is not in DB, but the canonical from the prior run is.
+        canonical_source = "distro/release/1/x86_64-linux-gnu-gcc-16.1.gz"
+        mock_store.has_manpage_source.side_effect = lambda s: s == canonical_source
+
+        mock_make_ext.return_value = MagicMock()
+        mock_run.return_value = BatchResult()
+
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--db",
+                "/tmp/test.db",
+                "extract",
+                "--mode",
+                "llm:openai/test-model",
+                "/fake/file.gz",
+            ],
+        )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        # run() should be called with an empty file list.
+        (_, call_files), _ = mock_run.call_args
+        self.assertEqual(call_files, [])
+        # Mapping created to the existing DB entry.
+        mock_store.add_mapping.assert_called_once_with(
+            "aarch64-linux-gnu-gcc-16",
+            "distro/release/1/x86_64-linux-gnu-gcc-16.1.gz",
+            score=10,
+        )
+
+    @patch("explainshell.extraction.common.gz_sha256", return_value="same-hash")
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch("explainshell.util.collect_gz_files")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_overwrite_bypasses_db_hash_dedup(
+        self,
+        mock_source,
+        mock_collect,
+        mock_store_create,
+        mock_make_ext,
+        mock_run,
+        _mock_sha,
+    ):
+        """--overwrite must re-extract even when the hash is already in the DB."""
+        gz_files = ["/fake/distro/release/1/x86_64-linux-gnu-gcc-16.1.gz"]
+        mock_collect.return_value = gz_files
+        mock_source.side_effect = lambda p: "/".join(p.split("/")[-4:])
+
+        mock_store = MagicMock()
+        mock_store_create.return_value = mock_store
+        mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
+        mock_store.has_manpage_source.return_value = True  # already in DB
+        mock_store.mapping_score.return_value = None
+        mock_store.known_sha256s.return_value = {
+            "same-hash": "distro/release/1/x86_64-linux-gnu-gcc-16.1.gz"
+        }
+
+        mock_make_ext.return_value = MagicMock()
+
+        def _fake_run(ext, files, **kwargs):
+            batch = BatchResult()
+            for gz_path in files:
+                if kwargs.get("on_start"):
+                    kwargs["on_start"](gz_path)
+                mp = MagicMock(options=[MagicMock()])
+                mp.source = mock_source(gz_path)
+                entry = ExtractionResult(
+                    gz_path=gz_path,
+                    outcome=ExtractionOutcome.SUCCESS,
+                    mp=mp,
+                    raw=MagicMock(),
+                    stats=ExtractionStats(),
+                )
+                batch.n_succeeded += 1
+                if kwargs.get("on_result"):
+                    kwargs["on_result"](gz_path, entry)
+            return batch
+
+        mock_run.side_effect = _fake_run
+
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--db",
+                "/tmp/test.db",
+                "extract",
+                "--mode",
+                "llm:openai/test-model",
+                "--overwrite",
+                "/fake/file.gz",
+            ],
+        )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        # The file must be extracted, not deduped.
+        (_, call_files), _ = mock_run.call_args
+        self.assertEqual(len(call_files), 1)
+        # known_sha256s should not be called when overwriting.
+        mock_store.known_sha256s.assert_not_called()
+
+    @patch("explainshell.extraction.common.gz_sha256", return_value="same-hash")
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch("explainshell.util.collect_gz_files")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_cross_release_identical_files_not_deduped(
+        self,
+        mock_source,
+        mock_collect,
+        mock_store_create,
+        mock_make_ext,
+        mock_run,
+        _mock_sha,
+    ):
+        """Identical files from different releases must both be extracted."""
+        gz_files = [
+            "/fake/ubuntu/25.10/1/foo.1.gz",
+            "/fake/ubuntu/26.04/1/foo.1.gz",
+        ]
+        mock_collect.return_value = gz_files
+        mock_source.side_effect = lambda p: "/".join(p.split("/")[-4:])
+
+        mock_store = MagicMock()
+        mock_store_create.return_value = mock_store
+        mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
+        mock_store.has_manpage_source.return_value = False
+        mock_store.known_sha256s.return_value = {}
+
+        mock_make_ext.return_value = MagicMock()
+
+        def _fake_run(ext, files, **kwargs):
+            batch = BatchResult()
+            for gz_path in files:
+                if kwargs.get("on_start"):
+                    kwargs["on_start"](gz_path)
+                mp = MagicMock(options=[MagicMock()])
+                mp.source = mock_source(gz_path)
+                entry = ExtractionResult(
+                    gz_path=gz_path,
+                    outcome=ExtractionOutcome.SUCCESS,
+                    mp=mp,
+                    raw=MagicMock(),
+                    stats=ExtractionStats(),
+                )
+                batch.n_succeeded += 1
+                if kwargs.get("on_result"):
+                    kwargs["on_result"](gz_path, entry)
+            return batch
+
+        mock_run.side_effect = _fake_run
+
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--db",
+                "/tmp/test.db",
+                "extract",
+                "--mode",
+                "llm:openai/test-model",
+                "/fake/file.gz",
+            ],
+        )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        # Both files should be passed to run() despite identical hashes.
+        (_, call_files), _ = mock_run.call_args
+        self.assertEqual(len(call_files), 2)
+
+    @patch("explainshell.extraction.common.gz_sha256", return_value="same-hash")
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch("explainshell.util.collect_gz_files")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_cross_section_identical_files_not_deduped(
+        self,
+        mock_source,
+        mock_collect,
+        mock_store_create,
+        mock_make_ext,
+        mock_run,
+        _mock_sha,
+    ):
+        """Identical files in different sections must both be extracted."""
+        gz_files = [
+            "/fake/ubuntu/26.04/1/foo.1.gz",
+            "/fake/ubuntu/26.04/8/foo.8.gz",
+        ]
+        mock_collect.return_value = gz_files
+        mock_source.side_effect = lambda p: "/".join(p.split("/")[-4:])
+
+        mock_store = MagicMock()
+        mock_store_create.return_value = mock_store
+        mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
+        mock_store.has_manpage_source.return_value = False
+        mock_store.known_sha256s.return_value = {}
+
+        mock_make_ext.return_value = MagicMock()
+
+        def _fake_run(ext, files, **kwargs):
+            batch = BatchResult()
+            for gz_path in files:
+                if kwargs.get("on_start"):
+                    kwargs["on_start"](gz_path)
+                mp = MagicMock(options=[MagicMock()])
+                mp.source = mock_source(gz_path)
+                entry = ExtractionResult(
+                    gz_path=gz_path,
+                    outcome=ExtractionOutcome.SUCCESS,
+                    mp=mp,
+                    raw=MagicMock(),
+                    stats=ExtractionStats(),
+                )
+                batch.n_succeeded += 1
+                if kwargs.get("on_result"):
+                    kwargs["on_result"](gz_path, entry)
+            return batch
+
+        mock_run.side_effect = _fake_run
+
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--db",
+                "/tmp/test.db",
+                "extract",
+                "--mode",
+                "llm:openai/test-model",
+                "/fake/file.gz",
+            ],
+        )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        # Both files should be passed to run() despite identical hashes.
+        (_, call_files), _ = mock_run.call_args
+        self.assertEqual(len(call_files), 2)
 
 
 # ---------------------------------------------------------------------------

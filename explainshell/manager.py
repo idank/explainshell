@@ -326,47 +326,49 @@ def _run_dry_run(
 # ---------------------------------------------------------------------------
 
 
-def _add_symlink_mapping(
+def _add_alias_mapping(
     s: store.Store,
     gz_path: str,
-    symlink_source: str,
+    alias_source: str,
     canonical_source: str,
 ) -> bool:
-    """Insert or upgrade a mapping from a symlink's command name to the canonical source.
+    """Insert or upgrade a mapping from an alias command name to the canonical source.
 
-    If a mapping already exists with a lower score (e.g. lexgrog alias at score 1),
-    upgrades it to score 10 since the symlink name is the primary command name.
+    Used for both symlinks and content-identical files (e.g. cross-compiler
+    variants).  If a mapping already exists with a lower score (e.g. lexgrog
+    alias at score 1), upgrades it to score 10 since the alias name is the
+    primary command name.
 
     Returns True if a mapping was inserted or upgraded, False if unchanged.
     """
     from explainshell import manpage
 
-    symlink_name = manpage.extract_name(gz_path)
-    existing_score = s.mapping_score(symlink_name, canonical_source)
+    alias_name = manpage.extract_name(gz_path)
+    existing_score = s.mapping_score(alias_name, canonical_source)
     if existing_score is not None and existing_score >= 10:
         logger.debug(
-            "symlink mapping %s -> %s already exists (score %d)",
-            symlink_name,
+            "alias mapping %s -> %s already exists (score %d)",
+            alias_name,
             canonical_source,
             existing_score,
         )
         return False
     if existing_score is not None:
         # Upgrade score from lower value (e.g. lexgrog alias at score 1).
-        s.update_mapping_score(symlink_name, canonical_source, score=10)
+        s.update_mapping_score(alias_name, canonical_source, score=10)
         logger.info(
-            "upgraded symlink mapping %s -> %s score %d -> 10",
-            symlink_source,
+            "upgraded alias mapping %s -> %s score %d -> 10",
+            alias_source,
             canonical_source,
             existing_score,
         )
     else:
-        s.add_mapping(symlink_name, canonical_source, score=10)
+        s.add_mapping(alias_name, canonical_source, score=10)
         logger.info(
-            "mapped symlink %s -> %s (name: %s)",
-            symlink_source,
+            "mapped alias %s -> %s (name: %s)",
+            alias_source,
             canonical_source,
-            symlink_name,
+            alias_name,
         )
     return True
 
@@ -382,9 +384,10 @@ def _log_summary(
     elapsed: float,
     dry_run: bool = False,
     symlinks_mapped: int = 0,
+    content_deduped: int = 0,
 ) -> int:
     """Log a summary of batch results and return the exit code."""
-    added = batch_result.n_succeeded + symlinks_mapped
+    added = batch_result.n_succeeded + symlinks_mapped + content_deduped
     skipped = batch_result.n_skipped + prefilter_skipped
     failed = batch_result.n_failed
 
@@ -603,12 +606,31 @@ def extract(
     t0 = time.monotonic()
     prefilter_skipped = 0
     symlinks_mapped = 0
+    content_deduped = 0
     symlink_files: list[tuple[str, str, str]] = []  # (gz_path, source, canonical)
+    content_dup_files: list[tuple[str, str, str]] = []  # same shape
 
     cfg = ExtractorConfig(model=model, run_dir=run_dir, debug=debug)
     extractor = make_extractor(parsed_mode, cfg)
 
-    # Pre-filter already-stored files and separate symlinks.
+    # Pre-filter already-stored files, separate symlinks, and deduplicate
+    # content-identical files (e.g. cross-compiler gcc variants).
+    # Dedup is scoped to (hash, distro, release) so cross-release lookups
+    # are not broken.  When --overwrite is set, we skip seeding from the DB
+    # so that every canonical gets re-extracted; in-run dedup still applies.
+    from explainshell.extraction.common import gz_sha256
+
+    def _dedup_key(sha: str, source: str) -> str:
+        """Build a dedup key scoped to distro/release/section."""
+        # source format: "distro/release/section/file.gz"
+        prefix = source.rsplit("/", 1)[0]  # "distro/release/section"
+        return f"{sha}:{prefix}"
+
+    hash_to_canonical: dict[str, str] = {}
+    if not overwrite:
+        for sha, source in s.known_sha256s().items():
+            hash_to_canonical[_dedup_key(sha, source)] = source
+
     work_files: list[str] = []
     for gz_path in gz_files:
         short_path = config.source_from_path(gz_path)
@@ -624,10 +646,18 @@ def extract(
                 symlink_files.append((gz_path, short_path, canonical_source))
                 continue
 
+        h = gz_sha256(gz_path)
+        key = _dedup_key(h, short_path)
+        if key in hash_to_canonical:
+            content_dup_files.append((gz_path, short_path, hash_to_canonical[key]))
+            continue
+        hash_to_canonical[key] = short_path
         work_files.append(gz_path)
 
     if prefilter_skipped:
         logger.info("skipped %d already stored file(s)", prefilter_skipped)
+    if content_dup_files:
+        logger.info("deduplicated %d content-identical file(s)", len(content_dup_files))
 
     extract_total = len(work_files) + prefilter_skipped
 
@@ -701,7 +731,7 @@ def extract(
     # The extraction failure is reported separately in the summary.
     for gz_path, symlink_source, canonical_source in symlink_files:
         if s.has_manpage_source(canonical_source):
-            if _add_symlink_mapping(s, gz_path, symlink_source, canonical_source):
+            if _add_alias_mapping(s, gz_path, symlink_source, canonical_source):
                 symlinks_mapped += 1
         else:
             logger.debug(
@@ -710,13 +740,29 @@ def extract(
                 canonical_source,
             )
 
+    # Map content-identical files (e.g. cross-compiler variants) the same way.
+    for gz_path, dup_source, canonical_source in content_dup_files:
+        if s.has_manpage_source(canonical_source):
+            if _add_alias_mapping(s, gz_path, dup_source, canonical_source):
+                content_deduped += 1
+        else:
+            logger.debug(
+                "content-dup %s -> %s: canonical not in DB, skipping",
+                dup_source,
+                canonical_source,
+            )
+
     added = batch_result.n_succeeded
-    if added > 0 or symlinks_mapped > 0:
+    if added > 0 or symlinks_mapped > 0 or content_deduped > 0:
         s.update_subcommand_mappings()
 
     elapsed = time.monotonic() - t0
     rc = _log_summary(
-        batch_result, prefilter_skipped, elapsed, symlinks_mapped=symlinks_mapped
+        batch_result,
+        prefilter_skipped,
+        elapsed,
+        symlinks_mapped=symlinks_mapped,
+        content_deduped=content_deduped,
     )
 
     import datetime as _dt
@@ -740,6 +786,7 @@ def extract(
             failed=batch_result.n_failed,
             prefilter_skipped=prefilter_skipped,
             symlinks_mapped=symlinks_mapped,
+            content_deduped=content_deduped,
             interrupted=batch_result.interrupted,
             fatal_error=fatal_error,
         ),

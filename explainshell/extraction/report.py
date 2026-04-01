@@ -32,6 +32,7 @@ class ExtractSummary(BaseModel):
     failed: int
     prefilter_skipped: int = 0
     symlinks_mapped: int = 0
+    content_deduped: int = 0
     interrupted: bool = False
     fatal_error: str | None = None
 

@@ -231,6 +231,19 @@ class Store:
         ).fetchone()
         return row is not None
 
+    def known_sha256s(self) -> dict[str, str]:
+        """Return a mapping of source_gz_sha256 → source for all stored manpages.
+
+        Only includes rows that have both a sha256 and a matching parsed_manpages
+        entry.  When multiple sources share the same hash, an arbitrary one wins.
+        """
+        rows = self._conn.execute(
+            "SELECT m.source_gz_sha256, m.source FROM manpages m"
+            " JOIN parsed_manpages p ON p.source = m.source"
+            " WHERE m.source_gz_sha256 IS NOT NULL"
+        ).fetchall()
+        return {row["source_gz_sha256"]: row["source"] for row in rows}
+
     def counts(self) -> dict[str, int]:
         """Return row counts for core tables."""
         return {
@@ -386,7 +399,7 @@ class Store:
             if lost:
                 logger.warning(
                     "re-importing %s will drop non-alias mappings: %s "
-                    "(rerun extraction with symlink paths to restore them)",
+                    "(rerun extraction with the original paths to restore them)",
                     m.source,
                     ", ".join(sorted(lost)),
                 )
