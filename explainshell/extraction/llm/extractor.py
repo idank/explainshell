@@ -166,8 +166,11 @@ class LLMExtractor:
         self._model = config.model or ""
         self._run_dir = config.run_dir
         self._debug = config.debug
-        self._provider_instance: LLMProvider | None = None
-        self._batch_provider_instance: BatchProvider | None = None
+        self.provider: LLMProvider = make_provider(self._model)
+        try:
+            self.batch_provider: BatchProvider = make_batch_provider(self._model)
+        except ValueError:
+            pass  # model doesn't support batch; accessed only via --batch flag
         self._cancelled = threading.Event()
 
     def cancel(self) -> None:
@@ -175,18 +178,6 @@ class LLMExtractor:
         LLM request completes.  Does not abort already in-flight HTTP calls,
         but prevents the next chunk from being submitted."""
         self._cancelled.set()
-
-    @property
-    def provider(self) -> LLMProvider:
-        if self._provider_instance is None:
-            self._provider_instance = make_provider(self._model)
-        return self._provider_instance
-
-    @property
-    def batch_provider(self) -> BatchProvider:
-        if self._batch_provider_instance is None:
-            self._batch_provider_instance = make_batch_provider(self._model)
-        return self._batch_provider_instance
 
     def extract(self, gz_path: str) -> ExtractionResult:
         """Full extraction pipeline: prepare → LLM calls → finalize."""

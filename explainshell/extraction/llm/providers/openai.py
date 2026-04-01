@@ -73,25 +73,23 @@ class OpenAIProvider:
             raise ValueError(f"unsupported OpenAI-compatible model prefix: {model!r}")
         self._reasoning_effort = reasoning_effort
         self._stall_timeout = stall_timeout
-
-    def _make_client(self) -> OpenAI:
         if self._backend == "azure":
             api_key = os.environ.get("AZURE_OPENAI_API_KEY")
             if not api_key:
                 raise ValueError("azure/ models require AZURE_OPENAI_API_KEY")
-            return OpenAI(
+            self.client = OpenAI(
                 api_key=api_key,
                 base_url=_azure_base_url(),
                 timeout=LLM_TIMEOUT_SECONDS,
             )
-        return OpenAI(timeout=LLM_TIMEOUT_SECONDS)
+        else:
+            self.client = OpenAI(timeout=LLM_TIMEOUT_SECONDS)
 
     def call(self, user_content: str) -> tuple[str, TokenUsage]:
-        client = self._make_client()
         kwargs: dict = {}
         if self._reasoning_effort:
             kwargs["reasoning"] = {"effort": self._reasoning_effort}
-        response = client.responses.create(
+        response = self.client.responses.create(
             model=self._api_model,
             input=_openai_input(user_content),
             text={"format": {"type": "json_object"}},
@@ -118,8 +116,6 @@ class OpenAIProvider:
     # -- Batch API --
 
     def submit_batch(self, entries: list[BatchEntry]) -> str:
-        client = self._make_client()
-
         buf = io.BytesIO()
         for req in entries:
             body: dict = {
@@ -144,10 +140,12 @@ class OpenAIProvider:
             buf.write(b"\n")
         buf.seek(0)
 
-        file_obj = client.files.create(file=("batch_input.jsonl", buf), purpose="batch")
+        file_obj = self.client.files.create(
+            file=("batch_input.jsonl", buf), purpose="batch"
+        )
         logger.info("uploaded batch input file: %s", file_obj.id)
 
-        batch = client.batches.create(
+        batch = self.client.batches.create(
             input_file_id=file_obj.id,
             endpoint="/v1/responses",
             completion_window="24h",
@@ -156,15 +154,14 @@ class OpenAIProvider:
         return batch.id
 
     def make_poll_client(self) -> OpenAI:
-        return self._make_client()
+        return self.client
 
     def cancel_batch(self, client: OpenAI, job_id: str) -> None:
         client.batches.cancel(job_id)
 
     def retrieve_batch(self, batch_id: str) -> Batch:
         """Retrieve a batch by ID (for salvage/inspection)."""
-        client = self._make_client()
-        return client.batches.retrieve(batch_id)
+        return self.client.batches.retrieve(batch_id)
 
     def poll_batch(
         self,
@@ -307,8 +304,7 @@ class OpenAIProvider:
         if not job.output_file_id:
             return BatchResults(results, usage)
 
-        client = self._make_client()
-        content = client.files.content(job.output_file_id)
+        content = self.client.files.content(job.output_file_id)
 
         per_request_input = 0
         per_request_output = 0
@@ -352,7 +348,7 @@ class OpenAIProvider:
 
         if job.error_file_id:
             try:
-                error_content = client.files.content(job.error_file_id)
+                error_content = self.client.files.content(job.error_file_id)
                 for line in error_content.text.splitlines():
                     if not line.strip():
                         continue

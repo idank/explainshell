@@ -561,6 +561,16 @@ class TestRunDispatcher(unittest.TestCase):
             run(ext, ["/fake/a.1.gz"], batch_size=10)
         self.assertIn("BatchExtractor", str(ctx.exception))
 
+    def test_batch_mode_raises_for_non_batch_llm_model(self):
+        """LLMExtractor with a non-batch model rejects --batch at dispatch."""
+        from explainshell.extraction.llm.extractor import LLMExtractor
+        from explainshell.extraction.types import ExtractorConfig
+
+        ext = LLMExtractor(ExtractorConfig(model="test-model"))
+        with self.assertRaises(TypeError) as ctx:
+            run(ext, ["/fake/a.1.gz"], batch_size=10)
+        self.assertIn("BatchExtractor", str(ctx.exception))
+
     def test_batch_mode_dispatches_to_batch_extractor(self):
         """batch_size set with a BatchExtractor calls run_batch path."""
         prepared = _make_prepared("alpha")

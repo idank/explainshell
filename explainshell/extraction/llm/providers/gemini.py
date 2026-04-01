@@ -31,6 +31,7 @@ class GeminiProvider:
         self._thinking_budget: int | None = (
             int(reasoning_effort) if reasoning_effort is not None else None
         )
+        self.client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
     def _thinking_config(self) -> types.ThinkingConfig | None:
         if self._thinking_budget is None:
@@ -38,7 +39,6 @@ class GeminiProvider:
         return types.ThinkingConfig(thinking_budget=self._thinking_budget)
 
     def call(self, user_content: str) -> tuple[str, TokenUsage]:
-        client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
         config_kwargs: dict = {
             "system_instruction": SYSTEM_PROMPT,
             "response_mime_type": "application/json",
@@ -47,7 +47,7 @@ class GeminiProvider:
         thinking = self._thinking_config()
         if thinking:
             config_kwargs["thinking_config"] = thinking
-        response = client.models.generate_content(
+        response = self.client.models.generate_content(
             model=self._gemini_model,
             contents=user_content,
             config=types.GenerateContentConfig(**config_kwargs),
@@ -67,8 +67,6 @@ class GeminiProvider:
     # -- Batch API --
 
     def submit_batch(self, entries: list[BatchEntry]) -> str:
-        client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-
         config_kwargs: dict = {
             "system_instruction": SYSTEM_PROMPT,
             "response_mime_type": "application/json",
@@ -87,7 +85,7 @@ class GeminiProvider:
                 )
             )
 
-        job = client.batches.create(
+        job = self.client.batches.create(
             model=self._gemini_model,
             src=inline_entries,
             config=types.CreateBatchJobConfig(display_name="explainshell-batch"),
@@ -95,15 +93,14 @@ class GeminiProvider:
         return job.name
 
     def make_poll_client(self) -> Client:
-        return genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+        return self.client
 
     def cancel_batch(self, client: Client, job_id: str) -> None:
         client.batches.cancel(name=job_id)
 
     def retrieve_batch(self, batch_id: str) -> BatchJob:
         """Retrieve a batch by ID (for salvage/inspection)."""
-        client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-        return client.batches.get(name=batch_id)
+        return self.client.batches.get(name=batch_id)
 
     def poll_batch(
         self,
