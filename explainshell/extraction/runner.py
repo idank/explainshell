@@ -210,7 +210,11 @@ def run_parallel(
                     on_result(entry.gz_path, entry)
                 _submit_next()
     except KeyboardInterrupt:
-        logger.info("interrupted by user")
+        n_pending = sum(1 for f in pending if f.running())
+        logger.info(
+            "interrupted by user, waiting for %d pending request(s) to finish",
+            n_pending,
+        )
         batch.interrupted = True
         extractor.cancel()
         executor.shutdown(wait=False, cancel_futures=True)
