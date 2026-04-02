@@ -107,6 +107,15 @@ _BLACKLISTED_SOURCES: dict[str, str] = {
     "ubuntu/26.04/1/ANTSpexec.1.gz": "content filter false-positive (ANTs neuroimaging tool)",
     "ubuntu/26.04/8/kea-dhcp6.8.gz": "content filter false-positive (ISC DHCP server)",
     "ubuntu/26.04/1/rsbackup-mount.1.gz": "content filter false-positive (backup mount helper)",
+    # Observed 2026-04-02 with gpt-5-mini/medium on arch/latest.
+    "arch/latest/1/uu-uname.1.gz": "content filter false-positive (coreutils-style page)",
+    "arch/latest/1/uil.1.gz": "content filter false-positive (Motif UIL compiler)",
+    "arch/latest/8/pykeymgr.8.gz": "content filter false-positive (Knot DNS key manager)",
+    "arch/latest/1/setwallpaper.1.gz": "content filter false-positive (wallpaper setter)",
+    "arch/latest/8/kea-dhcp6.8.gz": "content filter false-positive (ISC DHCP server)",
+    "arch/latest/1/setcollection.1.gz": "content filter false-positive (set collection utility)",
+    "arch/latest/8/kea-dhcp4.8.gz": "content filter false-positive (ISC DHCP server)",
+    "arch/latest/8/cups-calibrate.8.gz": "content filter false-positive (CUPS calibration tool)",
 }
 
 
