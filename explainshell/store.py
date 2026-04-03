@@ -8,6 +8,8 @@ import os
 import re
 import sqlite3
 import zlib
+from collections.abc import Iterator
+from typing import NamedTuple
 
 from explainshell import errors, util, config
 from explainshell.models import ParsedManpage, RawManpage
@@ -17,7 +19,7 @@ logger = logging.getLogger(__name__)
 _SOURCE_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]*/[^/]+/[^/]+/[^/]+\.\d\w*\.gz$")
 
 
-def validate_source_path(source):
+def validate_source_path(source: str) -> None:
     """Validate that *source* has the ``distro/release/section/name.section.gz`` format.
 
     Raises ``errors.InvalidSourcePath`` on failure.
@@ -79,10 +81,17 @@ def _decompress(data: bytes) -> str:
     return zlib.decompress(data).decode("utf-8")
 
 
+class SubcommandMappingResult(NamedTuple):
+    """Result of :meth:`Store.update_subcommand_mappings`."""
+
+    mappings_added: list[tuple[str, str]]  # (src, dst) pairs added
+    parents: dict[str, str]  # parent name -> source
+
+
 class Store:
     """read/write processed man pages from sqlite"""
 
-    def __init__(self, db_path, read_only=False):
+    def __init__(self, db_path: str, read_only: bool = False) -> None:
         logger.info("creating store, db_path = %r, read_only = %s", db_path, read_only)
         # check_same_thread=False: the default sqlite3 driver raises if a
         # connection is used from a thread other than the one that created it.
@@ -104,12 +113,12 @@ class Store:
         s._conn.executescript(_CREATE_SCHEMA)
         return s
 
-    def close(self):
+    def close(self) -> None:
         if self._conn:
             self._conn.close()
             self._conn = None
 
-    def drop(self, confirm=False):
+    def drop(self, confirm: bool = False) -> None:
         if not confirm:
             return
 
@@ -121,7 +130,9 @@ class Store:
         """)
         self._conn.commit()
 
-    def find_man_page(self, name, distro=None, release=None):
+    def find_man_page(
+        self, name: str, distro: str | None = None, release: str | None = None
+    ) -> list[ParsedManpage]:
         """find a man page by its name, everything following the last dot (.) in name,
         is taken as the section of the man page
 
@@ -256,8 +267,12 @@ class Store:
         }
 
     def _discover_manpage_suggestions(
-        self, source, existing, distro=None, release=None
-    ):
+        self,
+        source: str,
+        existing: list[tuple[str, ParsedManpage]],
+        distro: str | None = None,
+        release: str | None = None,
+    ) -> list[tuple[str, ParsedManpage]]:
         """find suggestions for a given man page
 
         source is the source path of the man page in question,
@@ -303,7 +318,7 @@ class Store:
             for row in manpage_rows
         ]
 
-    def distros(self):
+    def distros(self) -> list[tuple[str, str]]:
         """Return distinct (distro, release) pairs from manpages."""
         rows = self._conn.execute("""
             SELECT DISTINCT
@@ -330,7 +345,7 @@ class Store:
         ).fetchall()
         return [(row["distro"], row["release"]) for row in rows]
 
-    def add_mapping(self, src, dst, score):
+    def add_mapping(self, src: str, dst: str, score: int) -> None:
         self._conn.execute(
             "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)", (src, dst, score)
         )
@@ -358,7 +373,7 @@ class Store:
         )
         self._conn.commit()
 
-    def _upsert_raw_manpage(self, source, raw):
+    def _upsert_raw_manpage(self, source: str, raw: RawManpage) -> None:
         """Insert or replace a RawManpage into the manpages table."""
         self._conn.execute(
             """INSERT OR REPLACE INTO manpages(source, data, generated_at, generator,
@@ -374,7 +389,7 @@ class Store:
             ),
         )
 
-    def add_manpage(self, m, raw):
+    def add_manpage(self, m: ParsedManpage, raw: RawManpage) -> ParsedManpage:
         """add `m` into the store, if it exists first remove it and its mappings
 
         each man page may have aliases besides the name determined by its
@@ -458,11 +473,11 @@ class Store:
         self._conn.commit()
         return m
 
-    def names(self):
+    def names(self) -> Iterator[tuple[str, str]]:
         for row in self._conn.execute("SELECT source, name FROM parsed_manpages"):
             yield row["source"], row["name"]
 
-    def mappings(self):
+    def mappings(self) -> Iterator[tuple[str, str]]:
         for row in self._conn.execute("SELECT src, dst FROM mappings"):
             yield row["src"], row["dst"]
 
@@ -475,7 +490,7 @@ class Store:
         )
         self._conn.commit()
 
-    def update_subcommand_mappings(self):
+    def update_subcommand_mappings(self) -> SubcommandMappingResult:
         """Discover sub-command relationships and create mappings.
 
         For LLM-extracted pages with a subcommands list, use the declared
@@ -567,7 +582,7 @@ class Store:
                     self._set_subcommands(source, children)
                     logger.debug("setting subcommands on %r: %s", name, children)
 
-        return mappings_to_add, parents
+        return SubcommandMappingResult(mappings_to_add, parents)
 
     def list_sections(self, distro: str, release: str) -> list[str]:
         """Return distinct section directories for a distro/release.
