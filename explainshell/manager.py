@@ -674,9 +674,11 @@ def extract(
         logger.info("%s [%s] extracting...", progress, short_path)
 
     def on_result(gz_path: str, entry: ExtractionResult) -> None:
-        result_counter["n"] += 1
+        with counter_lock:
+            result_counter["n"] += 1
+            n = result_counter["n"]
         short_path = config.source_from_path(gz_path)
-        progress = f"[{result_counter['n'] + prefilter_skipped}/{extract_total}]"
+        progress = f"[{n + prefilter_skipped}/{extract_total}]"
         if entry.outcome == ExtractionOutcome.SUCCESS:
             s.add_manpage(entry.mp, entry.raw)
             logger.info(
@@ -706,6 +708,7 @@ def extract(
         manifest = BatchManifestWriter(manifest_path, model=model, batch_size=batch)
 
     fatal_error: str | None = None
+    batch_result = BatchResult()
     try:
         batch_result = run(
             extractor,
@@ -716,45 +719,45 @@ def extract(
             on_result=on_result,
             manifest=manifest,
         )
+
+        # Map symlinks to their canonical manpages (now that extraction is done).
+        # Note: has_manpage_source checks the DB, not extraction outcomes. If a
+        # canonical existed from a prior run and the current --overwrite attempt
+        # failed, the old data is still valid and the symlink mapping is correct.
+        # The extraction failure is reported separately in the summary.
+        for gz_path, symlink_source, canonical_source in symlink_files:
+            if s.has_manpage_source(canonical_source):
+                if _add_alias_mapping(s, gz_path, symlink_source, canonical_source):
+                    symlinks_mapped += 1
+            else:
+                logger.debug(
+                    "symlink %s -> %s: canonical not in DB, skipping",
+                    symlink_source,
+                    canonical_source,
+                )
+
+        # Map content-identical files (e.g. cross-compiler variants) the same way.
+        for gz_path, dup_source, canonical_source in content_dup_files:
+            if s.has_manpage_source(canonical_source):
+                if _add_alias_mapping(s, gz_path, dup_source, canonical_source):
+                    content_deduped += 1
+            else:
+                logger.debug(
+                    "content-dup %s -> %s: canonical not in DB, skipping",
+                    dup_source,
+                    canonical_source,
+                )
+
+        added = batch_result.n_succeeded
+        if added > 0 or symlinks_mapped > 0 or content_deduped > 0:
+            s.update_subcommand_mappings()
     except KeyboardInterrupt:
         logger.info("interrupted by user (Ctrl+C)")
-        batch_result = BatchResult(interrupted=True)
+        batch_result.interrupted = True
     except errors.FatalExtractionError as e:
         logger.error("FATAL: %s", e)
         batch_result = BatchResult(n_failed=1)
         fatal_error = str(e)
-
-    # Map symlinks to their canonical manpages (now that extraction is done).
-    # Note: has_manpage_source checks the DB, not extraction outcomes. If a
-    # canonical existed from a prior run and the current --overwrite attempt
-    # failed, the old data is still valid and the symlink mapping is correct.
-    # The extraction failure is reported separately in the summary.
-    for gz_path, symlink_source, canonical_source in symlink_files:
-        if s.has_manpage_source(canonical_source):
-            if _add_alias_mapping(s, gz_path, symlink_source, canonical_source):
-                symlinks_mapped += 1
-        else:
-            logger.debug(
-                "symlink %s -> %s: canonical not in DB, skipping",
-                symlink_source,
-                canonical_source,
-            )
-
-    # Map content-identical files (e.g. cross-compiler variants) the same way.
-    for gz_path, dup_source, canonical_source in content_dup_files:
-        if s.has_manpage_source(canonical_source):
-            if _add_alias_mapping(s, gz_path, dup_source, canonical_source):
-                content_deduped += 1
-        else:
-            logger.debug(
-                "content-dup %s -> %s: canonical not in DB, skipping",
-                dup_source,
-                canonical_source,
-            )
-
-    added = batch_result.n_succeeded
-    if added > 0 or symlinks_mapped > 0 or content_deduped > 0:
-        s.update_subcommand_mappings()
 
     elapsed = time.monotonic() - t0
     rc = _log_summary(
