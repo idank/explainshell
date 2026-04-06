@@ -89,16 +89,9 @@ def run_bench(args: argparse.Namespace) -> int:
         print("error: --model is required", file=sys.stderr)
         return 1
 
-    if args.batch is not None:
-        if args.batch < 1:
-            print("error: --batch must be >= 1", file=sys.stderr)
-            return 1
-        if not args.model.startswith(("gemini/", "openai/")):
-            print(
-                "error: --batch only supports gemini/ and openai/ models",
-                file=sys.stderr,
-            )
-            return 1
+    if args.batch is not None and args.batch < 1:
+        print("error: --batch must be >= 1", file=sys.stderr)
+        return 1
 
     logger.info("benchmarking %d file(s)...", len(gz_files))
 
