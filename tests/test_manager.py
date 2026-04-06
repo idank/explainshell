@@ -1088,10 +1088,10 @@ class TestDiffDbCli(unittest.TestCase):
     @patch("explainshell.manager.store.Store.create")
     @patch("explainshell.util.collect_gz_files")
     @patch("explainshell.manager.config.source_from_path", return_value="fake/a.1.gz")
-    def test_diff_db_dry_run_threads_through(
+    def test_diff_db_debug_threads_through(
         self, mock_source, mock_collect, mock_store_create, mock_make_ext, mock_run
     ):
-        """--dry-run is forwarded to _run_diff_db."""
+        """--debug is forwarded to _run_diff_db."""
         mock_collect.return_value = ["/fake/a.1.gz"]
         mock_store_create.return_value = MagicMock()
         mock_make_ext.return_value = MagicMock()
@@ -1112,14 +1112,12 @@ class TestDiffDbCli(unittest.TestCase):
                 "db",
                 "--mode",
                 "source",
-                "--dry-run",
+                "--debug",
                 "/fake/a.1.gz",
             ],
         )
 
         self.assertEqual(result.exit_code, 0)
-        # When dry_run=True, ExtractorConfig receives debug=True and
-        # output_dir is set to the run directory.
         from explainshell.extraction import ExtractorConfig
 
         call_args = mock_make_ext.call_args

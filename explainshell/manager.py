@@ -1055,7 +1055,6 @@ def diff() -> None:
     required=True,
     help="Extraction strategy: source, mandoc, llm:<model>, or hybrid:<model>.",
 )
-@click.option("--dry-run", is_flag=True, help="Enable extractor debug output.")
 @click.option(
     "--batch",
     type=int,
@@ -1074,7 +1073,6 @@ def diff_db_cmd(
     ctx: click.Context,
     mode: str,
     files: tuple[str, ...],
-    dry_run: bool,
     batch: int | None,
     debug: bool,
 ) -> None:
@@ -1107,7 +1105,7 @@ def diff_db_cmd(
     s = store.Store.create(db_path)
     t0 = time.monotonic()
     batch_result = _run_diff_db(
-        gz_files, parsed_mode, model, run_dir, dry_run or debug, s, batch_size=batch
+        gz_files, parsed_mode, model, run_dir, debug, s, batch_size=batch
     )
     elapsed = time.monotonic() - t0
     rc = _log_summary(batch_result, 0, elapsed)
