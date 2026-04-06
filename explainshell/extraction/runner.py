@@ -10,7 +10,7 @@ import concurrent.futures
 import logging
 import threading
 from collections.abc import Callable
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple
 from explainshell.errors import ExtractionError, FatalExtractionError, SkippedExtraction
 from explainshell.util import fmt_tokens
 from explainshell.extraction.llm.extractor import BatchExtractor, PreparedFile
@@ -25,6 +25,23 @@ from explainshell.extraction.types import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class _NullBatchManifestWriter:
+    """No-op BatchManifestWriter that discards all calls."""
+
+    def set_total_batches(self, n: int) -> None:
+        pass
+
+    def record_batch(
+        self,
+        batch_idx: int,
+        batch_id: str | None,
+        status: Literal["submitted", "completed", "failed"],
+        files: list[str],
+        error: str | None = None,
+    ) -> None:
+        pass
 
 
 class _InflightBatches:
@@ -607,6 +624,8 @@ def run(
             raise TypeError(
                 f"batch mode requires a BatchExtractor (got {type(extractor).__name__})"
             )
+        if manifest is None:
+            manifest = _NullBatchManifestWriter()
         return run_batch(
             extractor,
             gz_files,

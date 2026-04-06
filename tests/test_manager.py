@@ -1052,13 +1052,13 @@ class TestContentDedup(unittest.TestCase):
 class TestDiffDbCli(unittest.TestCase):
     """CliRunner tests for the ``diff db`` command surface."""
 
-    @patch("explainshell.manager.run_sequential")
+    @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
     @patch("explainshell.util.collect_gz_files")
     @patch("explainshell.manager.config.source_from_path", return_value="fake/a.1.gz")
     def test_diff_db_success(
-        self, mock_source, mock_collect, mock_store_create, mock_make_ext, mock_run_seq
+        self, mock_source, mock_collect, mock_store_create, mock_make_ext, mock_run
     ):
         """Basic diff db invocation succeeds."""
         mock_collect.return_value = ["/fake/a.1.gz"]
@@ -1069,7 +1069,7 @@ class TestDiffDbCli(unittest.TestCase):
 
         from explainshell.extraction.types import BatchResult
 
-        mock_run_seq.return_value = BatchResult()
+        mock_run.return_value = BatchResult()
 
         from explainshell.manager import cli
 
@@ -1083,13 +1083,13 @@ class TestDiffDbCli(unittest.TestCase):
         mock_store_create.assert_called_once_with("/tmp/test.db")
         mock_make_ext.assert_called_once()
 
-    @patch("explainshell.manager.run_sequential")
+    @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.store.Store.create")
     @patch("explainshell.util.collect_gz_files")
     @patch("explainshell.manager.config.source_from_path", return_value="fake/a.1.gz")
     def test_diff_db_dry_run_threads_through(
-        self, mock_source, mock_collect, mock_store_create, mock_make_ext, mock_run_seq
+        self, mock_source, mock_collect, mock_store_create, mock_make_ext, mock_run
     ):
         """--dry-run is forwarded to _run_diff_db."""
         mock_collect.return_value = ["/fake/a.1.gz"]
@@ -1098,7 +1098,7 @@ class TestDiffDbCli(unittest.TestCase):
 
         from explainshell.extraction.types import BatchResult
 
-        mock_run_seq.return_value = BatchResult()
+        mock_run.return_value = BatchResult()
 
         from explainshell.manager import cli
 
@@ -1147,12 +1147,12 @@ class TestDiffDbCli(unittest.TestCase):
 class TestDiffExtractorsCli(unittest.TestCase):
     """CliRunner tests for the ``diff extractors`` command surface."""
 
-    @patch("explainshell.manager.run_sequential")
+    @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.util.collect_gz_files")
     @patch("explainshell.manager.config.source_from_path", return_value="fake/a.1.gz")
     def test_diff_extractors_success(
-        self, mock_source, mock_collect, mock_make_ext, mock_run_seq
+        self, mock_source, mock_collect, mock_make_ext, mock_run
     ):
         """Basic diff extractors invocation succeeds."""
         mock_collect.return_value = ["/fake/a.1.gz"]
@@ -1160,7 +1160,7 @@ class TestDiffExtractorsCli(unittest.TestCase):
 
         from explainshell.extraction.types import BatchResult
 
-        mock_run_seq.return_value = BatchResult()
+        mock_run.return_value = BatchResult()
 
         from explainshell.manager import cli
 
@@ -1207,11 +1207,11 @@ class TestDiffExtractorsCli(unittest.TestCase):
 class TestDiffExtractorsFailureHandling(unittest.TestCase):
     """Tests for _run_diff_extractors under partial/total failure."""
 
-    @patch("explainshell.manager.run_sequential")
+    @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.config.source_from_path")
     def test_partial_failure_preserves_successful_stats(
-        self, mock_source, mock_make_ext, mock_run_seq
+        self, mock_source, mock_make_ext, mock_run
     ):
         """When one side fails, the successful side's stats are still counted."""
         mock_source.side_effect = lambda p: p.split("/")[-1]
@@ -1246,15 +1246,15 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
             ),
         ]
 
-        def _fake_run_seq(ext, gz_files, **kwargs):
-            files = left_files if mock_run_seq.call_count == 1 else right_files
+        def _fake_run(ext, gz_files, **kwargs):
+            files = left_files if mock_run.call_count == 1 else right_files
             on_result = kwargs.get("on_result")
             if on_result:
                 for f in files:
                     on_result(f.gz_path, f)
             return BatchResult()
 
-        mock_run_seq.side_effect = _fake_run_seq
+        mock_run.side_effect = _fake_run
 
         from explainshell.manager import _run_diff_extractors
 
@@ -1272,11 +1272,11 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
         self.assertEqual(result.n_succeeded, 1)
         self.assertEqual(result.n_failed, 1)
 
-    @patch("explainshell.manager.run_sequential")
+    @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.config.source_from_path")
     def test_failed_takes_precedence_over_skipped(
-        self, mock_source, mock_make_ext, mock_run_seq
+        self, mock_source, mock_make_ext, mock_run
     ):
         """When one side is SKIPPED and the other FAILED, outcome is FAILED."""
         mock_source.side_effect = lambda p: p.split("/")[-1]
@@ -1298,15 +1298,15 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
             ),
         ]
 
-        def _fake_run_seq(ext, gz_files, **kwargs):
-            files = left_files if mock_run_seq.call_count == 1 else right_files
+        def _fake_run(ext, gz_files, **kwargs):
+            files = left_files if mock_run.call_count == 1 else right_files
             on_result = kwargs.get("on_result")
             if on_result:
                 for f in files:
                     on_result(f.gz_path, f)
             return BatchResult()
 
-        mock_run_seq.side_effect = _fake_run_seq
+        mock_run.side_effect = _fake_run
 
         from explainshell.manager import _run_diff_extractors
 
@@ -1320,11 +1320,11 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
         self.assertEqual(result.n_failed, 1)
         self.assertEqual(result.n_skipped, 0)
 
-    @patch("explainshell.manager.run_sequential")
+    @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.config.source_from_path")
     def test_both_skipped_yields_skipped_outcome(
-        self, mock_source, mock_make_ext, mock_run_seq
+        self, mock_source, mock_make_ext, mock_run
     ):
         """When both extractors skip, outcome is SKIPPED (not FAILED)."""
         mock_source.side_effect = lambda p: p.split("/")[-1]
@@ -1346,15 +1346,15 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
             ),
         ]
 
-        def _fake_run_seq(ext, gz_files, **kwargs):
-            files = left_files if mock_run_seq.call_count == 1 else right_files
+        def _fake_run(ext, gz_files, **kwargs):
+            files = left_files if mock_run.call_count == 1 else right_files
             on_result = kwargs.get("on_result")
             if on_result:
                 for f in files:
                     on_result(f.gz_path, f)
             return BatchResult()
 
-        mock_run_seq.side_effect = _fake_run_seq
+        mock_run.side_effect = _fake_run
 
         from explainshell.manager import _run_diff_extractors
 
@@ -1372,11 +1372,11 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
 class TestDiffExtractorLabels(unittest.TestCase):
     """Labels in diff output must include model when present."""
 
-    @patch("explainshell.manager.run_sequential")
+    @patch("explainshell.manager.run")
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.manager.config.source_from_path")
     def test_llm_vs_llm_labels_include_model(
-        self, mock_source, mock_make_ext, mock_run_seq
+        self, mock_source, mock_make_ext, mock_run
     ):
         """When both sides are llm:<model>, labels must distinguish them."""
         mock_source.side_effect = lambda p: p.split("/")[-1]
@@ -1403,15 +1403,15 @@ class TestDiffExtractorLabels(unittest.TestCase):
             ),
         ]
 
-        def _fake_run_seq(ext, gz_files, **kwargs):
-            files = left_files if mock_run_seq.call_count == 1 else right_files
+        def _fake_run(ext, gz_files, **kwargs):
+            files = left_files if mock_run.call_count == 1 else right_files
             on_result = kwargs.get("on_result")
             if on_result:
                 for f in files:
                     on_result(f.gz_path, f)
             return BatchResult()
 
-        mock_run_seq.side_effect = _fake_run_seq
+        mock_run.side_effect = _fake_run
 
         from explainshell.manager import _run_diff_extractors
 

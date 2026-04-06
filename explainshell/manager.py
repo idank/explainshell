@@ -48,7 +48,7 @@ from explainshell.extraction import (
 )
 from explainshell.extraction.manifest import (
     BatchManifest,
-    BatchManifestWriter,
+    FileBatchManifestWriter,
     failed_batches,
     load_manifest,
 )
@@ -125,6 +125,7 @@ def _run_diff_extractors(
     diff_left: tuple,
     diff_right: tuple,
     run_dir: str,
+    batch_size: int | None = None,
 ) -> BatchResult:
     """Run --diff A..B mode: compare two extractors on each file."""
     left_mode, left_model = diff_left
@@ -141,10 +142,23 @@ def _run_diff_extractors(
     left_files: list[ExtractionResult] = []
     right_files: list[ExtractionResult] = []
 
+    left_bs = batch_size if left_mode == "llm" else None
+    right_bs = batch_size if right_mode == "llm" else None
+
     logger.info("running %s extractor on %d file(s)...", left_label, len(gz_files))
-    run_sequential(left_ext, gz_files, on_result=lambda _p, e: left_files.append(e))
+    run(
+        left_ext,
+        gz_files,
+        batch_size=left_bs,
+        on_result=lambda _p, e: left_files.append(e),
+    )
     logger.info("running %s extractor on %d file(s)...", right_label, len(gz_files))
-    run_sequential(right_ext, gz_files, on_result=lambda _p, e: right_files.append(e))
+    run(
+        right_ext,
+        gz_files,
+        batch_size=right_bs,
+        on_result=lambda _p, e: right_files.append(e),
+    )
 
     batch = BatchResult()
     for left_entry, right_entry in zip(left_files, right_files):
@@ -225,6 +239,7 @@ def _run_diff_db(
     run_dir: str,
     debug: bool,
     s: store.Store,
+    batch_size: int | None = None,
 ) -> BatchResult:
     """Run --diff db mode: compare fresh extraction against the DB."""
     cfg = ExtractorConfig(model=model, run_dir=run_dir, debug=debug)
@@ -265,7 +280,9 @@ def _run_diff_db(
             for line in format_diff(stored_mp, entry.mp):
                 logger.info(line)
 
-    return run_sequential(ext, gz_files, on_start=on_start, on_result=on_result)
+    return run(
+        ext, gz_files, batch_size=batch_size, on_start=on_start, on_result=on_result
+    )
 
 
 def _run_dry_run(
@@ -705,7 +722,7 @@ def extract(
     manifest = None
     if batch is not None:
         manifest_path = os.path.join(run_dir, "batch-manifest.json")
-        manifest = BatchManifestWriter(manifest_path, model=model, batch_size=batch)
+        manifest = FileBatchManifestWriter(manifest_path, model=model, batch_size=batch)
 
     fatal_error: str | None = None
     batch_result = BatchResult()
@@ -1040,6 +1057,12 @@ def diff() -> None:
 )
 @click.option("--dry-run", is_flag=True, help="Enable extractor debug output.")
 @click.option(
+    "--batch",
+    type=int,
+    default=None,
+    help="Batch size for provider batch API (gemini/, openai/, and azure/ models).",
+)
+@click.option(
     "--debug",
     "debug",
     is_flag=True,
@@ -1052,6 +1075,7 @@ def diff_db_cmd(
     mode: str,
     files: tuple[str, ...],
     dry_run: bool,
+    batch: int | None,
     debug: bool,
 ) -> None:
     """Diff fresh extraction against the database."""
@@ -1059,6 +1083,20 @@ def diff_db_cmd(
         parsed_mode, model = _parse_mode(mode)
     except ValueError as e:
         raise click.UsageError(str(e))
+
+    if batch is not None:
+        if batch < 1:
+            raise click.UsageError("--batch must be >= 1")
+        if not model:
+            raise click.UsageError(
+                "--batch requires a model (e.g. llm:gemini/<model>, llm:openai/<model>, or llm:azure/<deployment>)"
+            )
+        if not model.startswith(_BATCH_MODEL_PREFIXES):
+            raise click.UsageError(
+                "--batch only supports gemini/, openai/, and azure/ models"
+            )
+        if parsed_mode != "llm":
+            raise click.UsageError("--batch only works with llm:<model> mode")
 
     db_path = _require_db(ctx)
     gz_files = util.collect_gz_files(list(files))
@@ -1069,7 +1107,7 @@ def diff_db_cmd(
     s = store.Store.create(db_path)
     t0 = time.monotonic()
     batch_result = _run_diff_db(
-        gz_files, parsed_mode, model, run_dir, dry_run or debug, s
+        gz_files, parsed_mode, model, run_dir, dry_run or debug, s, batch_size=batch
     )
     elapsed = time.monotonic() - t0
     rc = _log_summary(batch_result, 0, elapsed)
@@ -1078,11 +1116,18 @@ def diff_db_cmd(
 
 
 @diff.command("extractors")
+@click.option(
+    "--batch",
+    type=int,
+    default=None,
+    help="Batch size for provider batch API (gemini/, openai/, and azure/ models).",
+)
 @click.argument("spec")
 @click.argument("files", nargs=-1, required=True)
 @click.pass_context
 def diff_extractors_cmd(
     ctx: click.Context,
+    batch: int | None,
     spec: str,
     files: tuple[str, ...],
 ) -> None:
@@ -1101,13 +1146,35 @@ def diff_extractors_cmd(
     except ValueError as e:
         raise click.UsageError(str(e))
 
+    if batch is not None:
+        if batch < 1:
+            raise click.UsageError("--batch must be >= 1")
+        left_mode, left_model = left
+        right_mode, right_model = right
+        has_batch_side = False
+        for mode, model in [(left_mode, left_model), (right_mode, right_model)]:
+            if (
+                mode == "llm"
+                and model is not None
+                and model.startswith(_BATCH_MODEL_PREFIXES)
+            ):
+                has_batch_side = True
+                break
+        if not has_batch_side:
+            raise click.UsageError(
+                "--batch requires at least one llm: side with a batch-capable model "
+                "(gemini/, openai/, or azure/)"
+            )
+
     gz_files = util.collect_gz_files(list(files))
     if not gz_files:
         raise click.UsageError("No .gz files found.")
 
     run_dir: str = ctx.obj["run_dir"]
     t0 = time.monotonic()
-    batch_result = _run_diff_extractors(gz_files, left, right, run_dir)
+    batch_result = _run_diff_extractors(
+        gz_files, left, right, run_dir, batch_size=batch
+    )
     elapsed = time.monotonic() - t0
     rc = _log_summary(batch_result, 0, elapsed)
     if rc != 0:

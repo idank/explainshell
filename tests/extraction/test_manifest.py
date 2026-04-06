@@ -8,7 +8,7 @@ import unittest
 from pydantic import ValidationError
 
 from explainshell.extraction.manifest import (
-    BatchManifestWriter,
+    FileBatchManifestWriter,
     BatchManifestEntry,
     BatchManifest,
     failed_batches,
@@ -29,7 +29,7 @@ def _make_manifest_data(**overrides: object) -> BatchManifest:
     return BatchManifest(**defaults)
 
 
-class TestBatchManifestWriter(unittest.TestCase):
+class TestFileBatchManifestWriter(unittest.TestCase):
     def setUp(self) -> None:
         self.tmpdir = tempfile.mkdtemp()
         self.manifest_path = os.path.join(self.tmpdir, "batch-manifest.json")
@@ -43,7 +43,7 @@ class TestBatchManifestWriter(unittest.TestCase):
         os.rmdir(self.tmpdir)
 
     def test_writes_valid_json(self) -> None:
-        m = BatchManifestWriter(
+        m = FileBatchManifestWriter(
             self.manifest_path, model="openai/gpt-5-mini", batch_size=50
         )
         m.set_total_batches(2)
@@ -67,7 +67,7 @@ class TestBatchManifestWriter(unittest.TestCase):
         self.assertEqual(data.batches[0].files, ["/path/a.gz", "/path/b.gz"])
 
     def test_records_incrementally(self) -> None:
-        m = BatchManifestWriter(
+        m = FileBatchManifestWriter(
             self.manifest_path, model="openai/gpt-5-mini", batch_size=50
         )
         m.set_total_batches(3)
@@ -91,7 +91,7 @@ class TestBatchManifestWriter(unittest.TestCase):
         self.assertEqual(len(data3.batches), 3)
 
     def test_failed_batch_recorded(self) -> None:
-        m = BatchManifestWriter(
+        m = FileBatchManifestWriter(
             self.manifest_path, model="openai/gpt-5-mini", batch_size=50
         )
         m.set_total_batches(1)
@@ -109,7 +109,7 @@ class TestBatchManifestWriter(unittest.TestCase):
         self.assertEqual(entry.error, "Batch job expired")
 
     def test_null_batch_id_for_submit_failure(self) -> None:
-        m = BatchManifestWriter(
+        m = FileBatchManifestWriter(
             self.manifest_path, model="openai/gpt-5-mini", batch_size=50
         )
         m.set_total_batches(1)
@@ -126,7 +126,7 @@ class TestBatchManifestWriter(unittest.TestCase):
 
     def test_atomic_write_no_tmp_left(self) -> None:
         """After a successful write, no .tmp file should remain."""
-        m = BatchManifestWriter(
+        m = FileBatchManifestWriter(
             self.manifest_path, model="openai/gpt-5-mini", batch_size=50
         )
         m.set_total_batches(1)
@@ -136,13 +136,13 @@ class TestBatchManifestWriter(unittest.TestCase):
         self.assertFalse(os.path.exists(self.manifest_path + ".tmp"))
 
     def test_creates_parent_directory(self) -> None:
-        """BatchManifestWriter creates the parent directory if it doesn't exist."""
+        """FileBatchManifestWriter creates the parent directory if it doesn't exist."""
         import shutil
 
         nested_dir = tempfile.mkdtemp()
-        os.rmdir(nested_dir)  # remove so BatchManifestWriter has to create it
+        os.rmdir(nested_dir)  # remove so FileBatchManifestWriter has to create it
         nested = os.path.join(nested_dir, "sub", "batch-manifest.json")
-        m = BatchManifestWriter(nested, model="openai/gpt-5-mini", batch_size=50)
+        m = FileBatchManifestWriter(nested, model="openai/gpt-5-mini", batch_size=50)
         m.set_total_batches(1)
         m.record_batch(batch_idx=1, batch_id="b1", status="completed", files=["/a.gz"])
 
@@ -151,7 +151,7 @@ class TestBatchManifestWriter(unittest.TestCase):
 
     def test_record_replaces_existing_entry(self) -> None:
         """A second record_batch with the same batch_idx replaces the first."""
-        m = BatchManifestWriter(
+        m = FileBatchManifestWriter(
             self.manifest_path, model="openai/gpt-5-mini", batch_size=50
         )
         m.set_total_batches(1)

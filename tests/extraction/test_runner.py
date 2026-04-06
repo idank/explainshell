@@ -1,16 +1,14 @@
 """Tests for explainshell.extraction.runner — batch orchestration."""
 
-import os
-import tempfile
 import threading
 import unittest
 from unittest.mock import MagicMock, patch
 
 from explainshell.errors import ExtractionError, FatalExtractionError, SkippedExtraction
 from explainshell.extraction.llm.providers import BatchResults, TokenUsage
-from explainshell.extraction.manifest import BatchManifestWriter
 from explainshell.extraction.runner import (
     WorkItem,
+    _NullBatchManifestWriter,
     group_work_items,
     run,
     run_batch_collected,
@@ -22,15 +20,6 @@ from explainshell.extraction.types import (
     ExtractionResult,
     ExtractionStats,
 )
-
-
-def _tmp_manifest(batch_size: int = 50) -> BatchManifestWriter:
-    """Create a throwaway manifest for tests."""
-    return BatchManifestWriter(
-        os.path.join(tempfile.mkdtemp(), "manifest.json"),
-        model="test",
-        batch_size=batch_size,
-    )
 
 
 def _make_prepared(basename: str, n_chunks: int = 1) -> PreparedFile:
@@ -169,7 +158,9 @@ class TestRunBatchStatsContract(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        batch, files = run_batch_collected(ext, [gz_a, gz_b], manifest=_tmp_manifest())
+        batch, files = run_batch_collected(
+            ext, [gz_a, gz_b], manifest=_NullBatchManifestWriter()
+        )
 
         self.assertEqual(batch.n_succeeded, 1)
         self.assertEqual(batch.n_failed, 1)
@@ -199,7 +190,9 @@ class TestRunBatchFailedStats(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        batch, files = run_batch_collected(ext, [gz], manifest=_tmp_manifest())
+        batch, files = run_batch_collected(
+            ext, [gz], manifest=_NullBatchManifestWriter()
+        )
 
         self.assertEqual(batch.n_failed, 1)
         entry = files[0]
@@ -217,7 +210,9 @@ class TestRunBatchFailedStats(unittest.TestCase):
         bp = _make_batch_provider(error=ExtractionError("batch exploded"))
         ext.batch_provider = bp
 
-        batch, files = run_batch_collected(ext, [gz], manifest=_tmp_manifest())
+        batch, files = run_batch_collected(
+            ext, [gz], manifest=_NullBatchManifestWriter()
+        )
 
         self.assertEqual(batch.n_failed, 1)
         entry = files[0]
@@ -242,7 +237,9 @@ class TestRunBatchFailedStats(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        batch, files = run_batch_collected(ext, [gz_a, gz_b], manifest=_tmp_manifest())
+        batch, files = run_batch_collected(
+            ext, [gz_a, gz_b], manifest=_NullBatchManifestWriter()
+        )
 
         self.assertEqual(batch.n_succeeded, 1)
         self.assertEqual(batch.n_failed, 1)
@@ -279,7 +276,7 @@ class TestRunBatchPartialResults(unittest.TestCase):
         ext.batch_provider = bp
 
         batch, files = run_batch_collected(
-            ext, [gz_a, gz_b, gz_c], manifest=_tmp_manifest()
+            ext, [gz_a, gz_b, gz_c], manifest=_NullBatchManifestWriter()
         )
 
         self.assertEqual(batch.n_succeeded, 2)
@@ -309,7 +306,7 @@ class TestRunBatchPartialResults(unittest.TestCase):
         ext.batch_provider = bp
 
         batch, files = run_batch_collected(
-            ext, [gz_big, gz_small], manifest=_tmp_manifest()
+            ext, [gz_big, gz_small], manifest=_NullBatchManifestWriter()
         )
 
         self.assertEqual(batch.n_succeeded, 1)
@@ -348,7 +345,9 @@ class TestRunBatchAllOutcomes(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        _batch, files = run_batch_collected(ext, [gz_a, gz_b], manifest=_tmp_manifest())
+        _batch, files = run_batch_collected(
+            ext, [gz_a, gz_b], manifest=_NullBatchManifestWriter()
+        )
 
         paths = {f.gz_path for f in files}
         self.assertEqual(paths, {gz_a, gz_b})
@@ -378,7 +377,9 @@ class TestRunBatchAllOutcomes(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        batch, files = run_batch_collected(ext, [gz_a, gz_b], manifest=_tmp_manifest())
+        batch, files = run_batch_collected(
+            ext, [gz_a, gz_b], manifest=_NullBatchManifestWriter()
+        )
 
         self.assertEqual(batch.n_skipped, 1)
         self.assertEqual(batch.n_succeeded, 1)
@@ -413,7 +414,9 @@ class TestRunBatchAllOutcomes(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        batch, files = run_batch_collected(ext, [gz_a, gz_b], manifest=_tmp_manifest())
+        batch, files = run_batch_collected(
+            ext, [gz_a, gz_b], manifest=_NullBatchManifestWriter()
+        )
 
         self.assertEqual(batch.n_failed, 1)
         self.assertEqual(batch.n_succeeded, 1)
@@ -449,7 +452,9 @@ class TestRunBatchCallbacks(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        _batch, files = run_batch_collected(ext, [gz_a, gz_b], manifest=_tmp_manifest())
+        _batch, files = run_batch_collected(
+            ext, [gz_a, gz_b], manifest=_NullBatchManifestWriter()
+        )
 
         self.assertEqual(len(files), 2)
         paths = {f.gz_path for f in files}
@@ -468,7 +473,9 @@ class TestRunBatchGenericExceptions(unittest.TestCase):
         bp = _make_batch_provider(error=RuntimeError("network timeout"))
         ext.batch_provider = bp
 
-        batch, files = run_batch_collected(ext, [gz], manifest=_tmp_manifest())
+        batch, files = run_batch_collected(
+            ext, [gz], manifest=_NullBatchManifestWriter()
+        )
 
         self.assertEqual(batch.n_failed, 1)
         entry = files[0]
@@ -488,7 +495,9 @@ class TestRunBatchGenericExceptions(unittest.TestCase):
         bp.make_poll_client.side_effect = RuntimeError("auth failed")
         ext.batch_provider = bp
 
-        batch, files = run_batch_collected(ext, [gz_a, gz_b], manifest=_tmp_manifest())
+        batch, files = run_batch_collected(
+            ext, [gz_a, gz_b], manifest=_NullBatchManifestWriter()
+        )
 
         self.assertEqual(batch.n_failed, 2)
         for entry in files:
@@ -526,7 +535,7 @@ class TestRunBatchGenericExceptions(unittest.TestCase):
 
         # batch_size=1 forces each file into its own batch
         batch, files = run_batch_collected(
-            ext, [gz_a, gz_b], batch_size=1, manifest=_tmp_manifest(1)
+            ext, [gz_a, gz_b], batch_size=1, manifest=_NullBatchManifestWriter()
         )
 
         self.assertEqual(batch.n_succeeded, 1)
@@ -582,7 +591,9 @@ class TestRunDispatcher(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        batch, files = run_collected(ext, [gz], batch_size=50, manifest=_tmp_manifest())
+        batch, files = run_collected(
+            ext, [gz], batch_size=50, manifest=_NullBatchManifestWriter()
+        )
 
         self.assertEqual(batch.n_succeeded, 1)
         self.assertEqual(files[0].outcome, ExtractionOutcome.SUCCESS)
@@ -791,7 +802,7 @@ class TestRunDispatcher(unittest.TestCase):
         ext.batch_provider = bp
 
         batch, files = run_collected(
-            ext, [gz], batch_size=50, jobs=4, manifest=_tmp_manifest()
+            ext, [gz], batch_size=50, jobs=4, manifest=_NullBatchManifestWriter()
         )
 
         # batch_provider was used (batch mode), not thread pool
@@ -826,7 +837,11 @@ class TestParallelBatchMode(unittest.TestCase):
         ext.batch_provider = bp
 
         batch, files = run_batch_collected(
-            ext, [gz_a, gz_b, gz_c], batch_size=1, jobs=2, manifest=_tmp_manifest(1)
+            ext,
+            [gz_a, gz_b, gz_c],
+            batch_size=1,
+            jobs=2,
+            manifest=_NullBatchManifestWriter(),
         )
 
         self.assertEqual(batch.n_succeeded, 3)
@@ -870,7 +885,7 @@ class TestParallelBatchMode(unittest.TestCase):
 
         # batch_size=1 → 2 batches, jobs=2 → both in parallel.
         batch, files = run_batch_collected(
-            ext, [gz_a, gz_b], batch_size=1, jobs=2, manifest=_tmp_manifest(1)
+            ext, [gz_a, gz_b], batch_size=1, jobs=2, manifest=_NullBatchManifestWriter()
         )
 
         self.assertEqual(batch.n_succeeded, 1)
@@ -912,7 +927,7 @@ class TestParallelBatchMode(unittest.TestCase):
             on_result=lambda _p, _e: callback_threads.append(
                 threading.current_thread()
             ),
-            manifest=_tmp_manifest(1),
+            manifest=_NullBatchManifestWriter(),
         )
 
         main_thread = threading.main_thread()
@@ -952,7 +967,7 @@ class TestParallelBatchMode(unittest.TestCase):
         ext.batch_provider = bp
 
         batch, files = run_batch_collected(
-            ext, [gz_a, gz_b], batch_size=1, jobs=2, manifest=_tmp_manifest(1)
+            ext, [gz_a, gz_b], batch_size=1, jobs=2, manifest=_NullBatchManifestWriter()
         )
 
         self.assertEqual(batch.n_succeeded, 1)
@@ -979,7 +994,7 @@ class TestParallelBatchMode(unittest.TestCase):
         ext.batch_provider = bp
 
         batch, files = run_batch_collected(
-            ext, [gz_a, gz_b], jobs=1, manifest=_tmp_manifest()
+            ext, [gz_a, gz_b], jobs=1, manifest=_NullBatchManifestWriter()
         )
 
         self.assertEqual(batch.n_succeeded, 2)
@@ -1009,7 +1024,7 @@ class TestParallelBatchMode(unittest.TestCase):
 
         # batch_size=1 → 2 batches. With jobs=2, both submitted.
         batch, files = run_collected(
-            ext, [gz_a, gz_b], batch_size=1, jobs=2, manifest=_tmp_manifest(1)
+            ext, [gz_a, gz_b], batch_size=1, jobs=2, manifest=_NullBatchManifestWriter()
         )
 
         self.assertEqual(batch.n_succeeded, 2)

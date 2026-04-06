@@ -45,7 +45,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from explainshell.extraction import ExtractorConfig, ExtractionOutcome, make_extractor
-from explainshell.extraction.manifest import BatchManifestWriter
+from explainshell.extraction.manifest import FileBatchManifestWriter
 from explainshell.extraction.types import ExtractionResult
 from explainshell.extraction.runner import run
 from explainshell.util import collect_gz_files, git_metadata as _git_metadata
@@ -134,7 +134,7 @@ def run_bench(args: argparse.Namespace) -> int:
     manifest = None
     if args.batch is not None:
         manifest_path = os.path.join(run_dir, "batch-manifest.json")
-        manifest = BatchManifestWriter(
+        manifest = FileBatchManifestWriter(
             manifest_path, model=args.model, batch_size=args.batch
         )
 

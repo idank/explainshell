@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import os
 import threading
-from typing import Literal
+from typing import Literal, Protocol
 
 from pydantic import BaseModel
 
@@ -34,7 +34,22 @@ class BatchManifest(BaseModel):
     batches: list[BatchManifestEntry]
 
 
-class BatchManifestWriter:
+class BatchManifestWriter(Protocol):
+    """Protocol for batch manifest writers used by the runner."""
+
+    def set_total_batches(self, n: int) -> None: ...
+
+    def record_batch(
+        self,
+        batch_idx: int,
+        batch_id: str | None,
+        status: Literal["submitted", "completed", "failed"],
+        files: list[str],
+        error: str | None = None,
+    ) -> None: ...
+
+
+class FileBatchManifestWriter:
     """Thread-safe manifest writer for batch extraction runs.
 
     Records batch outcomes incrementally and flushes to disk after each update.
