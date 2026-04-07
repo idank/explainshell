@@ -22,9 +22,11 @@ import csv
 import gzip
 import logging
 import os
+import re
 import subprocess
 import sys
 from collections import defaultdict
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -224,7 +226,130 @@ def cmd_extract(args):
     os.makedirs(output_dir, exist_ok=True)
     extract_contents(data_dir, content_to_manpages, output_dir)
 
+    # Resolve .so redirects — manned.org stores roff-level .so directives as
+    # regular file content rather than filesystem symlinks.  Replace them with
+    # symlinks so the extraction pipeline can map aliases correctly.
+    logger.info("=== Resolving .so redirects ===")
+    so_stats = resolve_so_redirects(Path(output_dir))
+    logger.info(
+        ".so redirects: %d found, %d resolved, %d unresolvable",
+        so_stats["found"],
+        so_stats["resolved"],
+        so_stats["unresolvable"],
+    )
+
     logger.info("=== Done! Man pages written to %s ===", output_dir)
+
+
+# ---------------------------------------------------------------------------
+# .so redirect resolution
+# ---------------------------------------------------------------------------
+
+# Matches ".so man1/foo.1" or ".so foo.1" (with optional trailing whitespace).
+_SO_RE = re.compile(r"^\.so\s+(?P<target>\S+)\s*$")
+
+
+def _parse_so_redirect(content: str) -> str | None:
+    """If *content* is a pure .so redirect, return the target path; else None."""
+    lines = [line for line in content.splitlines() if line.strip()]
+    if len(lines) != 1:
+        return None
+    m = _SO_RE.match(lines[0])
+    return m.group("target") if m else None
+
+
+def _resolve_so_target(redirect_path: Path, so_target: str, root: Path) -> Path | None:
+    """Resolve a .so target string to an actual .gz file under *root*.
+
+    Handles two formats:
+      - "man<N>/<name>.<N>"  → root/<N>/<name>.<N>.gz
+      - "<name>.<N>"         → root/<same-section>/<name>.<N>.gz
+    """
+    m = re.match(r"^man(\d+)/(.+)$", so_target)
+    if m:
+        section = m.group(1)
+        basename = m.group(2)
+        candidate = root / section / f"{basename}.gz"
+        if candidate.exists():
+            return candidate
+        # Upstream packaging bugs may embed junk path components
+        # (e.g. "man1/./build/man/podman-play.1").  Fall back to the
+        # filename only.
+        filename = Path(basename).name
+        if filename != basename:
+            candidate = root / section / f"{filename}.gz"
+            if candidate.exists():
+                return candidate
+        return None
+
+    # Bare filename — same section as the source file.
+    candidate = redirect_path.parent / f"{so_target}.gz"
+    if candidate.exists():
+        return candidate
+    return None
+
+
+def resolve_so_redirects(root: Path) -> dict[str, int]:
+    """Replace .so redirect files under *root* with symlinks to their targets.
+
+    Returns a dict with counts: found, resolved, unresolvable.
+    """
+    # Collect non-symlink .gz files.
+    gz_files: list[Path] = []
+    for dirpath, _dirnames, filenames in os.walk(root):
+        for fname in filenames:
+            if fname.endswith(".gz"):
+                p = Path(dirpath) / fname
+                if not p.is_symlink():
+                    gz_files.append(p)
+
+    # Pass 1: identify redirects and resolve targets.
+    redirects: dict[Path, tuple[str, Path]] = {}
+    unresolvable = 0
+    for gz_path in gz_files:
+        try:
+            with gzip.open(gz_path, "rt", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+        except Exception:
+            continue
+        so_target = _parse_so_redirect(content)
+        if so_target is None:
+            continue
+        resolved = _resolve_so_target(gz_path, so_target, root)
+        if resolved is None:
+            unresolvable += 1
+            logger.warning(
+                "deleting unresolvable .so redirect: %s -> %s", gz_path, so_target
+            )
+            gz_path.unlink()
+            continue
+        redirects[gz_path] = (so_target, resolved)
+
+    # Pass 2: follow chains (A→B→C) to the terminal real file.
+    resolved_count = 0
+    for gz_path, (so_target, target) in redirects.items():
+        final = target
+        depth = 0
+        while final in redirects and depth < 10:
+            _, final = redirects[final]
+            depth += 1
+        if final in redirects:
+            unresolvable += 1
+            logger.warning(
+                "deleting circular .so redirect: %s -> %s", gz_path, so_target
+            )
+            gz_path.unlink()
+            continue
+        rel_target = os.path.relpath(final, gz_path.parent)
+        gz_path.unlink()
+        os.symlink(rel_target, gz_path)
+        resolved_count += 1
+
+    return {
+        "found": len(redirects) + unresolvable,
+        "resolved": resolved_count,
+        "unresolvable": unresolvable,
+    }
 
 
 def load_metadata(data_dir):
