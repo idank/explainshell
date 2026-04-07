@@ -116,6 +116,8 @@ _BLACKLISTED_SOURCES: dict[str, str] = {
     "arch/latest/1/setcollection.1.gz": "content filter false-positive (set collection utility)",
     "arch/latest/8/kea-dhcp4.8.gz": "content filter false-positive (ISC DHCP server)",
     "arch/latest/8/cups-calibrate.8.gz": "content filter false-positive (CUPS calibration tool)",
+    # Observed 2026-04-06 with gpt-5/medium on arch/latest.
+    "arch/latest/8/tc-police.8.gz": "content filter false-positive (tc traffic policing action)",
 }
 
 
