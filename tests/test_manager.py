@@ -2299,5 +2299,24 @@ class TestExtractionReport(unittest.TestCase):
         self.assertEqual(data["summary"]["failed"], 1)
 
 
+class TestCollectGzFilesValidation(unittest.TestCase):
+    """collect_gz_files must reject non-.gz file paths."""
+
+    def test_rejects_non_gz_file(self) -> None:
+        with self.assertRaises(ValueError) as cm:
+            from explainshell.util import collect_gz_files
+
+            collect_gz_files(["somefile.txt"])
+        self.assertIn("somefile.txt", str(cm.exception))
+        self.assertIn("@somefile.txt", str(cm.exception))
+
+    def test_accepts_gz_file(self) -> None:
+        from explainshell.util import collect_gz_files
+
+        with tempfile.NamedTemporaryFile(suffix=".gz") as f:
+            result = collect_gz_files([f.name])
+            self.assertEqual(result, [os.path.abspath(f.name)])
+
+
 if __name__ == "__main__":
     unittest.main()

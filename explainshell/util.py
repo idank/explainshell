@@ -122,6 +122,10 @@ def collect_gz_files(paths: list[str]) -> list[str]:
             result.extend(
                 sorted(glob.glob(os.path.join(path, "**", "*.gz"), recursive=True))
             )
+        elif not path.endswith(".gz"):
+            raise ValueError(
+                f"expected a .gz file but got '{path}' — did you mean '@{path}'?"
+            )
         else:
             result.append(path)
     return [os.path.abspath(p) for p in result]

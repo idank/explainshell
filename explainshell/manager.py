@@ -593,7 +593,10 @@ def extract(
         if parsed_mode != "llm":
             raise click.UsageError("--batch only works with llm:<model> mode")
 
-    gz_files = util.collect_gz_files(list(files))
+    try:
+        gz_files = util.collect_gz_files(list(files))
+    except ValueError as e:
+        raise click.UsageError(str(e))
     if not gz_files:
         raise click.UsageError("No .gz files found.")
 
@@ -1097,7 +1100,10 @@ def diff_db_cmd(
             raise click.UsageError("--batch only works with llm:<model> mode")
 
     db_path = _require_db(ctx)
-    gz_files = util.collect_gz_files(list(files))
+    try:
+        gz_files = util.collect_gz_files(list(files))
+    except ValueError as e:
+        raise click.UsageError(str(e))
     if not gz_files:
         raise click.UsageError("No .gz files found.")
 
@@ -1164,7 +1170,10 @@ def diff_extractors_cmd(
                 "(gemini/, openai/, or azure/)"
             )
 
-    gz_files = util.collect_gz_files(list(files))
+    try:
+        gz_files = util.collect_gz_files(list(files))
+    except ValueError as e:
+        raise click.UsageError(str(e))
     if not gz_files:
         raise click.UsageError("No .gz files found.")
 
