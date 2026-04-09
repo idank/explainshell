@@ -6,7 +6,7 @@ import bashlex.ast
 from explainshell import help_constants, matcher, errors
 from tests import helpers
 
-s = helpers.MockStore()
+s = helpers.create_test_store()
 MR = matcher.MatchResult
 
 

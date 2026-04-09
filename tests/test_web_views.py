@@ -1,8 +1,12 @@
+import datetime
 import unittest
 
+import explainshell.web as web_mod
+from explainshell.models import Option, ParsedManpage, RawManpage
+from explainshell.store import Store
 from explainshell.web import create_app
 from explainshell.web.views import explain_program, manpage_url, render_markdown
-from tests import helpers
+from tests.helpers import create_test_store
 
 
 class TestExplainRouter(unittest.TestCase):
@@ -10,7 +14,7 @@ class TestExplainRouter(unittest.TestCase):
 
     def setUp(self):
         self.app = create_app()
-        self.app.store = helpers.MockStore()
+        self.app.store = create_test_store()
         self.app.config["TESTING"] = True
         self.client = self.app.test_client()
 
@@ -83,6 +87,47 @@ class TestExplainRouter(unittest.TestCase):
         self.assertIn(b"/explain/1/bar", rv.data)
         self.assertNotIn(b"/explain/ubuntu/25.10/1/bar", rv.data)
 
+    @unittest.expectedFailure
+    def test_default_distro_prefers_ubuntu(self):
+        """When multiple distros exist, the default should prefer ubuntu so
+        that commands available only in ubuntu are found without an explicit
+        distro in the URL."""
+        store = Store.create(":memory:")
+        raw = RawManpage(
+            source_text=".TH BAR 1",
+            generated_at=datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc),
+            generator="test",
+        )
+        # Only ubuntu has "bar"; arch has a different command.
+        store.add_manpage(
+            ParsedManpage(
+                source="ubuntu/25.10/1/bar.1.gz",
+                name="bar",
+                synopsis="bar synopsis",
+                options=[Option(text="-a desc", short=["-a"], long=[])],
+                aliases=[("bar", 10)],
+            ),
+            raw,
+        )
+        store.add_manpage(
+            ParsedManpage(
+                source="arch/latest/1/other.1.gz",
+                name="other",
+                aliases=[("other", 10)],
+            ),
+            raw,
+        )
+        self.app.store = store
+        web_mod._distros_cache = None
+
+        try:
+            rv = self.client.get("/explain?cmd=bar+-a")
+            self.assertEqual(rv.status_code, 200)
+            self.assertNotIn(b"missing man page", rv.data)
+            self.assertIn(b"bar", rv.data)
+        finally:
+            web_mod._distros_cache = None
+
     def test_distro_only_no_cmd_redirects(self):
         rv = self.client.get("/explain/ubuntu/25.10")
         self.assertEqual(rv.status_code, 302)
@@ -104,7 +149,7 @@ class TestManpageRoute(unittest.TestCase):
 
     def setUp(self):
         self.app = create_app()
-        self.app.store = helpers.MockStore()
+        self.app.store = create_test_store()
         self.app.config["TESTING"] = True
         self.client = self.app.test_client()
 
@@ -223,7 +268,7 @@ class TestManpageUrl(unittest.TestCase):
 
 class TestExplainProgram(unittest.TestCase):
     def setUp(self):
-        self.store = helpers.MockStore()
+        self.store = create_test_store()
 
     def test_explain_program_returns_str_options(self):
         mp, suggestions, *_ = explain_program("bar", self.store)
@@ -240,7 +285,8 @@ class TestExplainProgram(unittest.TestCase):
 
     def test_explain_program_no_synopsis(self):
         mp, suggestions, *_ = explain_program("nosynopsis", self.store)
-        self.assertIsNone(mp["synopsis"])
+        # The Store replaces NULL synopsis with a placeholder string.
+        self.assertEqual(mp["synopsis"], "no synopsis found")
 
     def test_explain_program_with_suggestions(self):
         mp, suggestions, *_ = explain_program("dup", self.store)
