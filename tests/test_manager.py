@@ -2299,6 +2299,134 @@ class TestExtractionReport(unittest.TestCase):
         self.assertEqual(data["summary"]["failed"], 1)
 
 
+class TestExtractLimit(unittest.TestCase):
+    """Verify --limit caps the number of files sent to extraction."""
+
+    @patch("explainshell.extraction.common.gz_sha256", side_effect=lambda p: p)
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch("explainshell.util.collect_gz_files")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_limit_applied_after_prefilter(
+        self,
+        mock_source,
+        mock_collect,
+        mock_store_create,
+        mock_make_ext,
+        mock_run,
+        _mock_sha,
+    ) -> None:
+        # 5 files total; page0 and page1 are already stored.
+        gz_files = [f"/fake/distro/release/1/page{i}.1.gz" for i in range(5)]
+        stored = {"distro/release/1/page0.1.gz", "distro/release/1/page1.1.gz"}
+        mock_collect.return_value = gz_files
+        mock_source.side_effect = lambda p: "/".join(p.split("/")[-4:])
+
+        mock_store = MagicMock()
+        mock_store_create.return_value = mock_store
+        mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
+        mock_store.has_manpage_source.side_effect = lambda s: s in stored
+        mock_store.known_sha256s.return_value = {}
+
+        mock_make_ext.return_value = MagicMock()
+        mock_run.return_value = BatchResult()
+
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        # 3 files survive prefilter (page2-4); --limit 2 caps to page2, page3.
+        result = runner.invoke(
+            cli,
+            [
+                "--db",
+                "/tmp/test.db",
+                "extract",
+                "--mode",
+                "llm:openai/test-model",
+                "--batch",
+                "2",
+                "--limit",
+                "2",
+                "/fake/file.gz",
+            ],
+        )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        (_, call_files), _ = mock_run.call_args
+        self.assertEqual(call_files, gz_files[2:4])
+
+    @patch("explainshell.extraction.common.gz_sha256", side_effect=lambda p: p)
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.manager.store.Store.create")
+    @patch("explainshell.util.collect_gz_files")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_no_limit_passes_all_files(
+        self,
+        mock_source,
+        mock_collect,
+        mock_store_create,
+        mock_make_ext,
+        mock_run,
+        _mock_sha,
+    ) -> None:
+        gz_files = [f"/fake/distro/release/1/page{i}.1.gz" for i in range(5)]
+        mock_collect.return_value = gz_files
+        mock_source.side_effect = lambda p: "/".join(p.split("/")[-4:])
+
+        mock_store = MagicMock()
+        mock_store_create.return_value = mock_store
+        mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
+        mock_store.has_manpage_source.return_value = False
+        mock_store.known_sha256s.return_value = {}
+
+        mock_make_ext.return_value = MagicMock()
+        mock_run.return_value = BatchResult()
+
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--db",
+                "/tmp/test.db",
+                "extract",
+                "--mode",
+                "llm:openai/test-model",
+                "--batch",
+                "2",
+                "/fake/file.gz",
+            ],
+        )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        (_, call_files), _ = mock_run.call_args
+        self.assertEqual(len(call_files), 5)
+
+    def test_limit_zero_rejected(self) -> None:
+        from explainshell.manager import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--db",
+                "/tmp/test.db",
+                "extract",
+                "--mode",
+                "source",
+                "--limit",
+                "0",
+                "/fake/file.gz",
+            ],
+        )
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("--limit must be >= 1", result.output)
+
+
 class TestCollectGzFilesValidation(unittest.TestCase):
     """collect_gz_files must reject non-.gz file paths."""
 
