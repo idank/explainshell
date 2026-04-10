@@ -138,6 +138,31 @@ test('distro-prefixed URL loads and preserves prefix in links', async ({
     expect(count).toBeGreaterThan(0);
 });
 
+test('distro switch navigates to correct URL', async ({ page }) => {
+    // Start on arch/latest with tar
+    await page.goto('/explain/arch/latest?cmd=tar+xzvf+archive.tar.gz');
+    await page.waitForLoadState('networkidle');
+
+    // Open the command's dropdown
+    const caret = page.locator('#command .dropdown .caret').first();
+    await caret.click();
+
+    // Click the ubuntu 25.10 distro link
+    const ubuntuLink = page.locator(
+        '#command a[data-distro="ubuntu"][data-release="25.10"]',
+    );
+    await expect(ubuntuLink).toBeVisible();
+
+    // Click and wait for navigation
+    await Promise.all([page.waitForNavigation(), ubuntuLink.click()]);
+
+    // Should navigate to /explain/ubuntu/25.10?cmd=... (not /explain/ubuntu/25.10/arch/latest?cmd=...)
+    const url = page.url();
+    expect(url).toContain('/explain/ubuntu/25.10');
+    expect(url).not.toContain('/arch/latest');
+    expect(url).toContain('cmd=');
+});
+
 test('distro dropdown shows active distro as unclickable highlighted item', async ({
     page,
 }) => {

@@ -1190,7 +1190,7 @@ function currentExplainPrefix() {
     const parts = rest.split('/');
     // Check if first segment is a known distro from the dropdown
     const knownDistros = Array.from(
-        document.querySelectorAll('a[data-distro]'),
+        document.querySelectorAll('[data-distro]'),
         (el) => el.dataset.distro,
     );
     if (parts.length >= 2 && knownDistros.indexOf(parts[0]) !== -1) {

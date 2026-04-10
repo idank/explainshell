@@ -3,7 +3,7 @@
                       <li class="dropdown-header">distro</li>
                       {% for distro, release in available_distros %}
                       {% if distro == active_distro and release == active_release %}
-                      <li class="active-distro">{{ distro }} {{ release }}</li>
+                      <li class="active-distro" data-distro="{{ distro }}" data-release="{{ release }}">{{ distro }} {{ release }}</li>
                       {% else %}
                       <li><a tabindex="-1" href="#" data-distro="{{ distro }}" data-release="{{ release }}">{{ distro }} {{ release }}</a></li>
                       {% endif %}

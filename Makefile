@@ -3,11 +3,12 @@ tests:
 
 E2E_MANPAGES_25 := tests/e2e/manpages/ubuntu/25.10/1
 E2E_MANPAGES_24 := tests/e2e/manpages/ubuntu/24.04/1
+E2E_MANPAGES_ARCH := tests/e2e/manpages/arch/latest/1
 E2E_DB := tests/e2e/e2e.db
 
 e2e-db:
 	rm -f $(E2E_DB)
-	python -m explainshell.manager --db $(E2E_DB) extract --mode source $(E2E_MANPAGES_25)/tar.1.gz $(E2E_MANPAGES_25)/echo.1.gz $(E2E_MANPAGES_25)/grep.1.gz $(E2E_MANPAGES_24)/tar.1.gz $(E2E_MANPAGES_24)/echo.1.gz $(E2E_MANPAGES_24)/grep.1.gz
+	python -m explainshell.manager --db $(E2E_DB) extract --mode source $(E2E_MANPAGES_25)/tar.1.gz $(E2E_MANPAGES_25)/echo.1.gz $(E2E_MANPAGES_25)/grep.1.gz $(E2E_MANPAGES_24)/tar.1.gz $(E2E_MANPAGES_24)/echo.1.gz $(E2E_MANPAGES_24)/grep.1.gz $(E2E_MANPAGES_ARCH)/tar.1.gz
 	python -m explainshell.manager --db $(E2E_DB) extract --mode llm:openai/gpt-5.2 $(E2E_MANPAGES_25)/git-rebase.1.gz
 
 e2e:
