@@ -66,6 +66,8 @@ from explainshell.extraction.runner import (
 
 logger = logging.getLogger("explainshell.manager")
 
+_LOGS_ROOT = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+
 # ANSI color helpers.
 _RED = "\033[31m"
 _GREEN = "\033[32m"
@@ -475,7 +477,7 @@ def _setup_logging(log_level_str: str) -> str:
         datefmt=datefmt,
     )
 
-    logs_root = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+    logs_root = _LOGS_ROOT
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = os.path.join(logs_root, timestamp)
     os.makedirs(run_dir, exist_ok=True)
