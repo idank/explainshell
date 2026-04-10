@@ -3,6 +3,7 @@ data objects to save processed man pages to sqlite
 """
 
 import datetime
+import json
 import logging
 import os
 import re
@@ -482,8 +483,6 @@ class Store:
             yield row["src"], row["dst"]
 
     def _set_subcommands(self, source: str, subcommands: list[str]) -> None:
-        import json
-
         self._conn.execute(
             "UPDATE parsed_manpages SET subcommands = ? WHERE source = ?",
             (json.dumps(subcommands), source),
@@ -499,8 +498,6 @@ class Store:
         contains a hyphen (e.g. ``git-commit``) and the prefix (``git``)
         exists as another manpage, create a mapping.
         """
-        import json
-
         manpages: dict[str, str] = {}  # name -> source
         potential: list[tuple[list[str], str]] = []  # (name parts, source)
         llm_parents: dict[

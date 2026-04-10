@@ -19,6 +19,7 @@ from explainshell.extraction.llm.extractor import (
     _BLACKLISTED_SOURCES,
 )
 from explainshell.extraction.llm.providers import TokenUsage
+from explainshell.extraction.llm.response import normalize_subcommands
 
 
 # ---------------------------------------------------------------------------
@@ -442,20 +443,14 @@ class TestSubcommandNormalization(unittest.TestCase):
     """Tests for normalize_subcommands()."""
 
     def test_strips_parent_prefix(self):
-        from explainshell.extraction.llm.response import normalize_subcommands
-
         result = normalize_subcommands("git", ["git-add", "git-commit", "push"])
         self.assertEqual(result, ["add", "commit", "push"])
 
     def test_no_prefix_unchanged(self):
-        from explainshell.extraction.llm.response import normalize_subcommands
-
         result = normalize_subcommands("apt", ["install", "update", "remove"])
         self.assertEqual(result, ["install", "update", "remove"])
 
     def test_deduplicates(self):
-        from explainshell.extraction.llm.response import normalize_subcommands
-
         result = normalize_subcommands("git", ["git-add", "add", "git-add"])
         self.assertEqual(result, ["add"])
 

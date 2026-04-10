@@ -3,23 +3,42 @@
 import contextlib
 import datetime
 import json
+import logging
 import os
+import shutil
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
-from explainshell.manager import cli
+from explainshell.errors import ExtractionError, SkippedExtraction
+from explainshell.extraction import ExtractorConfig
+from explainshell.extraction.llm.providers import BatchResults, TokenUsage
 from explainshell.extraction.manifest import BatchManifest
+from explainshell.extraction.report import (
+    DbCounts,
+    ExtractConfig,
+    ExtractSummary,
+    ExtractionReport,
+    GitInfo,
+)
 from explainshell.extraction.types import (
     BatchResult,
     ExtractionResult,
     ExtractionStats,
     ExtractionOutcome,
 )
+from explainshell.manager import (
+    cli,
+    _run_diff_db,
+    _run_diff_extractors,
+    _run_salvage,
+    _write_report,
+)
 from explainshell.models import Option, ParsedManpage, RawManpage
 from explainshell.store import Store
+from explainshell.util import collect_gz_files, name_section
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +91,6 @@ def _make_manpage_from_source(source: str) -> ParsedManpage:
     """Create a ParsedManpage from a source path like 'distro/release/1/name.1.gz'."""
     basename = os.path.basename(source)  # e.g. "name.1.gz"
     name_with_section = basename[:-3]  # strip ".gz" -> "name.1"
-    from explainshell.util import name_section
 
     name, section = name_section(name_with_section)
     parts = source.split("/")
@@ -128,8 +146,6 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
                 on_result=None,
                 manifest=None,
             ):
-                from explainshell.extraction.types import BatchResult
-
                 batch = BatchResult()
                 for gz_path in files:
                     if on_start:
@@ -211,8 +227,6 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
                 on_result=None,
                 manifest=None,
             ):
-                from explainshell.extraction.types import BatchResult
-
                 batch = BatchResult()
                 for i, gz_path in enumerate(files):
                     if on_start:
@@ -315,7 +329,6 @@ class TestLlmManagerDryRun(unittest.TestCase):
     ):
         """Skipped files are not failures — return code should be 0."""
         mock_collect.return_value = ["/fake/echo.1.gz"]
-        from explainshell.errors import SkippedExtraction
 
         mock_ext = MagicMock()
         mock_ext.extract.side_effect = SkippedExtraction("no OPTIONS section")
@@ -342,7 +355,6 @@ class TestLlmManagerDryRun(unittest.TestCase):
     ):
         """Failed extraction should cause non-zero return code."""
         mock_collect.return_value = ["/fake/echo.1.gz"]
-        from explainshell.errors import ExtractionError
 
         mock_ext = MagicMock()
         mock_ext.extract.side_effect = ExtractionError("parse error")
@@ -391,8 +403,6 @@ class TestLlmManagerDryRun(unittest.TestCase):
                 on_result=None,
                 manifest=None,
             ):
-                from explainshell.extraction.types import BatchResult
-
                 batch = BatchResult()
                 for gz_path in files:
                     if on_start:
@@ -1056,8 +1066,6 @@ class TestDiffDbCli(unittest.TestCase):
         mock_store.counts.return_value = {"manpages": 0, "mappings": 0}
         mock_make_ext.return_value = MagicMock()
 
-        from explainshell.extraction.types import BatchResult
-
         mock_run.return_value = BatchResult()
 
         runner = CliRunner()
@@ -1083,8 +1091,6 @@ class TestDiffDbCli(unittest.TestCase):
         mock_store_create.return_value = MagicMock()
         mock_make_ext.return_value = MagicMock()
 
-        from explainshell.extraction.types import BatchResult
-
         mock_run.return_value = BatchResult()
 
         runner = CliRunner()
@@ -1103,7 +1109,6 @@ class TestDiffDbCli(unittest.TestCase):
         )
 
         self.assertEqual(result.exit_code, 0)
-        from explainshell.extraction import ExtractorConfig
 
         call_args = mock_make_ext.call_args
         cfg = call_args[0][1] if len(call_args[0]) > 1 else call_args[1].get("cfg")
@@ -1139,8 +1144,6 @@ class TestDiffExtractorsCli(unittest.TestCase):
         """Basic diff extractors invocation succeeds."""
         mock_collect.return_value = ["/fake/a.1.gz"]
         mock_make_ext.return_value = MagicMock()
-
-        from explainshell.extraction.types import BatchResult
 
         mock_run.return_value = BatchResult()
 
@@ -1193,7 +1196,6 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
     ):
         """When one side fails, the successful side's stats are still counted."""
         mock_source.side_effect = lambda p: p.split("/")[-1]
-        from explainshell.extraction.types import BatchResult
 
         left_files = [
             ExtractionResult(
@@ -1234,8 +1236,6 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
 
         mock_run.side_effect = _fake_run
 
-        from explainshell.manager import _run_diff_extractors
-
         result = _run_diff_extractors(
             ["/fake/a.1.gz", "/fake/b.1.gz"],
             ("source", None),
@@ -1258,7 +1258,6 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
     ):
         """When one side is SKIPPED and the other FAILED, outcome is FAILED."""
         mock_source.side_effect = lambda p: p.split("/")[-1]
-        from explainshell.extraction.types import BatchResult
 
         left_files = [
             ExtractionResult(
@@ -1286,8 +1285,6 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
 
         mock_run.side_effect = _fake_run
 
-        from explainshell.manager import _run_diff_extractors
-
         result = _run_diff_extractors(
             ["/fake/a.1.gz"],
             ("source", None),
@@ -1306,7 +1303,6 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
     ):
         """When both extractors skip, outcome is SKIPPED (not FAILED)."""
         mock_source.side_effect = lambda p: p.split("/")[-1]
-        from explainshell.extraction.types import BatchResult
 
         left_files = [
             ExtractionResult(
@@ -1334,8 +1330,6 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
 
         mock_run.side_effect = _fake_run
 
-        from explainshell.manager import _run_diff_extractors
-
         result = _run_diff_extractors(
             ["/fake/a.1.gz"],
             ("source", None),
@@ -1358,7 +1352,6 @@ class TestDiffExtractorLabels(unittest.TestCase):
     ):
         """When both sides are llm:<model>, labels must distinguish them."""
         mock_source.side_effect = lambda p: p.split("/")[-1]
-        from explainshell.extraction.types import BatchResult
 
         mp = MagicMock()
         mp.options = []
@@ -1391,10 +1384,6 @@ class TestDiffExtractorLabels(unittest.TestCase):
 
         mock_run.side_effect = _fake_run
 
-        from explainshell.manager import _run_diff_extractors
-
-        import logging
-
         with self.assertLogs("explainshell.manager", level=logging.INFO) as cm:
             _run_diff_extractors(
                 ["/fake/a.1.gz"],
@@ -1423,8 +1412,6 @@ class TestDiffDbSourceMatch(unittest.TestCase):
         self, gz_path: str, short_path: str, store: Store
     ) -> list[str]:
         """Run _run_diff_db and return captured log lines."""
-        from explainshell.manager import _run_diff_db
-        from explainshell.extraction.types import BatchResult
 
         fake_mp = _make_manpage_from_source(short_path)
         fake_raw = _make_raw()
@@ -1454,8 +1441,6 @@ class TestDiffDbSourceMatch(unittest.TestCase):
                 return BatchResult()
 
             mock_run.side_effect = _fake_run
-
-            import logging
 
             with self.assertLogs("explainshell.manager", level=logging.INFO) as cm:
                 _run_diff_db([gz_path], "source", None, None, False, store)
@@ -1925,7 +1910,6 @@ class TestRunSalvage(unittest.TestCase):
 
     def test_no_failed_batches(self) -> None:
         """When all batches completed, _run_salvage returns empty result."""
-        from explainshell.manager import _run_salvage
 
         manifest_data = self._make_manifest_data(
             [
@@ -1947,8 +1931,6 @@ class TestRunSalvage(unittest.TestCase):
 
     def test_salvage_failed_batch(self) -> None:
         """Failed batch files are re-prepared, finalized, and counted as succeeded."""
-        from explainshell.extraction.llm.providers import BatchResults, TokenUsage
-        from explainshell.manager import _run_salvage
 
         manifest_data = self._make_manifest_data(
             [
@@ -1992,7 +1974,6 @@ class TestRunSalvage(unittest.TestCase):
 
     def test_null_batch_id_skipped(self) -> None:
         """Batches with null batch_id (submit failed) are skipped, files counted as failed."""
-        from explainshell.manager import _run_salvage
 
         manifest_data = self._make_manifest_data(
             [
@@ -2015,8 +1996,6 @@ class TestRunSalvage(unittest.TestCase):
 
     def test_submitted_status_polls_before_collecting(self) -> None:
         """Batches in 'submitted' status are polled to terminal state, not just retrieved."""
-        from explainshell.extraction.llm.providers import BatchResults, TokenUsage
-        from explainshell.manager import _run_salvage
 
         manifest_data = self._make_manifest_data(
             [
@@ -2147,8 +2126,6 @@ class TestExtractionReport(unittest.TestCase):
         self._run_dir = tempfile.mkdtemp()
 
     def tearDown(self) -> None:
-        import shutil
-
         shutil.rmtree(self._run_dir, ignore_errors=True)
 
     def _read_report(self) -> dict:
@@ -2160,14 +2137,6 @@ class TestExtractionReport(unittest.TestCase):
             return json.load(f)
 
     def _make_report(self, **overrides):
-        from explainshell.extraction.report import (
-            DbCounts,
-            ExtractConfig,
-            ExtractSummary,
-            ExtractionReport,
-            GitInfo,
-        )
-
         defaults = dict(
             timestamp="2026-03-30T12:00:00+00:00",
             git=GitInfo(commit="abc123", commit_short="abc123", dirty=False),
@@ -2182,7 +2151,6 @@ class TestExtractionReport(unittest.TestCase):
 
     def test_report_schema(self) -> None:
         """report.json has the expected top-level fields and values."""
-        from explainshell.manager import _write_report
 
         report = self._make_report()
         _write_report(self._run_dir, report)
@@ -2201,7 +2169,6 @@ class TestExtractionReport(unittest.TestCase):
 
     def test_none_fields_excluded(self) -> None:
         """Fields set to None are omitted from the JSON (exclude_none)."""
-        from explainshell.manager import _write_report
 
         report = self._make_report(batch_manifest=None)
         _write_report(self._run_dir, report)
@@ -2211,7 +2178,6 @@ class TestExtractionReport(unittest.TestCase):
 
     def test_batch_manifest_embedded(self) -> None:
         """batch_manifest dict is included when provided."""
-        from explainshell.manager import _write_report
 
         manifest_dict = {
             "version": 1,
@@ -2229,7 +2195,6 @@ class TestExtractionReport(unittest.TestCase):
 
     def test_standalone_manifest_cleaned_up(self) -> None:
         """_write_report removes batch-manifest.json if it exists."""
-        from explainshell.manager import _write_report
 
         standalone = os.path.join(self._run_dir, "batch-manifest.json")
         with open(standalone, "w") as f:
@@ -2242,8 +2207,6 @@ class TestExtractionReport(unittest.TestCase):
 
     def test_interrupted_report(self) -> None:
         """Interrupted runs record interrupted=true in the summary."""
-        from explainshell.extraction.report import ExtractSummary
-        from explainshell.manager import _write_report
 
         report = self._make_report(
             summary=ExtractSummary(succeeded=0, skipped=0, failed=0, interrupted=True),
@@ -2255,8 +2218,6 @@ class TestExtractionReport(unittest.TestCase):
 
     def test_fatal_error_report(self) -> None:
         """Fatal errors are recorded in summary.fatal_error."""
-        from explainshell.extraction.report import ExtractSummary
-        from explainshell.manager import _write_report
 
         report = self._make_report(
             summary=ExtractSummary(
@@ -2397,15 +2358,11 @@ class TestCollectGzFilesValidation(unittest.TestCase):
 
     def test_rejects_non_gz_file(self) -> None:
         with self.assertRaises(ValueError) as cm:
-            from explainshell.util import collect_gz_files
-
             collect_gz_files(["somefile.txt"])
         self.assertIn("somefile.txt", str(cm.exception))
         self.assertIn("@somefile.txt", str(cm.exception))
 
     def test_accepts_gz_file(self) -> None:
-        from explainshell.util import collect_gz_files
-
         with tempfile.NamedTemporaryFile(suffix=".gz") as f:
             result = collect_gz_files([f.name])
             self.assertEqual(result, [os.path.abspath(f.name)])

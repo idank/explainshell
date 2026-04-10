@@ -1,4 +1,5 @@
 import datetime
+import logging
 
 import pytest
 
@@ -597,8 +598,6 @@ class TestReimportWarnsAboutLostMappings:
         assert store.has_mapping("eagle", mp.source)
 
         # Re-import the same manpage (simulates --overwrite).
-        import logging
-
         with caplog.at_level(logging.WARNING):
             mp2 = _make_manpage("bio-eagle", "1", aliases=[("bio-eagle", 10)])
             store.add_manpage(mp2, raw)
@@ -615,8 +614,6 @@ class TestReimportWarnsAboutLostMappings:
         mp = _make_manpage("bio-eagle", "1", aliases=[("bio-eagle", 10)])
         raw = _make_raw()
         store.add_manpage(mp, raw)
-
-        import logging
 
         with caplog.at_level(logging.WARNING):
             mp2 = _make_manpage("bio-eagle", "1", aliases=[("bio-eagle", 10)])
