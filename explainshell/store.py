@@ -499,7 +499,7 @@ class Store:
         exists as another manpage, create a mapping.
         """
         manpages: dict[str, str] = {}  # name -> source
-        potential: list[tuple[list[str], str]] = []  # (name parts, source)
+        hyphenated: dict[str, str] = {}  # full hyphenated name -> source
         llm_parents: dict[
             str, tuple[str, list[str]]
         ] = {}  # name -> (source, subcommands) — only non-empty
@@ -519,7 +519,7 @@ class Store:
                 if subcommands:
                     llm_parents[name] = (source, subcommands)
             if "-" in name:
-                potential.append((name.split("-"), source))
+                hyphenated[name] = source
             else:
                 manpages[name] = source
 
@@ -532,12 +532,7 @@ class Store:
         for parent_name, (parent_source, subcommands) in llm_parents.items():
             for sub in subcommands:
                 child_name = f"{parent_name}-{sub}"
-                # Find the child source by scanning potential entries.
-                child_source = None
-                for parts, src in potential:
-                    if "-".join(parts) == child_name:
-                        child_source = src
-                        break
+                child_source = hyphenated.get(child_name)
                 if child_source is None:
                     continue
                 joined = f"{parent_name} {sub}"
@@ -548,13 +543,13 @@ class Store:
                 parents[parent_name] = parent_source
 
         # Heuristic path: scan hyphenated children for non-LLM pages.
-        for parts, source in potential:
+        for name, source in hyphenated.items():
             if source in llm_children:
                 continue
-            joined = " ".join(parts)
+            joined = name.replace("-", " ")
             if joined in existing_mappings:
                 continue
-            parent_name = parts[0]
+            parent_name = name.split("-", 1)[0]
             if parent_name in manpages:
                 # Skip if parent is LLM-extracted (already handled by LLM path).
                 if parent_name in llm_extracted:
@@ -570,10 +565,11 @@ class Store:
         for name, source in parents.items():
             if name not in llm_parents:
                 # Collect child names for heuristic parents.
+                prefix = name + "-"
                 children = [
-                    "-".join(parts[1:])
-                    for parts, src in potential
-                    if parts[0] == name and src not in llm_children
+                    child_name[len(prefix) :]
+                    for child_name, src in hyphenated.items()
+                    if child_name.startswith(prefix) and src not in llm_children
                 ]
                 if children:
                     self._set_subcommands(source, children)
