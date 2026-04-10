@@ -76,9 +76,18 @@ def render_markdown(text: str) -> str:
 def inject_distros():
     url_distro, url_release = _get_current_url_distro_release()
     active_distro, active_release = _get_distro_release(url_distro, url_release)
+    prefix = _explain_prefix(url_distro, url_release)
+    # Suffix to append after /explain/<distro>/<release> when switching
+    # distros.  Preserves the path tail (e.g. /1/tar) and query string
+    # (e.g. ?cmd=tar+xzvf) from the current request.
+    suffix = request.path[len(prefix) :]
+    qs = request.query_string.decode()
+    if qs:
+        suffix += "?" + qs
     return {
         "available_distros": get_cached_distros(),
-        "explain_prefix": _explain_prefix(url_distro, url_release),
+        "explain_prefix": prefix,
+        "distro_switch_suffix": suffix,
         "active_distro": active_distro,
         "active_release": active_release,
     }

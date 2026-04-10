@@ -149,7 +149,7 @@ test('distro switch navigates to correct URL', async ({ page }) => {
 
     // Click the ubuntu 25.10 distro link
     const ubuntuLink = page.locator(
-        '#command a[data-distro="ubuntu"][data-release="25.10"]',
+        '#command a[href*="/explain/ubuntu/25.10"]',
     );
     await expect(ubuntuLink).toBeVisible();
 

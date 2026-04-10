@@ -1183,47 +1183,9 @@ function setTheme(theme) {
     localStorage.setItem(themeCookieName, theme);
 }
 
-function currentExplainPrefix() {
-    const path = window.location.pathname;
-    if (!path.startsWith('/explain/')) return '/explain';
-    const rest = path.substring('/explain/'.length);
-    const parts = rest.split('/');
-    // Check if first segment is a known distro from the dropdown
-    const knownDistros = Array.from(
-        document.querySelectorAll('[data-distro]'),
-        (el) => el.dataset.distro,
-    );
-    if (parts.length >= 2 && knownDistros.indexOf(parts[0]) !== -1) {
-        return `/explain/${parts[0]}/${parts[1]}`;
-    }
-    return '/explain';
-}
-
-function setDistro(distro, release) {
-    log('setting distro to', distro, release);
-    localStorage.setItem('distro', distro);
-    localStorage.setItem('release', release);
-
-    const newPrefix = `/explain/${distro}/${release}`;
-    const path = window.location.pathname;
-    const query = window.location.search;
-    const oldPrefix = currentExplainPrefix();
-
-    if (path.startsWith(oldPrefix)) {
-        const rest = path.substring(oldPrefix.length);
-        window.location.href = `${newPrefix}${rest}${query}`;
-    } else {
-        window.location.href = `${newPrefix}${query}`;
-    }
-}
-
 // Theme-related stuff
 $(document).ready(() => {
     $('#settingsContainer .dropdown-menu a').click(function () {
         setTheme(this.dataset.themeName);
-    });
-
-    $(document).on('click', 'a[data-distro]', function () {
-        setDistro(this.dataset.distro, this.dataset.release);
     });
 });
