@@ -39,7 +39,7 @@ def _get_distro_release(url_distro=None, url_release=None):
         return url_distro, url_release
     pairs = list(get_cached_distros())
     if pairs:
-        pairs.sort(key=lambda dr: (dr[0] != "ubuntu", dr[1]), reverse=True)
+        pairs.sort(key=lambda dr: (dr[0] == "ubuntu", dr[1]), reverse=True)
         return pairs[0]
     return None, None
 
@@ -235,8 +235,19 @@ def _handle_explain_cmd(url_distro, url_release):
             "errors/error.html", title="parsing error!", message="no newlines please"
         )
 
-    distro, release = _get_distro_release(url_distro, url_release)
     prefix = _explain_prefix(url_distro, url_release)
+    if url_distro:
+        # Explicit URL distro — strict scoping, no fallback.
+        distro, release = url_distro, url_release
+        distro_preference = None
+    else:
+        # No explicit distro — let the preference list drive lookups.
+        distro, release = None, None
+        distro_preference = sorted(
+            get_cached_distros(),
+            key=lambda dr: (dr[0] == "ubuntu", dr[1]),
+            reverse=True,
+        )
     try:
         matches, helptext, debug_info = explain_cmd(
             command,
@@ -244,6 +255,7 @@ def _handle_explain_cmd(url_distro, url_release):
             distro=distro,
             release=release,
             explain_prefix=prefix,
+            distro_preference=distro_preference,
         )
         helptext = [(render_markdown(text), id_) for text, id_ in helptext]
 
@@ -298,27 +310,40 @@ def _handle_explain_program(section, program, url_distro, url_release):
         url_release,
     )
 
-    distro, release = _get_distro_release(url_distro, url_release)
     if section is not None:
         program = f"{program}.{section}"
 
-    try:
-        mp, suggestions, raw_mp, debug_info = explain_program(
-            program, current_app.store, distro=distro, release=release
+    if url_distro:
+        distros_to_try = [(url_distro, url_release)]
+    else:
+        distros_to_try = sorted(
+            get_cached_distros(),
+            key=lambda dr: (dr[0] == "ubuntu", dr[1]),
+            reverse=True,
         )
-        cmd_distros = current_app.store.distros_for_name(raw_mp.name)
-        return render_template(
-            "options.html",
-            mp=mp,
-            suggestions=suggestions,
-            raw_mp=raw_mp,
-            debug_info=debug_info,
-            available_distros=cmd_distros,
-        )
-    except errors.ProgramDoesNotExist as e:
-        return render_template(
-            "errors/missingmanpage.html", title="missing man page", e=e
-        )
+
+    last_error = None
+    for d, r in distros_to_try:
+        try:
+            mp, suggestions, raw_mp, debug_info = explain_program(
+                program, current_app.store, distro=d, release=r
+            )
+            cmd_distros = current_app.store.distros_for_name(raw_mp.name)
+            return render_template(
+                "options.html",
+                mp=mp,
+                suggestions=suggestions,
+                raw_mp=raw_mp,
+                debug_info=debug_info,
+                available_distros=cmd_distros,
+            )
+        except errors.ProgramDoesNotExist as e:
+            last_error = e
+            continue
+
+    return render_template(
+        "errors/missingmanpage.html", title="missing man page", e=last_error
+    )
 
 
 def manpage_url(source):
@@ -394,8 +419,21 @@ def _make_match(start, end, match, cmd_class, help_class):
     }
 
 
-def explain_cmd(command, store, distro=None, release=None, explain_prefix="/explain"):
-    matcher_ = matcher.Matcher(command, store, distro=distro, release=release)
+def explain_cmd(
+    command,
+    store,
+    distro=None,
+    release=None,
+    explain_prefix="/explain",
+    distro_preference=None,
+):
+    matcher_ = matcher.Matcher(
+        command,
+        store,
+        distro=distro,
+        release=release,
+        distro_preference=distro_preference,
+    )
     groups = matcher_.match()
     expansions = matcher_.expansions
 

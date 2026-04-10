@@ -66,11 +66,20 @@ class Matcher(bashlex.ast.nodevisitor):
     each token.
     """
 
-    def __init__(self, s, store, distro=None, release=None):
+    def __init__(
+        self,
+        s,
+        store,
+        distro: str | None = None,
+        release: str | None = None,
+        distro_preference: list[tuple[str, str]] | None = None,
+    ):
         self.s = s
         self.store = store
         self.distro = distro
         self.release = release
+        self._distro_preference = distro_preference or []
+        self._anchored = False
         self._prev_option = self._current_option = None
         self.groups = [MatchGroup("shell")]
 
@@ -126,15 +135,42 @@ class Matcher(bashlex.ast.nodevisitor):
 
     def find_man_pages(self, prog):
         logger.info("looking up %r in store", prog)
-        man_pages = self.store.find_man_page(
-            prog,
-            distro=self.distro,
-            release=self.release,
-        )
-        logger.info(
-            "found %r in store, got: %r, using %r", prog, man_pages, man_pages[0]
-        )
-        return man_pages
+
+        if self._anchored or not self._distro_preference:
+            # Already anchored to a distro, or no preference list to fall
+            # back through — strict lookup only.
+            man_pages = self.store.find_man_page(
+                prog,
+                distro=self.distro,
+                release=self.release,
+            )
+            logger.info(
+                "found %r in store, got: %r, using %r",
+                prog,
+                man_pages,
+                man_pages[0],
+            )
+            return man_pages
+
+        # Try each distro in preference order; the first hit anchors all
+        # subsequent lookups to that distro.
+        for d, r in self._distro_preference:
+            try:
+                man_pages = self.store.find_man_page(prog, distro=d, release=r)
+            except errors.ProgramDoesNotExist:
+                continue
+            self.distro = d
+            self.release = r
+            self._anchored = True
+            logger.info(
+                "found %r in store, got: %r, using %r",
+                prog,
+                man_pages,
+                man_pages[0],
+            )
+            return man_pages
+
+        raise errors.ProgramDoesNotExist(prog)
 
     def unknown(self, token, start, end):
         logger.debug("nothing to do with token %r", token)

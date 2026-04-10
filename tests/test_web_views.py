@@ -87,7 +87,6 @@ class TestExplainRouter(unittest.TestCase):
         self.assertIn(b"/explain/1/bar", rv.data)
         self.assertNotIn(b"/explain/ubuntu/25.10/1/bar", rv.data)
 
-    @unittest.expectedFailure
     def test_default_distro_prefers_ubuntu(self):
         """When multiple distros exist, the default should prefer ubuntu so
         that commands available only in ubuntu are found without an explicit
@@ -142,6 +141,147 @@ class TestExplainRouter(unittest.TestCase):
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b"/explain/2/dup", rv.data)
         self.assertNotIn(b"/explain/ubuntu/25.10/2/dup", rv.data)
+
+
+class TestDistroFallback(unittest.TestCase):
+    """Tests for cross-distro fallback when a manpage isn't in the preferred distro."""
+
+    _RAW = RawManpage(
+        source_text=".TH TEST 1",
+        generated_at=datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc),
+        generator="test",
+    )
+
+    def _make_app(self, store):
+        app = create_app()
+        app.store = store
+        app.config["TESTING"] = True
+        return app
+
+    def _store_with_ubuntu_and_arch(self) -> Store:
+        """Store where 'uonly' is ubuntu-only, 'aonly' is arch-only,
+        and 'both' exists in both distros."""
+        store = Store.create(":memory:")
+        store.add_manpage(
+            ParsedManpage(
+                source="ubuntu/25.10/1/uonly.1.gz",
+                name="uonly",
+                synopsis="ubuntu only",
+                options=[Option(text="-u desc", short=["-u"], long=[])],
+                aliases=[("uonly", 10)],
+            ),
+            self._RAW,
+        )
+        store.add_manpage(
+            ParsedManpage(
+                source="arch/latest/1/aonly.1.gz",
+                name="aonly",
+                synopsis="arch only",
+                options=[Option(text="-a desc", short=["-a"], long=[])],
+                aliases=[("aonly", 10)],
+            ),
+            self._RAW,
+        )
+        store.add_manpage(
+            ParsedManpage(
+                source="ubuntu/25.10/1/both.1.gz",
+                name="both",
+                synopsis="both ubuntu",
+                options=[Option(text="-b desc", short=["-b"], long=[])],
+                aliases=[("both", 10)],
+            ),
+            self._RAW,
+        )
+        store.add_manpage(
+            ParsedManpage(
+                source="arch/latest/1/both.1.gz",
+                name="both",
+                synopsis="both arch",
+                options=[Option(text="-b desc", short=["-b"], long=[])],
+                aliases=[("both", 10)],
+            ),
+            self._RAW,
+        )
+        return store
+
+    def test_default_distro_falls_back(self):
+        """Default distro is arch (sorts last with reverse), but 'uonly'
+        only exists in ubuntu — fallback should find it."""
+        app = self._make_app(self._store_with_ubuntu_and_arch())
+        web_mod._distros_cache = None
+        try:
+            with app.test_client() as c:
+                # No distro in URL → default picks ubuntu, fallback active.
+                rv = c.get("/explain?cmd=aonly+-a")
+                self.assertEqual(rv.status_code, 200)
+                self.assertNotIn(b"missing man page", rv.data)
+                self.assertIn(b"aonly", rv.data)
+        finally:
+            web_mod._distros_cache = None
+
+    def test_url_distro_no_fallback(self):
+        """Explicit URL distro should NOT fall back — missing is missing."""
+        app = self._make_app(self._store_with_ubuntu_and_arch())
+        web_mod._distros_cache = None
+        try:
+            with app.test_client() as c:
+                rv = c.get("/explain/arch/latest?cmd=uonly+-u")
+                self.assertEqual(rv.status_code, 200)
+                self.assertIn(b"missing man page", rv.data)
+        finally:
+            web_mod._distros_cache = None
+
+    def test_all_distros_miss_still_raises(self):
+        """A command that exists nowhere should still show missing."""
+        app = self._make_app(self._store_with_ubuntu_and_arch())
+        web_mod._distros_cache = None
+        try:
+            with app.test_client() as c:
+                rv = c.get("/explain?cmd=nosuchcmd")
+                self.assertEqual(rv.status_code, 200)
+                self.assertIn(b"missing man page", rv.data)
+        finally:
+            web_mod._distros_cache = None
+
+    def test_pipeline_anchors_to_fallback_distro(self):
+        """Default picks ubuntu. In 'aonly | uonly', the first command
+        falls back to arch, anchoring there — so 'uonly' (ubuntu-only)
+        should be unknown."""
+        app = self._make_app(self._store_with_ubuntu_and_arch())
+        web_mod._distros_cache = None
+        try:
+            with app.test_client() as c:
+                rv = c.get("/explain?cmd=aonly+-a+|+uonly+-u")
+                self.assertEqual(rv.status_code, 200)
+                self.assertIn(b"aonly", rv.data)
+                self.assertIn(b"unknown", rv.data)
+        finally:
+            web_mod._distros_cache = None
+
+    def test_program_default_falls_back(self):
+        """The /explain/<program> route should fall back with default distro."""
+        app = self._make_app(self._store_with_ubuntu_and_arch())
+        web_mod._distros_cache = None
+        try:
+            with app.test_client() as c:
+                rv = c.get("/explain/aonly")
+                self.assertEqual(rv.status_code, 200)
+                self.assertNotIn(b"missing man page", rv.data)
+                self.assertIn(b"aonly", rv.data)
+        finally:
+            web_mod._distros_cache = None
+
+    def test_program_url_distro_no_fallback(self):
+        """The /explain/<distro>/<release>/<program> route should NOT fall back."""
+        app = self._make_app(self._store_with_ubuntu_and_arch())
+        web_mod._distros_cache = None
+        try:
+            with app.test_client() as c:
+                rv = c.get("/explain/arch/latest/uonly")
+                self.assertEqual(rv.status_code, 200)
+                self.assertIn(b"missing man page", rv.data)
+        finally:
+            web_mod._distros_cache = None
 
 
 class TestManpageRoute(unittest.TestCase):
