@@ -1214,12 +1214,18 @@ def show() -> None:
 @show.command("manpage")
 @click.argument("name")
 @click.option("--raw", is_flag=True, help="Also print raw manpage text.")
+@click.option("--distro", default=None, help="Filter by distro (e.g. ubuntu).")
+@click.option("--release", default=None, help="Filter by release (e.g. 26.04).")
 @click.pass_context
-def show_manpage(ctx: click.Context, name: str, raw: bool) -> None:
+def show_manpage(
+    ctx: click.Context, name: str, raw: bool, distro: str | None, release: str | None
+) -> None:
     """Look up a command and display its extracted options."""
+    if (distro is None) != (release is None):
+        raise click.UsageError("--distro and --release must be used together.")
     s = store.Store(_require_db(ctx, must_exist=True), read_only=True)
     try:
-        results = s.find_man_page(name)
+        results = s.find_man_page(name, distro=distro, release=release)
     except errors.ProgramDoesNotExist:
         click.echo(f"Not found: {name}", err=True)
         sys.exit(1)

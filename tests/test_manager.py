@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
+from explainshell.manager import cli
 from explainshell.extraction.manifest import BatchManifest
 from explainshell.extraction.types import (
     BatchResult,
@@ -153,8 +154,6 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
 
             mock_run.side_effect = _fake_run
 
-            from explainshell.manager import cli
-
             runner = CliRunner()
             result = runner.invoke(
                 cli,
@@ -247,8 +246,6 @@ class TestBatchPerBatchDbWrites(unittest.TestCase):
 
             mock_run.side_effect = _fake_run
 
-            from explainshell.manager import cli
-
             runner = CliRunner()
             result = runner.invoke(
                 cli,
@@ -297,8 +294,6 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_ext.extract.return_value = fake_result
         mock_make_ext.return_value = mock_ext
 
-        from explainshell.manager import cli
-
         runner = CliRunner()
         result = runner.invoke(
             cli,
@@ -326,8 +321,6 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_ext.extract.side_effect = SkippedExtraction("no OPTIONS section")
         mock_make_ext.return_value = mock_ext
 
-        from explainshell.manager import cli
-
         runner = CliRunner()
         result = runner.invoke(
             cli,
@@ -354,8 +347,6 @@ class TestLlmManagerDryRun(unittest.TestCase):
         mock_ext = MagicMock()
         mock_ext.extract.side_effect = ExtractionError("parse error")
         mock_make_ext.return_value = mock_ext
-
-        from explainshell.manager import cli
 
         runner = CliRunner()
         result = runner.invoke(
@@ -419,8 +410,6 @@ class TestLlmManagerDryRun(unittest.TestCase):
                 return batch
 
             mock_run.side_effect = _fake_run
-
-            from explainshell.manager import cli
 
             runner = CliRunner()
             result = runner.invoke(
@@ -509,8 +498,6 @@ class TestSymlinkMapping(unittest.TestCase):
                     side_effect=lambda p: canonical if p == symlink else p,
                 ),
             ):
-                from explainshell.manager import cli
-
                 runner = CliRunner()
                 result = runner.invoke(
                     cli,
@@ -561,8 +548,6 @@ class TestSymlinkMapping(unittest.TestCase):
                     return_value="/fake/distro/release/1/bio-eagle.1.gz",
                 ),
             ):
-                from explainshell.manager import cli
-
                 runner = CliRunner()
                 result = runner.invoke(
                     cli,
@@ -619,8 +604,6 @@ class TestSymlinkMapping(unittest.TestCase):
                     side_effect=lambda p: canonical if p == symlink else p,
                 ),
             ):
-                from explainshell.manager import cli
-
                 runner = CliRunner()
                 result = runner.invoke(
                     cli,
@@ -678,8 +661,6 @@ class TestSymlinkMapping(unittest.TestCase):
                     side_effect=lambda p: canonical if p == symlink else p,
                 ),
             ):
-                from explainshell.manager import cli
-
                 runner = CliRunner()
                 result = runner.invoke(
                     cli,
@@ -761,8 +742,6 @@ class TestContentDedup(unittest.TestCase):
 
             mock_run.side_effect = _fake_run
 
-            from explainshell.manager import cli
-
             runner = CliRunner()
             result = runner.invoke(
                 cli,
@@ -825,8 +804,6 @@ class TestContentDedup(unittest.TestCase):
 
             mock_make_ext.return_value = MagicMock()
             mock_run.return_value = BatchResult()
-
-            from explainshell.manager import cli
 
             runner = CliRunner()
             result = runner.invoke(
@@ -908,8 +885,6 @@ class TestContentDedup(unittest.TestCase):
 
             mock_run.side_effect = _fake_run
 
-            from explainshell.manager import cli
-
             runner = CliRunner()
             result = runner.invoke(
                 cli,
@@ -975,8 +950,6 @@ class TestContentDedup(unittest.TestCase):
 
             mock_run.side_effect = _fake_run
 
-            from explainshell.manager import cli
-
             runner = CliRunner()
             result = runner.invoke(
                 cli,
@@ -1041,8 +1014,6 @@ class TestContentDedup(unittest.TestCase):
 
             mock_run.side_effect = _fake_run
 
-            from explainshell.manager import cli
-
             runner = CliRunner()
             result = runner.invoke(
                 cli,
@@ -1089,8 +1060,6 @@ class TestDiffDbCli(unittest.TestCase):
 
         mock_run.return_value = BatchResult()
 
-        from explainshell.manager import cli
-
         runner = CliRunner()
         result = runner.invoke(
             cli,
@@ -1118,8 +1087,6 @@ class TestDiffDbCli(unittest.TestCase):
 
         mock_run.return_value = BatchResult()
 
-        from explainshell.manager import cli
-
         runner = CliRunner()
         result = runner.invoke(
             cli,
@@ -1146,7 +1113,6 @@ class TestDiffDbCli(unittest.TestCase):
 
     def test_diff_db_invalid_mode(self):
         """Invalid mode is rejected."""
-        from explainshell.manager import cli
 
         runner = CliRunner()
         result = runner.invoke(cli, ["diff", "db", "--mode", "bogus", "/fake/a.1.gz"])
@@ -1178,8 +1144,6 @@ class TestDiffExtractorsCli(unittest.TestCase):
 
         mock_run.return_value = BatchResult()
 
-        from explainshell.manager import cli
-
         runner = CliRunner()
         result = runner.invoke(
             cli,
@@ -1192,7 +1156,6 @@ class TestDiffExtractorsCli(unittest.TestCase):
 
     def test_diff_extractors_invalid_spec_no_dots(self):
         """Spec without '..' is rejected."""
-        from explainshell.manager import cli
 
         runner = CliRunner()
         result = runner.invoke(
@@ -1204,7 +1167,6 @@ class TestDiffExtractorsCli(unittest.TestCase):
 
     def test_diff_extractors_invalid_mode_in_spec(self):
         """Invalid mode inside A..B spec is rejected."""
-        from explainshell.manager import cli
 
         runner = CliRunner()
         result = runner.invoke(
@@ -1579,7 +1541,6 @@ class TestDbPathValidation(unittest.TestCase):
 
     def test_no_db_set(self):
         """Commands that need a DB fail cleanly when --db is not set."""
-        from explainshell.manager import cli
 
         runner = CliRunner()
         result = runner.invoke(cli, ["show", "stats"])
@@ -1589,7 +1550,6 @@ class TestDbPathValidation(unittest.TestCase):
 
     def test_nonexistent_db(self):
         """Read-only commands fail cleanly when DB file doesn't exist."""
-        from explainshell.manager import cli
 
         runner = CliRunner()
         result = runner.invoke(
@@ -1601,7 +1561,6 @@ class TestDbPathValidation(unittest.TestCase):
 
     def test_dry_run_without_db(self):
         """extract --dry-run should not require a DB path."""
-        from explainshell.manager import cli
 
         runner = CliRunner()
         with (
@@ -1657,8 +1616,6 @@ class TestShowCli(unittest.TestCase):
         os.rmdir(self.tmp)
 
     def test_show_stats(self):
-        from explainshell.manager import cli
-
         runner = CliRunner()
         result = runner.invoke(cli, ["--db", self.db_path, "show", "stats"])
 
@@ -1667,8 +1624,6 @@ class TestShowCli(unittest.TestCase):
         self.assertIn("ubuntu/25.10", result.output)
 
     def test_show_distros(self):
-        from explainshell.manager import cli
-
         runner = CliRunner()
         result = runner.invoke(cli, ["--db", self.db_path, "show", "distros"])
 
@@ -1676,8 +1631,6 @@ class TestShowCli(unittest.TestCase):
         self.assertIn("ubuntu/25.10", result.output)
 
     def test_show_manpage(self):
-        from explainshell.manager import cli
-
         runner = CliRunner()
         result = runner.invoke(cli, ["--db", self.db_path, "show", "manpage", "tar"])
 
@@ -1686,9 +1639,53 @@ class TestShowCli(unittest.TestCase):
         self.assertIn("options: 2", result.output)
         self.assertIn("--create", result.output)
 
-    def test_show_manpage_not_found(self):
-        from explainshell.manager import cli
+    def test_show_manpage_distro_release(self):
+        # Add the same command under a second distro.
+        self.store.add_manpage(
+            _make_manpage("tar", distro="arch", release="latest"),
+            _make_raw(),
+        )
 
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--db",
+                self.db_path,
+                "show",
+                "manpage",
+                "tar",
+                "--distro",
+                "arch",
+                "--release",
+                "latest",
+            ],
+        )
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("source: arch/latest/1/tar.1.gz", result.output)
+
+    def test_show_manpage_distro_without_release(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--db", self.db_path, "show", "manpage", "tar", "--distro", "ubuntu"],
+        )
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("--distro and --release must be used together", result.output)
+
+    def test_show_manpage_release_without_distro(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--db", self.db_path, "show", "manpage", "tar", "--release", "25.10"],
+        )
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("--distro and --release must be used together", result.output)
+
+    def test_show_manpage_not_found(self):
         runner = CliRunner()
         result = runner.invoke(
             cli, ["--db", self.db_path, "show", "manpage", "nonexistent"]
@@ -1698,8 +1695,6 @@ class TestShowCli(unittest.TestCase):
         self.assertIn("Not found", result.output)
 
     def test_show_sections(self):
-        from explainshell.manager import cli
-
         runner = CliRunner()
         result = runner.invoke(
             cli, ["--db", self.db_path, "show", "sections", "ubuntu", "25.10"]
@@ -1709,8 +1704,6 @@ class TestShowCli(unittest.TestCase):
         self.assertIn("1", result.output)
 
     def test_show_manpages(self):
-        from explainshell.manager import cli
-
         runner = CliRunner()
         result = runner.invoke(
             cli, ["--db", self.db_path, "show", "manpages", "ubuntu/25.10/1/"]
@@ -1721,8 +1714,6 @@ class TestShowCli(unittest.TestCase):
         self.assertIn("echo.1.gz", result.output)
 
     def test_show_mappings(self):
-        from explainshell.manager import cli
-
         runner = CliRunner()
         result = runner.invoke(cli, ["--db", self.db_path, "show", "mappings"])
 
@@ -1752,8 +1743,6 @@ class TestDbCheckCli(unittest.TestCase):
     def test_clean_db(self):
         self.store.add_manpage(_make_manpage("tar"), _make_raw())
 
-        from explainshell.manager import cli
-
         runner = CliRunner()
         result = runner.invoke(cli, ["--db", self.db_path, "db-check"])
 
@@ -1770,8 +1759,6 @@ class TestDbCheckCli(unittest.TestCase):
         self.store._conn.commit()
         self.store._conn.execute("PRAGMA foreign_keys = ON")
 
-        from explainshell.manager import cli
-
         runner = CliRunner()
         result = runner.invoke(cli, ["--db", self.db_path, "db-check"])
 
@@ -1779,8 +1766,6 @@ class TestDbCheckCli(unittest.TestCase):
         self.assertIn("orphaned mapping", result.output)
 
     def test_nonexistent_db(self):
-        from explainshell.manager import cli
-
         runner = CliRunner()
         result = runner.invoke(
             cli, ["--db", "/tmp/does-not-exist-12345.db", "db-check"]
@@ -1824,8 +1809,6 @@ class TestAtFileExpansion(unittest.TestCase):
             list_path = f.name
 
         try:
-            from explainshell.manager import cli
-
             runner = CliRunner()
             result = runner.invoke(
                 cli,
@@ -1862,8 +1845,6 @@ class TestAtFileExpansion(unittest.TestCase):
             list_path = f.name
 
         try:
-            from explainshell.manager import cli
-
             runner = CliRunner()
             result = runner.invoke(
                 cli,
@@ -1900,8 +1881,6 @@ class TestAtFileExpansion(unittest.TestCase):
             list_path = f.name
 
         try:
-            from explainshell.manager import cli
-
             runner = CliRunner()
             result = runner.invoke(
                 cli,
@@ -2103,8 +2082,6 @@ class TestSalvageCliValidation(unittest.TestCase):
             manifest_path = f.name
 
         try:
-            from explainshell.manager import cli
-
             runner = CliRunner()
             result = runner.invoke(
                 cli,
@@ -2138,8 +2115,6 @@ class TestSalvageCliValidation(unittest.TestCase):
             manifest_path = f.name
 
         try:
-            from explainshell.manager import cli
-
             runner = CliRunner()
             result = runner.invoke(
                 cli,
@@ -2335,8 +2310,6 @@ class TestExtractLimit(unittest.TestCase):
             mock_make_ext.return_value = MagicMock()
             mock_run.return_value = BatchResult()
 
-            from explainshell.manager import cli
-
             runner = CliRunner()
             # 3 files survive prefilter (page2-4); --limit 2 caps to page2, page3.
             result = runner.invoke(
@@ -2380,8 +2353,6 @@ class TestExtractLimit(unittest.TestCase):
             mock_make_ext.return_value = MagicMock()
             mock_run.return_value = BatchResult()
 
-            from explainshell.manager import cli
-
             runner = CliRunner()
             result = runner.invoke(
                 cli,
@@ -2402,8 +2373,6 @@ class TestExtractLimit(unittest.TestCase):
             self.assertEqual(len(call_files), 5)
 
     def test_limit_zero_rejected(self) -> None:
-        from explainshell.manager import cli
-
         runner = CliRunner()
         result = runner.invoke(
             cli,
