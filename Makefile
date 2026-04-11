@@ -52,7 +52,7 @@ db-check:
 
 UBUNTU_ARCHIVE_DIR := manpages/ubuntu-manpages-operator
 UBUNTU_ARCHIVE_OUTPUT := $(UBUNTU_ARCHIVE_DIR)/output
-UBUNTU_RELEASE ?= 25.10
+UBUNTU_RELEASE ?= 26.04
 
 ubuntu-archive:
 	cd $(UBUNTU_ARCHIVE_DIR) && go build -o ingest ./cmd/ingest
@@ -70,7 +70,7 @@ arch-archive:
 	@test ! -d manpages/arch/latest || (echo "manpages/arch/latest already exists, delete it first"; exit 1)
 	@test -d $(MANNED_DATA_DIR) || (echo "Manned.org dump not found. Download it first with:"; echo "  python tools/fetch_manned.py download --data-dir $(MANNED_DATA_DIR)"; exit 1)
 	python tools/fetch_manned.py --log INFO extract --data-dir $(MANNED_DATA_DIR) \
-		--distro arch --sections 1,8 --output-dir manpages
+		--distro arch --sections 1,1p,8 --output-dir manpages
 
 LIVE_DB := explainshell.db
 LIVE_DB_RELEASE := db-latest
