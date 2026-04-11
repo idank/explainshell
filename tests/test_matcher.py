@@ -74,6 +74,39 @@ class test_matcher(unittest.TestCase):
 
         self.assertMatchSingle(cmd, s.find_man_page("withargs")[0], matchedresult)
 
+    def test_multiple_positionals(self):
+        """each positional arg gets its own help text in definition order"""
+        cmd = "withmultipos src.txt dst.txt"
+        matchedresult = [
+            MR(0, 12, "withmultipos synopsis", "withmultipos"),
+            MR(13, 20, "source file(s) to copy", "src.txt"),
+            MR(21, 28, "destination path", "dst.txt"),
+        ]
+
+        self.assertMatchSingle(cmd, s.find_man_page("withmultipos")[0], matchedresult)
+
+    def test_multiple_positionals_variadic(self):
+        """extra args beyond the defined positionals reuse the last one;
+        adjacent matches with the same text get merged"""
+        cmd = "withmultipos a b c"
+        matchedresult = [
+            MR(0, 12, "withmultipos synopsis", "withmultipos"),
+            MR(13, 14, "source file(s) to copy", "a"),
+            MR(15, 18, "destination path", "b c"),  # b and c merged
+        ]
+
+        self.assertMatchSingle(cmd, s.find_man_page("withmultipos")[0], matchedresult)
+
+    def test_positional_name_match(self):
+        """a word that exactly matches a positional key uses that key's text"""
+        cmd = "withmultipos DEST"
+        matchedresult = [
+            MR(0, 12, "withmultipos synopsis", "withmultipos"),
+            MR(13, 17, "destination path", "DEST"),
+        ]
+
+        self.assertMatchSingle(cmd, s.find_man_page("withmultipos")[0], matchedresult)
+
     def test_reset_current_option_if_argument_taken(self):
         cmd = "withargs -ab12 arg"
         matchedresult = [

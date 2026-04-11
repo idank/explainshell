@@ -21,6 +21,11 @@ class MatchGroup:
     manpage: object = None
     suggestions: list | None = None
     error: Exception | None = None
+    # Tracks how many ordered positional arguments have been consumed for
+    # this command group.  Each unmatched word advances the index so the
+    # next positional definition is used; once exhausted, the last
+    # positional is reused (variadic).
+    positional_index: int = field(default=0, repr=False)
 
     def __repr__(self):
         return "<matchgroup %r with %d results>" % (self.name, len(self.results))
@@ -663,11 +668,31 @@ class Matcher(bashlex.ast.nodevisitor):
                                 return
 
                         d = self.man_page.positionals
-                        k = list(d.keys())[0]
+                        keys = list(d.keys())
+                        group = self.group_stack[-1][1]
+
+                        # Try exact name match first (handles keyword-style
+                        # positionals like "start"/"stop" where the user
+                        # types the key literally).
+                        if word in d:
+                            k = word
+                        elif group.positional_index < len(keys):
+                            # Ordered consumption: advance through positionals.
+                            k = keys[group.positional_index]
+                            group.positional_index += 1
+                        else:
+                            # All positionals consumed; reuse the last
+                            # (variadic).
+                            k = keys[-1]
+
                         logger.info("got arguments, using %r", k)
                         text = d[k]
                         mr = MatchResult(
-                            node.pos[0], node.pos[1], text, None, {"kind": "argument"}
+                            node.pos[0],
+                            node.pos[1],
+                            text,
+                            None,
+                            {"kind": "argument", "positional": k},
                         )
                         self.matches.append(mr)
                         return

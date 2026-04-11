@@ -172,6 +172,37 @@ def create_test_store() -> Store:
         _ROFF_RAW,
     )
 
+    multipos_opts = list(opts)
+    multipos_opts.append(
+        Option(
+            text="source file(s) to copy",
+            short=[],
+            long=[],
+            has_argument=False,
+            positional="SOURCE",
+        )
+    )
+    multipos_opts.append(
+        Option(
+            text="destination path",
+            short=[],
+            long=[],
+            has_argument=False,
+            positional="DEST",
+        )
+    )
+
+    store.add_manpage(
+        ParsedManpage(
+            source="ubuntu/25.10/1/withmultipos.1.gz",
+            name="withmultipos",
+            synopsis="withmultipos synopsis",
+            options=multipos_opts,
+            aliases=[("withmultipos", 10)],
+        ),
+        _ROFF_RAW,
+    )
+
     return store
 
 
