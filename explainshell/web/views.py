@@ -357,7 +357,9 @@ def _handle_explain_program(section, program, url_distro, url_release):
 
 def manpage_url(source):
     """Resolve a manpage source path to an external URL, or None."""
-    basename = os.path.basename(source)
+    parts = source.split("/")
+    section_dir = parts[-2]  # e.g. "1" from "ubuntu/25.10/1/cat.1posix.gz"
+    basename = parts[-1]
     name_with_section = basename[:-3]  # remove .gz
     name, section = name_with_section.rsplit(".", 1)
 
@@ -369,7 +371,7 @@ def manpage_url(source):
             best_len = len(prefix)
 
     if best_match:
-        return best_match.format(section=section, name=name)
+        return best_match.format(section=section, section_dir=section_dir, name=name)
     return None
 
 

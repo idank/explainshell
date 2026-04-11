@@ -396,13 +396,20 @@ class TestManpageUrl(unittest.TestCase):
         )
 
     def test_no_match(self):
-        self.assertIsNone(manpage_url("custom.1.gz"))
+        self.assertIsNone(manpage_url("custom/distro/1/foo.1.gz"))
 
     def test_section_8(self):
         url = manpage_url("ubuntu/25.10/8/iptables.8.gz")
         self.assertRegex(
             url,
             r"https://manpages\.ubuntu\.com/manpages/\w+/en/man8/iptables\.8\.html",
+        )
+
+    def test_posix_section(self):
+        url = manpage_url("ubuntu/25.10/1/crontab.1posix.gz")
+        self.assertEqual(
+            url,
+            "https://manpages.ubuntu.com/manpages/questing/en/man1/crontab.1posix.html",
         )
 
 
