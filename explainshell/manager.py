@@ -20,7 +20,6 @@ Reasoning effort can be appended to the model string:
     azure/<model>/<effort>      e.g. llm:azure/o3/high
     gemini/<model>/<budget>     e.g. llm:gemini/gemini-2.5-flash/8192 (thinking token budget)
     codex/<model>/<effort>      e.g. llm:codex/o3/high
-    <litellm-model>/<effort>    e.g. llm:anthropic/claude-sonnet-4-20250514/medium (low, medium, high)
 """
 
 from __future__ import annotations

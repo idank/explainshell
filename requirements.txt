@@ -4,6 +4,5 @@ bashlex==0.18
 loguru==0.7.2
 pydantic>=2.0
 openai>=1.0.0
-litellm>=1.40.0
 google-genai>=1.0.0
 markdown>=3.7

@@ -28,7 +28,7 @@ from explainshell.extraction.llm.response import normalize_subcommands
 
 
 class TestExtractIntegration(unittest.TestCase):
-    def _make_extractor(self, model="test-model", run_dir=None, debug=False):
+    def _make_extractor(self, model="openai/test-model", run_dir=None, debug=False):
         cfg = ExtractorConfig(model=model, run_dir=run_dir, debug=debug)
         return LLMExtractor(cfg)
 
@@ -262,7 +262,7 @@ class TestMultiChunkExtract(unittest.TestCase):
     """Interactive extract() path with multiple chunks."""
 
     def _make_extractor(self) -> LLMExtractor:
-        cfg = ExtractorConfig(model="test-model")
+        cfg = ExtractorConfig(model="openai/test-model")
         return LLMExtractor(cfg)
 
     @patch(
@@ -346,7 +346,7 @@ class TestMultiChunkExtract(unittest.TestCase):
         mock_prepare.return_value = _make_prepared(1)
 
         with tempfile.TemporaryDirectory() as fail_dir:
-            cfg = ExtractorConfig(model="test-model", run_dir=fail_dir)
+            cfg = ExtractorConfig(model="openai/test-model", run_dir=fail_dir)
             ext = LLMExtractor(cfg)
             ext.provider = mock_provider
 
@@ -363,7 +363,7 @@ class TestMultiChunkFinalize(unittest.TestCase):
     """Batch finalize() path with multiple chunks."""
 
     def _make_extractor(self, run_dir: str | None = None) -> LLMExtractor:
-        cfg = ExtractorConfig(model="test-model", run_dir=run_dir)
+        cfg = ExtractorConfig(model="openai/test-model", run_dir=run_dir)
         return LLMExtractor(cfg)
 
     @patch(

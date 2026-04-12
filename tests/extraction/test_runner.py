@@ -575,7 +575,7 @@ class TestRunDispatcher(unittest.TestCase):
         from explainshell.extraction.llm.extractor import LLMExtractor
         from explainshell.extraction.types import ExtractorConfig
 
-        ext = LLMExtractor(ExtractorConfig(model="test-model"))
+        ext = LLMExtractor(ExtractorConfig(model="codex/test-model"))
         with self.assertRaises(TypeError) as ctx:
             run(ext, ["/fake/a.1.gz"], batch_size=10)
         self.assertIn("BatchExtractor", str(ctx.exception))

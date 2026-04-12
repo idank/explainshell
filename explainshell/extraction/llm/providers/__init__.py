@@ -81,9 +81,6 @@ def _parse_model(model: str) -> tuple[str, str | None]:
 
         openai/gpt-5-mini/medium  →  ("openai/gpt-5-mini", "medium")
         codex/o3/high             →  ("codex/o3", "high")
-
-    For the LiteLLM catch-all (variable number of ``/`` segments), the last
-    segment is stripped only when it matches a known effort keyword.
     """
     _KNOWN_PREFIXES = ("openai/", "azure/", "gemini/", "codex/")
     for prefix in _KNOWN_PREFIXES:
@@ -94,13 +91,6 @@ def _parse_model(model: str) -> tuple[str, str | None]:
                 return prefix + parts[0], parts[1]
             return model, None
 
-    # LiteLLM: model strings may already contain slashes
-    # (e.g. "anthropic/claude-sonnet-4-20250514"), so only strip a known
-    # effort keyword from the tail.
-    _EFFORTS = {"low", "medium", "high"}
-    parts = model.rsplit("/", 1)
-    if len(parts) == 2 and parts[1] in _EFFORTS:
-        return parts[0], parts[1]
     return model, None
 
 
@@ -120,9 +110,7 @@ def make_provider(model: str) -> LLMProvider:
 
         return OpenAIProvider(base, reasoning_effort=effort)
 
-    from explainshell.extraction.llm.providers.litellm import LiteLLMProvider
-
-    return LiteLLMProvider(base, reasoning_effort=effort)
+    raise ValueError(f"Unsupported model: {model}")
 
 
 def make_batch_provider(model: str) -> BatchProvider:
