@@ -1,10 +1,7 @@
 Flask==3.0.3
 gunicorn==23.0.0
-pytest==8.3.3
-pytest-cov==6.0.0
 bashlex==0.18
 loguru==0.7.2
-ruff==0.12.9
 pydantic>=2.0
 openai>=1.0.0
 litellm>=1.40.0

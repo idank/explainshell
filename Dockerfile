@@ -8,7 +8,8 @@ WORKDIR /opt/webapp
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir --no-warn-script-location -r requirements.txt
 
-COPY . .
+COPY start.sh .
+COPY explainshell/ explainshell/
 
 EXPOSE 8080
 
