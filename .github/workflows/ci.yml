@@ -30,3 +30,19 @@ jobs:
       - run: npx playwright install --with-deps chromium
 
       - run: make tests-all
+
+  image-size:
+    name: Check Docker image size
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t size-check .
+      - run: |
+          MAX_MB=400
+          SIZE=$(docker image inspect size-check --format '{{.Size}}')
+          SIZE_MB=$((SIZE / 1048576))
+          echo "Image size: ${SIZE_MB}MB (max: ${MAX_MB}MB)"
+          if [ "$SIZE_MB" -gt "$MAX_MB" ]; then
+            echo "::error::Docker image size ${SIZE_MB}MB exceeds ${MAX_MB}MB limit"
+            exit 1
+          fi
