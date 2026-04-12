@@ -600,7 +600,16 @@ class Matcher(bashlex.ast.nodevisitor):
                         {"kind": "nested_end"},
                     )
                     self.matches.append(mr)
-                elif word != "-" and word.startswith("-") and not word.startswith("--"):
+                elif (
+                    word != "-"
+                    and word.startswith("-")
+                    and not word.startswith("--")
+                    # A quoted word (e.g. '-7 days') is an argument, not a
+                    # flag cluster.  bashlex strips quotes from node.word
+                    # but keeps them in the position span, so a span longer
+                    # than the word means it was quoted.
+                    and node.pos[1] - node.pos[0] == len(word)
+                ):
                     logger.debug("looks like a short option")
                     if len(word) > 2:
                         logger.info("trying to split it up")

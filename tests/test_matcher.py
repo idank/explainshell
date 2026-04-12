@@ -188,6 +188,34 @@ class test_matcher(unittest.TestCase):
 
         self.assertMatchSingle(cmd, s.find_man_page("bar")[0], matchedresult)
 
+    def test_quoted_dash_arg_is_not_split(self):
+        """a quoted word like '-foo' should be treated as an argument to the
+        previous option, not split as short option flags"""
+        cmd = "bar -b '-foo'"
+        matchedresult = [
+            MR(0, 3, "bar synopsis", "bar"),
+            MR(4, 13, "-b <arg> desc", "-b '-foo'"),
+        ]
+        self.assertMatchSingle(cmd, s.find_man_page("bar")[0], matchedresult)
+
+    def test_quoted_dash_arg_double_quotes(self):
+        """same as above but with double quotes"""
+        cmd = 'bar -b "-foo"'
+        matchedresult = [
+            MR(0, 3, "bar synopsis", "bar"),
+            MR(4, 13, "-b <arg> desc", '-b "-foo"'),
+        ]
+        self.assertMatchSingle(cmd, s.find_man_page("bar")[0], matchedresult)
+
+    def test_quoted_dash_arg_with_spaces(self):
+        """a quoted word with spaces and a leading dash is an argument"""
+        cmd = "bar -b '-7 days'"
+        matchedresult = [
+            MR(0, 3, "bar synopsis", "bar"),
+            MR(4, 16, "-b <arg> desc", "-b '-7 days'"),
+        ]
+        self.assertMatchSingle(cmd, s.find_man_page("bar")[0], matchedresult)
+
     def test_unknown_arg(self):
         matchedresult = [MR(0, 3, "bar synopsis", "bar"), MR(4, 6, None, "-x")]
         self.assertMatchSingle("bar -x", s.find_man_page("bar")[0], matchedresult)
