@@ -35,7 +35,7 @@ $ cd explainshell
 # Set up Python virtualenv
 $ python3 -m venv .venv
 $ source .venv/bin/activate
-$ pip install -r requirements.txt
+$ pip install -r requirements-dev.txt
 
 # Download the live db, or parse a manpage.
 $ make download-live-db
