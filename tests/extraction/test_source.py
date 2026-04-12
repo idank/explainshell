@@ -11,7 +11,7 @@ from explainshell.errors import ExtractionError
 from explainshell.extraction.source import SourceExtractor
 from explainshell.roff_utils import detect_dashless_opts, detect_nested_cmd
 
-_MANPAGES = os.path.join(TESTS_DIR, "..", "manpages", "ubuntu", "25.10", "1")
+_MANPAGES = os.path.join(TESTS_DIR, "manpages", "ubuntu", "25.10", "1")
 _MANPAGES_CUSTOM = os.path.join(TESTS_DIR, "manpages", "ubuntu", "12.04", "1")
 
 
