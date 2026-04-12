@@ -492,7 +492,7 @@ def _ensure_echo_gz() -> None:
     if not os.path.exists(ECHO_GZ):
         import shutil
 
-        src = os.path.join(TESTS_DIR, "manpages", "ubuntu", "12.04", "1", "echo.1.gz")
+        src = os.path.join(TESTS_DIR, "manpages", "ubuntu", "25.10", "1", "echo.1.gz")
         shutil.copy(src, ECHO_GZ)
 
 
