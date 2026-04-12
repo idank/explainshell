@@ -583,6 +583,51 @@ class TestUpdateSubcommandMappings:
         srcs = {src for src, _ in mappings_added}
         assert "sc im" not in srcs
 
+    def test_multi_distro_creates_per_distro_mappings(self, store):
+        """Subcommand mappings should be created per distro, not cross-distro."""
+
+        def mp(name: str, distro: str, release: str, **kwargs) -> ParsedManpage:
+            source = f"{distro}/{release}/1/{name}.1.gz"
+            return ParsedManpage(
+                source=source,
+                name=name,
+                synopsis=f"{name} - do things",
+                aliases=[(name, 10)],
+                **kwargs,
+            )
+
+        # Two distros, each with gh + gh-cache.
+        store.add_manpage(
+            mp("gh", "ubuntu", "26.04", extractor="llm", subcommands=["cache"]),
+            _make_raw(),
+        )
+        store.add_manpage(
+            mp("gh-cache", "ubuntu", "26.04", extractor="llm"), _make_raw()
+        )
+        store.add_manpage(
+            mp("gh", "arch", "latest", extractor="llm", subcommands=["cache"]),
+            _make_raw(),
+        )
+        store.add_manpage(
+            mp("gh-cache", "arch", "latest", extractor="llm"), _make_raw()
+        )
+
+        mappings_added, _ = store.update_subcommand_mappings()
+
+        dsts = {dst for _, dst in mappings_added}
+        assert "ubuntu/26.04/1/gh-cache.1.gz" in dsts
+        assert "arch/latest/1/gh-cache.1.gz" in dsts
+        # Each mapping should point to its own distro's child.
+        mapping_pairs = {(src, dst) for src, dst in mappings_added}
+        assert ("gh cache", "ubuntu/26.04/1/gh-cache.1.gz") in mapping_pairs
+        assert ("gh cache", "arch/latest/1/gh-cache.1.gz") in mapping_pairs
+        # No cross-distro mappings.
+        assert ("gh cache", "arch/latest/1/gh-cache.1.gz") not in {
+            (src, dst)
+            for src, dst in mappings_added
+            if src == "gh cache" and "ubuntu" in dst and "arch" in dst
+        }
+
 
 class TestReimportWarnsAboutLostMappings:
     """Verify that re-importing a canonical warns about non-alias mappings lost to CASCADE."""

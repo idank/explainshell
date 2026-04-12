@@ -110,17 +110,22 @@ def check(db_path: str) -> list[tuple[str, str]]:
     ).fetchall()
     for row in subcmd_mappings:
         src = row["src"]
+        dst = row["dst"]
         parent_name = src.split(" ", 1)[0]
         sub_name = src.split(" ", 1)[1]
+        # Scope parent lookup to the same distro/release as the mapping dst.
+        # dst format: "distro/release/section/file.gz"
+        dr_prefix = dst.rsplit("/", 2)[0] + "/"  # "distro/release/"
         parent_row = conn.execute(
-            "SELECT subcommands FROM parsed_manpages WHERE name = ? LIMIT 1",
-            (parent_name,),
+            "SELECT subcommands FROM parsed_manpages "
+            "WHERE name = ? AND source LIKE ? LIMIT 1",
+            (parent_name, dr_prefix + "%"),
         ).fetchone()
         if parent_row is None:
             issues.append(
                 (
                     "error",
-                    f"stale subcommand mapping: {src!r} -> {row['dst']!r} "
+                    f"stale subcommand mapping: {src!r} -> {dst!r} "
                     f"(parent {parent_name!r} does not exist)",
                 )
             )
@@ -130,7 +135,7 @@ def check(db_path: str) -> list[tuple[str, str]]:
                 issues.append(
                     (
                         "warning",
-                        f"stale subcommand mapping: {src!r} -> {row['dst']!r} "
+                        f"stale subcommand mapping: {src!r} -> {dst!r} "
                         f"(parent {parent_name!r} does not declare "
                         f"{sub_name!r} in subcommands)",
                     )

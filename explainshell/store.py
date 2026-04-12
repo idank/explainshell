@@ -512,11 +512,11 @@ class Store:
         contains a hyphen (e.g. ``git-commit``) and the prefix (``git``)
         exists as another manpage, create a mapping.
         """
-        manpages: dict[str, str] = {}  # name -> source
-        hyphenated: dict[str, str] = {}  # full hyphenated name -> source
+        manpages: dict[str, list[str]] = {}  # name -> [source, ...]
+        hyphenated: dict[str, list[str]] = {}  # full hyphenated name -> [source, ...]
         llm_parents: dict[
-            str, tuple[str, list[str]]
-        ] = {}  # name -> (source, subcommands) — only non-empty
+            str, list[tuple[str, list[str]]]
+        ] = {}  # name -> [(source, subcommands), ...] — only non-empty
         llm_extracted: set[str] = set()  # all LLM-extracted parent names
 
         rows = self._conn.execute(
@@ -531,46 +531,61 @@ class Store:
             if extractor == "llm":
                 llm_extracted.add(name)
                 if subcommands:
-                    llm_parents[name] = (source, subcommands)
+                    llm_parents.setdefault(name, []).append((source, subcommands))
             if "-" in name:
-                hyphenated[name] = source
+                hyphenated.setdefault(name, []).append(source)
             else:
-                manpages[name] = source
+                manpages.setdefault(name, []).append(source)
 
-        existing_mappings = {src for src, _ in self.mappings()}
-        mappings_to_add: list[tuple[str, str]] = []
+        existing_mappings = {(src, dst) for src, dst in self.mappings()}
+        new_mappings: set[tuple[str, str]] = set()
         parents: dict[str, str] = {}
+
+        def _dr_prefix(source: str) -> str:
+            """Extract 'distro/release/' prefix from a source path."""
+            parts = source.split("/", 2)
+            return f"{parts[0]}/{parts[1]}/"
 
         # LLM path: use declared subcommands to find children.
         llm_children: set[str] = set()  # sources handled by LLM path
-        for parent_name, (parent_source, subcommands) in llm_parents.items():
-            for sub in subcommands:
-                child_name = f"{parent_name}-{sub}"
-                child_source = hyphenated.get(child_name)
-                if child_source is None:
-                    continue
-                joined = f"{parent_name} {sub}"
-                if joined in existing_mappings:
-                    continue
-                mappings_to_add.append((joined, child_source))
-                llm_children.add(child_source)
-                parents[parent_name] = parent_source
+        for parent_name, parent_entries in llm_parents.items():
+            for parent_source, subcommands in parent_entries:
+                prefix = _dr_prefix(parent_source)
+                for sub in subcommands:
+                    child_name = f"{parent_name}-{sub}"
+                    for child_source in hyphenated.get(child_name, []):
+                        if not child_source.startswith(prefix):
+                            continue
+                        joined = f"{parent_name} {sub}"
+                        if (joined, child_source) in existing_mappings:
+                            continue
+                        new_mappings.add((joined, child_source))
+                        llm_children.add(child_source)
+                        parents[parent_name] = parent_source
 
         # Heuristic path: scan hyphenated children for non-LLM pages.
-        for name, source in hyphenated.items():
-            if source in llm_children:
-                continue
-            joined = name.replace("-", " ")
-            if joined in existing_mappings:
-                continue
-            parent_name = name.split("-", 1)[0]
-            if parent_name in manpages:
-                # Skip if parent is LLM-extracted (already handled by LLM path).
-                if parent_name in llm_extracted:
+        for name, sources in hyphenated.items():
+            for source in sources:
+                if source in llm_children:
                     continue
-                mappings_to_add.append((joined, source))
-                parents[parent_name] = manpages[parent_name]
+                joined = name.replace("-", " ")
+                parent_name = name.split("-", 1)[0]
+                if parent_name in manpages:
+                    # Skip if parent is LLM-extracted (already handled by LLM path).
+                    if parent_name in llm_extracted:
+                        continue
+                    # Only match parents from the same distro/release.
+                    prefix = _dr_prefix(source)
+                    if not any(p.startswith(prefix) for p in manpages[parent_name]):
+                        continue
+                    if (joined, source) in existing_mappings:
+                        continue
+                    new_mappings.add((joined, source))
+                    parents[parent_name] = next(
+                        p for p in manpages[parent_name] if p.startswith(prefix)
+                    )
 
+        mappings_to_add = sorted(new_mappings)
         for src, dst in mappings_to_add:
             self.add_mapping(src, dst, 1)
             logger.debug("inserting mapping (subcommand) %s -> %s", src, dst)
@@ -582,8 +597,9 @@ class Store:
                 prefix = name + "-"
                 children = [
                     child_name[len(prefix) :]
-                    for child_name, src in hyphenated.items()
-                    if child_name.startswith(prefix) and src not in llm_children
+                    for child_name, sources in hyphenated.items()
+                    if child_name.startswith(prefix)
+                    and not all(s in llm_children for s in sources)
                 ]
                 if children:
                     self._set_subcommands(source, children)
