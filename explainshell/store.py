@@ -243,6 +243,20 @@ class Store:
         ).fetchone()
         return row is not None
 
+    def delete_manpage(self, source: str) -> bool:
+        """Delete a manpage and its mappings (via CASCADE) from the store.
+
+        Deleting from manpages cascades to parsed_manpages, which in turn
+        cascades to mappings.
+
+        Returns True if a row was deleted, False if the source was not found.
+        """
+        cur = self._conn.execute("DELETE FROM manpages WHERE source = ?", (source,))
+        if cur.rowcount:
+            self._conn.commit()
+            return True
+        return False
+
     def known_sha256s(self) -> dict[str, str]:
         """Return a mapping of source_gz_sha256 → source for all stored manpages.
 

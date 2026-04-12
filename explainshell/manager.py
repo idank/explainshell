@@ -664,17 +664,28 @@ def extract(
     work_files: list[str] = []
     for gz_path in gz_files:
         short_path = config.source_from_path(gz_path)
-        if not overwrite and s.has_manpage_source(short_path):
-            logger.debug("skipping %s (already stored)", short_path)
-            prefilter_skipped += 1
-            continue
 
         if os.path.islink(gz_path):
             canonical_path = os.path.realpath(gz_path)
             canonical_source = config.source_from_path(canonical_path)
             if canonical_source != short_path:
+                # Clean up stale data if this file was previously extracted as
+                # a regular file (e.g. manpages were refreshed and the file
+                # became a symlink).  The CASCADE delete removes orphan mappings.
+                if s.has_manpage_source(short_path):
+                    s.delete_manpage(short_path)
+                    logger.info(
+                        "removed stale manpage %s (now a symlink to %s)",
+                        short_path,
+                        canonical_source,
+                    )
                 symlink_files.append((gz_path, short_path, canonical_source))
                 continue
+
+        if not overwrite and s.has_manpage_source(short_path):
+            logger.debug("skipping %s (already stored)", short_path)
+            prefilter_skipped += 1
+            continue
 
         h = gz_sha256(gz_path)
         key = _dedup_key(h, short_path)

@@ -694,6 +694,90 @@ class TestSymlinkMapping(unittest.TestCase):
                 10,
             )
 
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.util.collect_gz_files")
+    def test_symlink_cleans_up_stale_manpage(
+        self,
+        mock_collect,
+        mock_make_ext,
+        mock_run,
+    ):
+        """A file that was previously extracted as regular but is now a symlink
+        should have its stale parsed_manpages row (and CASCADE mappings) removed."""
+        with _temp_db() as db_path:
+            canonical = "/fake/distro/release/1/context.1.gz"
+            symlink = "/fake/distro/release/1/contextjit.1.gz"
+            mock_collect.return_value = [symlink]
+
+            # Pre-populate: both canonical and contextjit were previously
+            # extracted as regular files.  Now contextjit is a symlink.
+            pre_store = Store.create(db_path)
+            pre_store.add_manpage(
+                _make_manpage("context", distro="distro", release="release"),
+                _make_raw(),
+            )
+            pre_store.add_manpage(
+                _make_manpage("contextjit", distro="distro", release="release"),
+                _make_raw(),
+            )
+            # Verify stale data exists.
+            self.assertTrue(
+                pre_store.has_manpage_source("distro/release/1/contextjit.1.gz")
+            )
+            self.assertEqual(
+                pre_store.mapping_score(
+                    "contextjit", "distro/release/1/contextjit.1.gz"
+                ),
+                10,
+            )
+            pre_store.close()
+
+            mock_make_ext.return_value = MagicMock()
+            mock_run.return_value = BatchResult()
+
+            with (
+                patch("os.path.islink", side_effect=lambda p: p == symlink),
+                patch(
+                    "os.path.realpath",
+                    side_effect=lambda p: canonical if p == symlink else p,
+                ),
+            ):
+                runner = CliRunner()
+                result = runner.invoke(
+                    cli,
+                    [
+                        "--db",
+                        db_path,
+                        "extract",
+                        "--mode",
+                        "llm:openai/test-model",
+                        "--batch",
+                        "2",
+                        "/fake/file.gz",
+                    ],
+                )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            result_store = Store(db_path, read_only=True)
+            # Stale parsed_manpages row should be gone.
+            self.assertFalse(
+                result_store.has_manpage_source("distro/release/1/contextjit.1.gz")
+            )
+            # Stale mapping should be gone (CASCADE).
+            self.assertIsNone(
+                result_store.mapping_score(
+                    "contextjit", "distro/release/1/contextjit.1.gz"
+                )
+            )
+            # Symlink mapping to canonical should exist.
+            self.assertEqual(
+                result_store.mapping_score(
+                    "contextjit", "distro/release/1/context.1.gz"
+                ),
+                10,
+            )
+
 
 # ---------------------------------------------------------------------------
 # TestContentDedup
