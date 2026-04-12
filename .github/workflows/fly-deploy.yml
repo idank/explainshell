@@ -16,7 +16,9 @@ jobs:
     name: Deploy app
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    concurrency: deploy-group
+    concurrency:
+      group: deploy-group
+      cancel-in-progress: true
     environment: production
     steps:
       - uses: actions/checkout@v6
