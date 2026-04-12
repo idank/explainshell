@@ -91,6 +91,7 @@ from explainshell.extraction.types import (
 )
 
 dotenv.load_dotenv()
+dotenv.load_dotenv(dotenv.find_dotenv(".env.example"))
 
 logger = logging.getLogger(__name__)
 
