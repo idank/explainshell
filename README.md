@@ -50,9 +50,9 @@ $ make serve
 
 Processed manpages live in a single SQLite database (`explainshell.db`) with three tables:
 
-- **manpages** — zlib-compressed manpage source text (typically markdown produced by `mandoc -T markdown`). Keyed by a `source` path in the format `distro/release/section/name.section.gz` (e.g. `ubuntu/25.10/1/tar.1.gz`).
-- **parsed_manpages** — extracted options, synopsis, aliases, and behavioral flags for each manpage. Options are stored as a JSON list.
-- **mappings** — maps command names to `parsed_manpages` rows (many-to-one, with a score for preference). A single manpage can have multiple mappings — one per alias and one per sub-command form (e.g. `git commit` maps to the `git-commit` manpage).
+- **manpages**: zlib-compressed manpage source text (typically markdown produced by `mandoc -T markdown`). Keyed by a `source` path in the format `distro/release/section/name.section.gz` (e.g. `ubuntu/25.10/1/tar.1.gz`).
+- **parsed_manpages**: extracted options, synopsis, aliases, and behavioral flags for each manpage. Options are stored as a JSON list.
+- **mappings**: maps command names to `parsed_manpages` rows (many-to-one, with a score for preference). A single manpage can have multiple mappings - one per alias and one per sub-command form (e.g. `git commit` maps to the `git-commit` manpage).
 
 The `source` path is the primary key across both `manpages` and `parsed_manpages`, and doubles as a namespace: queries can be scoped to a specific distro/release by filtering on the path prefix.
 
@@ -90,20 +90,12 @@ $ export DB_PATH=$(pwd)/test.db
 # LLM extraction requires an API key
 $ python -m explainshell.manager extract --mode llm:openai/gpt-5-mini manpages/ubuntu/26.04/1/find.1.gz
 $ python -m explainshell.manager extract --mode llm:openai/gpt-5-mini --batch 50 manpages/ubuntu/26.04/
-
-# Azure OpenAI uses an explicit azure/ deployment prefix
-$ export AZURE_OPENAI_API_KEY=...
-$ export AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com
-$ python -m explainshell.manager extract --mode llm:azure/my-deployment manpages/ubuntu/26.04/1/find.1.gz
-$ python -m explainshell.manager extract --mode llm:azure/my-deployment --batch 50 manpages/ubuntu/26.04/
 ```
 
 The `--mode` flag selects the extraction strategy:
 
-- `source` — parses roff macros directly. Fast, no external dependencies beyond `lexgrog`, but struggles with some manpage formats.
-- `llm:<provider/model>` — sends the manpage text (converted to markdown via `mandoc -T markdown`) to an LLM for extraction. More accurate, especially for complex or non-standard manpages. LLM output is postprocessed to sanitize LLM weirdness. Examples: `--mode llm:openai/gpt-5-mini`, `--mode llm:azure/my-deployment`.
-
-Azure mode reads `AZURE_OPENAI_API_KEY` plus either `AZURE_OPENAI_BASE_URL` or `AZURE_OPENAI_ENDPOINT`. When using `azure/...`, the part after the prefix is treated as the Azure deployment name.
+- `source`: parses roff macros directly. Fast, no external dependencies beyond `lexgrog`, but struggles with some manpage formats.
+- `llm:<provider/model>`: sends the manpage text (converted to markdown via `mandoc -T markdown`) to an LLM for extraction. More accurate, especially for complex or non-standard manpages. LLM output is postprocessed to sanitize LLM weirdness. Example: `--mode llm:openai/gpt-5-mini`.
 
 Other `extract` flags: `--overwrite` (re-process existing entries), `--dry-run` (extract without writing to DB), `-j <N>` (parallel workers), `--batch <N>` (provider batch API for LLM modes, including `gemini/`, `openai/`, and `azure/`).
 
