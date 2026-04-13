@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS mappings (
 );
 
 CREATE INDEX IF NOT EXISTS idx_mappings_dst ON mappings(dst);
+CREATE INDEX IF NOT EXISTS idx_mappings_src ON mappings(src, dst, score);
 
 """
 
@@ -102,10 +103,12 @@ class Store:
             self._conn = sqlite3.connect(
                 f"file:{db_path}?mode=ro", uri=True, check_same_thread=False
             )
+            self._conn.row_factory = sqlite3.Row
+            self._conn.execute("PRAGMA cache_size=-32000")  # 32 MB
         else:
             self._conn = sqlite3.connect(db_path, check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
-        self._conn.execute("PRAGMA foreign_keys = ON")
+            self._conn.row_factory = sqlite3.Row
+            self._conn.execute("PRAGMA foreign_keys = ON")
 
     @classmethod
     def create(cls, db_path: str) -> "Store":
