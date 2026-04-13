@@ -43,7 +43,7 @@ jobs:
       - uses: actions/checkout@v6
       - run: docker build -t size-check .
       - run: |
-          MAX_MB=400
+          MAX_MB=800
           SIZE=$(docker image inspect size-check --format '{{.Size}}')
           SIZE_MB=$((SIZE / 1048576))
           echo "Image size: ${SIZE_MB}MB (max: ${MAX_MB}MB)"

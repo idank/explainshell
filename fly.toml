@@ -8,17 +8,14 @@ primary_region = 'iad'
 
 [build]
 
+[deploy]
+  strategy = "bluegreen"
+
 [env]
-  DB_PATH = '/data/explainshell.db'
-  DB_URL = 'https://github.com/idank/explainshell/releases/download/db-latest/explainshell.db'
-  DB_VERSION = '6'
+  DB_PATH = '/opt/webapp/explainshell.db'
   DEBUG = 'false'
   HOST_IP = '0.0.0.0'
   PORT = '8080'
-
-[[mounts]]
-  source = 'explainshell_data'
-  destination = '/data'
 
 [http_service]
   internal_port = 8080
@@ -30,7 +27,7 @@ primary_region = 'iad'
   [[http_service.checks]]
     interval = "10s"
     timeout = "2s"
-    grace_period = "300s"
+    grace_period = "60s"
     method = "get"
     path = "/"
 
