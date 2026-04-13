@@ -12,6 +12,7 @@ playwright-report/
 dump.gz
 *.db-shm
 *.db-wal
+*.db.zst
 docs/
 ignore/
 tests/regression/llm-bench/*
