@@ -54,7 +54,7 @@ def _run_lexgrog(gz_path: str, name: str) -> str:
         ["lexgrog", gz_path], capture_output=True, text=True, timeout=300
     )
     if proc.stderr:
-        logger.error("lexgrog stderr for %s: %s", name, proc.stderr)
+        logger.warning("lexgrog stderr for %s: %s", name, proc.stderr)
     if not proc.stdout or not proc.stdout.strip():
         raise RuntimeError(f"lexgrog produced no output for {gz_path}")
     return proc.stdout.rstrip()

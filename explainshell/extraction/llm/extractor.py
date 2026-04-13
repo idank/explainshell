@@ -119,6 +119,9 @@ _BLACKLISTED_SOURCES: dict[str, str] = {
     "arch/latest/8/cups-calibrate.8.gz": "content filter false-positive (CUPS calibration tool)",
     # Observed 2026-04-06 with gpt-5/medium on arch/latest.
     "arch/latest/8/tc-police.8.gz": "content filter false-positive (tc traffic policing action)",
+    # Observed 2026-04-13 with gpt-5/medium on arch/latest.
+    "arch/latest/1/mdsearch.1.gz": "content filter false-positive (macOS Spotlight search tool)",
+    "arch/latest/1/mysqld_safe.1.gz": "content filter false-positive (MySQL safe startup script)",
 }
 
 
