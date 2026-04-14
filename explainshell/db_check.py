@@ -105,8 +105,12 @@ def check(db_path: str) -> list[tuple[str, str]]:
 
     # 5. Stale subcommand mappings: subcommand mapping exists but the parent
     #    manpage doesn't declare that subcommand.
+    # Exclude alias mappings where src matches the manpage name (e.g.
+    # "pg_autoctl config check" is a real manpage name, not a subcommand).
     subcmd_mappings = conn.execute(
-        "SELECT m.src, m.dst FROM mappings m WHERE m.src LIKE '% %'"
+        "SELECT m.src, m.dst FROM mappings m "
+        "JOIN parsed_manpages mp ON m.dst = mp.source "
+        "WHERE m.src LIKE '% %' AND m.src != mp.name"
     ).fetchall()
     for row in subcmd_mappings:
         src = row["src"]

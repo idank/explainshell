@@ -514,18 +514,64 @@ class TestUpdateSubcommandMappingsLlm(_SubcommandTestBase):
         subs = self._get_subcommands(store, "ubuntu/25.10/1/git.1.gz")
         assert subs == ["commit"]  # unchanged from the original value
 
-    def test_skips_existing_mappings(self, store):
-        """LLM path should not duplicate mappings on re-run."""
+    def test_idempotent_on_rerun(self, store):
+        """LLM path should produce the same mappings on re-run (no duplicates)."""
         store.add_manpage(
             self._make_mp("git", extractor="llm", subcommands=["commit"]),
             _make_raw(),
         )
         store.add_manpage(self._make_mp("git-commit", extractor="llm"), _make_raw())
 
-        store.update_subcommand_mappings_llm()
-        mappings_added, _ = store.update_subcommand_mappings_llm()
+        first_added, _ = store.update_subcommand_mappings_llm()
+        second_added, _ = store.update_subcommand_mappings_llm()
 
-        assert mappings_added == []
+        assert set(first_added) == set(second_added)
+        # No duplicate rows in the DB.
+        all_mappings = store.mappings()
+        subcmd = [(s, d) for s, d in all_mappings if " " in s]
+        assert len(subcmd) == len(set(subcmd))
+
+    def test_removes_stale_mappings(self, store):
+        """Reconciliation removes subcommand mappings no longer declared by parent."""
+        store.add_manpage(
+            self._make_mp("git", extractor="llm", subcommands=["commit", "push"]),
+            _make_raw(),
+        )
+        store.add_manpage(self._make_mp("git-commit", extractor="llm"), _make_raw())
+        store.add_manpage(self._make_mp("git-push", extractor="llm"), _make_raw())
+
+        store.update_subcommand_mappings_llm()
+        srcs = {src for src, _ in store.mappings()}
+        assert "git commit" in srcs
+        assert "git push" in srcs
+
+        # Parent re-extracted with "push" removed from subcommands.
+        store.add_manpage(
+            self._make_mp("git", extractor="llm", subcommands=["commit"]),
+            _make_raw(),
+        )
+        store.update_subcommand_mappings_llm()
+
+        srcs = {src for src, _ in store.mappings()}
+        assert "git commit" in srcs
+        assert "git push" not in srcs
+
+    def test_preserves_alias_mappings_with_spaces(self, store):
+        """Reconciliation must not delete alias mappings for manpages whose
+        name contains a space (e.g. 'pg_autoctl activate')."""
+        mp = ParsedManpage(
+            source="ubuntu/25.10/1/pg_autoctl activate.1.gz",
+            name="pg_autoctl activate",
+            synopsis="pg_autoctl activate - do things",
+            aliases=[("pg_autoctl activate", 10)],
+            extractor="llm",
+        )
+        store.add_manpage(mp, _make_raw())
+
+        store.update_subcommand_mappings_llm()
+
+        srcs = {src for src, _ in store.mappings()}
+        assert "pg_autoctl activate" in srcs
 
     def test_multi_distro_creates_per_distro_mappings(self, store):
         """Subcommand mappings should be created per distro, not cross-distro."""

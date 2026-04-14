@@ -512,11 +512,16 @@ class Store:
         self._conn.commit()
 
     def update_subcommand_mappings_llm(self) -> SubcommandMappingResult:
-        """Create subcommand mappings using declared subcommands from LLM-extracted pages.
+        """Reconcile subcommand mappings using declared subcommands from LLM-extracted pages.
 
         For each parent manpage that has a non-empty ``subcommands`` list,
         find matching child manpages (hyphenated names like ``git-commit``)
         in the same distro/release and create ``"git commit"`` → child mappings.
+
+        This is a full reconciliation: all existing subcommand mappings
+        (``src LIKE '% %'``) are deleted first, then the correct set is
+        re-inserted.  This cleans up stale mappings left by prior runs
+        (e.g. a parent whose subcommands list shrank after re-extraction).
         """
         hyphenated: dict[str, list[str]] = {}  # full hyphenated name -> [source, ...]
         # name -> [(source, subcommands), ...] — only non-empty subcommands
@@ -535,8 +540,8 @@ class Store:
             if "-" in name:
                 hyphenated.setdefault(name, []).append(source)
 
-        existing_mappings = {(src, dst) for src, dst in self.mappings()}
-        new_mappings: set[tuple[str, str]] = set()
+        # Compute the full set of valid subcommand mappings.
+        valid_mappings: set[tuple[str, str]] = set()
         parents: dict[str, str] = {}
 
         for parent_name, parent_entries in llm_parents.items():
@@ -548,15 +553,25 @@ class Store:
                         if not child_source.startswith(prefix):
                             continue
                         joined = f"{parent_name} {sub}"
-                        if (joined, child_source) in existing_mappings:
-                            continue
-                        new_mappings.add((joined, child_source))
+                        valid_mappings.add((joined, child_source))
                         parents[parent_name] = parent_source
 
-        mappings_to_add = sorted(new_mappings)
-        for src, dst in mappings_to_add:
-            self.add_mapping(src, dst, 1)
-            logger.debug("inserting mapping (subcommand) %s -> %s", src, dst)
+        # Delete all existing subcommand mappings and re-insert the valid set
+        # in a single transaction.  Exclude alias mappings where src matches
+        # the manpage name (e.g. "pg_autoctl activate" whose name has a space).
+        deleted = self._conn.execute(
+            "DELETE FROM mappings WHERE src LIKE '% %' "
+            "AND src NOT IN (SELECT name FROM parsed_manpages WHERE name LIKE '% %')"
+        ).rowcount
+        if deleted:
+            logger.debug("deleted %d existing subcommand mapping(s)", deleted)
+
+        mappings_to_add = sorted(valid_mappings)
+        self._conn.executemany(
+            "INSERT INTO mappings(src, dst, score) VALUES (?, ?, 1)",
+            [(src, dst) for src, dst in mappings_to_add],
+        )
+        self._conn.commit()
 
         return SubcommandMappingResult(mappings_to_add, parents)
 
