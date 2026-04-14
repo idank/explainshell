@@ -661,6 +661,11 @@ def extract(
         for sha, source in s.known_sha256s().items():
             hash_to_canonical[_dedup_key(sha, source)] = source
 
+    # Normalize input paths so symlink handling can check whether the
+    # canonical target is already in the input set.  Use normpath (not
+    # realpath) so symlinks don't resolve to their targets.
+    normalized_inputs: set[str] = {os.path.normpath(p) for p in gz_files}
+
     work_files: list[str] = []
     for gz_path in gz_files:
         short_path = config.source_from_path(gz_path)
@@ -680,6 +685,18 @@ def extract(
                         canonical_source,
                     )
                 symlink_files.append((gz_path, short_path, canonical_source))
+                if canonical_path not in normalized_inputs:
+                    logger.info(
+                        "skipping symlink %s -> %s (pass the canonical file to extract it)",
+                        short_path,
+                        canonical_source,
+                    )
+                else:
+                    logger.info(
+                        "skipping symlink %s -> %s (canonical file is in the input set)",
+                        short_path,
+                        canonical_source,
+                    )
                 continue
 
         if not overwrite and s.has_manpage_source(short_path):
@@ -775,7 +792,7 @@ def extract(
                 if _add_alias_mapping(s, gz_path, symlink_source, canonical_source):
                     symlinks_mapped += 1
             else:
-                logger.debug(
+                logger.warning(
                     "symlink %s -> %s: canonical not in DB, skipping",
                     symlink_source,
                     canonical_source,

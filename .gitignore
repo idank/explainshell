@@ -15,5 +15,6 @@ dump.gz
 *.db.zst
 docs/
 ignore/
+todos/
 tests/regression/llm-bench/*
 !tests/regression/llm-bench/manpages/
