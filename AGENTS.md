@@ -234,6 +234,7 @@ The app is deployed to [Fly.io](https://fly.io) with two machines in the `iad` (
 - **Domain:** `explainshell.com` → Cloudflare (orange cloud proxy) → Fly.io
 - **Cloudflare:** DNS + proxy, SSL mode set to **Full (Strict)**
 - **Fly app:** `explainshell` — VM size, region, and machine config are in `fly.toml`
+- **Direct origin access:** The `.fly.dev` hostname is disabled (`auto_assign_hostname = false`) so all traffic must pass through Cloudflare. Use `fly proxy 8080` to reach the origin directly for debugging.
 - **Old DigitalOcean box:** `174.138.81.104` (New Jersey) — kept as fallback; rollback = point Cloudflare DNS back to this IP
 
 **Latency baseline (Cloudflare → origin TTFB for `/explain`):** ~140ms average.

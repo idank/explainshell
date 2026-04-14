@@ -23,6 +23,9 @@ primary_region = 'iad'
   auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 2
+  # Disable the public explainshell.fly.dev hostname. Use `fly proxy 8080`
+  # to access the origin directly for debugging.
+  auto_assign_hostname = false
 
   [[http_service.checks]]
     interval = "10s"
