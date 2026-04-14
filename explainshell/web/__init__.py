@@ -1,6 +1,6 @@
 import time
 
-from flask import Flask, current_app
+from flask import Flask, current_app, g
 from explainshell import config, store
 
 # Cache distros() result; refreshed at most every 5 minutes.
@@ -9,11 +9,18 @@ _distros_cache_time = 0
 _DISTROS_TTL = 300
 
 
+def get_store() -> store.Store:
+    """Return a per-request read-only Store, creating one if needed."""
+    if "store" not in g:
+        g.store = store.Store(current_app.config["DB_PATH"], read_only=True)
+    return g.store
+
+
 def get_cached_distros():
     global _distros_cache, _distros_cache_time
     now = time.monotonic()
     if _distros_cache is None or now - _distros_cache_time > _DISTROS_TTL:
-        _distros_cache = current_app.store.distros()
+        _distros_cache = get_store().distros()
         _distros_cache_time = now
     return _distros_cache
 
@@ -25,12 +32,18 @@ def create_app(db_path=None):
 
     db = db_path or config.DB_PATH
     if db:
-        app.store = store.Store(db, read_only=True)
+        app.config["DB_PATH"] = db
 
     from explainshell.web.views import bp, debug_bp
 
     app.register_blueprint(bp)
     if config.DEBUG:
         app.register_blueprint(debug_bp)
+
+    @app.teardown_appcontext
+    def close_store(exc: BaseException | None) -> None:
+        s = g.pop("store", None)
+        if s is not None:
+            s.close()
 
     return app

@@ -2,6 +2,7 @@ import datetime
 import unittest
 
 import explainshell.web as web_mod
+from flask import g
 from explainshell.models import Option, ParsedManpage, RawManpage
 from explainshell.store import Store
 from explainshell.web import create_app
@@ -9,12 +10,31 @@ from explainshell.web.views import explain_program, manpage_url, render_markdown
 from tests.helpers import create_test_store
 
 
+def _use_store(app: object, store: Store) -> None:
+    """Inject *store* into Flask's ``g`` for every request so that
+    ``get_store()`` returns it instead of opening a real database.
+
+    The store is popped from ``g`` in ``after_request`` (before the
+    teardown hook runs) so that the app's teardown doesn't close the
+    shared test connection.
+    """
+
+    @app.before_request
+    def _inject() -> None:
+        g.store = store
+
+    @app.after_request
+    def _preserve(response):
+        g.pop("store", None)
+        return response
+
+
 class TestExplainRouter(unittest.TestCase):
     """Route-level tests for the unified explain_router."""
 
     def setUp(self):
         self.app = create_app()
-        self.app.store = create_test_store()
+        _use_store(self.app, create_test_store())
         self.app.config["TESTING"] = True
         self.client = self.app.test_client()
 
@@ -116,7 +136,7 @@ class TestExplainRouter(unittest.TestCase):
             ),
             raw,
         )
-        self.app.store = store
+        _use_store(self.app, store)
         web_mod._distros_cache = None
 
         try:
@@ -154,7 +174,7 @@ class TestDistroFallback(unittest.TestCase):
 
     def _make_app(self, store):
         app = create_app()
-        app.store = store
+        _use_store(app, store)
         app.config["TESTING"] = True
         return app
 
@@ -289,7 +309,7 @@ class TestManpageRoute(unittest.TestCase):
 
     def setUp(self):
         self.app = create_app()
-        self.app.store = create_test_store()
+        _use_store(self.app, create_test_store())
         self.app.config["TESTING"] = True
         self.client = self.app.test_client()
 

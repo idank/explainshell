@@ -97,14 +97,13 @@ class Store:
         logger.info("creating store, db_path = %r, read_only = %s", db_path, read_only)
         # check_same_thread=False: the default sqlite3 driver raises if a
         # connection is used from a thread other than the one that created it.
-        # Flask serves requests from multiple threads sharing a single Store,
-        # but each request does independent read-only queries so this is safe.
+        # Each Store instance is used by a single thread (the web layer
+        # creates a per-request Store), so this is safe.
         if read_only:
             self._conn = sqlite3.connect(
                 f"file:{db_path}?mode=ro", uri=True, check_same_thread=False
             )
             self._conn.row_factory = sqlite3.Row
-            self._conn.execute("PRAGMA cache_size=-32000")  # 32 MB
         else:
             self._conn = sqlite3.connect(db_path, check_same_thread=False)
             self._conn.row_factory = sqlite3.Row

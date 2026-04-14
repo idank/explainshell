@@ -6,12 +6,12 @@ import urllib
 import markupsafe
 
 import markdown as markdown_lib
-from flask import Blueprint, current_app, render_template, request, redirect
+from flask import Blueprint, render_template, request, redirect
 
 import bashlex.errors
 
 from explainshell import matcher, errors, util, config
-from explainshell.web import get_cached_distros, helpers
+from explainshell.web import get_cached_distros, get_store, helpers
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +115,7 @@ def manpage_releases(distro):
 @debug_bp.route("/manpage/<distro>/<release>/")
 def manpage_sections(distro, release):
     """List available sections for a distro/release."""
-    sections = current_app.store.list_sections(distro, release)
+    sections = get_store().list_sections(distro, release)
     return render_template(
         "manpage_sections.html",
         distro=distro,
@@ -128,7 +128,7 @@ def manpage_sections(distro, release):
 def manpage_list(distro, release, section):
     """List available manpages within a section."""
     prefix = f"{distro}/{release}/{section}/"
-    sources = current_app.store.list_manpages(prefix)
+    sources = get_store().list_manpages(prefix)
     entries = []
     for source in sorted(sources):
         # source is e.g. "ubuntu/25.10/1/cd.1posix.gz"; strip the
@@ -161,7 +161,7 @@ def manpage(distro, release, rest):
     mapping to source key "ubuntu/25.10/1/cd.1posix.gz".
     """
     source = f"{distro}/{release}/{rest}.gz"
-    raw = current_app.store.get_raw_manpage(source)
+    raw = get_store().get_raw_manpage(source)
     if raw is None:
         return render_template(
             "errors/missingmanpage.html",
@@ -260,7 +260,7 @@ def _handle_explain_cmd(url_distro, url_release):
     try:
         matches, helptext, debug_info = explain_cmd(
             command,
-            current_app.store,
+            get_store(),
             distro=distro,
             release=release,
             explain_prefix=prefix,
@@ -271,7 +271,7 @@ def _handle_explain_cmd(url_distro, url_release):
         # Compute distros scoped to the matched commands (intersection).
         cmd_names = [m["name"] for m in matches if "name" in m]
         if cmd_names:
-            sets = [set(current_app.store.distros_for_name(n)) for n in cmd_names]
+            sets = [set(get_store().distros_for_name(n)) for n in cmd_names]
             cmd_distros = sorted(sets[0].intersection(*sets[1:]))
         else:
             cmd_distros = list(get_cached_distros())
@@ -335,9 +335,9 @@ def _handle_explain_program(section, program, url_distro, url_release):
     for d, r in distros_to_try:
         try:
             mp, suggestions, raw_mp, debug_info = explain_program(
-                program, current_app.store, distro=d, release=r
+                program, get_store(), distro=d, release=r
             )
-            cmd_distros = current_app.store.distros_for_name(raw_mp.name)
+            cmd_distros = get_store().distros_for_name(raw_mp.name)
             return render_template(
                 "options.html",
                 mp=mp,
