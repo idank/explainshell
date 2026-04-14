@@ -6,7 +6,14 @@ import urllib
 import markupsafe
 
 import cmarkgfm
-from flask import Blueprint, render_template, request, redirect
+from flask import (
+    Blueprint,
+    current_app,
+    has_app_context,
+    render_template,
+    request,
+    redirect,
+)
 
 import bashlex.errors
 
@@ -16,6 +23,12 @@ from explainshell.web import get_cached_distros, get_store, helpers
 logger = logging.getLogger(__name__)
 
 bp = Blueprint("main", __name__)
+
+
+def _debug_enabled() -> bool:
+    if has_app_context():
+        return bool(current_app.config.get("DEBUG", False))
+    return config.DEBUG
 
 
 def _is_known_distro(name):
@@ -396,7 +409,7 @@ def explain_program(program, store, distro=None, release=None):
     }
 
     debug_info = {}
-    if config.DEBUG:
+    if _debug_enabled():
         for i, o in enumerate(raw_mp.options):
             debug_info[f"option-{i}"] = {
                 "kind": "option",
@@ -536,7 +549,7 @@ def explain_cmd(
     helptext = sorted(text_ids.items(), key=lambda kv: id_start_pos[kv[1]])
 
     debug_info = {}
-    if config.DEBUG:
+    if _debug_enabled():
         for group in groups:
             for m in group.results:
                 if m.debug_info and m.text in text_ids:

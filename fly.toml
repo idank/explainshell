@@ -15,10 +15,10 @@ primary_region = 'iad'
   DB_PATH = '/opt/webapp/explainshell.db'
   DEBUG = 'false'
   HOST_IP = '0.0.0.0'
-  PORT = '8080'
+  PORT = '5000'
 
 [http_service]
-  internal_port = 8080
+  internal_port = 5000
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true

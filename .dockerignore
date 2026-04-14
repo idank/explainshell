@@ -2,6 +2,8 @@
 *
 
 # Allow only what the runtime needs
+!docker/
+!docker/**
 !explainshell/
+!explainshell/**
 !requirements.txt
-!start.sh

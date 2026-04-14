@@ -1,19 +1,15 @@
-import logging
 import os
 
-from explainshell import config
 from explainshell.web import create_app
-from explainshell.logger.logging_interceptor import InterceptHandler
+
+
+def main() -> None:
+    app = create_app()
+    port = int(os.environ.get("PORT", 5000))
+    host = os.environ.get("HOST_IP", "127.0.0.1")
+
+    app.run(debug=app.config["DEBUG"], host=host, port=port)
 
 
 if __name__ == "__main__":
-    # activate logging and redirect all logs to loguru
-    logging.basicConfig(handlers=[InterceptHandler()], level=logging.DEBUG, force=True)
-
-    app = create_app()
-    port = int(os.environ.get("PORT", 5000))
-
-    if config.HOST_IP:
-        app.run(debug=config.DEBUG, host=config.HOST_IP, port=port)
-    else:
-        app.run(debug=config.DEBUG, port=port)
+    main()

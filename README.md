@@ -46,6 +46,18 @@ $ make serve
 # open http://localhost:5000
 ```
 
+Runtime env vars for the web app:
+
+- `HOST_IP` - bind address for the local dev server, default `127.0.0.1`
+- `DB_PATH` - SQLite database path
+- `DEBUG` - enables Flask debug behavior and debug-only web routes/templates
+- `LOG_LEVEL` - log level for `explainshell.*` application logs
+- `GUNICORN_WORKERS` - Gunicorn worker count for the container entrypoint
+- `GUNICORN_THREADS` - Gunicorn thread count per worker
+- `GUNICORN_ACCESS_LOG` - enables Gunicorn access logs when set to `1` or `true` (disabled by default)
+- `GUNICORN_ACCESS_LOG_FILE` - Gunicorn access log destination when enabled, default `-`
+- `GUNICORN_ACCESS_LOG_FORMAT` - Gunicorn access log format string when enabled
+
 ## Storage
 
 Processed manpages live in a single SQLite database (`explainshell.db`) with three tables:

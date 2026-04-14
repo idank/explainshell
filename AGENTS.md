@@ -153,7 +153,7 @@ python -m explainshell.manager extract --mode source /path/to/manpage.1.gz
   - `manpage.py` - Man page reading and HTML conversion
   - `help_constants.py` - Shell constant definitions for help text
   - `util.py` - Shared utilities (group_continuous, Peekable, name_section)
-  - `config.py` - Configuration (DB_PATH, HOST_IP, DEBUG, MANPAGE_URLS)
+  - `config.py` - Configuration defaults (DB_PATH, HOST_IP, DEBUG, MANPAGE_URLS)
   - `extraction/` - Man page option extraction pipeline
     - `__init__.py` - Public API: `make_extractor(mode)` factory
     - `types.py` - Shared types (ExtractionResult, ExtractionStats, BatchResult, ExtractorConfig, Extractor protocol)
@@ -174,6 +174,8 @@ python -m explainshell.manager extract --mode source /path/to/manpage.1.gz
   - `llm_bench.py` - LLM extractor benchmark tool (run/compare metrics reports)
   - `fetch_manned.py` - Fetch man pages from manned.org weekly dump
   - `mandoc-md` - Custom mandoc binary with markdown output support
+- `docker/` - Container runtime assets
+  - `docker-entrypoint.sh` - Gunicorn entrypoint used by the Docker image
 - `tests/` - Unit tests (`test_*.py`), fixtures
 - `tests/e2e/` - Playwright e2e tests, snapshots, and dedicated `e2e.db`
 - `tests/regression/` - Parsing regression tests and manpage .gz fixtures
@@ -227,7 +229,7 @@ Hermetic setup: uses a dedicated `tests/e2e/e2e.db` and random port selection. S
 
 ### Deployment
 
-The app is deployed to [Fly.io](https://fly.io) with two machines in the `iad` (Virginia) region. The SQLite database is baked into the Docker image at build time (downloaded as `.zst` from the GitHub release, decompressed during `docker build`).
+The app is deployed to [Fly.io](https://fly.io) with two machines in the `iad` (Virginia) region. The SQLite database is baked into the Docker image at build time (downloaded as `.zst` from the GitHub release, decompressed during `docker build`). The Dockerfile uses a multi-stage build so Python dependencies and the live DB can cache independently; refresh the baked DB by changing the `DB_CACHE_BUST` build arg when needed. The Gunicorn container path uses `explainshell.web:create_app()` directly; runtime env such as `DB_PATH`, `DEBUG`, and `LOG_LEVEL` is resolved inside the app factory rather than shell-rendering Python arguments in `docker/docker-entrypoint.sh`. App logs default to `INFO`. Gunicorn access logs are disabled by default and can be enabled via `GUNICORN_ACCESS_LOG`, with `GUNICORN_ACCESS_LOG_FILE` and `GUNICORN_ACCESS_LOG_FORMAT` available for overrides.
 
 **Production infrastructure:**
 
