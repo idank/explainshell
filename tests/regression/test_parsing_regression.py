@@ -73,7 +73,7 @@ def test_parsing_matches_db(gz_path, db_store, request):
     ext = make_extractor(extractor_mode)
     result = ext.extract(gz_path)
 
-    # subcommands is computed post-extraction by update_subcommand_mappings(),
+    # subcommands is computed post-extraction by update_subcommand_mappings_*(),
     # not by the parser, so exclude it from comparison.
     diffs = compare_manpages(
         stored_mp,

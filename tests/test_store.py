@@ -380,9 +380,8 @@ class TestValidateSourcePath:
             store.add_manpage(mp, _make_raw())
 
 
-class TestUpdateSubcommandMappings:
-    """Tests for update_subcommand_mappings() covering the heuristic path,
-    the LLM path, and their interaction."""
+class _SubcommandTestBase:
+    """Shared helpers for subcommand mapping tests."""
 
     def _make_mp(
         self,
@@ -415,52 +414,56 @@ class TestUpdateSubcommandMappings:
         ).fetchone()
         return json.loads(row["subcommands"]) if row else []
 
-    # -- Heuristic path (source/mandoc extractors) --
 
-    def test_heuristic_creates_mapping_for_hyphenated_child(self, store):
+class TestUpdateSubcommandMappingsHeuristic(_SubcommandTestBase):
+    """Tests for update_subcommand_mappings_heuristic()."""
+
+    def test_creates_mapping_for_hyphenated_child(self, store):
         """git + git-commit → mapping 'git commit' -> git-commit source."""
         store.add_manpage(self._make_mp("git", extractor="source"), _make_raw())
         store.add_manpage(self._make_mp("git-commit", extractor="source"), _make_raw())
 
-        mappings_added, parents = store.update_subcommand_mappings()
+        mappings_added, parents = store.update_subcommand_mappings_heuristic()
 
         assert ("git commit", "ubuntu/25.10/1/git-commit.1.gz") in mappings_added
         assert "git" in parents
 
-    def test_heuristic_sets_subcommands_on_parent(self, store):
+    def test_sets_subcommands_on_parent(self, store):
         """Heuristic path should set the subcommands list on the parent."""
         store.add_manpage(self._make_mp("git", extractor="source"), _make_raw())
         store.add_manpage(self._make_mp("git-commit", extractor="source"), _make_raw())
         store.add_manpage(self._make_mp("git-push", extractor="source"), _make_raw())
 
-        store.update_subcommand_mappings()
+        store.update_subcommand_mappings_heuristic()
 
         subs = self._get_subcommands(store, "ubuntu/25.10/1/git.1.gz")
         assert sorted(subs) == ["commit", "push"]
 
-    def test_heuristic_no_mapping_without_parent(self, store):
+    def test_no_mapping_without_parent(self, store):
         """A hyphenated name with no matching parent should not create a mapping."""
         store.add_manpage(self._make_mp("cd-discid", extractor="source"), _make_raw())
 
-        mappings_added, parents = store.update_subcommand_mappings()
+        mappings_added, parents = store.update_subcommand_mappings_heuristic()
 
         assert mappings_added == []
         assert parents == {}
 
-    def test_heuristic_skips_existing_mappings(self, store):
+    def test_skips_existing_mappings(self, store):
         """Should not duplicate mappings that already exist."""
         store.add_manpage(self._make_mp("git", extractor="source"), _make_raw())
         store.add_manpage(self._make_mp("git-commit", extractor="source"), _make_raw())
 
-        store.update_subcommand_mappings()
+        store.update_subcommand_mappings_heuristic()
         # Run a second time — should add nothing new.
-        mappings_added, _ = store.update_subcommand_mappings()
+        mappings_added, _ = store.update_subcommand_mappings_heuristic()
 
         assert mappings_added == []
 
-    # -- LLM path --
 
-    def test_llm_uses_declared_subcommands(self, store):
+class TestUpdateSubcommandMappingsLlm(_SubcommandTestBase):
+    """Tests for update_subcommand_mappings_llm()."""
+
+    def test_uses_declared_subcommands(self, store):
         """LLM parent with subcommands=['commit','push'] creates mappings
         only for children that exist as manpages."""
         store.add_manpage(
@@ -473,7 +476,7 @@ class TestUpdateSubcommandMappings:
         store.add_manpage(self._make_mp("git-push", extractor="llm"), _make_raw())
         # git-stash does NOT exist — should be silently skipped.
 
-        mappings_added, parents = store.update_subcommand_mappings()
+        mappings_added, parents = store.update_subcommand_mappings_llm()
 
         srcs = {src for src, _ in mappings_added}
         assert "git commit" in srcs
@@ -481,7 +484,7 @@ class TestUpdateSubcommandMappings:
         assert "git stash" not in srcs
         assert "git" in parents
 
-    def test_llm_does_not_create_false_positive(self, store):
+    def test_does_not_create_false_positive(self, store):
         """LLM parent without the child in its subcommands list should not
         create a mapping even if the hyphenated name exists."""
         store.add_manpage(
@@ -489,15 +492,15 @@ class TestUpdateSubcommandMappings:
             _make_raw(),
         )
         store.add_manpage(
-            self._make_mp("python-socketio", extractor="source"), _make_raw()
+            self._make_mp("python-socketio", extractor="llm"), _make_raw()
         )
 
-        mappings_added, parents = store.update_subcommand_mappings()
+        mappings_added, parents = store.update_subcommand_mappings_llm()
 
         srcs = {src for src, _ in mappings_added}
         assert "python socketio" not in srcs
 
-    def test_llm_does_not_set_subcommands_on_parent(self, store):
+    def test_does_not_set_subcommands_on_parent(self, store):
         """LLM parents already have their subcommands; the method should not
         overwrite them."""
         store.add_manpage(
@@ -506,12 +509,12 @@ class TestUpdateSubcommandMappings:
         )
         store.add_manpage(self._make_mp("git-commit", extractor="llm"), _make_raw())
 
-        store.update_subcommand_mappings()
+        store.update_subcommand_mappings_llm()
 
         subs = self._get_subcommands(store, "ubuntu/25.10/1/git.1.gz")
         assert subs == ["commit"]  # unchanged from the original value
 
-    def test_llm_skips_existing_mappings(self, store):
+    def test_skips_existing_mappings(self, store):
         """LLM path should not duplicate mappings on re-run."""
         store.add_manpage(
             self._make_mp("git", extractor="llm", subcommands=["commit"]),
@@ -519,69 +522,10 @@ class TestUpdateSubcommandMappings:
         )
         store.add_manpage(self._make_mp("git-commit", extractor="llm"), _make_raw())
 
-        store.update_subcommand_mappings()
-        mappings_added, _ = store.update_subcommand_mappings()
+        store.update_subcommand_mappings_llm()
+        mappings_added, _ = store.update_subcommand_mappings_llm()
 
         assert mappings_added == []
-
-    # -- Interaction between LLM and heuristic paths --
-
-    def test_heuristic_skips_children_of_llm_parent(self, store):
-        """Children already handled by the LLM path should not be duplicated
-        by the heuristic path."""
-        store.add_manpage(
-            self._make_mp("git", extractor="llm", subcommands=["commit"]),
-            _make_raw(),
-        )
-        store.add_manpage(self._make_mp("git-commit", extractor="source"), _make_raw())
-
-        mappings_added, _ = store.update_subcommand_mappings()
-
-        # Only one mapping for "git commit", not two.
-        git_commit_mappings = [src for src, _ in mappings_added if src == "git commit"]
-        assert len(git_commit_mappings) == 1
-
-    def test_mixed_llm_and_heuristic(self, store):
-        """LLM parent and a separate heuristic parent should both work."""
-        # LLM parent.
-        store.add_manpage(
-            self._make_mp("git", extractor="llm", subcommands=["commit"]),
-            _make_raw(),
-        )
-        store.add_manpage(self._make_mp("git-commit", extractor="llm"), _make_raw())
-
-        # Heuristic parent.
-        store.add_manpage(self._make_mp("systemd", extractor="source"), _make_raw())
-        store.add_manpage(
-            self._make_mp("systemd-analyze", extractor="source"), _make_raw()
-        )
-
-        mappings_added, parents = store.update_subcommand_mappings()
-
-        srcs = {src for src, _ in mappings_added}
-        assert "git commit" in srcs
-        assert "systemd analyze" in srcs
-        assert "git" in parents
-        assert "systemd" in parents
-
-        # Heuristic parent should have subcommands set.
-        subs = self._get_subcommands(store, "ubuntu/25.10/1/systemd.1.gz")
-        assert subs == ["analyze"]
-
-    def test_llm_parent_with_empty_subcommands_blocks_heuristic(self, store):
-        """An LLM-extracted parent with an empty subcommands list should NOT
-        fall through to the heuristic — the LLM explicitly determined there
-        are no subcommands."""
-        store.add_manpage(
-            self._make_mp("sc", extractor="llm", subcommands=[]),
-            _make_raw(),
-        )
-        store.add_manpage(self._make_mp("sc-im", extractor="source"), _make_raw())
-
-        mappings_added, parents = store.update_subcommand_mappings()
-
-        srcs = {src for src, _ in mappings_added}
-        assert "sc im" not in srcs
 
     def test_multi_distro_creates_per_distro_mappings(self, store):
         """Subcommand mappings should be created per distro, not cross-distro."""
@@ -612,7 +556,7 @@ class TestUpdateSubcommandMappings:
             mp("gh-cache", "arch", "latest", extractor="llm"), _make_raw()
         )
 
-        mappings_added, _ = store.update_subcommand_mappings()
+        mappings_added, _ = store.update_subcommand_mappings_llm()
 
         dsts = {dst for _, dst in mappings_added}
         assert "ubuntu/26.04/1/gh-cache.1.gz" in dsts

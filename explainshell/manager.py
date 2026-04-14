@@ -812,7 +812,10 @@ def extract(
 
         added = batch_result.n_succeeded
         if added > 0 or symlinks_mapped > 0 or content_deduped > 0:
-            s.update_subcommand_mappings()
+            if parsed_mode == "llm":
+                s.update_subcommand_mappings_llm()
+            else:
+                s.update_subcommand_mappings_heuristic()
     except KeyboardInterrupt:
         logger.info("interrupted by user (Ctrl+C)")
         batch_result.interrupted = True
@@ -1075,7 +1078,7 @@ def salvage(
     batch_result = _run_salvage(extractor, manifest_data, s, dry_run)
 
     if not dry_run and s is not None and batch_result.n_succeeded > 0:
-        s.update_subcommand_mappings()
+        s.update_subcommand_mappings_llm()
 
     elapsed = time.monotonic() - t0
     rc = _log_summary(batch_result, 0, elapsed, dry_run=dry_run)
