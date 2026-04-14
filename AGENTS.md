@@ -227,7 +227,16 @@ Hermetic setup: uses a dedicated `tests/e2e/e2e.db` and random port selection. S
 
 ### Deployment
 
-The app is deployed to [Fly.io](https://fly.io) with two machines for availability. The SQLite database is stored on persistent Fly volumes mounted at `/data`.
+The app is deployed to [Fly.io](https://fly.io) with two machines in the `iad` (Virginia) region. The SQLite database is baked into the Docker image at build time (downloaded as `.zst` from the GitHub release, decompressed during `docker build`).
+
+**Production infrastructure:**
+
+- **Domain:** `explainshell.com` → Cloudflare (orange cloud proxy) → Fly.io
+- **Cloudflare:** DNS + proxy, SSL mode set to **Full (Strict)**
+- **Fly app:** `explainshell` — VM size, region, and machine config are in `fly.toml`
+- **Old DigitalOcean box:** `174.138.81.104` (New Jersey) — kept as fallback; rollback = point Cloudflare DNS back to this IP
+
+**Latency baseline (Cloudflare → origin TTFB for `/explain`):** ~140ms average.
 
 **Deploy code changes:**
 
@@ -237,8 +246,5 @@ fly deploy
 
 **Update the database:**
 
-1. `make upload-live-db` (uploads `explainshell.db` to the GitHub release and waits for the CDN to update)
-2. Bump `DB_VERSION` in `fly.toml`
-3. `fly deploy`
-
-On startup, `start.sh` compares `DB_VERSION` against a marker file on the volume. If they differ, it downloads the DB from `DB_URL` and updates the marker. Normal restarts skip the download.
+1. `make upload-live-db` (uploads `explainshell.db.zst` to the GitHub release)
+2. `fly deploy` (rebuilds the image with the new DB)
