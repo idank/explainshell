@@ -864,6 +864,13 @@ def extract(
     )
     _write_report(run_dir, report)
 
+    # Log the extraction event into the DB itself so the production service
+    # can inspect when / how the database was last updated.
+    s.log_event(
+        "extraction",
+        report.model_dump(exclude={"batch_manifest"}, exclude_none=True),
+    )
+
     if rc != 0:
         sys.exit(rc)
 
@@ -1380,6 +1387,49 @@ def show_stats(ctx: click.Context) -> None:
             click.echo(f"  {row['distro']}/{row['release']}: {row['cnt']}")
 
     conn.close()
+
+
+@show.command("events")
+@click.option("-n", "limit", default=10, help="Number of events to show.")
+@click.pass_context
+def show_events(ctx: click.Context, limit: int) -> None:
+    """Show recent db_events."""
+    import datetime
+
+    import humanize
+
+    db_path = _require_db(ctx, must_exist=True)
+    s = store.Store(db_path, read_only=True)
+    events = s.get_events(limit=limit)
+    s.close()
+    if not events:
+        click.echo("No events recorded.")
+        return
+    events.reverse()
+    for i, ev in enumerate(events):
+        if i > 0:
+            click.echo()
+        dt = datetime.datetime.fromisoformat(ev["timestamp"])
+        short_ts = dt.strftime("%Y-%m-%d %H:%M")
+        click.echo(f"{short_ts} ({humanize.naturaltime(dt)})")
+        click.echo(f"  event:    {ev['event']}")
+        if ev["event"] == "extraction":
+            report = ExtractionReport(**ev["metadata"])
+            if report.config.mode:
+                click.echo(f"  mode:     {report.config.mode}")
+            if report.config.model:
+                click.echo(f"  model:    {report.config.model}")
+            sm = report.summary
+            click.echo(
+                f"  result:   ok={sm.succeeded} skip={sm.skipped} fail={sm.failed}"
+            )
+            if report.db_before and report.db_after:
+                dm = report.db_after.manpages - report.db_before.manpages
+                dmap = report.db_after.mappings - report.db_before.mappings
+                click.echo(
+                    f"  db:       {report.db_after.manpages}({dm:+d})"
+                    f" mappings={report.db_after.mappings}({dmap:+d})"
+                )
 
 
 # ---------------------------------------------------------------------------

@@ -380,6 +380,42 @@ class TestValidateSourcePath:
             store.add_manpage(mp, _make_raw())
 
 
+class TestDbEvents:
+    def test_log_and_get_event(self, store):
+        store.log_event("extraction", {"model": "gpt-5"})
+        events = store.get_events()
+        assert len(events) == 1
+        assert events[0]["event"] == "extraction"
+        assert events[0]["metadata"]["model"] == "gpt-5"
+        assert "timestamp" in events[0]
+
+    def test_filter_by_event_type(self, store):
+        store.log_event("extraction", {"model": "gpt-5"})
+        store.log_event("upload", {"repo": "idank/explainshell"})
+        assert len(store.get_events(event="extraction")) == 1
+        assert len(store.get_events(event="upload")) == 1
+
+    def test_ordering_newest_first(self, store):
+        store.log_event("extraction", {"run": 1})
+        store.log_event("extraction", {"run": 2})
+        events = store.get_events()
+        assert events[0]["metadata"]["run"] == 2
+        assert events[1]["metadata"]["run"] == 1
+
+    def test_limit(self, store):
+        for i in range(10):
+            store.log_event("extraction", {"run": i})
+        assert len(store.get_events(limit=3)) == 3
+
+    def test_empty_metadata(self, store):
+        store.log_event("upload")
+        events = store.get_events()
+        assert events[0]["metadata"] == {}
+
+    def test_get_events_empty(self, store):
+        assert store.get_events() == []
+
+
 class _SubcommandTestBase:
     """Shared helpers for subcommand mapping tests."""
 

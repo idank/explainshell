@@ -83,32 +83,6 @@ download-live-db:
 	zstd -d --rm $(LIVE_DB_ASSET)
 
 upload-live-db:
-	@test -f $(LIVE_DB) || (echo "$(LIVE_DB) not found"; exit 1)
-	@asset_id=$$(gh api repos/$(LIVE_DB_REPO)/releases/tags/$(LIVE_DB_RELEASE) --jq '.assets[] | select(.name == "$(LIVE_DB_ASSET)") | .id'); \
-	if [ -n "$$asset_id" ]; then \
-		upload_date=$$(gh api repos/$(LIVE_DB_REPO)/releases/tags/$(LIVE_DB_RELEASE) --jq '.assets[] | select(.name == "$(LIVE_DB_ASSET)") | .updated_at' | tr -d 'Z' | tr 'T:' '-'); \
-		archive_name="explainshell-$$upload_date.db.zst"; \
-		echo "Renaming existing asset to $$archive_name..."; \
-		gh api repos/$(LIVE_DB_REPO)/releases/assets/$$asset_id -X PATCH -f name="$$archive_name" --silent; \
-	fi
-	zstd -1 -f $(LIVE_DB) -o $(LIVE_DB_ASSET)
-	@upload_url=$$(gh api repos/$(LIVE_DB_REPO)/releases/tags/$(LIVE_DB_RELEASE) --jq '.upload_url' | sed 's/{.*}//'); \
-	curl --progress-bar \
-		-H "Authorization: token $$(gh auth token)" \
-		-H "Content-Type: application/octet-stream" \
-		--data-binary @$(LIVE_DB_ASSET) \
-		"$$upload_url?name=$(LIVE_DB_ASSET)" | cat
-	@expected_size=$$(wc -c < $(LIVE_DB_ASSET)); \
-	rm -f $(LIVE_DB_ASSET); \
-	echo "Waiting for CDN to serve the new file ($$expected_size bytes)..."; \
-	while true; do \
-		cdn_size=$$(curl -sI -L "$(LIVE_DB_CDN_URL)" | grep -i content-length | tail -1 | tr -d '[:space:]' | cut -d: -f2); \
-		if [ "$$cdn_size" = "$$expected_size" ]; then \
-			echo "CDN updated."; \
-			break; \
-		fi; \
-		echo "  CDN still serving $$cdn_size bytes, expected $$expected_size. Retrying in 10s..."; \
-		sleep 10; \
-	done
+	tools/upload-live-db.sh $(LIVE_DB)
 
 .PHONY: tests e2e e2e-db e2e-update test-llm tests-all tests-quick lint serve parsing-regression parsing-update db-check ubuntu-archive arch-archive download-live-db upload-live-db

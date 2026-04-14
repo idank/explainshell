@@ -72,6 +72,14 @@ CREATE TABLE IF NOT EXISTS mappings (
 CREATE INDEX IF NOT EXISTS idx_mappings_dst ON mappings(dst);
 CREATE INDEX IF NOT EXISTS idx_mappings_src ON mappings(src, dst, score);
 
+-- Append-only event log for tracking DB lifecycle (extractions, uploads, etc.).
+CREATE TABLE IF NOT EXISTS db_events (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT    NOT NULL,  -- ISO-8601 UTC
+    event     TEXT    NOT NULL,  -- e.g. "extraction", "upload"
+    metadata  TEXT    NOT NULL DEFAULT '{}'  -- JSON blob with event-specific details
+);
+
 """
 
 
@@ -288,6 +296,42 @@ class Store:
                 0
             ],
         }
+
+    def log_event(self, event: str, metadata: dict | None = None) -> None:
+        """Append an entry to the db_events log."""
+        ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        self._conn.execute(
+            "INSERT INTO db_events(timestamp, event, metadata) VALUES (?, ?, ?)",
+            (ts, event, json.dumps(metadata or {})),
+        )
+        self._conn.commit()
+
+    def get_events(self, event: str | None = None, limit: int = 50) -> list[dict]:
+        """Return recent db_events, newest first.
+
+        If *event* is given, only rows matching that event type are returned.
+        """
+        if event:
+            rows = self._conn.execute(
+                "SELECT id, timestamp, event, metadata FROM db_events "
+                "WHERE event = ? ORDER BY id DESC LIMIT ?",
+                (event, limit),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT id, timestamp, event, metadata FROM db_events "
+                "ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [
+            {
+                "id": r["id"],
+                "timestamp": r["timestamp"],
+                "event": r["event"],
+                "metadata": json.loads(r["metadata"]),
+            }
+            for r in rows
+        ]
 
     def _discover_manpage_suggestions(
         self,

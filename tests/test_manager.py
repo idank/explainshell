@@ -1790,6 +1790,87 @@ class TestShowCli(unittest.TestCase):
         self.assertIn("tar ->", result.output)
         self.assertIn("echo ->", result.output)
 
+    def test_show_events_empty(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--db", self.db_path, "show", "events"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("No events recorded", result.output)
+
+    def test_show_events_date_format(self):
+        self.store.log_event(
+            "extraction",
+            {
+                "version": 1,
+                "command": "extract",
+                "timestamp": "2026-04-14T10:30:00+00:00",
+                "git": {"commit": None, "commit_short": None, "dirty": None},
+                "config": {"mode": "source"},
+                "elapsed_seconds": 1.0,
+                "summary": {"succeeded": 0, "skipped": 0, "failed": 0},
+            },
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--db", self.db_path, "show", "events"])
+
+        self.assertEqual(result.exit_code, 0)
+        # Short date format: "YYYY-MM-DD HH:MM"
+        self.assertRegex(result.output, r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}")
+        # Humanized delta in parentheses (e.g. "now", "2 days ago")
+        self.assertRegex(result.output, r"\(.*ago\)|now\)")
+
+    def test_show_events_extraction(self):
+        self.store.log_event(
+            "extraction",
+            {
+                "version": 1,
+                "command": "extract",
+                "timestamp": "2026-04-14T10:00:00+00:00",
+                "git": {"commit": "abc123", "commit_short": "abc", "dirty": False},
+                "config": {"mode": "llm", "model": "openai/gpt-5"},
+                "elapsed_seconds": 5.0,
+                "summary": {
+                    "succeeded": 10,
+                    "skipped": 5,
+                    "failed": 1,
+                },
+                "db_before": {"manpages": 100, "mappings": 200},
+                "db_after": {"manpages": 110, "mappings": 220},
+            },
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--db", self.db_path, "show", "events"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("event:    extraction", result.output)
+        self.assertIn("mode:     llm", result.output)
+        self.assertIn("model:    openai/gpt-5", result.output)
+        self.assertIn("result:   ok=10 skip=5 fail=1", result.output)
+        self.assertIn("db:       110(+10) mappings=220(+20)", result.output)
+
+    def test_show_events_limit(self):
+        for i in range(5):
+            self.store.log_event(
+                "extraction",
+                {
+                    "version": 1,
+                    "command": "extract",
+                    "timestamp": f"2026-04-{10 + i}T10:00:00+00:00",
+                    "git": {"commit": None, "commit_short": None, "dirty": None},
+                    "config": {"mode": "source"},
+                    "elapsed_seconds": 1.0,
+                    "summary": {"succeeded": i, "skipped": 0, "failed": 0},
+                },
+            )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--db", self.db_path, "show", "events", "-n", "2"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(result.output.count("event:"), 2)
+
 
 # ---------------------------------------------------------------------------
 # TestDbCheckCli

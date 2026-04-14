@@ -1,7 +1,11 @@
+import logging
+import os
 import time
 
 from flask import Flask, current_app, g
 from explainshell import config, store
+
+logger = logging.getLogger(__name__)
 
 # Cache distros() result; refreshed at most every 5 minutes.
 _distros_cache = None
@@ -45,5 +49,19 @@ def create_app(db_path=None):
         s = g.pop("store", None)
         if s is not None:
             s.close()
+
+    # Read the DB SHA256 once at startup. The file is computed at Docker
+    # build time (see Dockerfile); it won't exist in dev unless created
+    # manually.
+    sha_path = (app.config.get("DB_PATH") or "") + ".sha256"
+    db_sha256 = ""
+    if os.path.isfile(sha_path):
+        with open(sha_path) as f:
+            db_sha256 = f.read().strip()
+        logger.info("db sha256: %s", db_sha256)
+
+    @app.route("/db")
+    def db_info():
+        return db_sha256 + "\n", 200, {"Content-Type": "text/plain"}
 
     return app
