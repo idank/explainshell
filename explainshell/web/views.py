@@ -5,7 +5,7 @@ import re
 import urllib
 import markupsafe
 
-import markdown as markdown_lib
+import cmarkgfm
 from flask import Blueprint, render_template, request, redirect
 
 import bashlex.errors
@@ -67,7 +67,7 @@ def render_markdown(text: str) -> str:
         # markdown library doesn't swallow them as HTML tags.  Leave
         # blockquote '>' at line starts and already-escaped &lt;/&gt; alone.
         text = re.sub(r"<([^>]+)>", r"&lt;\1&gt;", text)
-        return markdown_lib.markdown(text)
+        return cmarkgfm.markdown_to_html(text)
     except Exception:
         return markupsafe.escape(text)
 
