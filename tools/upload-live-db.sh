@@ -9,6 +9,9 @@ ASSET="explainshell-${DATE}.db.zst"
 
 test -f "$DB" || { echo "$DB not found"; exit 1; }
 
+# TODO: consider running `sqlite3 "$DB" VACUUM` after the digest check but
+# before compressing for upload, so the uploaded DB has no freelist bloat.
+
 # --- Compress ---
 zstd -1 -f "$DB" -o "$ASSET"
 
