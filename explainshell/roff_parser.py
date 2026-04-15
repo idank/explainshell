@@ -437,11 +437,16 @@ def _parse_flag_text(text: str) -> dict:
         if not argument:
             argument = None
 
+    # positional is only meaningful for flagless operands (e.g. FILE in
+    # cp).  For flagged options the metavar (e.g. PATTERNS from
+    # -e PATTERNS) is already captured by has_argument.
+    positional = argument if (not short and not long) else None
+
     return {
         "short": short,
         "long": long,
         "has_argument": has_argument,
-        "positional": argument,
+        "positional": positional,
     }
 
 
@@ -1101,11 +1106,13 @@ def _parse_mdoc_it_line(line: str) -> dict:
 
         i += 1
 
+    positional = argument if (not short and not long) else None
+
     return {
         "short": short,
         "long": long,
         "has_argument": has_argument,
-        "positional": argument,
+        "positional": positional,
     }
 
 

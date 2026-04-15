@@ -320,13 +320,13 @@ class TestParseFlagText(unittest.TestCase):
         result = _parse_flag_text("-f FILE")
         self.assertEqual(result["short"], ["-f"])
         self.assertTrue(result["has_argument"])
-        self.assertEqual(result["positional"], "FILE")
+        self.assertIsNone(result["positional"])
 
     def test_long_with_equals_arg(self):
         result = _parse_flag_text("--file=FILE")
         self.assertEqual(result["long"], ["--file"])
         self.assertTrue(result["has_argument"])
-        self.assertEqual(result["positional"], "FILE")
+        self.assertIsNone(result["positional"])
 
     def test_combined_short_long_with_arg(self):
         result = _parse_flag_text("-f, --file=FILE")
@@ -346,13 +346,13 @@ class TestParseFlagText(unittest.TestCase):
         result = _parse_flag_text("--exec-path[=<path>]")
         self.assertEqual(result["long"], ["--exec-path"])
         self.assertTrue(result["has_argument"])
-        self.assertEqual(result["positional"], "<path>")
+        self.assertIsNone(result["positional"])
 
     def test_flag_with_angle_arg(self):
         result = _parse_flag_text("-c <name>=<value>")
         self.assertEqual(result["short"], ["-c"])
         self.assertTrue(result["has_argument"])
-        self.assertEqual(result["positional"], "<name>=<value>")
+        self.assertIsNone(result["positional"])
 
     def test_bi_macro_flag(self):
         result = _parse_flag_text('.BI "--file=" FILE')
@@ -389,14 +389,14 @@ class TestParseFlagText(unittest.TestCase):
         result = _parse_flag_text("-C<n>")
         self.assertEqual(result["short"], ["-C"])
         self.assertTrue(result["has_argument"])
-        self.assertEqual(result["positional"], "<n>")
+        self.assertIsNone(result["positional"])
 
     def test_multichar_flag_with_glued_angle_arg(self):
         """Multi-char flag with angle-bracket arg glued on: -lf<logfile>"""
         result = _parse_flag_text("-lf<logfile>")
         self.assertEqual(result["short"], ["-lf"])
         self.assertTrue(result["has_argument"])
-        self.assertEqual(result["positional"], "<logfile>")
+        self.assertIsNone(result["positional"])
 
 
 # ---------------------------------------------------------------------------
