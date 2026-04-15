@@ -73,16 +73,11 @@ arch-archive:
 		--distro arch --sections 1,1p,8 --output-dir manpages
 
 LIVE_DB := explainshell.db
-LIVE_DB_ASSET := $(LIVE_DB).zst
-LIVE_DB_RELEASE := db-latest
-LIVE_DB_REPO := idank/explainshell
-LIVE_DB_CDN_URL := https://github.com/$(LIVE_DB_REPO)/releases/download/$(LIVE_DB_RELEASE)/$(LIVE_DB_ASSET)
 
-download-live-db:
-	gh release download $(LIVE_DB_RELEASE) -R $(LIVE_DB_REPO) -p $(LIVE_DB_ASSET) -D . --clobber
-	zstd -d --rm $(LIVE_DB_ASSET)
+download-latest-db:
+	tools/download-latest-db.sh $(LIVE_DB)
 
 upload-live-db:
 	tools/upload-live-db.sh $(LIVE_DB)
 
-.PHONY: tests e2e e2e-db e2e-update test-llm tests-all tests-quick lint serve parsing-regression parsing-update db-check ubuntu-archive arch-archive download-live-db upload-live-db
+.PHONY: tests e2e e2e-db e2e-update test-llm tests-all tests-quick lint serve parsing-regression parsing-update db-check ubuntu-archive arch-archive download-latest-db upload-live-db

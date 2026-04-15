@@ -247,5 +247,5 @@ fly deploy
 
 **Update the database:**
 
-1. `make upload-live-db` (uploads `explainshell.db.zst` to the GitHub release)
+1. `make upload-live-db` (uploads a date-stamped `explainshell-{date}.db.zst` to the GitHub release)
 2. `fly deploy` (rebuilds the image with the new DB)

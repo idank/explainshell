@@ -38,7 +38,7 @@ $ source .venv/bin/activate
 $ pip install -r requirements-dev.txt
 
 # Download the live db, or parse a manpage.
-$ make download-live-db
+$ make download-latest-db
 $ python -m explainshell.manager extract --mode source manpages/ubuntu/26.04/1/tar.1.gz
 
 # Run the web server
