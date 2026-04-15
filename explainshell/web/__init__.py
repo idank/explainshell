@@ -54,11 +54,12 @@ def create_app(db_path=None):
     # build time (see Dockerfile); it won't exist in dev unless created
     # manually.
     sha_path = (app.config.get("DB_PATH") or "") + ".sha256"
-    db_sha256 = ""
     if os.path.isfile(sha_path):
         with open(sha_path) as f:
             db_sha256 = f.read().strip()
         logger.info("db sha256: %s", db_sha256)
+    else:
+        db_sha256 = "local"
 
     @app.route("/db")
     def db_info():

@@ -12,6 +12,7 @@ RUN pip3 install --no-cache-dir --no-warn-script-location -r requirements.txt
 
 RUN wget -q -O explainshell.db.zst "$DB_URL" \
   && sha256sum explainshell.db.zst | awk '{print $1}' > explainshell.db.sha256 \
+  && echo "db sha256: $(cat explainshell.db.sha256)" \
   && zstd -d --rm explainshell.db.zst
 
 COPY start.sh .
