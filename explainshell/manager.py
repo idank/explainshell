@@ -1430,6 +1430,12 @@ def show_events(ctx: click.Context, limit: int) -> None:
                     f"  db:       {report.db_after.manpages}({dm:+d})"
                     f" mappings={report.db_after.mappings}({dmap:+d})"
                 )
+        else:
+            meta = ev.get("metadata", {})
+            for k, v in meta.items():
+                if k in ("version", "command"):
+                    continue
+                click.echo(f"  {k}:  {v}")
 
 
 # ---------------------------------------------------------------------------
