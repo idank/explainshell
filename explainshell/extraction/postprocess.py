@@ -6,9 +6,21 @@ import logging
 import re
 from dataclasses import dataclass
 
+from explainshell.errors import ExtractionError
 from explainshell.models import Option
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Sanity thresholds for LLM line-span validation
+# ---------------------------------------------------------------------------
+# Maximum ratio of sum-of-all-option-spans to total document lines.
+# Good extractions sit below ~3x; the 5–10x band is uniformly botched
+# (overlapping near-document-sized spans).  A few borderline cases
+# (e.g. nmap at 3.8x) slip under this threshold but lowering further
+# would false-positive on ImageMagick and similar pages whose mandoc
+# output has very few but very long lines.
+_MAX_COVERAGE_RATIO = 3.0
 
 
 @dataclass
@@ -191,6 +203,41 @@ def drop_empty(options: list[Option]) -> tuple[list[Option], int]:
     return kept, len(options) - len(kept)
 
 
+def sanity_check_line_spans(options: list[Option]) -> None:
+    """Reject an LLM extraction whose line spans look pathological.
+
+    Raises ``ExtractionError`` when the sum of all option spans exceeds
+    ``_MAX_COVERAGE_RATIO`` times the document extent (derived from the
+    highest end-line in the options' own metadata).  This catches the
+    common failure mode where the LLM returns near-document-sized ranges
+    (e.g. ``[1, 927]``) for every option instead of precise per-option
+    spans.
+    """
+    if not options:
+        return
+
+    total_span = 0
+    max_end = 0
+    for opt in options:
+        meta = opt.meta or {}
+        lines = meta.get("lines")
+        if lines and isinstance(lines, list) and len(lines) == 2:
+            total_span += max(lines[1] - lines[0] + 1, 0)
+            max_end = max(max_end, lines[1])
+
+    if max_end < 1:
+        return
+
+    coverage = total_span / max_end
+
+    if coverage > _MAX_COVERAGE_RATIO:
+        raise ExtractionError(
+            f"line-span coverage {coverage:.1f}x exceeds {_MAX_COVERAGE_RATIO}x limit "
+            f"({len(options)} options, {max_end} lines) "
+            f"(try a stronger model?)"
+        )
+
+
 def postprocess(
     options: list[Option],
     steps: list[str] | None = None,
@@ -198,9 +245,15 @@ def postprocess(
     """Run selected post-processing steps.
 
     steps=None means all. Otherwise a subset like
-    ["sanitize", "dedup", "strip_blanks", "drop_empty"].
+    ["sanitize", "dedup", "strip_blanks", "drop_empty", "sanity_check_spans"].
     """
-    all_steps = {"sanitize", "dedup", "strip_blanks", "drop_empty"}
+    all_steps = {
+        "sanitize",
+        "dedup",
+        "strip_blanks",
+        "drop_empty",
+        "sanity_check_spans",
+    }
     active = set(steps) if steps is not None else all_steps
     stats = PostProcessStats()
 
@@ -223,5 +276,8 @@ def postprocess(
     if "drop_empty" in active:
         options, removed = drop_empty(options)
         stats.dropped_empty = removed
+
+    if "sanity_check_spans" in active:
+        sanity_check_line_spans(options)
 
     return options, stats

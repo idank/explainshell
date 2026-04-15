@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import pytest
+
+from explainshell.errors import ExtractionError
 from explainshell.extraction.postprocess import (
     _subset_has_cross_reference,
     dedup_options,
     postprocess,
+    sanity_check_line_spans,
 )
 from explainshell.models import Option
 
@@ -300,3 +304,44 @@ class TestPostprocessDedupIntegration:
         result, stats = postprocess([superset, subset], steps=["sanitize"])
         assert len(result) == 2
         assert stats.deduped_options == 0
+
+
+def _opt_with_lines(
+    start: int,
+    end: int,
+    short: list[str] | None = None,
+    long: list[str] | None = None,
+) -> Option:
+    return Option(
+        text="desc",
+        short=short or [f"-{chr(97 + start % 26)}"],
+        long=long or [],
+        meta={"lines": [start, end]},
+    )
+
+
+class TestSanityCheckLineSpans:
+    """Reject pathological LLM extractions based on line-span coverage."""
+
+    def test_normal_extraction_passes(self) -> None:
+        """Typical well-behaved extraction: each option spans a few lines."""
+        options = [
+            _opt_with_lines(1, 5),
+            _opt_with_lines(6, 10),
+            _opt_with_lines(11, 100),
+        ]
+        sanity_check_line_spans(options)
+
+    def test_coverage_too_high(self) -> None:
+        """Every option spanning the whole document triggers coverage check."""
+        options = [_opt_with_lines(1, 1000, short=[f"-{i}"]) for i in range(20)]
+        with pytest.raises(ExtractionError, match="line-span coverage"):
+            sanity_check_line_spans(options)
+
+    def test_no_meta_skipped(self) -> None:
+        """Options without line metadata are silently ignored."""
+        options = [_opt("desc", short=["-a"]), _opt("desc", short=["-b"])]
+        sanity_check_line_spans(options)
+
+    def test_empty_options_skipped(self) -> None:
+        sanity_check_line_spans([])
