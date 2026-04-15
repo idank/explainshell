@@ -33,7 +33,7 @@ def create_test_store() -> Store:
 
     store.add_manpage(
         ParsedManpage(
-            source="ubuntu/25.10/1/bar.1.gz",
+            source="ubuntu/26.04/1/bar.1.gz",
             name="bar",
             synopsis="bar synopsis",
             options=opts,
@@ -44,7 +44,7 @@ def create_test_store() -> Store:
     )
     store.add_manpage(
         ParsedManpage(
-            source="ubuntu/25.10/1/baz.1.gz",
+            source="ubuntu/26.04/1/baz.1.gz",
             name="baz",
             synopsis="baz synopsis",
             options=opts,
@@ -55,7 +55,7 @@ def create_test_store() -> Store:
     )
     store.add_manpage(
         ParsedManpage(
-            source="ubuntu/25.10/1/bar-foo.1.gz",
+            source="ubuntu/26.04/1/bar-foo.1.gz",
             name="bar-foo",
             synopsis="bar foo synopsis",
             options=opts,
@@ -66,7 +66,7 @@ def create_test_store() -> Store:
     )
     store.add_manpage(
         ParsedManpage(
-            source="ubuntu/25.10/1/nosynopsis.1.gz",
+            source="ubuntu/26.04/1/nosynopsis.1.gz",
             name="nosynopsis",
             synopsis=None,
             options=opts,
@@ -78,7 +78,7 @@ def create_test_store() -> Store:
     # Two manpages with the same name but different sections (suggestions).
     store.add_manpage(
         ParsedManpage(
-            source="ubuntu/25.10/1/dup.1.gz",
+            source="ubuntu/26.04/1/dup.1.gz",
             name="dup",
             synopsis="dup1 synopsis",
             options=opts,
@@ -88,7 +88,7 @@ def create_test_store() -> Store:
     )
     store.add_manpage(
         ParsedManpage(
-            source="ubuntu/25.10/2/dup.2.gz",
+            source="ubuntu/26.04/2/dup.2.gz",
             name="dup",
             synopsis="dup2 synopsis",
             options=opts,
@@ -119,7 +119,7 @@ def create_test_store() -> Store:
 
     store.add_manpage(
         ParsedManpage(
-            source="ubuntu/25.10/1/markdown-page.1.gz",
+            source="ubuntu/26.04/1/markdown-page.1.gz",
             name="markdown-page",
             synopsis="page with markdown source",
             options=extended_opts,
@@ -131,7 +131,7 @@ def create_test_store() -> Store:
     # Edge-case filenames.
     store.add_manpage(
         ParsedManpage(
-            source="ubuntu/25.10/1/cd.1posix.gz",
+            source="ubuntu/26.04/1/cd.1posix.gz",
             name="cd",
             synopsis="change directory",
             options=[],
@@ -141,7 +141,7 @@ def create_test_store() -> Store:
     )
     store.add_manpage(
         ParsedManpage(
-            source="ubuntu/25.10/1/pg_autoctl create worker.1.gz",
+            source="ubuntu/26.04/1/pg_autoctl create worker.1.gz",
             name="pg_autoctl create worker",
             synopsis="create a worker",
             options=[],
@@ -151,7 +151,7 @@ def create_test_store() -> Store:
     )
     store.add_manpage(
         ParsedManpage(
-            source="ubuntu/25.10/1/c++filt.1.gz",
+            source="ubuntu/26.04/1/c++filt.1.gz",
             name="c++filt",
             synopsis="demangle symbols",
             options=[],
@@ -161,7 +161,7 @@ def create_test_store() -> Store:
     )
     store.add_manpage(
         ParsedManpage(
-            source="ubuntu/25.10/1/withargs.1.gz",
+            source="ubuntu/26.04/1/withargs.1.gz",
             name="withargs",
             synopsis="withargs synopsis",
             options=extended_opts,
@@ -194,7 +194,7 @@ def create_test_store() -> Store:
 
     store.add_manpage(
         ParsedManpage(
-            source="ubuntu/25.10/1/withmultipos.1.gz",
+            source="ubuntu/26.04/1/withmultipos.1.gz",
             name="withmultipos",
             synopsis="withmultipos synopsis",
             options=multipos_opts,

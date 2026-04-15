@@ -67,30 +67,30 @@ class TestExplainRouter(unittest.TestCase):
     # -- Distro-prefixed routes --
 
     def test_explain_cmd_with_distro(self):
-        rv = self.client.get("/explain/ubuntu/25.10?cmd=bar+-a")
+        rv = self.client.get("/explain/ubuntu/26.04?cmd=bar+-a")
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b"bar", rv.data)
 
     def test_explain_program_with_distro(self):
-        rv = self.client.get("/explain/ubuntu/25.10/bar")
+        rv = self.client.get("/explain/ubuntu/26.04/bar")
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b"bar", rv.data)
 
     def test_explain_section_program_with_distro(self):
-        rv = self.client.get("/explain/ubuntu/25.10/1/bar")
+        rv = self.client.get("/explain/ubuntu/26.04/1/bar")
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b"bar", rv.data)
 
     def test_url_distro_scoping(self):
-        rv = self.client.get("/explain/ubuntu/25.10?cmd=bar+-a")
+        rv = self.client.get("/explain/ubuntu/26.04?cmd=bar+-a")
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b"bar", rv.data)
 
     # -- explain_prefix in rendered HTML --
 
     def test_explain_prefix_with_distro_in_form(self):
-        rv = self.client.get("/explain/ubuntu/25.10?cmd=bar+-a")
-        self.assertIn(b"action='/explain/ubuntu/25.10'", rv.data)
+        rv = self.client.get("/explain/ubuntu/26.04?cmd=bar+-a")
+        self.assertIn(b"action='/explain/ubuntu/26.04'", rv.data)
 
     def test_explain_prefix_without_distro_in_form(self):
         rv = self.client.get("/explain?cmd=bar+-a")
@@ -98,14 +98,14 @@ class TestExplainRouter(unittest.TestCase):
         self.assertNotIn(b"action='/explain/ubuntu", rv.data)
 
     def test_explain_prefix_in_command_links(self):
-        rv = self.client.get("/explain/ubuntu/25.10?cmd=bar+-a")
+        rv = self.client.get("/explain/ubuntu/26.04?cmd=bar+-a")
         # Command links should use distro prefix
-        self.assertIn(b"/explain/ubuntu/25.10/1/bar", rv.data)
+        self.assertIn(b"/explain/ubuntu/26.04/1/bar", rv.data)
 
     def test_explain_prefix_without_distro_in_command_links(self):
         rv = self.client.get("/explain?cmd=bar+-a")
         self.assertIn(b"/explain/1/bar", rv.data)
-        self.assertNotIn(b"/explain/ubuntu/25.10/1/bar", rv.data)
+        self.assertNotIn(b"/explain/ubuntu/26.04/1/bar", rv.data)
 
     def test_default_distro_prefers_ubuntu(self):
         """When multiple distros exist, the default should prefer ubuntu so
@@ -120,7 +120,7 @@ class TestExplainRouter(unittest.TestCase):
         # Only ubuntu has "bar"; arch has a different command.
         store.add_manpage(
             ParsedManpage(
-                source="ubuntu/25.10/1/bar.1.gz",
+                source="ubuntu/26.04/1/bar.1.gz",
                 name="bar",
                 synopsis="bar synopsis",
                 options=[Option(text="-a desc", short=["-a"], long=[])],
@@ -148,19 +148,19 @@ class TestExplainRouter(unittest.TestCase):
             web_mod._distros_cache = None
 
     def test_distro_only_no_cmd_redirects(self):
-        rv = self.client.get("/explain/ubuntu/25.10")
+        rv = self.client.get("/explain/ubuntu/26.04")
         self.assertEqual(rv.status_code, 302)
 
     def test_suggestion_links_use_distro_prefix(self):
-        rv = self.client.get("/explain/ubuntu/25.10/dup")
+        rv = self.client.get("/explain/ubuntu/26.04/dup")
         self.assertEqual(rv.status_code, 200)
-        self.assertIn(b"/explain/ubuntu/25.10/2/dup", rv.data)
+        self.assertIn(b"/explain/ubuntu/26.04/2/dup", rv.data)
 
     def test_suggestion_links_no_distro(self):
         rv = self.client.get("/explain/dup")
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b"/explain/2/dup", rv.data)
-        self.assertNotIn(b"/explain/ubuntu/25.10/2/dup", rv.data)
+        self.assertNotIn(b"/explain/ubuntu/26.04/2/dup", rv.data)
 
 
 class TestDistroFallback(unittest.TestCase):
@@ -184,7 +184,7 @@ class TestDistroFallback(unittest.TestCase):
         store = Store.create(":memory:")
         store.add_manpage(
             ParsedManpage(
-                source="ubuntu/25.10/1/uonly.1.gz",
+                source="ubuntu/26.04/1/uonly.1.gz",
                 name="uonly",
                 synopsis="ubuntu only",
                 options=[Option(text="-u desc", short=["-u"], long=[])],
@@ -204,7 +204,7 @@ class TestDistroFallback(unittest.TestCase):
         )
         store.add_manpage(
             ParsedManpage(
-                source="ubuntu/25.10/1/both.1.gz",
+                source="ubuntu/26.04/1/both.1.gz",
                 name="both",
                 synopsis="both ubuntu",
                 options=[Option(text="-b desc", short=["-b"], long=[])],
@@ -316,26 +316,26 @@ class TestManpageRoute(unittest.TestCase):
     # -- Single manpage view --
 
     def test_manpage_returns_200(self):
-        rv = self.client.get("/manpage/ubuntu/25.10/1/bar.1")
+        rv = self.client.get("/manpage/ubuntu/26.04/1/bar.1")
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b"bar(1)", rv.data)
 
     def test_manpage_displays_source_text(self):
-        rv = self.client.get("/manpage/ubuntu/25.10/1/bar.1")
+        rv = self.client.get("/manpage/ubuntu/26.04/1/bar.1")
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b".TH roff content", rv.data)
 
     def test_manpage_not_found(self):
-        rv = self.client.get("/manpage/ubuntu/25.10/1/nosuchpage.1")
+        rv = self.client.get("/manpage/ubuntu/26.04/1/nosuchpage.1")
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b"missing man page", rv.data)
 
     def test_manpage_roff_rendered_as_pre(self):
-        rv = self.client.get("/manpage/ubuntu/25.10/1/bar.1")
+        rv = self.client.get("/manpage/ubuntu/26.04/1/bar.1")
         self.assertIn(b"<pre>", rv.data)
 
     def test_manpage_markdown_rendered_as_html(self):
-        rv = self.client.get("/manpage/ubuntu/25.10/1/markdown-page.1")
+        rv = self.client.get("/manpage/ubuntu/26.04/1/markdown-page.1")
         self.assertEqual(rv.status_code, 200)
         # Markdown content should be rendered, not in a <pre> block
         self.assertNotIn(b"<pre>", rv.data)
@@ -344,17 +344,17 @@ class TestManpageRoute(unittest.TestCase):
     # -- Edge-case filenames --
 
     def test_manpage_mismatched_dir_file_section(self):
-        rv = self.client.get("/manpage/ubuntu/25.10/1/cd.1posix")
+        rv = self.client.get("/manpage/ubuntu/26.04/1/cd.1posix")
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b"cd(1posix)", rv.data)
 
     def test_manpage_filename_with_spaces(self):
-        rv = self.client.get("/manpage/ubuntu/25.10/1/pg_autoctl create worker.1")
+        rv = self.client.get("/manpage/ubuntu/26.04/1/pg_autoctl create worker.1")
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b"pg_autoctl create worker(1)", rv.data)
 
     def test_manpage_filename_with_plus(self):
-        rv = self.client.get("/manpage/ubuntu/25.10/1/c++filt.1")
+        rv = self.client.get("/manpage/ubuntu/26.04/1/c++filt.1")
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b"c++filt(1)", rv.data)
 
@@ -363,8 +363,8 @@ class TestManpageRoute(unittest.TestCase):
     def test_release_index(self):
         rv = self.client.get("/manpage/ubuntu/")
         self.assertEqual(rv.status_code, 200)
-        self.assertIn(b"25.10", rv.data)
-        self.assertIn(b'href="/manpage/ubuntu/25.10/"', rv.data)
+        self.assertIn(b"26.04", rv.data)
+        self.assertIn(b'href="/manpage/ubuntu/26.04/"', rv.data)
 
     def test_release_index_unknown_distro(self):
         rv = self.client.get("/manpage/archlinux/")
@@ -375,41 +375,41 @@ class TestManpageRoute(unittest.TestCase):
     # -- Section index --
 
     def test_section_index(self):
-        rv = self.client.get("/manpage/ubuntu/25.10/")
+        rv = self.client.get("/manpage/ubuntu/26.04/")
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b"section 1", rv.data)
 
     # -- Section listing --
 
     def test_list_filtered_by_section(self):
-        rv = self.client.get("/manpage/ubuntu/25.10/1/")
+        rv = self.client.get("/manpage/ubuntu/26.04/1/")
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b"bar(1)", rv.data)
 
     def test_list_empty_for_unknown_section(self):
-        rv = self.client.get("/manpage/ubuntu/25.10/9/")
+        rv = self.client.get("/manpage/ubuntu/26.04/9/")
         self.assertEqual(rv.status_code, 200)
         # No manpage links, but page should render
-        self.assertNotIn(b"/manpage/ubuntu/25.10/9/", rv.data)
+        self.assertNotIn(b"/manpage/ubuntu/26.04/9/", rv.data)
 
     def test_list_links_point_to_manpage_view(self):
-        rv = self.client.get("/manpage/ubuntu/25.10/1/")
-        self.assertIn(b'href="/manpage/ubuntu/25.10/1/bar.1"', rv.data)
+        rv = self.client.get("/manpage/ubuntu/26.04/1/")
+        self.assertIn(b'href="/manpage/ubuntu/26.04/1/bar.1"', rv.data)
 
     def test_list_links_url_encode_special_chars(self):
-        rv = self.client.get("/manpage/ubuntu/25.10/1/")
+        rv = self.client.get("/manpage/ubuntu/26.04/1/")
         # Spaces should be percent-encoded in URLs
         self.assertIn(
-            b'href="/manpage/ubuntu/25.10/1/pg_autoctl%20create%20worker.1"',
+            b'href="/manpage/ubuntu/26.04/1/pg_autoctl%20create%20worker.1"',
             rv.data,
         )
         # + should be percent-encoded in URLs
-        self.assertIn(b'href="/manpage/ubuntu/25.10/1/c%2B%2Bfilt.1"', rv.data)
+        self.assertIn(b'href="/manpage/ubuntu/26.04/1/c%2B%2Bfilt.1"', rv.data)
 
 
 class TestManpageUrl(unittest.TestCase):
     def test_matching_prefix(self):
-        url = manpage_url("ubuntu/25.10/1/tar.1.gz")
+        url = manpage_url("ubuntu/26.04/1/tar.1.gz")
         self.assertRegex(
             url,
             r"https://manpages\.ubuntu\.com/manpages/\w+/en/man1/tar\.1\.html",
@@ -419,17 +419,17 @@ class TestManpageUrl(unittest.TestCase):
         self.assertIsNone(manpage_url("custom/distro/1/foo.1.gz"))
 
     def test_section_8(self):
-        url = manpage_url("ubuntu/25.10/8/iptables.8.gz")
+        url = manpage_url("ubuntu/26.04/8/iptables.8.gz")
         self.assertRegex(
             url,
             r"https://manpages\.ubuntu\.com/manpages/\w+/en/man8/iptables\.8\.html",
         )
 
     def test_posix_section(self):
-        url = manpage_url("ubuntu/25.10/1/crontab.1posix.gz")
+        url = manpage_url("ubuntu/26.04/1/crontab.1posix.gz")
         self.assertEqual(
             url,
-            "https://manpages.ubuntu.com/manpages/questing/en/man1/crontab.1posix.html",
+            "https://manpages.ubuntu.com/manpages/resolute/en/man1/crontab.1posix.html",
         )
 
 

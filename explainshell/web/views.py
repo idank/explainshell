@@ -131,7 +131,7 @@ def manpage_list(distro, release, section):
     sources = get_store().list_manpages(prefix)
     entries = []
     for source in sorted(sources):
-        # source is e.g. "ubuntu/25.10/1/cd.1posix.gz"; strip the
+        # source is e.g. "ubuntu/26.04/1/cd.1posix.gz"; strip the
         # distro/release prefix and .gz suffix to form the URL tail.
         tail = source[len(f"{distro}/{release}/") : -3]  # "1/cd.1posix"
         basename = os.path.basename(source)[:-3]
@@ -158,7 +158,7 @@ def manpage(distro, release, rest):
     """Serve the raw manpage source text via exact lookup.
 
     *rest* is everything after distro/release, e.g. "1/cd.1posix",
-    mapping to source key "ubuntu/25.10/1/cd.1posix.gz".
+    mapping to source key "ubuntu/26.04/1/cd.1posix.gz".
     """
     source = f"{distro}/{release}/{rest}.gz"
     raw = get_store().get_raw_manpage(source)
@@ -213,7 +213,7 @@ def explain_router(path):
             program = parts[0]
         elif len(parts) == 2:
             if _is_known_distro(parts[0]):
-                # /explain/ubuntu/25.10 with no ?cmd → redirect to index
+                # /explain/ubuntu/26.04 with no ?cmd → redirect to index
                 return redirect("/")
             section, program = parts[0], parts[1]
         elif len(parts) == 3 and _is_known_distro(parts[0]):
@@ -358,7 +358,7 @@ def _handle_explain_program(section, program, url_distro, url_release):
 def manpage_url(source):
     """Resolve a manpage source path to an external URL, or None."""
     parts = source.split("/")
-    section_dir = parts[-2]  # e.g. "1" from "ubuntu/25.10/1/cat.1posix.gz"
+    section_dir = parts[-2]  # e.g. "1" from "ubuntu/26.04/1/cat.1posix.gz"
     basename = parts[-1]
     name_with_section = basename[:-3]  # remove .gz
     name, section = name_with_section.rsplit(".", 1)

@@ -26,7 +26,7 @@ def store():
     s.close()
 
 
-def _make_manpage(name, section, aliases=None, distro="ubuntu", release="25.10"):
+def _make_manpage(name, section, aliases=None, distro="ubuntu", release="26.04"):
     """Helper to build a ParsedManpage with the conventional source path."""
     source = f"{distro}/{release}/{section}/{name}.{section}.gz"
     if aliases is None:
@@ -131,7 +131,7 @@ class TestFindManPageExactSource:
         mp = _make_manpage("tar", "1")
         store.add_manpage(mp, _make_raw())
 
-        results = store.find_man_page("ubuntu/25.10/1/tar.1.gz")
+        results = store.find_man_page("ubuntu/26.04/1/tar.1.gz")
         assert results[0].name == "tar"
 
     def test_gz_lookup_not_found_raises(self, store):
@@ -147,7 +147,7 @@ class TestFindManPageNotFound:
     def test_dot_command(self, store):
         """The '.' command (source) should be looked up without splitting on dot."""
         mp = ParsedManpage(
-            source="ubuntu/25.10/1/..1.gz",
+            source="ubuntu/26.04/1/..1.gz",
             name=".",
             synopsis=". - source a file",
             aliases=[(".", 10)],
@@ -163,15 +163,15 @@ class TestHasManpageSource:
         mp = _make_manpage("tar", "1")
         store.add_manpage(mp, _make_raw())
 
-        assert store.has_manpage_source("ubuntu/25.10/1/tar.1.gz") is True
+        assert store.has_manpage_source("ubuntu/26.04/1/tar.1.gz") is True
 
     def test_returns_false_for_missing_source(self, store):
-        assert store.has_manpage_source("ubuntu/25.10/1/missing.1.gz") is False
+        assert store.has_manpage_source("ubuntu/26.04/1/missing.1.gz") is False
 
 
 class TestParseDistroRelease:
     def test_distro_path(self):
-        assert parse_distro_release("ubuntu/25.10/1/ps.1.gz") == ("ubuntu", "25.10")
+        assert parse_distro_release("ubuntu/26.04/1/ps.1.gz") == ("ubuntu", "26.04")
 
     def test_different_distro(self):
         assert parse_distro_release("debian/12/8/foo.8.gz") == ("debian", "12")
@@ -187,13 +187,13 @@ class TestAddManpageDuplicatePrevention:
     def test_same_name_section_distro_different_source_raises(self, store):
         """Two manpages with same name+section+distro but different source should raise."""
         mp1 = ParsedManpage(
-            source="ubuntu/25.10/1/ps.1.gz",
+            source="ubuntu/26.04/1/ps.1.gz",
             name="ps",
             synopsis="ps - report",
             aliases=[("ps", 10)],
         )
         mp2 = ParsedManpage(
-            source="ubuntu/25.10/1/procps-ps.1.gz",
+            source="ubuntu/26.04/1/procps-ps.1.gz",
             name="ps",
             synopsis="ps - report processes",
             aliases=[("ps", 10)],
@@ -204,7 +204,7 @@ class TestAddManpageDuplicatePrevention:
 
     def test_same_name_different_distro_succeeds(self, store):
         """Same name+section in different distros should be allowed."""
-        mp1 = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
+        mp1 = _make_manpage("ps", "1", distro="ubuntu", release="26.04")
         mp2 = _make_manpage("ps", "1", distro="debian", release="12")
         store.add_manpage(mp1, _make_raw())
         store.add_manpage(mp2, _make_raw())  # should not raise
@@ -220,18 +220,18 @@ class TestAddManpageDuplicatePrevention:
 class TestFindManPageDistroScoping:
     def test_filter_by_distro(self, store):
         """find_man_page with distro/release should only return matching manpages."""
-        mp_ubuntu = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
+        mp_ubuntu = _make_manpage("ps", "1", distro="ubuntu", release="26.04")
         mp_debian = _make_manpage("ps", "1", distro="debian", release="12")
         store.add_manpage(mp_ubuntu, _make_raw())
         store.add_manpage(mp_debian, _make_raw())
 
-        results = store.find_man_page("ps", distro="ubuntu", release="25.10")
+        results = store.find_man_page("ps", distro="ubuntu", release="26.04")
         assert len(results) == 1
-        assert results[0].source.startswith("ubuntu/25.10/")
+        assert results[0].source.startswith("ubuntu/26.04/")
 
     def test_no_results_raises(self, store):
         """Filtering by a distro that has no matching manpage should raise."""
-        mp = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
+        mp = _make_manpage("ps", "1", distro="ubuntu", release="26.04")
         store.add_manpage(mp, _make_raw())
 
         with pytest.raises(errors.ProgramDoesNotExist):
@@ -239,7 +239,7 @@ class TestFindManPageDistroScoping:
 
     def test_no_filter_returns_all(self, store):
         """Without distro/release, all matching manpages should be returned."""
-        mp_ubuntu = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
+        mp_ubuntu = _make_manpage("ps", "1", distro="ubuntu", release="26.04")
         mp_debian = _make_manpage("ps", "1", distro="debian", release="12")
         store.add_manpage(mp_ubuntu, _make_raw())
         store.add_manpage(mp_debian, _make_raw())
@@ -250,23 +250,23 @@ class TestFindManPageDistroScoping:
 
 class TestDistros:
     def test_returns_distro_release_pairs(self, store):
-        mp1 = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
+        mp1 = _make_manpage("ps", "1", distro="ubuntu", release="26.04")
         mp2 = _make_manpage("ls", "1", distro="debian", release="12")
         store.add_manpage(mp1, _make_raw())
         store.add_manpage(mp2, _make_raw())
 
         pairs = store.distros()
-        assert ("ubuntu", "25.10") in pairs
+        assert ("ubuntu", "26.04") in pairs
         assert ("debian", "12") in pairs
 
     def test_no_duplicates(self, store):
-        mp1 = _make_manpage("ps", "1", distro="ubuntu", release="25.10")
-        mp2 = _make_manpage("ls", "1", distro="ubuntu", release="25.10")
+        mp1 = _make_manpage("ps", "1", distro="ubuntu", release="26.04")
+        mp2 = _make_manpage("ls", "1", distro="ubuntu", release="26.04")
         store.add_manpage(mp1, _make_raw())
         store.add_manpage(mp2, _make_raw())
 
         pairs = store.distros()
-        assert pairs.count(("ubuntu", "25.10")) == 1
+        assert pairs.count(("ubuntu", "26.04")) == 1
 
 
 class TestGetManpageSource:
@@ -279,7 +279,7 @@ class TestGetManpageSource:
         )
         store.add_manpage(mp, raw)
 
-        result = store.get_raw_manpage("ubuntu/25.10/1/tar.1.gz")
+        result = store.get_raw_manpage("ubuntu/26.04/1/tar.1.gz")
         assert result is not None
         assert result.source_text == ".TH TAR 1"
         assert result.generator == "roff"
@@ -293,12 +293,12 @@ class TestGetManpageSource:
         )
         store.add_manpage(mp, raw)
 
-        result = store.get_raw_manpage("ubuntu/25.10/1/curl.1.gz")
+        result = store.get_raw_manpage("ubuntu/26.04/1/curl.1.gz")
         assert result is not None
         assert "markdown" in result.generator
 
     def test_not_found_returns_none(self, store):
-        assert store.get_raw_manpage("ubuntu/25.10/1/nosuch.1.gz") is None
+        assert store.get_raw_manpage("ubuntu/26.04/1/nosuch.1.gz") is None
 
 
 class TestListSections:
@@ -308,7 +308,7 @@ class TestListSections:
         store.add_manpage(mp1, _make_raw())
         store.add_manpage(mp3, _make_raw())
 
-        sections = store.list_sections("ubuntu", "25.10")
+        sections = store.list_sections("ubuntu", "26.04")
         assert sections == ["1", "3"]
 
     def test_no_duplicates(self, store):
@@ -317,7 +317,7 @@ class TestListSections:
         store.add_manpage(mp1, _make_raw())
         store.add_manpage(mp2, _make_raw())
 
-        sections = store.list_sections("ubuntu", "25.10")
+        sections = store.list_sections("ubuntu", "26.04")
         assert sections == ["1"]
 
     def test_empty_for_unknown_distro(self, store):
@@ -329,13 +329,13 @@ class TestListSections:
 
 class TestListManpages:
     def test_prefix_filters_by_distro_release(self, store):
-        mp1 = _make_manpage("tar", "1", distro="ubuntu", release="25.10")
+        mp1 = _make_manpage("tar", "1", distro="ubuntu", release="26.04")
         mp2 = _make_manpage("ps", "1", distro="debian", release="12")
         store.add_manpage(mp1, _make_raw())
         store.add_manpage(mp2, _make_raw())
 
-        sources = store.list_manpages("ubuntu/25.10/")
-        assert "ubuntu/25.10/1/tar.1.gz" in sources
+        sources = store.list_manpages("ubuntu/26.04/")
+        assert "ubuntu/26.04/1/tar.1.gz" in sources
         assert "debian/12/1/ps.1.gz" not in sources
 
     def test_prefix_filters_by_section(self, store):
@@ -344,8 +344,8 @@ class TestListManpages:
         store.add_manpage(mp1, _make_raw())
         store.add_manpage(mp3, _make_raw())
 
-        sources = store.list_manpages("ubuntu/25.10/3/")
-        assert sources == ["ubuntu/25.10/3/printf.3.gz"]
+        sources = store.list_manpages("ubuntu/26.04/3/")
+        assert sources == ["ubuntu/26.04/3/printf.3.gz"]
 
     def test_empty_result(self, store):
         mp = _make_manpage("tar", "1")
@@ -356,7 +356,7 @@ class TestListManpages:
 
 class TestValidateSourcePath:
     def test_valid_path(self):
-        validate_source_path("ubuntu/25.10/1/tar.1.gz")
+        validate_source_path("ubuntu/26.04/1/tar.1.gz")
 
     def test_valid_path_section_8(self):
         validate_source_path("debian/12/8/iptables.8.gz")
@@ -367,7 +367,7 @@ class TestValidateSourcePath:
 
     def test_missing_distro_rejected(self):
         with pytest.raises(errors.InvalidSourcePath):
-            validate_source_path("25.10/1/tar.1.gz")
+            validate_source_path("26.04/1/tar.1.gz")
 
     def test_add_manpage_rejects_bare_source(self, store):
         mp = ParsedManpage(
@@ -427,7 +427,7 @@ class _SubcommandTestBase:
         extractor: str | None = None,
         subcommands: list[str] | None = None,
     ) -> ParsedManpage:
-        source = f"ubuntu/25.10/{section}/{name}.{section}.gz"
+        source = f"ubuntu/26.04/{section}/{name}.{section}.gz"
         return ParsedManpage(
             source=source,
             name=name,
@@ -461,7 +461,7 @@ class TestUpdateSubcommandMappingsHeuristic(_SubcommandTestBase):
 
         mappings_added, parents = store.update_subcommand_mappings_heuristic()
 
-        assert ("git commit", "ubuntu/25.10/1/git-commit.1.gz") in mappings_added
+        assert ("git commit", "ubuntu/26.04/1/git-commit.1.gz") in mappings_added
         assert "git" in parents
 
     def test_sets_subcommands_on_parent(self, store):
@@ -472,7 +472,7 @@ class TestUpdateSubcommandMappingsHeuristic(_SubcommandTestBase):
 
         store.update_subcommand_mappings_heuristic()
 
-        subs = self._get_subcommands(store, "ubuntu/25.10/1/git.1.gz")
+        subs = self._get_subcommands(store, "ubuntu/26.04/1/git.1.gz")
         assert sorted(subs) == ["commit", "push"]
 
     def test_no_mapping_without_parent(self, store):
@@ -547,7 +547,7 @@ class TestUpdateSubcommandMappingsLlm(_SubcommandTestBase):
 
         store.update_subcommand_mappings_llm()
 
-        subs = self._get_subcommands(store, "ubuntu/25.10/1/git.1.gz")
+        subs = self._get_subcommands(store, "ubuntu/26.04/1/git.1.gz")
         assert subs == ["commit"]  # unchanged from the original value
 
     def test_idempotent_on_rerun(self, store):
@@ -596,7 +596,7 @@ class TestUpdateSubcommandMappingsLlm(_SubcommandTestBase):
         """Reconciliation must not delete alias mappings for manpages whose
         name contains a space (e.g. 'pg_autoctl activate')."""
         mp = ParsedManpage(
-            source="ubuntu/25.10/1/pg_autoctl activate.1.gz",
+            source="ubuntu/26.04/1/pg_autoctl activate.1.gz",
             name="pg_autoctl activate",
             synopsis="pg_autoctl activate - do things",
             aliases=[("pg_autoctl activate", 10)],

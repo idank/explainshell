@@ -59,7 +59,7 @@ def _make_manpage(
     name: str,
     section: str = "1",
     distro: str = "ubuntu",
-    release: str = "25.10",
+    release: str = "26.04",
     aliases: list[tuple[str, int]] | None = None,
     options: list[Option] | None = None,
 ) -> ParsedManpage:
@@ -1014,8 +1014,8 @@ class TestContentDedup(unittest.TestCase):
         """Identical files from different releases must both be extracted."""
         with _temp_db() as db_path:
             gz_files = [
-                "/fake/ubuntu/25.10/1/foo.1.gz",
                 "/fake/ubuntu/26.04/1/foo.1.gz",
+                "/fake/ubuntu/24.04/1/foo.1.gz",
             ]
             mock_collect.return_value = gz_files
             mock_source.side_effect = lambda p: "/".join(p.split("/")[-4:])
@@ -1536,9 +1536,9 @@ class TestDiffDbSourceMatch(unittest.TestCase):
         with _temp_db() as db_path:
             real_store = Store.create(db_path)
             # Insert find in two releases so both exact-source and name lookups
-            # could succeed.  Give the 25.10 entry a distinctive synopsis so
+            # could succeed.  Give the 26.04 entry a distinctive synopsis so
             # we can tell which one the diff resolved.
-            mp_25 = _make_manpage("find", distro="ubuntu", release="25.10")
+            mp_25 = _make_manpage("find", distro="ubuntu", release="26.04")
             mp_25.synopsis = "old synopsis"
             real_store.add_manpage(mp_25, _make_raw())
             real_store.add_manpage(
@@ -1554,7 +1554,7 @@ class TestDiffDbSourceMatch(unittest.TestCase):
 
             log_text = "\n".join(logs)
             self.assertNotIn("not in DB", log_text)
-            # Must NOT show the 25.10 synopsis — exact source (26.04) should
+            # Must NOT show the 26.04 synopsis — exact source (26.04) should
             # have been preferred over the name-based fallback.
             self.assertNotIn("old synopsis", log_text)
             real_store.close()
@@ -1563,10 +1563,10 @@ class TestDiffDbSourceMatch(unittest.TestCase):
         """When exact source is not in DB, fall back to name lookup."""
         with _temp_db() as db_path:
             real_store = Store.create(db_path)
-            # Insert find under 25.10 only.  The exact source lookup for
+            # Insert find under 26.04 only.  The exact source lookup for
             # ubuntu/26.04 will fail, so _run_diff_db must fall back to the
             # name-based lookup ("find") which resolves to this entry.
-            mp = _make_manpage("find", distro="ubuntu", release="25.10")
+            mp = _make_manpage("find", distro="ubuntu", release="26.04")
             mp.synopsis = "fallback synopsis"
             real_store.add_manpage(mp, _make_raw())
 
@@ -1690,14 +1690,14 @@ class TestShowCli(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         self.assertIn("parsed_manpages:   2", result.output)
-        self.assertIn("ubuntu/25.10", result.output)
+        self.assertIn("ubuntu/26.04", result.output)
 
     def test_show_distros(self):
         runner = CliRunner()
         result = runner.invoke(cli, ["--db", self.db_path, "show", "distros"])
 
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("ubuntu/25.10", result.output)
+        self.assertIn("ubuntu/26.04", result.output)
 
     def test_show_manpage(self):
         runner = CliRunner()
@@ -1748,7 +1748,7 @@ class TestShowCli(unittest.TestCase):
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["--db", self.db_path, "show", "manpage", "tar", "--release", "25.10"],
+            ["--db", self.db_path, "show", "manpage", "tar", "--release", "26.04"],
         )
 
         self.assertNotEqual(result.exit_code, 0)
@@ -1766,7 +1766,7 @@ class TestShowCli(unittest.TestCase):
     def test_show_sections(self):
         runner = CliRunner()
         result = runner.invoke(
-            cli, ["--db", self.db_path, "show", "sections", "ubuntu", "25.10"]
+            cli, ["--db", self.db_path, "show", "sections", "ubuntu", "26.04"]
         )
 
         self.assertEqual(result.exit_code, 0)
@@ -1775,7 +1775,7 @@ class TestShowCli(unittest.TestCase):
     def test_show_manpages(self):
         runner = CliRunner()
         result = runner.invoke(
-            cli, ["--db", self.db_path, "show", "manpages", "ubuntu/25.10/1/"]
+            cli, ["--db", self.db_path, "show", "manpages", "ubuntu/26.04/1/"]
         )
 
         self.assertEqual(result.exit_code, 0)
@@ -1904,7 +1904,7 @@ class TestDbCheckCli(unittest.TestCase):
         self.store._conn.execute("PRAGMA foreign_keys = OFF")
         self.store._conn.execute(
             "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)",
-            ("ghost", "ubuntu/25.10/1/ghost.1.gz", 10),
+            ("ghost", "ubuntu/26.04/1/ghost.1.gz", 10),
         )
         self.store._conn.commit()
         self.store._conn.execute("PRAGMA foreign_keys = ON")

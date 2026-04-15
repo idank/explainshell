@@ -57,8 +57,8 @@ class TestGetManpageText(unittest.TestCase):
 # TestGetManpageTextReal — exercises the actual mandoc binary
 # ---------------------------------------------------------------------------
 
-_ECHO_GZ = os.path.join(TESTS_DIR, "manpages", "ubuntu", "25.10", "1", "echo.1.gz")
-_FIND_GZ = os.path.join(TESTS_DIR, "manpages", "ubuntu", "25.10", "1", "find.1.gz")
+_ECHO_GZ = os.path.join(TESTS_DIR, "manpages", "ubuntu", "26.04", "1", "echo.1.gz")
+_FIND_GZ = os.path.join(TESTS_DIR, "manpages", "ubuntu", "26.04", "1", "find.1.gz")
 
 
 class TestGetManpageTextReal(unittest.TestCase):

@@ -29,7 +29,7 @@ def validate_source_path(source: str) -> None:
         raise errors.InvalidSourcePath(
             f"source path {source!r} does not match the required "
             f"'distro/release/section/name.section.gz' format "
-            f"(e.g. 'ubuntu/25.10/1/tar.1.gz')"
+            f"(e.g. 'ubuntu/26.04/1/tar.1.gz')"
         )
 
 
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS manpages (
 );
 
 CREATE TABLE IF NOT EXISTS parsed_manpages (
-    source        TEXT    PRIMARY KEY,            -- e.g. "ubuntu/25.10/1/tar.1.gz"
+    source        TEXT    PRIMARY KEY,            -- e.g. "ubuntu/26.04/1/tar.1.gz"
     name          TEXT    NOT NULL,               -- command name (e.g. 'git')
     synopsis      TEXT,                           -- one-line synopsis from the man page
     options       TEXT    NOT NULL DEFAULT '[]',  -- JSON list of option dicts

@@ -17,7 +17,7 @@ def _make_raw():
     )
 
 
-def _make_manpage(name, section, aliases=None, distro="ubuntu", release="25.10"):
+def _make_manpage(name, section, aliases=None, distro="ubuntu", release="26.04"):
     source = f"{distro}/{release}/{section}/{name}.{section}.gz"
     if aliases is None:
         aliases = [(name, 10)]
@@ -64,7 +64,7 @@ class TestCheck:
         store._conn.execute("PRAGMA foreign_keys = OFF")
         store._conn.execute(
             "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)",
-            ("ghost", "ubuntu/25.10/1/ghost.1.gz", 10),
+            ("ghost", "ubuntu/26.04/1/ghost.1.gz", 10),
         )
         store._conn.commit()
         store._conn.execute("PRAGMA foreign_keys = ON")
@@ -78,7 +78,7 @@ class TestCheck:
         store._conn.execute(
             "INSERT INTO parsed_manpages(source, name, options, aliases) "
             "VALUES (?, ?, '[]', '[]')",
-            ("ubuntu/25.10/1/lonely.1.gz", "lonely"),
+            ("ubuntu/26.04/1/lonely.1.gz", "lonely"),
         )
         store._conn.commit()
         store._conn.execute("PRAGMA foreign_keys = ON")
@@ -94,7 +94,7 @@ class TestCheck:
         store._conn.execute(
             "INSERT INTO parsed_manpages(source, name, options, aliases) "
             "VALUES (?, ?, '[]', '[]')",
-            ("ubuntu/25.10/1/procps-ps.1.gz", "ps"),
+            ("ubuntu/26.04/1/procps-ps.1.gz", "ps"),
         )
         store._conn.commit()
         store._conn.execute("PRAGMA foreign_keys = ON")
@@ -120,7 +120,7 @@ class TestCheck:
         store._conn.execute(
             "INSERT INTO parsed_manpages(source, name, options, aliases) "
             "VALUES (?, ?, ?, '[]')",
-            ("ubuntu/25.10/1/find.1.gz", "find", opts),
+            ("ubuntu/26.04/1/find.1.gz", "find", opts),
         )
         store._conn.commit()
         store._conn.execute("PRAGMA foreign_keys = ON")
@@ -146,7 +146,7 @@ class TestCheck:
         store._conn.execute(
             "INSERT INTO parsed_manpages(source, name, options, aliases) "
             "VALUES (?, ?, ?, '[]')",
-            ("ubuntu/25.10/1/cat.1.gz", "cat", opts),
+            ("ubuntu/26.04/1/cat.1.gz", "cat", opts),
         )
         store._conn.commit()
         store._conn.execute("PRAGMA foreign_keys = ON")
@@ -160,7 +160,7 @@ class TestCheck:
         store._conn.execute("PRAGMA foreign_keys = OFF")
         store._conn.execute(
             "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)",
-            ("git commit", "ubuntu/25.10/1/git-commit.1.gz", 1),
+            ("git commit", "ubuntu/26.04/1/git-commit.1.gz", 1),
         )
         store._conn.commit()
         store._conn.execute("PRAGMA foreign_keys = ON")
@@ -178,7 +178,7 @@ class TestCheck:
         store._conn.execute("PRAGMA foreign_keys = OFF")
         store._conn.execute(
             "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)",
-            ("cd discid", "ubuntu/25.10/1/cd-discid.1.gz", 1),
+            ("cd discid", "ubuntu/26.04/1/cd-discid.1.gz", 1),
         )
         store._conn.commit()
         store._conn.execute("PRAGMA foreign_keys = ON")
@@ -192,7 +192,7 @@ class TestCheck:
     def test_valid_subcommand_mapping_ok(self, store, db_path):
         """Subcommand mapping matching parent's declared subcommands should not warn."""
         mp = ParsedManpage(
-            source="ubuntu/25.10/1/git.1.gz",
+            source="ubuntu/26.04/1/git.1.gz",
             name="git",
             synopsis="git - version control",
             aliases=[("git", 10)],
@@ -203,7 +203,7 @@ class TestCheck:
         store._conn.execute("PRAGMA foreign_keys = OFF")
         store._conn.execute(
             "INSERT INTO mappings(src, dst, score) VALUES (?, ?, ?)",
-            ("git commit", "ubuntu/25.10/1/git-commit.1.gz", 1),
+            ("git commit", "ubuntu/26.04/1/git-commit.1.gz", 1),
         )
         store._conn.commit()
         store._conn.execute("PRAGMA foreign_keys = ON")

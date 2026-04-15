@@ -13,7 +13,6 @@ MANDOC_PATH = os.getenv(
 # Templates may use {section} and {name} placeholders.
 MANPAGE_URLS = {
     "ubuntu/26.04": "https://manpages.ubuntu.com/manpages/resolute/en/man{section_dir}/{name}.{section}.html",
-    "ubuntu/25.10": "https://manpages.ubuntu.com/manpages/questing/en/man{section_dir}/{name}.{section}.html",
     "arch": "https://man.archlinux.org/man/{name}.{section}",
 }
 
@@ -22,7 +21,7 @@ def parse_distro_release(source):
     """Extract (distro, release) from a source path.
 
     All source paths follow the ``distro/release/section/file.gz`` format:
-      "ubuntu/25.10/1/ps.1.gz" -> ("ubuntu", "25.10")
+      "ubuntu/26.04/1/ps.1.gz" -> ("ubuntu", "26.04")
     """
     parts = source.split("/")
     return parts[0], parts[1]

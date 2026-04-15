@@ -118,7 +118,7 @@ test('manpage source links use configured URL', async ({ page }) => {
 test('distro-prefixed URL loads and preserves prefix in links', async ({
     page,
 }) => {
-    await page.goto('/explain/ubuntu/25.10?cmd=tar+xzvf+archive.tar.gz');
+    await page.goto('/explain/ubuntu/26.04?cmd=tar+xzvf+archive.tar.gz');
     await page.waitForLoadState('networkidle');
 
     await expect(page).toHaveTitle(/tar xzvf archive\.tar\.gz/);
@@ -128,11 +128,11 @@ test('distro-prefixed URL loads and preserves prefix in links', async ({
     const formAction = await page
         .locator('#top-search')
         .evaluate((el) => el.closest('form').getAttribute('action'));
-    expect(formAction).toBe('/explain/ubuntu/25.10');
+    expect(formAction).toBe('/explain/ubuntu/26.04');
 
     // Command links within the page should preserve the distro prefix
     const commandLinks = page.locator(
-        '#command a[href*="/explain/ubuntu/25.10/"]',
+        '#command a[href*="/explain/ubuntu/26.04/"]',
     );
     const count = await commandLinks.count();
     expect(count).toBeGreaterThan(0);
@@ -147,18 +147,18 @@ test('distro switch navigates to correct URL', async ({ page }) => {
     const caret = page.locator('#command .dropdown .caret').first();
     await caret.click();
 
-    // Click the ubuntu 25.10 distro link
+    // Click the ubuntu 26.04 distro link
     const ubuntuLink = page.locator(
-        '#command a[href*="/explain/ubuntu/25.10"]',
+        '#command a[href*="/explain/ubuntu/26.04"]',
     );
     await expect(ubuntuLink).toBeVisible();
 
     // Click and wait for navigation
     await Promise.all([page.waitForNavigation(), ubuntuLink.click()]);
 
-    // Should navigate to /explain/ubuntu/25.10?cmd=... (not /explain/ubuntu/25.10/arch/latest?cmd=...)
+    // Should navigate to /explain/ubuntu/26.04?cmd=... (not /explain/ubuntu/26.04/arch/latest?cmd=...)
     const url = page.url();
-    expect(url).toContain('/explain/ubuntu/25.10');
+    expect(url).toContain('/explain/ubuntu/26.04');
     expect(url).not.toContain('/arch/latest');
     expect(url).toContain('cmd=');
 });
@@ -176,7 +176,7 @@ test('distro dropdown shows active distro as unclickable highlighted item', asyn
     // The active distro should be a plain <li> (no <a> tag) with the active-distro class
     const activeItem = page.locator('#command .active-distro').first();
     await expect(activeItem).toBeVisible();
-    await expect(activeItem).toHaveText(/ubuntu 25\.10/);
+    await expect(activeItem).toHaveText(/ubuntu 26\.04/);
 
     // It should not contain a link
     const link = activeItem.locator('a');
@@ -339,7 +339,7 @@ test('unknown args show question mark circles', async ({ page }) => {
     // The unknown span should exist in #command
     const unknownSpan = page.locator('#command span.unknown');
     await expect(unknownSpan).toBeVisible();
-    await expect(unknownSpan).toHaveText('-Q');
+    await expect(unknownSpan).toHaveText('-Q hello');
     await expect(unknownSpan).toHaveAttribute(
         'title',
         /no matching help text/i,
