@@ -5,3 +5,4 @@
 !explainshell/
 !requirements.txt
 !start.sh
+!tools/download-latest-db.sh
