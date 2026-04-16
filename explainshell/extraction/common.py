@@ -16,7 +16,7 @@ def build_manpage_metadata(
     nested_cmd: bool | str | None = None,
     subcommands: list[str] | None = None,
     extractor: str | None = None,
-    extraction_meta: dict | None = None,
+    extraction_meta: models.ExtractionMeta | None = None,
 ) -> models.ParsedManpage:
     """One place to assemble synopsis, aliases, and detection metadata.
 

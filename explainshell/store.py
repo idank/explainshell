@@ -13,7 +13,7 @@ from collections.abc import Iterator
 from typing import NamedTuple
 
 from explainshell import errors, util, config
-from explainshell.models import ParsedManpage, RawManpage
+from explainshell.models import ExtractionMeta, ParsedManpage, RawManpage
 
 logger = logging.getLogger(__name__)
 
@@ -285,6 +285,20 @@ class Store:
             " WHERE m.source_gz_sha256 IS NOT NULL"
         ).fetchall()
         return {row["source_gz_sha256"]: row["source"] for row in rows}
+
+    def extractor_info_index(self) -> dict[str, tuple[str, ExtractionMeta]]:
+        """Return source -> (extractor, meta) for all parsed manpages."""
+        rows = self._conn.execute(
+            "SELECT source, extractor, extraction_meta FROM parsed_manpages"
+        ).fetchall()
+        result: dict[str, tuple[str, ExtractionMeta]] = {}
+        for row in rows:
+            meta_dict = json.loads(row["extraction_meta"] or "{}")
+            result[row["source"]] = (
+                row["extractor"] or "",
+                ExtractionMeta.model_validate(meta_dict),
+            )
+        return result
 
     def counts(self) -> dict[str, int]:
         """Return row counts for core tables."""

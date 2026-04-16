@@ -20,6 +20,7 @@ class ExtractConfig(BaseModel):
     mode: str | None = None
     model: str | None = None
     overwrite: bool = False
+    filter_db: str | None = None
     drop: bool = False
     jobs: int = 1
     batch_size: int | None = None

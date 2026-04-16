@@ -97,7 +97,7 @@ The `--mode` flag selects the extraction strategy:
 - `source`: parses roff macros directly. Fast, no external dependencies beyond `lexgrog`, but struggles with some manpage formats.
 - `llm:<provider/model>`: sends the manpage text (converted to markdown via `mandoc -T markdown`) to an LLM for extraction. More accurate, especially for complex or non-standard manpages. The LLM returns line ranges into the source text, not generated descriptions, so hallucinations are structurally impossible - the actual help text is always sliced from the original manpage. Example: `--mode llm:openai/gpt-5-mini`.
 
-Other `extract` flags: `--overwrite` (re-process existing entries), `--dry-run` (extract without writing to DB), `-j <N>` (parallel workers), `--batch <N>` (provider batch API for LLM modes, including `gemini/`, `openai/`, and `azure/`).
+Other `extract` flags: `--overwrite` (re-process existing entries), `--filter-db <spec>` (with `--overwrite`, only re-extract rows whose stored extractor matches `<spec>`; same syntax as `--mode` minus hybrid), `--dry-run` (extract without writing to DB), `-j <N>` (parallel workers), `--batch <N>` (provider batch API for LLM modes, including `gemini/`, `openai/`, and `azure/`).
 
 To compare extraction results, use the `diff` subcommand:
 

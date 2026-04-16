@@ -8,6 +8,7 @@ from explainshell.errors import LowConfidenceError
 from explainshell.extraction.llm.extractor import LLMExtractor
 from explainshell.extraction.mandoc import MandocExtractor
 from explainshell.extraction.types import ExtractionResult, ExtractorConfig
+from explainshell.models import ExtractionMeta
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +35,8 @@ class HybridExtractor:
             result = self._llm.extract(gz_path)
             result.stats.fallback_used = True
             result.stats.fallback_reason = str(e)[:256]
-            result.mp.extraction_meta = {
-                **(result.mp.extraction_meta or {}),
-                "fallback": True,
-                "fallback_reason": str(e)[:256],
-            }
+            base = result.mp.extraction_meta or ExtractionMeta()
+            result.mp.extraction_meta = base.model_copy(
+                update={"fallback": True, "fallback_reason": str(e)[:256]}
+            )
             return result

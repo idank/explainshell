@@ -24,6 +24,22 @@ class RawManpage:
     source_gz_sha256: str | None = None
 
 
+class ExtractionMeta(BaseModel):
+    """Side-band metadata attached to an extracted manpage.
+
+    The extractor name itself lives on ``ParsedManpage.extractor`` (and the
+    matching DB column); this model holds everything else.
+
+    model - for llm rows, the provider/model identifier (e.g. 'openai/gpt-5-mini').
+    fallback - True when hybrid fell back from mandoc to LLM.
+    fallback_reason - short message explaining why hybrid fell back.
+    """
+
+    model: str | None = None
+    fallback: bool | None = None
+    fallback_reason: str | None = None
+
+
 class Option(BaseModel):
     """An extracted command-line option from a man page.
 
@@ -79,7 +95,7 @@ class ParsedManpage(BaseModel):
     updated: bool = False
     nested_cmd: bool | str = False
     extractor: str | None = None
-    extraction_meta: dict | None = None
+    extraction_meta: ExtractionMeta | None = None
 
     @property
     def name_section(self):
@@ -112,6 +128,8 @@ class ParsedManpage(BaseModel):
                     return o_tmp
 
     def to_store(self):
+        meta = self.extraction_meta or ExtractionMeta()
+        meta_json = json.dumps(meta.model_dump(exclude_none=True))
         return {
             "source": self.source,
             "name": self.name,
@@ -123,7 +141,7 @@ class ParsedManpage(BaseModel):
             "updated": int(bool(self.updated)),
             "nested_cmd": json.dumps(self.nested_cmd),
             "extractor": self.extractor,
-            "extraction_meta": json.dumps(self.extraction_meta or {}),
+            "extraction_meta": meta_json,
         }
 
     @staticmethod
@@ -141,7 +159,10 @@ class ParsedManpage(BaseModel):
         nested_cmd = json.loads(d["nested_cmd"])
 
         extraction_meta_raw = d["extraction_meta"]
-        extraction_meta = json.loads(extraction_meta_raw) if extraction_meta_raw else {}
+        meta_dict = json.loads(extraction_meta_raw) if extraction_meta_raw else {}
+        extraction_meta = (
+            ExtractionMeta.model_validate(meta_dict) if meta_dict else None
+        )
 
         return ParsedManpage(
             source=d["source"],
@@ -154,7 +175,7 @@ class ParsedManpage(BaseModel):
             updated=bool(d["updated"]),
             nested_cmd=nested_cmd,
             extractor=d["extractor"],
-            extraction_meta=extraction_meta or None,
+            extraction_meta=extraction_meta,
         )
 
     def __repr__(self):

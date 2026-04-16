@@ -41,7 +41,7 @@ class SourceExtractor:
             gz_path,
             options,
             extractor="source",
-            extraction_meta={},
+            extraction_meta=None,
         )
 
         raw = build_raw_manpage(roff_text, "roff", gz_path)

@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 import click
 
-from explainshell import config, errors, store, util
+from explainshell import config, errors, models, store, util
 from explainshell.diff import format_diff
 from explainshell.extraction import (
     BatchResult,
@@ -114,6 +114,20 @@ def _parse_mode(raw: str | None) -> tuple[str | None, str | None]:
         f"invalid mode value: {raw!r} "
         f"(expected 'source', 'mandoc', 'llm:<model>', or 'hybrid:<model>')"
     )
+
+
+def _matches_filter(
+    filter_mode: str,
+    filter_model: str | None,
+    stored_extractor: str,
+    stored_meta: models.ExtractionMeta,
+) -> bool:
+    """Return True if a stored row matches a --filter-db spec."""
+    if not stored_extractor or filter_mode != stored_extractor:
+        return False
+    if filter_mode == "llm":
+        return stored_meta.model == filter_model
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -536,6 +550,15 @@ def _require_db(ctx: click.Context, *, must_exist: bool = False) -> str:
     "--overwrite", is_flag=True, help="Re-process pages already in the store."
 )
 @click.option(
+    "--filter-db",
+    "filter_db",
+    default=None,
+    help=(
+        "With --overwrite, only re-extract existing manpages whose DB row's "
+        "extractor matches <spec>. Same syntax as --mode, excluding hybrid."
+    ),
+)
+@click.option(
     "--drop",
     is_flag=True,
     help="Drop all data before processing (prompts for confirmation).",
@@ -569,6 +592,7 @@ def extract(
     files: tuple[str, ...],
     dry_run: bool,
     overwrite: bool,
+    filter_db: str | None,
     drop: bool,
     jobs: int,
     batch: int | None,
@@ -589,6 +613,22 @@ def extract(
         raise click.UsageError("--drop and --dry-run are mutually exclusive")
     if overwrite and dry_run:
         raise click.UsageError("--overwrite and --dry-run are mutually exclusive")
+
+    filter_mode: str | None = None
+    filter_model: str | None = None
+    if filter_db is not None:
+        if not overwrite:
+            raise click.UsageError("--filter-db requires --overwrite")
+        try:
+            filter_mode, filter_model = _parse_mode(filter_db)
+        except ValueError as e:
+            raise click.UsageError(f"--filter-db: {e}")
+        if filter_mode == "hybrid":
+            raise click.UsageError(
+                "--filter-db doesn't accept hybrid; filter by the underlying extractor "
+                "instead (e.g. llm:<model> or mandoc)"
+            )
+
     if batch is not None:
         if batch < 1:
             raise click.UsageError("--batch must be >= 1")
@@ -661,6 +701,10 @@ def extract(
         for sha, source in s.known_sha256s().items():
             hash_to_canonical[_dedup_key(sha, source)] = source
 
+    filter_index: dict[str, tuple[str, models.ExtractionMeta]] = {}
+    if filter_mode is not None:
+        filter_index = s.extractor_info_index()
+
     # Normalize input paths so symlink handling can check whether the
     # canonical target is already in the input set.  Use normpath (not
     # realpath) so symlinks don't resolve to their targets.
@@ -697,6 +741,40 @@ def extract(
                         short_path,
                         canonical_source,
                     )
+                continue
+
+        if overwrite and filter_mode is not None:
+            existing = filter_index.get(short_path)
+            if existing is not None:
+                stored_extractor, stored_meta = existing
+                if _matches_filter(
+                    filter_mode, filter_model, stored_extractor, stored_meta
+                ):
+                    # Matching DB row: queue directly and skip the
+                    # content-dedup check below. If a same-hash sibling
+                    # (new file or other DB row) appeared earlier in the
+                    # input and seeded hash_to_canonical, letting this row
+                    # fall through would alias it to that sibling and
+                    # leave its stale parsed_manpages row in place —
+                    # silently violating the "matching rows get
+                    # re-extracted" contract.
+                    work_files.append(gz_path)
+                    continue
+                logger.debug(
+                    "filter-skip %s (stored=%s/%s, filter=%s)",
+                    short_path,
+                    stored_extractor,
+                    stored_meta.model,
+                    filter_db,
+                )
+                prefilter_skipped += 1
+                # Intentionally do NOT seed hash_to_canonical from
+                # filter-skipped rows: the row we're preserving holds
+                # data we declined to refresh, so aliasing a fresh
+                # same-hash sibling onto it would pin the sibling to
+                # stale parsed output, and re-hashing the file on disk
+                # would also drift from the stored source_gz_sha256 if
+                # the .gz has changed since the last extraction.
                 continue
 
         if not overwrite and s.has_manpage_source(short_path):
@@ -842,6 +920,7 @@ def extract(
             mode=parsed_mode,
             model=model,
             overwrite=overwrite,
+            filter_db=filter_db,
             drop=drop,
             jobs=jobs,
             batch_size=batch,

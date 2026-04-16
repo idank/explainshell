@@ -56,6 +56,7 @@ import dotenv
 from pydantic import ValidationError
 
 from explainshell import config, manpage
+from explainshell.models import ExtractionMeta
 from explainshell.errors import ExtractionError, SkippedExtraction
 from explainshell.extraction.common import build_manpage_metadata, build_raw_manpage
 from explainshell.extraction.llm.prompt import SYSTEM_PROMPT
@@ -432,7 +433,7 @@ class LLMExtractor:
             dashless_opts=dashless_opts,
             subcommands=subcommands,
             extractor="llm",
-            extraction_meta={"model": self._model},
+            extraction_meta=ExtractionMeta(model=self._model),
         )
 
         raw_mp = build_raw_manpage(prepared.plain_text, "mandoc -T markdown", gz_path)

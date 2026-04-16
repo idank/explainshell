@@ -5,7 +5,7 @@ import pytest
 
 from explainshell import errors
 from explainshell.config import parse_distro_release
-from explainshell.models import ParsedManpage, RawManpage
+from explainshell.models import ExtractionMeta, ParsedManpage, RawManpage
 from explainshell.store import Store, validate_source_path
 
 
@@ -167,6 +167,35 @@ class TestHasManpageSource:
 
     def test_returns_false_for_missing_source(self, store):
         assert store.has_manpage_source("ubuntu/26.04/1/missing.1.gz") is False
+
+
+class TestExtractorInfoIndex:
+    def test_returns_extractor_and_meta_for_all_rows(self, store):
+        llm_mp = ParsedManpage(
+            source="ubuntu/26.04/1/tar.1.gz",
+            name="tar",
+            synopsis="tar - archive files",
+            aliases=[("tar", 10)],
+            extractor="llm",
+            extraction_meta=ExtractionMeta(model="openai/gpt-5-mini"),
+        )
+        mandoc_mp = ParsedManpage(
+            source="ubuntu/26.04/1/cp.1.gz",
+            name="cp",
+            synopsis="cp - copy files",
+            aliases=[("cp", 10)],
+            extractor="mandoc",
+        )
+        store.add_manpage(llm_mp, _make_raw())
+        store.add_manpage(mandoc_mp, _make_raw())
+
+        idx = store.extractor_info_index()
+        tar_extractor, tar_meta = idx["ubuntu/26.04/1/tar.1.gz"]
+        assert tar_extractor == "llm"
+        assert tar_meta.model == "openai/gpt-5-mini"
+        cp_extractor, cp_meta = idx["ubuntu/26.04/1/cp.1.gz"]
+        assert cp_extractor == "mandoc"
+        assert cp_meta.model is None
 
 
 class TestParseDistroRelease:

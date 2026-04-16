@@ -46,7 +46,7 @@ class MandocExtractor:
             gz_path,
             options,
             extractor="mandoc",
-            extraction_meta={},
+            extraction_meta=None,
         )
 
         confidence = tree_parser.assess_confidence(result)

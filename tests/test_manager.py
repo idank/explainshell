@@ -36,7 +36,7 @@ from explainshell.manager import (
     _run_salvage,
     _write_report,
 )
-from explainshell.models import Option, ParsedManpage, RawManpage
+from explainshell.models import ExtractionMeta, Option, ParsedManpage, RawManpage
 from explainshell.store import Store
 from explainshell.util import collect_gz_files, name_section
 
@@ -1125,6 +1125,477 @@ class TestContentDedup(unittest.TestCase):
             # Both files should be passed to run() despite identical hashes.
             (_, call_files), _ = mock_run.call_args
             self.assertEqual(len(call_files), 2)
+
+
+# ---------------------------------------------------------------------------
+# TestFilterFlag
+# ---------------------------------------------------------------------------
+
+
+def _make_manpage_with_extractor(
+    name: str,
+    extractor: str,
+    extraction_meta: dict | None = None,
+    distro: str = "ubuntu",
+    release: str = "26.04",
+    section: str = "1",
+) -> ParsedManpage:
+    mp = _make_manpage(name, section=section, distro=distro, release=release)
+    mp.extractor = extractor
+    mp.extraction_meta = (
+        ExtractionMeta.model_validate(extraction_meta) if extraction_meta else None
+    )
+    return mp
+
+
+class TestFilterFlag(unittest.TestCase):
+    """CLI tests for --filter-db."""
+
+    def test_filter_db_requires_overwrite(self):
+        runner = CliRunner()
+        with _temp_db() as db_path:
+            result = runner.invoke(
+                cli,
+                [
+                    "--db",
+                    db_path,
+                    "extract",
+                    "--mode",
+                    "llm:openai/new",
+                    "--filter-db",
+                    "llm:openai/old",
+                    "/fake/file.gz",
+                ],
+            )
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("requires --overwrite", result.output)
+
+    def test_filter_db_rejects_hybrid(self):
+        runner = CliRunner()
+        with _temp_db() as db_path:
+            result = runner.invoke(
+                cli,
+                [
+                    "--db",
+                    db_path,
+                    "extract",
+                    "--mode",
+                    "llm:openai/new",
+                    "--overwrite",
+                    "--filter-db",
+                    "hybrid:openai/gpt-5",
+                    "/fake/file.gz",
+                ],
+            )
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("hybrid", result.output)
+
+    def test_filter_db_rejects_bogus_spec(self):
+        runner = CliRunner()
+        with _temp_db() as db_path:
+            result = runner.invoke(
+                cli,
+                [
+                    "--db",
+                    db_path,
+                    "extract",
+                    "--mode",
+                    "llm:openai/new",
+                    "--overwrite",
+                    "--filter-db",
+                    "bogus",
+                    "/fake/file.gz",
+                ],
+            )
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("--filter-db", result.output)
+
+    @patch("explainshell.extraction.common.gz_sha256", side_effect=lambda p: p)
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.util.collect_gz_files")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_filter_db_llm_model_scope(
+        self,
+        mock_source,
+        mock_collect,
+        mock_make_ext,
+        mock_run,
+        _mock_sha,
+    ):
+        """Only rows matching the filter model reach run()."""
+        with _temp_db() as db_path:
+            gz_files = [
+                "/fake/ubuntu/26.04/1/foo.1.gz",
+                "/fake/ubuntu/26.04/1/bar.1.gz",
+            ]
+            mock_collect.return_value = gz_files
+            mock_source.side_effect = lambda p: "/".join(p.split("/")[-4:])
+
+            pre = Store.create(db_path)
+            pre.add_manpage(
+                _make_manpage_with_extractor(
+                    "foo", "llm", {"model": "openai/gpt-5-mini"}
+                ),
+                _make_raw(),
+            )
+            pre.add_manpage(
+                _make_manpage_with_extractor("bar", "llm", {"model": "openai/gpt-5"}),
+                _make_raw(),
+            )
+            pre.close()
+
+            mock_make_ext.return_value = MagicMock()
+            mock_run.return_value = BatchResult()
+
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--db",
+                    db_path,
+                    "extract",
+                    "--mode",
+                    "llm:openai/new",
+                    "--overwrite",
+                    "--filter-db",
+                    "llm:openai/gpt-5-mini",
+                    "/fake/file.gz",
+                ],
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            (_, call_files), _ = mock_run.call_args
+            self.assertEqual([p.split("/")[-1] for p in call_files], ["foo.1.gz"])
+
+    @patch("explainshell.extraction.common.gz_sha256", side_effect=lambda p: p)
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.util.collect_gz_files")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_filter_db_lets_new_files_through(
+        self,
+        mock_source,
+        mock_collect,
+        mock_make_ext,
+        mock_run,
+        _mock_sha,
+    ):
+        """Files not in the DB are extracted regardless of filter."""
+        with _temp_db() as db_path:
+            gz_files = [
+                "/fake/ubuntu/26.04/1/foo.1.gz",
+                "/fake/ubuntu/26.04/1/new.1.gz",
+            ]
+            mock_collect.return_value = gz_files
+            mock_source.side_effect = lambda p: "/".join(p.split("/")[-4:])
+
+            pre = Store.create(db_path)
+            pre.add_manpage(
+                _make_manpage_with_extractor("foo", "llm", {"model": "openai/old"}),
+                _make_raw(),
+            )
+            pre.close()
+
+            mock_make_ext.return_value = MagicMock()
+            mock_run.return_value = BatchResult()
+
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--db",
+                    db_path,
+                    "extract",
+                    "--mode",
+                    "llm:openai/new",
+                    "--overwrite",
+                    "--filter-db",
+                    "llm:openai/old",
+                    "/fake/file.gz",
+                ],
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            (_, call_files), _ = mock_run.call_args
+            self.assertEqual(
+                sorted(p.split("/")[-1] for p in call_files),
+                ["foo.1.gz", "new.1.gz"],
+            )
+
+    @patch("explainshell.extraction.common.gz_sha256", side_effect=lambda p: p)
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.util.collect_gz_files")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_filter_db_mandoc_matches_empty_meta(
+        self,
+        mock_source,
+        mock_collect,
+        mock_make_ext,
+        mock_run,
+        _mock_sha,
+    ):
+        """--filter-db mandoc matches extractor='mandoc', meta={}."""
+        with _temp_db() as db_path:
+            gz_files = ["/fake/ubuntu/26.04/1/m.1.gz"]
+            mock_collect.return_value = gz_files
+            mock_source.side_effect = lambda p: "/".join(p.split("/")[-4:])
+
+            pre = Store.create(db_path)
+            pre.add_manpage(
+                _make_manpage_with_extractor("m", "mandoc", {}),
+                _make_raw(),
+            )
+            pre.close()
+
+            mock_make_ext.return_value = MagicMock()
+            mock_run.return_value = BatchResult()
+
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--db",
+                    db_path,
+                    "extract",
+                    "--mode",
+                    "llm:openai/new",
+                    "--overwrite",
+                    "--filter-db",
+                    "mandoc",
+                    "/fake/file.gz",
+                ],
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            (_, call_files), _ = mock_run.call_args
+            self.assertEqual(len(call_files), 1)
+
+    @patch("explainshell.extraction.common.gz_sha256", side_effect=lambda p: p)
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.util.collect_gz_files")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_filter_db_matches_hybrid_fallback_shape(
+        self,
+        mock_source,
+        mock_collect,
+        mock_make_ext,
+        mock_run,
+        _mock_sha,
+    ):
+        """LLM filter matches rows with extra meta keys (e.g. fallback=True)."""
+        with _temp_db() as db_path:
+            gz_files = ["/fake/ubuntu/26.04/1/fb.1.gz"]
+            mock_collect.return_value = gz_files
+            mock_source.side_effect = lambda p: "/".join(p.split("/")[-4:])
+
+            pre = Store.create(db_path)
+            pre.add_manpage(
+                _make_manpage_with_extractor(
+                    "fb",
+                    "llm",
+                    {
+                        "model": "openai/gpt-5-mini",
+                        "fallback": True,
+                        "reason": "low-confidence",
+                    },
+                ),
+                _make_raw(),
+            )
+            pre.close()
+
+            mock_make_ext.return_value = MagicMock()
+            mock_run.return_value = BatchResult()
+
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--db",
+                    db_path,
+                    "extract",
+                    "--mode",
+                    "llm:openai/new",
+                    "--overwrite",
+                    "--filter-db",
+                    "llm:openai/gpt-5-mini",
+                    "/fake/file.gz",
+                ],
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            (_, call_files), _ = mock_run.call_args
+            self.assertEqual(len(call_files), 1)
+
+    @patch("explainshell.extraction.common.gz_sha256", return_value="same-hash")
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.util.collect_gz_files")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_filter_skipped_row_doesnt_block_matching_sibling(
+        self,
+        mock_source,
+        mock_collect,
+        mock_make_ext,
+        mock_run,
+        _mock_sha,
+    ):
+        """An earlier non-matching DB row must not suppress a later matching
+        DB row with the same content hash (finding 1 regression test)."""
+        with _temp_db() as db_path:
+            gz_files = [
+                "/fake/ubuntu/26.04/1/foo.1.gz",
+                "/fake/ubuntu/26.04/1/bar.1.gz",
+            ]
+            mock_collect.return_value = gz_files
+            mock_source.side_effect = lambda p: "/".join(p.split("/")[-4:])
+
+            pre = Store.create(db_path)
+            pre.add_manpage(
+                _make_manpage_with_extractor("foo", "llm", {"model": "openai/old"}),
+                _make_raw(sha256="same-hash"),
+            )
+            pre.add_manpage(
+                _make_manpage_with_extractor("bar", "llm", {"model": "openai/new"}),
+                _make_raw(sha256="same-hash"),
+            )
+            pre.close()
+
+            mock_make_ext.return_value = MagicMock()
+            mock_run.return_value = BatchResult()
+
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--db",
+                    db_path,
+                    "extract",
+                    "--mode",
+                    "llm:openai/newer",
+                    "--overwrite",
+                    "--filter-db",
+                    "llm:openai/new",
+                    "/fake/file.gz",
+                ],
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            (_, call_files), _ = mock_run.call_args
+            self.assertEqual([p.split("/")[-1] for p in call_files], ["bar.1.gz"])
+
+    @patch("explainshell.extraction.common.gz_sha256", return_value="same-hash")
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.util.collect_gz_files")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_new_file_first_doesnt_block_matching_db_row(
+        self,
+        mock_source,
+        mock_collect,
+        mock_make_ext,
+        mock_run,
+        _mock_sha,
+    ):
+        """A new file appearing earlier in the input must not suppress a
+        filter-matching DB row with the same content hash (finding 1:
+        input-order dependence in the content-dedup path)."""
+        with _temp_db() as db_path:
+            gz_files = [
+                "/fake/ubuntu/26.04/1/newfile.1.gz",
+                "/fake/ubuntu/26.04/1/bar.1.gz",
+            ]
+            mock_collect.return_value = gz_files
+            mock_source.side_effect = lambda p: "/".join(p.split("/")[-4:])
+
+            pre = Store.create(db_path)
+            pre.add_manpage(
+                _make_manpage_with_extractor("bar", "llm", {"model": "openai/new"}),
+                _make_raw(sha256="same-hash"),
+            )
+            pre.close()
+
+            mock_make_ext.return_value = MagicMock()
+            mock_run.return_value = BatchResult()
+
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--db",
+                    db_path,
+                    "extract",
+                    "--mode",
+                    "llm:openai/newer",
+                    "--overwrite",
+                    "--filter-db",
+                    "llm:openai/new",
+                    "/fake/file.gz",
+                ],
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            (_, call_files), _ = mock_run.call_args
+            self.assertEqual(
+                sorted(p.split("/")[-1] for p in call_files),
+                ["bar.1.gz", "newfile.1.gz"],
+            )
+
+    @patch("explainshell.extraction.common.gz_sha256", return_value="same-hash")
+    @patch("explainshell.manager.run")
+    @patch("explainshell.manager.make_extractor")
+    @patch("explainshell.util.collect_gz_files")
+    @patch("explainshell.manager.config.source_from_path")
+    def test_filter_skipped_row_doesnt_block_new_sibling(
+        self,
+        mock_source,
+        mock_collect,
+        mock_make_ext,
+        mock_run,
+        _mock_sha,
+    ):
+        """An earlier filter-skipped DB row must not suppress a later new
+        (not-in-DB) file with the same content hash. The new file is
+        extracted; we don't alias it onto the stale canonical."""
+        with _temp_db() as db_path:
+            gz_files = [
+                "/fake/ubuntu/26.04/1/foo.1.gz",
+                "/fake/ubuntu/26.04/1/clone.1.gz",
+            ]
+            mock_collect.return_value = gz_files
+            mock_source.side_effect = lambda p: "/".join(p.split("/")[-4:])
+
+            pre = Store.create(db_path)
+            pre.add_manpage(
+                _make_manpage_with_extractor("foo", "llm", {"model": "openai/old"}),
+                _make_raw(sha256="same-hash"),
+            )
+            pre.close()
+
+            mock_make_ext.return_value = MagicMock()
+            mock_run.return_value = BatchResult()
+
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--db",
+                    db_path,
+                    "extract",
+                    "--mode",
+                    "llm:openai/new",
+                    "--overwrite",
+                    "--filter-db",
+                    "llm:openai/new",
+                    "/fake/file.gz",
+                ],
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            (_, call_files), _ = mock_run.call_args
+            self.assertEqual([p.split("/")[-1] for p in call_files], ["clone.1.gz"])
 
 
 # ---------------------------------------------------------------------------
