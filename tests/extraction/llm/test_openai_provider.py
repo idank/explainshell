@@ -26,7 +26,9 @@ def _make_batch(
     completed: int = 0,
     failed: int = 0,
     total: int = 10,
+    input_file_id: str | None = None,
     output_file_id: str | None = None,
+    error_file_id: str | None = None,
 ) -> SimpleNamespace:
     """Build a fake Batch object matching openai.types.Batch shape."""
     return SimpleNamespace(
@@ -36,9 +38,10 @@ def _make_batch(
             failed=failed,
             total=total,
         ),
+        input_file_id=input_file_id,
         output_file_id=output_file_id,
         usage=None,
-        error_file_id=None,
+        error_file_id=error_file_id,
     )
 
 
@@ -764,6 +767,108 @@ class TestAzureRouting(unittest.TestCase):
             OpenAIProvider("azure/my-deployment")
 
         self.assertIn("AZURE_OPENAI_BASE_URL", str(ctx.exception))
+
+
+@patch("explainshell.extraction.llm.providers.openai.OpenAI")
+class TestBatchFileCleanup(unittest.TestCase):
+    """collect_results should delete input/output/error files after collection."""
+
+    def _make_provider(self) -> OpenAIProvider:
+        return OpenAIProvider("openai/gpt-5-mini")
+
+    def test_all_files_deleted_after_collect(self, _cls: MagicMock) -> None:
+        provider = self._make_provider()
+        job = _make_batch(
+            status="completed",
+            input_file_id="file-in",
+            output_file_id="file-out",
+            error_file_id="file-err",
+        )
+        output_line = json.dumps(
+            {
+                "custom_id": "0:0",
+                "response": {
+                    "body": {
+                        "output": [
+                            {
+                                "type": "message",
+                                "content": [
+                                    {"type": "output_text", "text": '{"options":[]}'}
+                                ],
+                            }
+                        ],
+                        "usage": {},
+                    }
+                },
+            }
+        )
+        provider.client.files.content.return_value = SimpleNamespace(text=output_line)
+        provider.client.files.delete.return_value = None
+
+        provider.collect_results(job)
+
+        deleted = [c.args[0] for c in provider.client.files.delete.call_args_list]
+        self.assertEqual(deleted, ["file-in", "file-out", "file-err"])
+
+    def test_no_output_file_still_cleans_input(self, _cls: MagicMock) -> None:
+        provider = self._make_provider()
+        job = _make_batch(
+            status="cancelled",
+            input_file_id="file-in",
+            output_file_id=None,
+        )
+        provider.client.files.delete.return_value = None
+
+        provider.collect_results(job)
+
+        deleted = [c.args[0] for c in provider.client.files.delete.call_args_list]
+        self.assertEqual(deleted, ["file-in"])
+
+    def test_delete_failure_does_not_prevent_results(self, _cls: MagicMock) -> None:
+        provider = self._make_provider()
+        job = _make_batch(
+            status="completed",
+            input_file_id="file-in",
+            output_file_id="file-out",
+        )
+        output_line = json.dumps(
+            {
+                "custom_id": "0:0",
+                "response": {
+                    "body": {
+                        "output": [
+                            {
+                                "type": "message",
+                                "content": [
+                                    {"type": "output_text", "text": '{"options":[]}'}
+                                ],
+                            }
+                        ],
+                        "usage": {},
+                    }
+                },
+            }
+        )
+        provider.client.files.content.return_value = SimpleNamespace(text=output_line)
+        provider.client.files.delete.side_effect = RuntimeError("gone")
+
+        result = provider.collect_results(job)
+
+        self.assertIn("0:0", result.responses)
+        self.assertEqual(provider.client.files.delete.call_count, 2)
+
+    def test_skips_none_file_ids(self, _cls: MagicMock) -> None:
+        provider = self._make_provider()
+        job = _make_batch(
+            status="cancelled",
+            input_file_id=None,
+            output_file_id=None,
+            error_file_id=None,
+        )
+
+        provider.collect_results(job)
+
+        provider.client.files.delete.assert_not_called()
 
 
 if __name__ == "__main__":

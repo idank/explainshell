@@ -293,6 +293,21 @@ class OpenAIProvider:
             else:
                 time.sleep(poll_interval)
 
+    def _cleanup_batch_files(self, job: Batch) -> None:
+        """Delete input/output/error files associated with a completed batch.
+
+        Azure enforces a hard 500-file limit with no automatic expiry;
+        OpenAI auto-expires but cleaning up is still good hygiene.
+        """
+        for file_id in (job.input_file_id, job.output_file_id, job.error_file_id):
+            if not file_id:
+                continue
+            logger.info("attempting to cleanup batch file %s", file_id)
+            try:
+                self.client.files.delete(file_id)
+            except Exception as e:
+                logger.error("batch file cleanup: failed to delete %s: %s", file_id, e)
+
     def collect_results(self, job: Batch) -> BatchResults:
         results: dict[str, str] = {}
         usage = TokenUsage()
@@ -302,6 +317,7 @@ class OpenAIProvider:
             usage.output_tokens = job.usage.output_tokens
 
         if not job.output_file_id:
+            self._cleanup_batch_files(job)
             return BatchResults(results, usage)
 
         content = self.client.files.content(job.output_file_id)
@@ -359,4 +375,5 @@ class OpenAIProvider:
             except Exception as e:
                 logger.warning("failed to download batch error file: %s", e)
 
+        self._cleanup_batch_files(job)
         return BatchResults(results, usage)
