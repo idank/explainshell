@@ -302,7 +302,7 @@ class OpenAIProvider:
         for file_id in (job.input_file_id, job.output_file_id, job.error_file_id):
             if not file_id:
                 continue
-            logger.info("attempting to cleanup batch file %s", file_id)
+            logger.debug("attempting to cleanup batch file %s", file_id)
             try:
                 self.client.files.delete(file_id)
             except Exception as e:
