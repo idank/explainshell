@@ -467,9 +467,9 @@ class Store:
         ).fetchone()
         if existing:
             logger.debug("removing old manpage %s", m.source)
-            # Warn about non-alias mappings (e.g. symlink-derived) that will
-            # be lost to the CASCADE delete.  Re-running extraction with the
-            # symlink paths in the input will recreate them.
+            # Non-alias mappings (e.g. symlink-derived) will be lost to the
+            # CASCADE delete, but are recreated automatically by the
+            # symlink/dedup mapping phase at the end of the run.
             alias_srcs = {a for a, _ in m.aliases}
             lost = [
                 row["src"]
@@ -479,9 +479,8 @@ class Store:
                 if row["src"] not in alias_srcs
             ]
             if lost:
-                logger.warning(
-                    "re-importing %s will drop non-alias mappings: %s "
-                    "(rerun extraction with the original paths to restore them)",
+                logger.debug(
+                    "re-importing %s will temporarily drop non-alias mappings: %s",
                     m.source,
                     ", ".join(sorted(lost)),
                 )

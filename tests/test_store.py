@@ -658,8 +658,8 @@ class TestUpdateSubcommandMappingsLlm(_SubcommandTestBase):
 class TestReimportWarnsAboutLostMappings:
     """Verify that re-importing a canonical warns about non-alias mappings lost to CASCADE."""
 
-    def test_reimport_warns_about_lost_symlink_mapping(self, store, caplog):
-        """Re-importing a canonical logs a warning about lost non-alias mappings."""
+    def test_reimport_logs_lost_symlink_mapping(self, store, caplog):
+        """Re-importing a canonical logs a debug message about lost non-alias mappings."""
         mp = _make_manpage("bio-eagle", "1", aliases=[("bio-eagle", 10)])
         raw = _make_raw()
         store.add_manpage(mp, raw)
@@ -669,24 +669,24 @@ class TestReimportWarnsAboutLostMappings:
         assert store.has_mapping("eagle", mp.source)
 
         # Re-import the same manpage (simulates --overwrite).
-        with caplog.at_level(logging.WARNING):
+        with caplog.at_level(logging.DEBUG):
             mp2 = _make_manpage("bio-eagle", "1", aliases=[("bio-eagle", 10)])
             store.add_manpage(mp2, raw)
 
         # The symlink mapping is gone (CASCADE).
         assert not store.has_mapping("eagle", mp2.source)
-        # A warning was logged.
+        # A debug message was logged.
         assert any(
             "eagle" in r.message and "non-alias" in r.message for r in caplog.records
         )
 
-    def test_reimport_no_warning_when_only_aliases(self, store, caplog):
-        """Re-importing when all mappings are aliases produces no warning."""
+    def test_reimport_no_log_when_only_aliases(self, store, caplog):
+        """Re-importing when all mappings are aliases produces no non-alias log."""
         mp = _make_manpage("bio-eagle", "1", aliases=[("bio-eagle", 10)])
         raw = _make_raw()
         store.add_manpage(mp, raw)
 
-        with caplog.at_level(logging.WARNING):
+        with caplog.at_level(logging.DEBUG):
             mp2 = _make_manpage("bio-eagle", "1", aliases=[("bio-eagle", 10)])
             store.add_manpage(mp2, raw)
 
