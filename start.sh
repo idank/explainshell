@@ -3,9 +3,9 @@ set -e
 
 # Caddy fronts gunicorn on :8080 and buffers responses so slow-read clients
 # cannot park gthread workers in wsgi.write(). Gunicorn binds localhost only.
+# Access logging lives in caddy (structured json with real client_ip from the
+# CF-Connecting-IP header); gunicorn only emits warnings/errors to stderr.
 gunicorn -w 2 --threads 4 -b [::1]:8081 \
-  --access-logfile - \
-  --access-logformat '%(t)s %({CF-Connecting-IP}i)s %({X-Forwarded-For}i)s "%(r)s" %(s)s %(b)s %(D)sμs "%(a)s"' \
   "explainshell.web:create_app()" &
 GUNI_PID=$!
 

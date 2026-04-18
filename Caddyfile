@@ -8,14 +8,63 @@
 	# X-Forwarded-Proto=http (its own hop is plaintext), contradicting fly's
 	# https value, and gunicorn rejects the request as InvalidSchemeHeaders.
 	# trusted_proxies_strict parses X-Forwarded-For right-to-left to resist
-	# spoofing from appending edges (CF/Fly).
+	# spoofing from appending edges (CF/Fly). client_ip_headers makes
+	# request.client_ip in access logs resolve to CF-Connecting-IP (the real
+	# user) rather than the closest untrusted hop, which is fly's public edge.
 	servers {
 		trusted_proxies static private_ranges
 		trusted_proxies_strict
+		client_ip_headers CF-Connecting-IP
 	}
 }
 
 :8080 {
+	# Structured access log. Default caddy json is ~1.5 KB/line; this filter
+	# drops well-known noise (cookie, accept-*, sec-fetch-*, fly-*, resp
+	# headers) to keep each line under ~400 bytes. client_ip + User-Agent +
+	# Cf-Ray are preserved for debugging and correlation with CF analytics.
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				resp_headers delete
+				bytes_read delete
+				user_id delete
+				request>remote_port delete
+				request>proto delete
+				request>headers>Accept delete
+				request>headers>Accept-Encoding delete
+				request>headers>Accept-Language delete
+				request>headers>Cookie delete
+				request>headers>Upgrade-Insecure-Requests delete
+				request>headers>Cache-Control delete
+				request>headers>Priority delete
+				request>headers>Dnt delete
+				request>headers>Te delete
+				request>headers>Connection delete
+				request>headers>Sec-Ch-Ua delete
+				request>headers>Sec-Ch-Ua-Mobile delete
+				request>headers>Sec-Ch-Ua-Platform delete
+				request>headers>Sec-Fetch-Dest delete
+				request>headers>Sec-Fetch-Mode delete
+				request>headers>Sec-Fetch-Site delete
+				request>headers>Sec-Fetch-User delete
+				request>headers>Via delete
+				request>headers>X-Forwarded-For delete
+				request>headers>X-Forwarded-Proto delete
+				request>headers>Cf-Connecting-Ip delete
+				request>headers>Fly-Forwarded-For delete
+				request>headers>Fly-Forwarded-Port delete
+				request>headers>Fly-Forwarded-Ssl delete
+				request>headers>Fly-Forwarded-Proto delete
+				request>headers>Fly-Region delete
+				request>headers>Fly-Request-Id delete
+				request>headers>Cdn-Loop delete
+			}
+		}
+	}
+
 	reverse_proxy [::1]:8081 {
 		# Drain gunicorn's response as fast as possible into caddy's memory
 		# so a slow client cannot park the upstream worker. 256 KB is well
