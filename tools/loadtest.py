@@ -687,7 +687,7 @@ def run_profile(args: argparse.Namespace) -> dict:
 
     rng = random.Random(args.seed)
     cmds = [gen_bot_cmd(rng) for _ in range(args.n)]
-    distro_preference = [("ubuntu", "26.04"), ("ubuntu", "25.10"), ("arch", "rolling")]
+    distro_preference = [("ubuntu", "26.04"), ("arch", "rolling")]
 
     for c in cmds[:3]:
         try:

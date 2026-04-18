@@ -128,7 +128,7 @@ make db-check
 make serve
 
 # Generate Ubuntu manpage archive (requires Go)
-make ubuntu-archive UBUNTU_RELEASE=questing
+make ubuntu-archive UBUNTU_RELEASE=resolute
 
 # Generate Arch Linux manpage archive (requires manned.org dump)
 make arch-archive

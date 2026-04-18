@@ -50,7 +50,7 @@ $ make serve
 
 Processed manpages live in a single SQLite database (`explainshell.db`) with three tables:
 
-- **manpages**: zlib-compressed manpage source text (typically markdown produced by `mandoc -T markdown`). Keyed by a `source` path in the format `distro/release/section/name.section.gz` (e.g. `ubuntu/25.10/1/tar.1.gz`).
+- **manpages**: zlib-compressed manpage source text (typically markdown produced by `mandoc -T markdown`). Keyed by a `source` path in the format `distro/release/section/name.section.gz` (e.g. `ubuntu/26.04/1/tar.1.gz`).
 - **parsed_manpages**: extracted options, synopsis, aliases, and behavioral flags for each manpage. Options are stored as a JSON list.
 - **mappings**: maps command names to `parsed_manpages` rows (many-to-one, with a score for preference). A single manpage can have multiple mappings - one per alias and one per sub-command form (e.g. `git commit` maps to the `git-commit` manpage).
 
@@ -68,7 +68,7 @@ To generate the archive locally:
 
 ```bash
 $ git submodule update --init --recursive
-$ make ubuntu-archive UBUNTU_RELEASE=questing
+$ make ubuntu-archive UBUNTU_RELEASE=resolute
 $ make arch-archive # Arch only has a 'latest' archive
 ```
 
