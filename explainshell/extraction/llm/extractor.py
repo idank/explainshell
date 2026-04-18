@@ -96,33 +96,33 @@ dotenv.load_dotenv(dotenv.find_dotenv(".env.example"))
 
 logger = logging.getLogger(__name__)
 
-# Manpage source paths that must be skipped because their content triggers
-# the LLM provider's content filter (false-positive "jailbreak" detection).
-# Keyed by distro-specific source path (distro/release/section/file.gz).
-# Each entry documents *why* so future maintainers can revisit if the
-# provider's filter is updated.
-_BLACKLISTED_SOURCES: dict[str, str] = {
-    # Observed 2026-04-01 with gpt-5-mini/medium — provider content filter
-    # flags the extraction prompt + manpage combo as jailbreak.
-    "ubuntu/26.04/1/rust-uname.1.gz": "content filter false-positive (coreutils-style page)",
-    "ubuntu/26.04/8/pkgsync.8.gz": "content filter false-positive (package synchronization tool)",
-    "ubuntu/26.04/1/ANTSpexec.1.gz": "content filter false-positive (ANTs neuroimaging tool)",
-    "ubuntu/26.04/8/kea-dhcp6.8.gz": "content filter false-positive (ISC DHCP server)",
-    "ubuntu/26.04/1/rsbackup-mount.1.gz": "content filter false-positive (backup mount helper)",
+# Manpage source paths that must be skipped during LLM extraction because
+# the provider's content filter flags them as jailbreak false-positives.
+# This list is reserved for failures we don't control upstream — do NOT
+# add sources rejected by our own postprocess validators (fix the
+# validator or its thresholds instead). Comments group entries by the run
+# where they were observed.
+_BLACKLISTED_SOURCES: set[str] = {
+    # Observed 2026-04-01 with gpt-5-mini/medium on ubuntu/26.04.
+    "ubuntu/26.04/1/rust-uname.1.gz",
+    "ubuntu/26.04/8/pkgsync.8.gz",
+    "ubuntu/26.04/1/ANTSpexec.1.gz",
+    "ubuntu/26.04/8/kea-dhcp6.8.gz",
+    "ubuntu/26.04/1/rsbackup-mount.1.gz",
     # Observed 2026-04-02 with gpt-5-mini/medium on arch/latest.
-    "arch/latest/1/uu-uname.1.gz": "content filter false-positive (coreutils-style page)",
-    "arch/latest/1/uil.1.gz": "content filter false-positive (Motif UIL compiler)",
-    "arch/latest/8/pykeymgr.8.gz": "content filter false-positive (Knot DNS key manager)",
-    "arch/latest/1/setwallpaper.1.gz": "content filter false-positive (wallpaper setter)",
-    "arch/latest/8/kea-dhcp6.8.gz": "content filter false-positive (ISC DHCP server)",
-    "arch/latest/1/setcollection.1.gz": "content filter false-positive (set collection utility)",
-    "arch/latest/8/kea-dhcp4.8.gz": "content filter false-positive (ISC DHCP server)",
-    "arch/latest/8/cups-calibrate.8.gz": "content filter false-positive (CUPS calibration tool)",
+    "arch/latest/1/uu-uname.1.gz",
+    "arch/latest/1/uil.1.gz",
+    "arch/latest/8/pykeymgr.8.gz",
+    "arch/latest/1/setwallpaper.1.gz",
+    "arch/latest/8/kea-dhcp6.8.gz",
+    "arch/latest/1/setcollection.1.gz",
+    "arch/latest/8/kea-dhcp4.8.gz",
+    "arch/latest/8/cups-calibrate.8.gz",
     # Observed 2026-04-06 with gpt-5/medium on arch/latest.
-    "arch/latest/8/tc-police.8.gz": "content filter false-positive (tc traffic policing action)",
+    "arch/latest/8/tc-police.8.gz",
     # Observed 2026-04-13 with gpt-5/medium on arch/latest.
-    "arch/latest/1/mdsearch.1.gz": "content filter false-positive (macOS Spotlight search tool)",
-    "arch/latest/1/mysqld_safe.1.gz": "content filter false-positive (MySQL safe startup script)",
+    "arch/latest/1/mdsearch.1.gz",
+    "arch/latest/1/mysqld_safe.1.gz",
 }
 
 
@@ -276,9 +276,7 @@ class LLMExtractor:
         source = config.source_from_path(gz_path)
 
         if source in _BLACKLISTED_SOURCES:
-            raise SkippedExtraction(
-                f"blacklisted: {_BLACKLISTED_SOURCES[source]}",
-            )
+            raise SkippedExtraction("blacklisted")
 
         synopsis, aliases = manpage.get_synopsis_and_aliases(gz_path)
         plain_text = clean_mandoc_artifacts(get_manpage_text(gz_path))
