@@ -1,0 +1,25 @@
+{
+	auto_https off
+	admin off
+	persist_config off
+
+	# Trust fly's private network so caddy preserves X-Forwarded-Proto/For/Host
+	# from the fly edge instead of overwriting them. Without this, caddy sets
+	# X-Forwarded-Proto=http (its own hop is plaintext), contradicting fly's
+	# https value, and gunicorn rejects the request as InvalidSchemeHeaders.
+	# trusted_proxies_strict parses X-Forwarded-For right-to-left to resist
+	# spoofing from appending edges (CF/Fly).
+	servers {
+		trusted_proxies static private_ranges
+		trusted_proxies_strict
+	}
+}
+
+:8080 {
+	reverse_proxy [::1]:8081 {
+		# Drain gunicorn's response as fast as possible into caddy's memory
+		# so a slow client cannot park the upstream worker. 256 KB is well
+		# above the ~67 KB worst-case explain response observed in prod.
+		response_buffers 256KB
+	}
+}

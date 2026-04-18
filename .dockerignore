@@ -5,4 +5,5 @@
 !explainshell/
 !requirements.txt
 !start.sh
+!Caddyfile
 !tools/download-latest-db.sh
