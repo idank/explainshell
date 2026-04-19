@@ -35,6 +35,6 @@ primary_region = 'iad'
     path = "/"
 
 [[vm]]
-  size = 'shared-cpu-1x'
+  size = 'shared-cpu-2x'
   memory = '1gb'
-  cpus = 1
+  cpus = 2

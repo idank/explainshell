@@ -5,7 +5,9 @@ set -e
 # cannot park gthread workers in wsgi.write(). Gunicorn binds localhost only.
 # Access logging lives in caddy (structured json with real client_ip from the
 # CF-Connecting-IP header); gunicorn only emits warnings/errors to stderr.
-gunicorn -w 2 --threads 4 -b [::1]:8081 \
+gunicorn -w 2 --threads 4 \
+  --max-requests 1000 --max-requests-jitter 200 --preload \
+  -b [::1]:8081 \
   "explainshell.web:create_app()" &
 GUNI_PID=$!
 
