@@ -18,6 +18,7 @@ Output is written to <output-dir>/<distro>/<release>/<section>/.
 """
 
 import argparse
+import calendar
 import csv
 import gzip
 import logging
@@ -210,7 +211,7 @@ def cmd_extract(args):
 
     # Select content IDs
     logger.info("=== Selecting man pages ===")
-    content_to_manpages = select_content_ids(
+    content_to_manpages, content_to_released = select_content_ids(
         data_dir,
         sections,
         english_locale_ids,
@@ -224,7 +225,7 @@ def cmd_extract(args):
     logger.info("=== Extracting content ===")
     output_dir = os.path.join(os.path.abspath(args.output_dir), distro, release)
     os.makedirs(output_dir, exist_ok=True)
-    extract_contents(data_dir, content_to_manpages, output_dir)
+    extract_contents(data_dir, content_to_manpages, content_to_released, output_dir)
 
     # Resolve .so redirects — manned.org stores roff-level .so directives as
     # regular file content rather than filesystem symlinks.  Replace them with
@@ -400,12 +401,16 @@ def load_metadata(data_dir):
         packages[pkg_id] = system
     logger.info("Loaded %d packages", len(packages))
 
-    # Parse package_versions: id -> package_id
-    pkg_versions = {}
+    # Parse package_versions: id -> (package_id, released_tuple)
+    # `released` (column 4) is a YYYY-MM-DD date that feeds the
+    # manned-style selector ranking — within a package we prefer the
+    # pkgver with the latest release date.
+    pkg_versions: dict[int, tuple[int, tuple[int, int, int]]] = {}
     for row in parse_tsv(os.path.join(data_dir, "package_versions.tsv")):
         pv_id = int(row[0])
         pkg_id = int(row[1])
-        pkg_versions[pv_id] = pkg_id
+        released = _parse_date(row[3]) if len(row) > 3 else (0, 0, 0)
+        pkg_versions[pv_id] = (pkg_id, released)
     logger.info("Loaded %d package versions", len(pkg_versions))
 
     return systems, english_locale_ids, mans, packages, pkg_versions
@@ -423,6 +428,21 @@ def _is_standard_manpath(filename):
     )
 
 
+def _parse_date(s: str) -> tuple[int, int, int]:
+    """Parse a YYYY-MM-DD release date into a sortable tuple.
+
+    Missing or malformed dates (\\N, empty, non-ISO) collapse to (0, 0, 0)
+    so they always lose ranking comparisons against real dates.
+    """
+    if not s or s == "\\N":
+        return (0, 0, 0)
+    try:
+        y, m, d = s.split("-")
+        return (int(y), int(m), int(d))
+    except ValueError:
+        return (0, 0, 0)
+
+
 def select_content_ids(
     data_dir,
     sections,
@@ -435,15 +455,27 @@ def select_content_ids(
     """
     Process the files table to select which content IDs to extract.
 
-    Filters by distro and English locale. For each unique man page
-    (name+section), picks one content entry, preferring entries from
-    standard man page paths (e.g. /usr/share/man/).
+    Adopts the ranking used by manned.org's ``man_pref`` (see www/index.pl)
+    so our pick matches what manned.org and man.archlinux.org serve. For
+    each (name, section) key:
+
+      1. Within each package, keep the pkgver with the latest ``released``
+         date (tiebreak: lowest shorthash).
+      2. If any surviving row is under a standard man-path, drop the rest.
+      3. Across packages, pick the row with the latest ``released`` date,
+         final tiebreak on lowest shorthash.
+
+    Cross-distro and cross-release steps from manned's selector are elided
+    because upstream filtering (matching_sys_ids) already narrows to one
+    system.
 
     Returns:
         content_to_manpages: dict mapping content_id -> [(name, section), ...]
     """
-    # Track seen (name, section) -> (content_id, is_standard) to deduplicate
-    seen = {}
+    # key -> pkg_id -> candidate row dict
+    # Candidate rows carry everything needed for the multi-step ranking:
+    #   content_id, released, shorthash, is_standard
+    per_key_per_pkg: dict[tuple[str, str], dict[int, dict]] = {}
 
     files_path = os.path.join(data_dir, "files.tsv")
     count = 0
@@ -456,19 +488,22 @@ def select_content_ids(
         pkgver_id = int(row[0])
         man_id = int(row[1])
         content_id = int(row[2])
+        try:
+            shorthash = int(row[3])
+        except (ValueError, IndexError):
+            shorthash = 0
         locale_id = int(row[4])
         filename = row[6] if len(row) > 6 else ""
         count += 1
 
-        # Filter: English locale only
         if locale_id not in english_locale_ids:
             skipped_locale += 1
             continue
 
-        # Filter: matching distro only
-        pkg_id = pkg_versions.get(pkgver_id)
-        if pkg_id is None:
+        pv = pkg_versions.get(pkgver_id)
+        if pv is None:
             continue
+        pkg_id, released = pv
         sys_id = packages.get(pkg_id)
         if sys_id is None:
             continue
@@ -476,26 +511,40 @@ def select_content_ids(
             skipped_distro += 1
             continue
 
-        # Look up man page name and section
         if man_id not in mans:
             continue
         name, section = mans[man_id]
 
-        # Skip non-standard sections (must start with a digit, e.g. 1, 3p, 5ssl)
+        # Require a digit-led section (e.g. 1, 3p, 5ssl).
         if not section or not section[0].isdigit():
             skipped_section += 1
             continue
-
-        # Filter by requested sections
         if sections and section not in sections:
             skipped_section += 1
             continue
 
         key = (name, section)
         is_standard = _is_standard_manpath(filename)
-        prev = seen.get(key)
-        if prev is None or (is_standard and not prev[1]):
-            seen[key] = (content_id, is_standard)
+        candidate = {
+            "content_id": content_id,
+            "released": released,
+            "shorthash": shorthash,
+            "is_standard": is_standard,
+        }
+
+        by_pkg = per_key_per_pkg.setdefault(key, {})
+        cur = by_pkg.get(pkg_id)
+        # Step 1: within a package, prefer the latest `released`;
+        # tiebreak on lowest shorthash (matches manned's final ORDER BY).
+        if (
+            cur is None
+            or candidate["released"] > cur["released"]
+            or (
+                candidate["released"] == cur["released"]
+                and candidate["shorthash"] < cur["shorthash"]
+            )
+        ):
+            by_pkg[pkg_id] = candidate
 
     logger.info(
         "Processed %d file entries: %d skipped (locale), %d skipped (distro), "
@@ -504,24 +553,55 @@ def select_content_ids(
         skipped_locale,
         skipped_distro,
         skipped_section,
-        len(seen),
+        len(per_key_per_pkg),
     )
 
-    # Build content_id -> [(name, section), ...] mapping
-    content_to_manpages = defaultdict(list)
-    for (name, section), (content_id, _) in seen.items():
-        content_to_manpages[content_id].append((name, section))
+    # Cross-package ranking per key (steps 2 and 3).
+    content_to_manpages: dict[int, list[tuple[str, str]]] = defaultdict(list)
+    # content_id -> latest `released` across all keys that picked this blob.
+    # When several keys land on the same content, we take the most recent
+    # release date for the gz mtime — upstream content is identical, so
+    # the most recent pkgver that ships it is the most defensible signal.
+    content_to_released: dict[int, tuple[int, int, int]] = {}
+    for (name, section), by_pkg in per_key_per_pkg.items():
+        rows = list(by_pkg.values())
+        # Step 2: prefer standard man-path if any candidate is there.
+        std = [r for r in rows if r["is_standard"]]
+        pool = std if std else rows
+        # Step 3: latest released wins; lowest shorthash tiebreaks.
+        chosen = max(pool, key=lambda r: (r["released"], -r["shorthash"]))
+        cid = chosen["content_id"]
+        content_to_manpages[cid].append((name, section))
+        prev = content_to_released.get(cid)
+        if prev is None or chosen["released"] > prev:
+            content_to_released[cid] = chosen["released"]
 
     logger.info("Need %d unique content entries", len(content_to_manpages))
-    return content_to_manpages
+    return content_to_manpages, content_to_released
 
 
-def extract_contents(data_dir, content_to_manpages, output_dir):
+def _released_to_epoch(released: tuple[int, int, int]) -> int:
+    """Convert a (YYYY, MM, DD) tuple to UTC epoch seconds.
+
+    Missing dates (0, 0, 0) collapse to 0, matching the gzip ``mtime=0``
+    convention for "no timestamp available".
+    """
+    y, m, d = released
+    if y == 0:
+        return 0
+    return calendar.timegm((y, m, d, 0, 0, 0, 0, 0, 0))
+
+
+def extract_contents(data_dir, content_to_manpages, content_to_released, output_dir):
     """
     Stream contents.tsv.zst and extract matching man pages as .gz files.
 
     The contents TSV has columns: id, hash, content
     Streams via zstd to avoid loading the full file into memory.
+
+    Gz headers are written with ``mtime`` set to the UTC epoch of the
+    chosen pkgver's ``released`` date — this matches the Last-Modified
+    semantics manned.org serves and is fully deterministic across runs.
     """
     contents_zst = os.path.join(data_dir, "contents.tsv.zst")
     logger.info("Streaming %s ...", contents_zst)
@@ -578,8 +658,12 @@ def extract_contents(data_dir, content_to_manpages, output_dir):
 
         canonical_gz = f"{canonical_name}.{canonical_section}.gz"
         canonical_path = os.path.join(canonical_section_dir, canonical_gz)
-        with gzip.open(canonical_path, "wt", encoding="utf-8") as gz_file:
-            gz_file.write(raw_content)
+        mtime = _released_to_epoch(content_to_released.get(content_id, (0, 0, 0)))
+        with open(canonical_path, "wb") as raw_file:
+            with gzip.GzipFile(
+                filename="", fileobj=raw_file, mode="wb", mtime=mtime
+            ) as gz_file:
+                gz_file.write(raw_content.encode("utf-8"))
 
         for name, section in pages[1:]:
             section_dir = os.path.join(output_dir, section)
