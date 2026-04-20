@@ -6,7 +6,14 @@ import urllib
 import markupsafe
 
 import cmarkgfm
-from flask import Blueprint, render_template, request, redirect
+from flask import (
+    Blueprint,
+    current_app,
+    make_response,
+    redirect,
+    render_template,
+    request,
+)
 
 import bashlex.errors
 
@@ -338,7 +345,7 @@ def _handle_explain_program(section, program, url_distro, url_release):
                 program, get_store(), distro=d, release=r
             )
             cmd_distros = get_store().distros_for_name(raw_mp.name)
-            return render_template(
+            body = render_template(
                 "options.html",
                 mp=mp,
                 suggestions=suggestions,
@@ -346,6 +353,8 @@ def _handle_explain_program(section, program, url_distro, url_release):
                 debug_info=debug_info,
                 available_distros=cmd_distros,
             )
+            parsed_sha = get_store().get_parsed_sha256(raw_mp.source)
+            return _cacheable_manpage_response(body, parsed_sha)
         except errors.ProgramDoesNotExist as e:
             last_error = e
             continue
@@ -353,6 +362,35 @@ def _handle_explain_program(section, program, url_distro, url_release):
     return render_template(
         "errors/missingmanpage.html", title="missing man page", e=last_error
     )
+
+
+# 7 days for both browser and CDN, with a 1-day grace window for
+# stale-while-revalidate so Cloudflare can serve slightly-stale HTML
+# while refreshing in the background.
+_MANPAGE_CACHE_CONTROL = (
+    "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400"
+)
+
+
+def _cacheable_manpage_response(body: str, parsed_sha256: str | None):
+    """Wrap *body* in a Response with ETag + Cache-Control headers.
+
+    Returns a plain 200 (no cache headers) when ``parsed_sha256`` is
+    missing — rows predating the column haven't been backfilled, and
+    caching them with a stable validator we can't prove is risky. When
+    the request carries a matching ``If-None-Match``, the response is
+    downgraded to 304 via Flask's ``make_conditional``.
+    """
+    response = make_response(body)
+    if not parsed_sha256:
+        return response
+
+    app_ver = current_app.config.get("APP_VERSION", "local")
+    etag = f"{parsed_sha256[:16]}-{app_ver}"
+    response.set_etag(etag, weak=True)
+    response.headers["Cache-Control"] = _MANPAGE_CACHE_CONTROL
+    response.make_conditional(request)
+    return response
 
 
 def manpage_url(source):

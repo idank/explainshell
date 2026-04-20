@@ -7,12 +7,45 @@ the extraction pipeline, web layer, store, and tests.
 import collections
 import dataclasses
 import datetime
+import hashlib
 import json
 import os
 
 from pydantic import BaseModel
 
 from explainshell import help_constants, util
+
+
+# Fields that feed into the rendered /explain page. Everything not
+# listed here (updated flag, extractor name, extraction_meta) is
+# bookkeeping and must not affect the cache validator, or unrelated
+# DB maintenance would churn edge caches.
+_PARSED_CONTENT_FIELDS = (
+    "source",
+    "name",
+    "synopsis",
+    "options",
+    "aliases",
+    "dashless_opts",
+    "subcommands",
+    "nested_cmd",
+)
+
+
+def compute_parsed_sha256(row) -> str:
+    """Stable sha256 over a parsed_manpages row's render-affecting fields.
+
+    Accepts anything dict-like — a ``ParsedManpage.to_store()`` result
+    (used at write time) or a ``sqlite3.Row`` from ``SELECT *`` (used by
+    the backfill script).  Operating on the stored representation
+    sidesteps ``from_store``'s None→placeholder mutations that would
+    otherwise make the two paths disagree.
+    """
+    payload = json.dumps(
+        {k: row[k] for k in _PARSED_CONTENT_FIELDS},
+        sort_keys=True,
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()
 
 
 @dataclasses.dataclass
@@ -126,6 +159,16 @@ class ParsedManpage(BaseModel):
             for o in o_tmp.opts:
                 if o == flag:
                     return o_tmp
+
+    def content_sha256(self) -> str:
+        """Stable sha256 over the render-affecting fields of this row.
+
+        Used by the web layer as the content half of the ETag: any
+        re-extraction that changes options/synopsis (including LLM
+        non-determinism) produces a new hash, invalidating caches even
+        when the source gz is unchanged.
+        """
+        return compute_parsed_sha256(self.to_store())
 
     def to_store(self):
         meta = self.extraction_meta or ExtractionMeta()

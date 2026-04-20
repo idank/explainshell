@@ -304,6 +304,97 @@ class TestDistroFallback(unittest.TestCase):
             web_mod._distros_cache = None
 
 
+class TestExplainCacheHeaders(unittest.TestCase):
+    """Manpage views on /explain/<program> should carry ETag +
+    Cache-Control so Cloudflare and browsers can cache them."""
+
+    _RAW = RawManpage(
+        source_text=".TH BAR 1",
+        generated_at=datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc),
+        generator="test",
+    )
+
+    def _make_mp(self, option_text: str = "-a desc") -> ParsedManpage:
+        return ParsedManpage(
+            source="ubuntu/26.04/1/bar.1.gz",
+            name="bar",
+            synopsis="bar synopsis",
+            options=[Option(text=option_text, short=["-a"], long=[])],
+            aliases=[("bar", 10)],
+        )
+
+    def _store_with_manpage(self, mp: ParsedManpage) -> Store:
+        store = Store.create(":memory:")
+        store.add_manpage(mp, self._RAW)
+        return store
+
+    def setUp(self):
+        self.app = create_app()
+        self.app.config["APP_VERSION"] = "deadbeef"
+        self.mp = self._make_mp()
+        self.store = self._store_with_manpage(self.mp)
+        _use_store(self.app, self.store)
+        self.app.config["TESTING"] = True
+        self.client = self.app.test_client()
+
+    def test_manpage_view_sets_etag_and_cache_control(self):
+        rv = self.client.get("/explain/bar")
+        self.assertEqual(rv.status_code, 200)
+        # Weak ETag: parsed_sha[:16] + app_ver.
+        expected_etag = f'W/"{self.mp.content_sha256()[:16]}-deadbeef"'
+        self.assertEqual(rv.headers.get("ETag"), expected_etag)
+        self.assertEqual(
+            rv.headers.get("Cache-Control"),
+            "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400",
+        )
+
+    def test_if_none_match_returns_304(self):
+        rv = self.client.get("/explain/bar")
+        etag = rv.headers["ETag"]
+        rv2 = self.client.get("/explain/bar", headers={"If-None-Match": etag})
+        self.assertEqual(rv2.status_code, 304)
+        # Cache-Control still sent on 304 so intermediaries update TTL.
+        self.assertIn("Cache-Control", rv2.headers)
+
+    def test_reextraction_flips_etag(self):
+        """Re-extraction that changes option text (e.g. an LLM returning
+        different wording) must produce a different ETag — the whole
+        point of parsed_sha256 over source_gz_sha256."""
+        etag1 = self.client.get("/explain/bar").headers["ETag"]
+        # Simulate a re-extraction: add_manpage overwrites the existing
+        # row with the new options, and parsed_sha256 is recomputed.
+        self.store.add_manpage(
+            self._make_mp(option_text="-a different desc"), self._RAW
+        )
+        etag2 = self.client.get("/explain/bar").headers["ETag"]
+        self.assertNotEqual(etag1, etag2)
+
+    def test_cmd_response_is_not_cached(self):
+        rv = self.client.get("/explain?cmd=bar+-a")
+        self.assertEqual(rv.status_code, 200)
+        self.assertNotIn("ETag", rv.headers)
+        self.assertNotIn("Cache-Control", rv.headers)
+
+    def test_missing_sha_falls_back_to_uncached(self):
+        # Simulate a pre-migration row: wipe the sha on the existing row.
+        self.store._conn.execute(
+            "UPDATE parsed_manpages SET parsed_sha256 = NULL WHERE source = ?",
+            ("ubuntu/26.04/1/bar.1.gz",),
+        )
+        self.store._conn.commit()
+        rv = self.client.get("/explain/bar")
+        self.assertEqual(rv.status_code, 200)
+        self.assertNotIn("ETag", rv.headers)
+        self.assertNotIn("Cache-Control", rv.headers)
+
+    def test_missing_manpage_is_not_cached(self):
+        rv = self.client.get("/explain/nosuchprogram")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b"missing man page", rv.data)
+        self.assertNotIn("ETag", rv.headers)
+        self.assertNotIn("Cache-Control", rv.headers)
+
+
 class TestManpageRoute(unittest.TestCase):
     """Route-level tests for /manpage endpoints."""
 

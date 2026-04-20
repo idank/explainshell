@@ -19,6 +19,11 @@ COPY Caddyfile /etc/caddy/Caddyfile
 COPY start.sh .
 COPY explainshell/ explainshell/
 
+# Surfaced in cache ETags so a code-only deploy still invalidates.
+# Passed in by the deploy pipeline (see .github/workflows/fly-deploy.yml).
+ARG GIT_SHA=unknown
+ENV GIT_SHA=$GIT_SHA
+
 EXPOSE 8080
 
 CMD ["./start.sh"]

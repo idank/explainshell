@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS parsed_manpages (
     nested_cmd    TEXT    NOT NULL DEFAULT 'false', -- positional args start a nested command (e.g. sudo, xargs)
     extractor     TEXT,                            -- extractor mode: "source", "mandoc", "llm"
     extraction_meta TEXT NOT NULL DEFAULT '{}',    -- JSON dict of additional extraction metadata
+    parsed_sha256 TEXT,                            -- hash of render-affecting fields (see ParsedManpage.content_sha256); populated by add_manpage
     FOREIGN KEY (source) REFERENCES manpages(source) ON DELETE CASCADE
 );
 
@@ -272,6 +273,19 @@ class Store:
             self._conn.commit()
             return True
         return False
+
+    def get_parsed_sha256(self, source: str) -> str | None:
+        """Return the stored parsed-row sha256 for *source*, or None.
+
+        Used by the serving path to build an ETag that flips on any
+        re-extraction (including non-deterministic LLM output) even when
+        the source gz bytes are unchanged.
+        """
+        row = self._conn.execute(
+            "SELECT parsed_sha256 FROM parsed_manpages WHERE source = ?",
+            (source,),
+        ).fetchone()
+        return row["parsed_sha256"] if row else None
 
     def known_sha256s(self) -> dict[str, str]:
         """Return a mapping of source_gz_sha256 → source for all stored manpages.
@@ -527,13 +541,14 @@ class Store:
         self._upsert_raw_manpage(m.source, raw)
 
         d = m.to_store()
+        d["parsed_sha256"] = m.content_sha256()
         self._conn.execute(
             """INSERT INTO parsed_manpages(source, name, synopsis, options, aliases,
                                    dashless_opts, subcommands, updated, nested_cmd,
-                                   extractor, extraction_meta)
+                                   extractor, extraction_meta, parsed_sha256)
                VALUES (:source, :name, :synopsis, :options, :aliases,
                        :dashless_opts, :subcommands, :updated, :nested_cmd,
-                       :extractor, :extraction_meta)""",
+                       :extractor, :extraction_meta, :parsed_sha256)""",
             d,
         )
         self._conn.commit()

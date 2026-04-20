@@ -80,4 +80,21 @@ download-latest-db:
 upload-live-db:
 	tools/upload-live-db.sh $(LIVE_DB)
 
-.PHONY: tests e2e e2e-db e2e-update test-llm tests-all tests-quick lint serve parsing-regression parsing-update db-check ubuntu-archive arch-archive download-latest-db upload-live-db
+# Deploy to Fly from the local machine, passing the current commit as
+# GIT_SHA so the serving-path ETag flips on code changes (the regular
+# CI deploy does the same via github.sha). Two interactive gates: one
+# for "yes, I'm deploying from local", one for a dirty working tree.
+deploy-local:
+	@printf "Deploy to production from LOCAL? [y/N] "; \
+	read ans; [ "$$ans" = "y" ] || [ "$$ans" = "Y" ] || { echo "aborted"; exit 1; }
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		echo "WARNING: working tree is dirty — you may be shipping untested changes:"; \
+		git status --short; \
+		printf "Continue anyway? [y/N] "; \
+		read ans; [ "$$ans" = "y" ] || [ "$$ans" = "Y" ] || { echo "aborted"; exit 1; }; \
+	fi
+	@sha=$$(git rev-parse HEAD); \
+	 if [ -n "$$(git status --porcelain)" ]; then sha="$${sha}-dirty"; fi; \
+	 flyctl deploy --remote-only --build-arg GIT_SHA=$$sha
+
+.PHONY: tests e2e e2e-db e2e-update test-llm tests-all tests-quick lint serve parsing-regression parsing-update db-check ubuntu-archive arch-archive download-latest-db upload-live-db deploy-local
