@@ -19,8 +19,8 @@ a {
     height: 132px;
     display: inline-block;
     background-repeat: no-repeat;
-    background-position: 276px 21px;
-    background-size: 74px 78px;
+    background-position: 280px 23px;
+    background-size: 66px 73px;
     margin-bottom: -41px;
     margin-top: 21px;
 }
@@ -411,6 +411,7 @@ body[data-theme='dark'] {
 
 [data-theme='dark'] .logo a {
     color: white;
+    background-image: url(/static/img/shell-dark.png);
 }
 
 [data-theme='dark'] #command-wrapper.affix {
