@@ -414,3 +414,137 @@ test('blockquotes in help boxes render as plain indented text', async ({
 
     await expect(helpBox).toHaveScreenshot('help-box-blockquote.png');
 });
+
+test('distro picker defaults to all with /explain action', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const picker = page.locator('#distroPicker');
+    const button = page.locator('#distroPickerButton');
+    await expect(button).toHaveText(/all/);
+    await expect(page.locator('#distroPickerMenu')).not.toHaveClass(/open/);
+    await expect(page.locator('#explain-form')).toHaveAttribute(
+        'action',
+        '/explain',
+    );
+
+    await expect(picker).toHaveScreenshot('distro-picker-closed.png');
+});
+
+test('distro picker opens and lists all available distros', async ({
+    page,
+}) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    await page.locator('#distroPickerButton').click();
+
+    const menu = page.locator('#distroPickerMenu');
+    await expect(menu).toHaveClass(/open/);
+
+    const items = menu.locator('li a');
+    await expect(items).toHaveText([
+        'all',
+        'arch/latest',
+        'ubuntu/24.04',
+        'ubuntu/26.04',
+    ]);
+
+    // Clip covers the picker button plus the menu that extends below it.
+    const btnBox = await page.locator('#distroPickerButton').boundingBox();
+    if (!btnBox) throw new Error('button not rendered');
+    await expect(page).toHaveScreenshot('distro-picker-open.png', {
+        clip: {
+            x: Math.max(0, btnBox.x - 4),
+            y: Math.max(0, btnBox.y - 4),
+            width: 260,
+            height: btnBox.height + 160,
+        },
+    });
+});
+
+test('selecting a distro updates label and form action', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    await page.locator('#distroPickerButton').click();
+    await page
+        .locator(
+            '#distroPickerMenu a[data-distro="ubuntu"][data-release="26.04"]',
+        )
+        .click();
+
+    // Menu closes, label updates, action pins to ubuntu/26.04.
+    await expect(page.locator('#distroPickerMenu')).not.toHaveClass(/open/);
+    await expect(page.locator('.distro-picker-label')).toHaveText(
+        'ubuntu/26.04',
+    );
+    await expect(page.locator('#explain-form')).toHaveAttribute(
+        'action',
+        '/explain/ubuntu/26.04',
+    );
+
+    await expect(page.locator('#distroPicker')).toHaveScreenshot(
+        'distro-picker-selected.png',
+    );
+
+    // Switching back to 'all' reverts the action.
+    await page.locator('#distroPickerButton').click();
+    await page
+        .locator('#distroPickerMenu a[data-distro=""][data-release=""]')
+        .click();
+    await expect(page.locator('.distro-picker-label')).toHaveText('all');
+    await expect(page.locator('#explain-form')).toHaveAttribute(
+        'action',
+        '/explain',
+    );
+});
+
+test('submitting a pinned distro navigates to the scoped URL', async ({
+    page,
+}) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    await page.locator('#distroPickerButton').click();
+    await page
+        .locator(
+            '#distroPickerMenu a[data-distro="arch"][data-release="latest"]',
+        )
+        .click();
+
+    await page.locator('#explain').fill('tar xzvf archive.tar.gz');
+    await Promise.all([
+        page.waitForURL(/\/explain\/arch\/latest\?cmd=/),
+        page.locator('#explain-form button[type="submit"]').click(),
+    ]);
+
+    expect(page.url()).toContain('/explain/arch/latest?cmd=');
+});
+
+test('help tooltip reveals distro picker explanation on hover', async ({
+    page,
+}) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const tooltip = page.locator('.distro-picker-tooltip');
+    await expect(tooltip).toBeHidden();
+
+    await page.locator('.distro-picker-help').hover();
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toContainText(/distro.*manpages/i);
+
+    // Crop covers the button + the tooltip above it.
+    const button = page.locator('#distroPickerButton');
+    const btnBox = await button.boundingBox();
+    if (!btnBox) throw new Error('button not rendered');
+    await expect(page).toHaveScreenshot('distro-picker-tooltip.png', {
+        clip: {
+            x: Math.max(0, btnBox.x - 120),
+            y: Math.max(0, btnBox.y - 80),
+            width: btnBox.width + 240,
+            height: btnBox.height + 90,
+        },
+    });
+});

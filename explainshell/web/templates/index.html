@@ -13,8 +13,20 @@
             <div class="push"></div>
             <div class="text-center">
                 <div class="input-append">
-                    <form action='{{ explain_prefix }}' method="get">
-                        <input id='explain' class="span10" type="text" name="cmd" autocapitalize="off" autocorrect="off" autofocus></input>
+                    <form id="explain-form" action='{{ explain_prefix }}' method="get">
+                        <span id="distroPicker" class="distro-picker">
+                            <button type="button" class="distro-picker-button" id="distroPickerButton" aria-haspopup="true" aria-expanded="false">
+                                <span class="distro-picker-help" role="img" aria-label="What does this do?">?<span class="distro-picker-tooltip" role="tooltip">Pick which distro's manpages to use.</span></span>
+                                <span class="distro-picker-label">all</span>
+                            </button>
+                            <ul class="distro-picker-menu" id="distroPickerMenu" role="menu">
+                                <li><a href="#" data-distro="" data-release="">all</a></li>
+                                {% for distro, release in available_distros %}
+                                <li><a href="#" data-distro="{{ distro }}" data-release="{{ release }}">{{ distro }}/{{ release }}</a></li>
+                                {% endfor %}
+                            </ul>
+                        </span>
+                        <input id='explain' type="text" name="cmd" autocapitalize="off" autocorrect="off" autofocus></input>
                         <button class="btn" type="submit">EXPLAIN</button>
                     </form>
                 </div>
@@ -42,5 +54,46 @@
             if(document.querySelectorAll("code").length > 0){
                 hljs.highlightAll();
             }
+            (function() {
+                var picker = document.getElementById('distroPicker');
+                if (!picker) return;
+                var button = document.getElementById('distroPickerButton');
+                var menu = document.getElementById('distroPickerMenu');
+                var label = picker.querySelector('.distro-picker-label');
+                var form = document.getElementById('explain-form');
+                var defaultAction = form.getAttribute('action');
+
+                function close() {
+                    menu.classList.remove('open');
+                    button.setAttribute('aria-expanded', 'false');
+                }
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var open = menu.classList.toggle('open');
+                    button.setAttribute('aria-expanded', open ? 'true' : 'false');
+                });
+                menu.addEventListener('click', function(e) {
+                    var a = e.target.closest('a');
+                    if (!a) return;
+                    e.preventDefault();
+                    var distro = a.getAttribute('data-distro');
+                    var release = a.getAttribute('data-release');
+                    if (distro && release) {
+                        form.setAttribute('action', '/explain/' + distro + '/' + release);
+                        label.textContent = distro + '/' + release;
+                    } else {
+                        form.setAttribute('action', defaultAction);
+                        label.textContent = 'all';
+                    }
+                    close();
+                });
+                document.addEventListener('click', function(e) {
+                    if (!picker.contains(e.target)) close();
+                });
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') close();
+                });
+            })();
         </script>
 {%- endblock %}
