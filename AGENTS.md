@@ -233,9 +233,10 @@ The app is deployed to [Fly.io](https://fly.io). The SQLite database is baked in
 
 - **Domain:** `explainshell.com` → Cloudflare (orange cloud proxy) → Fly.io
 - **Cloudflare:** DNS + proxy, SSL mode set to **Full (Strict)**
-- **Fly app:** `explainshell` — VM size, region, and machine config are in `fly.toml`
+- **Fly app:** `explainshell` — VM size, region, and machine config are in `prod/fly/fly.toml`
+- **DigitalOcean App Platform spec:** `prod/digitalocean/app.yaml` (alternative deploy target; see `.github/workflows/do-deploy.yml`)
+- **Shared container artifacts:** `prod/docker/` (Dockerfile, Caddyfile, start.sh) — used by both deploy targets
 - **Direct origin access:** The `.fly.dev` hostname is disabled (`auto_assign_hostname = false`) so all traffic must pass through Cloudflare. Use `fly proxy 8080` to reach the origin directly for debugging.
-- **Rollback path:** a legacy origin is retained as a DNS fallback. Check current DNS records in Cloudflare for its address when needed — don't rely on values hardcoded in docs.
 
 **Deploy code changes:**
 

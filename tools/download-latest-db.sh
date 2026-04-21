@@ -9,9 +9,9 @@
 # explainshell-*.db.zst by created_at (for manual `make
 # download-latest-db` runs).
 #
-# Build pipelines (fly-deploy.yml, `make deploy-local`) always pass
-# --asset so the image is pinned to what CI captured, not "whatever is
-# newest at the moment the remote builder runs."
+# Build pipelines (fly-deploy.yml, do-deploy.yml, `make deploy-local`)
+# always pass --asset so the image is pinned to what CI captured, not
+# "whatever is newest at the moment the remote builder runs."
 
 set -euo pipefail
 

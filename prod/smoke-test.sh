@@ -6,7 +6,7 @@
 # path — plus per-distro variants of both — and fails if any response
 # is non-200 or contains "Internal Server Error" or "missing man page".
 #
-# Usage: BASE=https://explainshell.com tools/prod/smoke-test.sh
+# Usage: BASE=https://explainshell.com prod/smoke-test.sh
 set -uo pipefail
 
 BASE="${BASE:-https://explainshell.com}"

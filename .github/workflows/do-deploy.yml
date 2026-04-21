@@ -1,0 +1,46 @@
+# Deploys to DigitalOcean App Platform. Mirrors fly-deploy.yml: waits
+# for CI to pass on master, resolves the newest db-latest asset name,
+# renders the app spec with DB_NAME + GIT_SHA, then applies it.
+
+name: DO Deploy
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy app
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: do-deploy-group
+      cancel-in-progress: true
+    environment: production
+    steps:
+      - uses: actions/checkout@v6
+      - uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      - id: db
+        # Same DB-pinning approach as fly-deploy.yml: resolve the exact
+        # asset name from the db-latest release and pass it through as
+        # a build arg so the image is pinned to what CI captured.
+        run: |
+          NAME=$(gh api "repos/${{ github.repository }}/releases/tags/db-latest" \
+            --jq '[.assets[] | select(.name | test("^explainshell-.*\\.db\\.zst$"))] | sort_by(.created_at) | last | .name')
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Render app spec
+        env:
+          DB_NAME: ${{ steps.db.outputs.name }}
+          GIT_SHA: ${{ github.sha }}
+        run: envsubst < prod/digitalocean/app.yaml > /tmp/app.yaml
+      - name: Apply app spec
+        run: doctl apps update ${{ secrets.DO_APP_ID }} --spec /tmp/app.yaml --wait

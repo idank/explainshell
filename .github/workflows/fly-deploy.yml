@@ -36,6 +36,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: flyctl deploy --remote-only
+          --config prod/fly/fly.toml
+          --dockerfile prod/docker/Dockerfile
           --build-arg GIT_SHA=${{ github.sha }}
           --build-arg DB_NAME=${{ steps.db.outputs.name }}
         env:

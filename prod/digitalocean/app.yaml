@@ -1,0 +1,58 @@
+# DigitalOcean App Platform spec for explainshell.
+#
+# This is the source of truth for the app's config; `doctl apps update
+# <id> --spec <file>` does a full replace. The deploy workflow
+# (.github/workflows/do-deploy.yml) renders this file with envsubst to
+# fill in ${DB_NAME} and ${GIT_SHA}, then applies it.
+#
+# First-time setup (one-off, manual):
+#   DB_NAME=$(...) GIT_SHA=$(git rev-parse HEAD) envsubst \
+#     < prod/digitalocean/app.yaml > /tmp/app.yaml
+#   doctl apps create --spec /tmp/app.yaml
+# Save the returned app id as the DO_APP_ID repo secret.
+name: explainshell
+region: nyc
+services:
+  - name: web
+    dockerfile_path: prod/docker/Dockerfile
+    source_dir: /
+    github:
+      repo: idank/explainshell
+      branch: master
+      # CI drives deploys (resolves DB_NAME from the db-latest release
+      # and calls `doctl apps update`). Auto-deploy would skip that
+      # step and ship an image with no DB pinning guarantee.
+      deploy_on_push: false
+    http_port: 8080
+    instance_count: 2
+    # apps-s-1vcpu-1gb: 1 shared vCPU / 1 GiB, professional tier.
+    # Same hardware as basic-xs ($10) but $12/mo, and the basic tier
+    # caps basic-xs at 1 instance — this slug is the cheapest one that
+    # allows instance_count > 1. Mirrors Fly's 1 GiB × 2 layout.
+    instance_size_slug: apps-s-1vcpu-1gb
+    health_check:
+      http_path: /
+      initial_delay_seconds: 60
+      period_seconds: 10
+      timeout_seconds: 2
+      failure_threshold: 3
+    envs:
+      - key: DB_PATH
+        value: /opt/webapp/explainshell.db
+        scope: RUN_TIME
+      - key: HOST_IP
+        value: 0.0.0.0
+        scope: RUN_TIME
+      - key: DEBUG
+        value: "false"
+        scope: RUN_TIME
+      - key: PORT
+        value: "8080"
+        scope: RUN_TIME
+      # Build args — see Dockerfile. Rendered by envsubst in CI.
+      - key: DB_NAME
+        value: ${DB_NAME}
+        scope: BUILD_TIME
+      - key: GIT_SHA
+        value: ${GIT_SHA}
+        scope: BUILD_TIME

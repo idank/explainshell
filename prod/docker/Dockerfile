@@ -25,12 +25,13 @@ COPY tools/download-latest-db.sh tools/
 ARG DB_NAME
 RUN tools/download-latest-db.sh --asset "$DB_NAME" explainshell.db
 
-COPY Caddyfile /etc/caddy/Caddyfile
-COPY start.sh .
+COPY prod/docker/Caddyfile /etc/caddy/Caddyfile
+COPY prod/docker/start.sh .
 COPY explainshell/ explainshell/
 
 # Surfaced in cache ETags so a code-only deploy still invalidates.
-# Passed in by the deploy pipeline (see .github/workflows/fly-deploy.yml).
+# Passed in by the deploy pipeline (see the deploy workflows under
+# .github/workflows/).
 ARG GIT_SHA=unknown
 ENV GIT_SHA=$GIT_SHA
 

@@ -100,6 +100,8 @@ deploy-local:
 	 name=$$(gh api "repos/idank/explainshell/releases/tags/db-latest" \
 	   --jq '[.assets[] | select(.name | test("^explainshell-.*\\.db\\.zst$$"))] | sort_by(.created_at) | last | .name'); \
 	 flyctl deploy --remote-only \
+	   --config prod/fly/fly.toml \
+	   --dockerfile prod/docker/Dockerfile \
 	   --build-arg GIT_SHA=$$sha \
 	   --build-arg DB_NAME=$$name
 

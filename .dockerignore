@@ -4,6 +4,6 @@
 # Allow only what the runtime needs
 !explainshell/
 !requirements.txt
-!start.sh
-!Caddyfile
+!prod/docker/Caddyfile
+!prod/docker/start.sh
 !tools/download-latest-db.sh
