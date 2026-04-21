@@ -41,7 +41,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - run: docker build -t size-check .
+      - id: db
+        # Dockerfile now requires DB_NAME (pins the release asset that
+        # gets baked in). Resolve the newest one here just like
+        # fly-deploy.yml does.
+        run: |
+          NAME=$(gh api "repos/${{ github.repository }}/releases/tags/db-latest" \
+            --jq '[.assets[] | select(.name | test("^explainshell-.*\\.db\\.zst$"))] | sort_by(.created_at) | last | .name')
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: docker build -t size-check --build-arg DB_NAME=${{ steps.db.outputs.name }} .
       - run: |
           MAX_MB=800
           SIZE=$(docker image inspect size-check --format '{{.Size}}')
