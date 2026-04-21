@@ -42,5 +42,15 @@ jobs:
           DB_NAME: ${{ steps.db.outputs.name }}
           GIT_SHA: ${{ github.sha }}
         run: envsubst < prod/digitalocean/app.yaml > /tmp/app.yaml
-      - name: Apply app spec
-        run: doctl apps update ${{ secrets.DO_APP_ID }} --spec /tmp/app.yaml --wait
+      - name: Apply app spec and deploy
+        # `apps update --spec` alone triggers a deploy, but with
+        # deploy_on_push=false DO never sees push webhooks, so its
+        # cached commit pointer for the branch doesn't advance and the
+        # deploy builds from a stale commit. `create-deployment
+        # --force-rebuild` refetches the branch head and supersedes
+        # the stale in-progress deploy. Net effect: the spec (with
+        # fresh DB_NAME/GIT_SHA build args) lands, and the deploy
+        # builds from the commit we actually want.
+        run: |
+          doctl apps update ${{ secrets.DO_APP_ID }} --spec /tmp/app.yaml
+          doctl apps create-deployment ${{ secrets.DO_APP_ID }} --force-rebuild --wait
