@@ -48,3 +48,8 @@ curl --progress-bar \
 
 rm -f "$ASSET"
 echo "Uploaded $ASSET to release $RELEASE."
+echo
+echo "Next steps:"
+echo "  1. Deploy (push, or 'make deploy-local') to bake the new DB into the image."
+echo "  2. After the deploy lands, purge Cloudflare so the edge stops serving the"
+echo "     old DB's responses."
