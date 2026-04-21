@@ -82,7 +82,9 @@ upload-live-db:
 
 # Deploy to Fly from the local machine, passing the current commit as
 # GIT_SHA so the serving-path ETag flips on code changes (the regular
-# CI deploy does the same via github.sha). Two interactive gates: one
+# CI deploy does the same via github.sha), and the newest db-latest
+# release asset's name as DB_NAME so the image is pinned to a specific
+# DB (cache bust + content pin in one arg). Two interactive gates: one
 # for "yes, I'm deploying from local", one for a dirty working tree.
 deploy-local:
 	@printf "Deploy to production from LOCAL? [y/N] "; \
@@ -95,6 +97,10 @@ deploy-local:
 	fi
 	@sha=$$(git rev-parse HEAD); \
 	 if [ -n "$$(git status --porcelain)" ]; then sha="$${sha}-dirty"; fi; \
-	 flyctl deploy --remote-only --build-arg GIT_SHA=$$sha
+	 name=$$(gh api "repos/idank/explainshell/releases/tags/db-latest" \
+	   --jq '[.assets[] | select(.name | test("^explainshell-.*\\.db\\.zst$$"))] | sort_by(.created_at) | last | .name'); \
+	 flyctl deploy --remote-only \
+	   --build-arg GIT_SHA=$$sha \
+	   --build-arg DB_NAME=$$name
 
 .PHONY: tests e2e e2e-db e2e-update test-llm tests-all tests-quick lint serve parsing-regression parsing-update db-check ubuntu-archive arch-archive download-latest-db upload-live-db deploy-local

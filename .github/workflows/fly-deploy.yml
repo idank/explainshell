@@ -23,6 +23,20 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only --build-arg GIT_SHA=${{ github.sha }}
+      - id: db
+        # Pin the image to a specific release asset rather than "newest
+        # at build time". The name busts the download layer's cache
+        # when a new DB lands AND tells the script exactly which asset
+        # to fetch+verify — so a concurrent upload during the build
+        # can't silently change what we ship.
+        run: |
+          NAME=$(gh api "repos/${{ github.repository }}/releases/tags/db-latest" \
+            --jq '[.assets[] | select(.name | test("^explainshell-.*\\.db\\.zst$"))] | sort_by(.created_at) | last | .name')
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: flyctl deploy --remote-only
+          --build-arg GIT_SHA=${{ github.sha }}
+          --build-arg DB_NAME=${{ steps.db.outputs.name }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

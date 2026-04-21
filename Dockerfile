@@ -13,7 +13,17 @@ COPY requirements.txt .
 RUN pip3 install --no-cache-dir --no-warn-script-location -r requirements.txt
 
 COPY tools/download-latest-db.sh tools/
-RUN tools/download-latest-db.sh explainshell.db
+# DB_NAME pins the release asset this image baked in. The deploy
+# pipeline (CI workflow and `make deploy-local`) looks it up from the
+# db-latest release and passes it here. It serves two roles:
+#   1) cache bust — referenced in the RUN string, so a new DB in the
+#      release invalidates this layer and forces re-download.
+#   2) content pin — the script verifies sha256 against the release
+#      metadata, so what lands in the image is exactly what CI captured
+#      (not "whatever is newest at build time", which would race with
+#      concurrent uploads).
+ARG DB_NAME
+RUN tools/download-latest-db.sh --asset "$DB_NAME" explainshell.db
 
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY start.sh .
