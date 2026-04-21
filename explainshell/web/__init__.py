@@ -98,11 +98,8 @@ def create_app(db_path=None):
     app.config["DB_SHA256"] = db_sha256
 
     # APP_VERSION captures the deployed code identity. Combined with
-    # per-row parsed_sha256 at serve time, this forms the ETag so
-    # caches invalidate on either axis (content or code). The DB sha
-    # is exposed on /health for admin/smoke-test use but isn't part of
-    # the validator — it would churn caches on routine DB refreshes
-    # whose parsed rows for a given manpage are unchanged.
+    # DB_SHA256 it forms the ETag served on /explain responses, so
+    # caches invalidate on any code change or DB rebuild.
     project_root = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )

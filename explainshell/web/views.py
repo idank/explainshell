@@ -283,7 +283,7 @@ def _handle_explain_cmd(url_distro, url_release):
         else:
             cmd_distros = list(get_distros())
 
-        return render_template(
+        body = render_template(
             "explain.html",
             matches=matches,
             helptext=helptext,
@@ -291,6 +291,7 @@ def _handle_explain_cmd(url_distro, url_release):
             debug_info=debug_info,
             available_distros=cmd_distros,
         )
+        return _cacheable_explain_response(body)
 
     except errors.ProgramDoesNotExist as error_msg:
         return render_template(
@@ -353,8 +354,7 @@ def _handle_explain_program(section, program, url_distro, url_release):
                 debug_info=debug_info,
                 available_distros=cmd_distros,
             )
-            parsed_sha = get_store().get_parsed_sha256(raw_mp.source)
-            return _cacheable_manpage_response(body, parsed_sha)
+            return _cacheable_explain_response(body)
         except errors.ProgramDoesNotExist as e:
             last_error = e
             continue
@@ -367,28 +367,29 @@ def _handle_explain_program(section, program, url_distro, url_release):
 # 7 days for both browser and CDN, with a 1-day grace window for
 # stale-while-revalidate so Cloudflare can serve slightly-stale HTML
 # while refreshing in the background.
-_MANPAGE_CACHE_CONTROL = (
+_EXPLAIN_CACHE_CONTROL = (
     "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400"
 )
 
 
-def _cacheable_manpage_response(body: str, parsed_sha256: str | None):
+def _cacheable_explain_response(body: str):
     """Wrap *body* in a Response with ETag + Cache-Control headers.
 
-    Returns a plain 200 (no cache headers) when ``parsed_sha256`` is
-    missing — rows predating the column haven't been backfilled, and
-    caching them with a stable validator we can't prove is risky. When
-    the request carries a matching ``If-None-Match``, the response is
-    downgraded to 304 via Flask's ``make_conditional``.
+    The ETag is ``<db_sha256[:16]>-<app_version>`` — two deploy-wide
+    constants, so it flips on any DB rebuild or code change and stays
+    stable otherwise. Error paths don't go through this helper; they
+    stay uncached.
+
+    ``Vary: Accept-Encoding`` is set explicitly: we never emit
+    ``Set-Cookie`` and don't use Flask sessions, so cookies must not
+    enter CF's cache key.
     """
     response = make_response(body)
-    if not parsed_sha256:
-        return response
-
+    db_sha = current_app.config.get("DB_SHA256", "local")
     app_ver = current_app.config.get("APP_VERSION", "local")
-    etag = f"{parsed_sha256[:16]}-{app_ver}"
-    response.set_etag(etag, weak=True)
-    response.headers["Cache-Control"] = _MANPAGE_CACHE_CONTROL
+    response.set_etag(f"{db_sha[:16]}-{app_ver}", weak=True)
+    response.headers["Cache-Control"] = _EXPLAIN_CACHE_CONTROL
+    response.headers["Vary"] = "Accept-Encoding"
     response.make_conditional(request)
     return response
 
