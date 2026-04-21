@@ -1,7 +1,6 @@
 import datetime
 import unittest
 
-import explainshell.web as web_mod
 from flask import g
 from explainshell.models import Option, ParsedManpage, RawManpage
 from explainshell.store import Store
@@ -16,8 +15,10 @@ def _use_store(app: object, store: Store) -> None:
 
     The store is popped from ``g`` in ``after_request`` (before the
     teardown hook runs) so that the app's teardown doesn't close the
-    shared test connection.
+    shared test connection. Also refreshes ``STARTUP_DISTROS`` from
+    *store* so ``get_distros()`` reflects the test fixture.
     """
+    app.config["STARTUP_DISTROS"] = list(store.distros())
 
     @app.before_request
     def _inject() -> None:
@@ -137,15 +138,11 @@ class TestExplainRouter(unittest.TestCase):
             raw,
         )
         _use_store(self.app, store)
-        web_mod._distros_cache = None
 
-        try:
-            rv = self.client.get("/explain?cmd=bar+-a")
-            self.assertEqual(rv.status_code, 200)
-            self.assertNotIn(b"missing man page", rv.data)
-            self.assertIn(b"bar", rv.data)
-        finally:
-            web_mod._distros_cache = None
+        rv = self.client.get("/explain?cmd=bar+-a")
+        self.assertEqual(rv.status_code, 200)
+        self.assertNotIn(b"missing man page", rv.data)
+        self.assertIn(b"bar", rv.data)
 
     def test_distro_only_no_cmd_redirects(self):
         rv = self.client.get("/explain/ubuntu/26.04")
@@ -228,80 +225,56 @@ class TestDistroFallback(unittest.TestCase):
         """Default distro is arch (sorts last with reverse), but 'uonly'
         only exists in ubuntu — fallback should find it."""
         app = self._make_app(self._store_with_ubuntu_and_arch())
-        web_mod._distros_cache = None
-        try:
-            with app.test_client() as c:
-                # No distro in URL → default picks ubuntu, fallback active.
-                rv = c.get("/explain?cmd=aonly+-a")
-                self.assertEqual(rv.status_code, 200)
-                self.assertNotIn(b"missing man page", rv.data)
-                self.assertIn(b"aonly", rv.data)
-        finally:
-            web_mod._distros_cache = None
+        with app.test_client() as c:
+            # No distro in URL → default picks ubuntu, fallback active.
+            rv = c.get("/explain?cmd=aonly+-a")
+            self.assertEqual(rv.status_code, 200)
+            self.assertNotIn(b"missing man page", rv.data)
+            self.assertIn(b"aonly", rv.data)
 
     def test_url_distro_no_fallback(self):
         """Explicit URL distro should NOT fall back — missing is missing."""
         app = self._make_app(self._store_with_ubuntu_and_arch())
-        web_mod._distros_cache = None
-        try:
-            with app.test_client() as c:
-                rv = c.get("/explain/arch/latest?cmd=uonly+-u")
-                self.assertEqual(rv.status_code, 200)
-                self.assertIn(b"missing man page", rv.data)
-        finally:
-            web_mod._distros_cache = None
+        with app.test_client() as c:
+            rv = c.get("/explain/arch/latest?cmd=uonly+-u")
+            self.assertEqual(rv.status_code, 200)
+            self.assertIn(b"missing man page", rv.data)
 
     def test_all_distros_miss_still_raises(self):
         """A command that exists nowhere should still show missing."""
         app = self._make_app(self._store_with_ubuntu_and_arch())
-        web_mod._distros_cache = None
-        try:
-            with app.test_client() as c:
-                rv = c.get("/explain?cmd=nosuchcmd")
-                self.assertEqual(rv.status_code, 200)
-                self.assertIn(b"missing man page", rv.data)
-        finally:
-            web_mod._distros_cache = None
+        with app.test_client() as c:
+            rv = c.get("/explain?cmd=nosuchcmd")
+            self.assertEqual(rv.status_code, 200)
+            self.assertIn(b"missing man page", rv.data)
 
     def test_pipeline_anchors_to_fallback_distro(self):
         """Default picks ubuntu. In 'aonly | uonly', the first command
         falls back to arch, anchoring there — so 'uonly' (ubuntu-only)
         should be unknown."""
         app = self._make_app(self._store_with_ubuntu_and_arch())
-        web_mod._distros_cache = None
-        try:
-            with app.test_client() as c:
-                rv = c.get("/explain?cmd=aonly+-a+|+uonly+-u")
-                self.assertEqual(rv.status_code, 200)
-                self.assertIn(b"aonly", rv.data)
-                self.assertIn(b"unknown", rv.data)
-        finally:
-            web_mod._distros_cache = None
+        with app.test_client() as c:
+            rv = c.get("/explain?cmd=aonly+-a+|+uonly+-u")
+            self.assertEqual(rv.status_code, 200)
+            self.assertIn(b"aonly", rv.data)
+            self.assertIn(b"unknown", rv.data)
 
     def test_program_default_falls_back(self):
         """The /explain/<program> route should fall back with default distro."""
         app = self._make_app(self._store_with_ubuntu_and_arch())
-        web_mod._distros_cache = None
-        try:
-            with app.test_client() as c:
-                rv = c.get("/explain/aonly")
-                self.assertEqual(rv.status_code, 200)
-                self.assertNotIn(b"missing man page", rv.data)
-                self.assertIn(b"aonly", rv.data)
-        finally:
-            web_mod._distros_cache = None
+        with app.test_client() as c:
+            rv = c.get("/explain/aonly")
+            self.assertEqual(rv.status_code, 200)
+            self.assertNotIn(b"missing man page", rv.data)
+            self.assertIn(b"aonly", rv.data)
 
     def test_program_url_distro_no_fallback(self):
         """The /explain/<distro>/<release>/<program> route should NOT fall back."""
         app = self._make_app(self._store_with_ubuntu_and_arch())
-        web_mod._distros_cache = None
-        try:
-            with app.test_client() as c:
-                rv = c.get("/explain/arch/latest/uonly")
-                self.assertEqual(rv.status_code, 200)
-                self.assertIn(b"missing man page", rv.data)
-        finally:
-            web_mod._distros_cache = None
+        with app.test_client() as c:
+            rv = c.get("/explain/arch/latest/uonly")
+            self.assertEqual(rv.status_code, 200)
+            self.assertIn(b"missing man page", rv.data)
 
 
 class TestExplainCacheHeaders(unittest.TestCase):

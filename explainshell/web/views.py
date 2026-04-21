@@ -18,7 +18,7 @@ from flask import (
 import bashlex.errors
 
 from explainshell import matcher, errors, util, config
-from explainshell.web import get_cached_distros, get_store, helpers
+from explainshell.web import get_distros, get_store, helpers
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ bp = Blueprint("main", __name__)
 
 def _is_known_distro(name):
     """Return True if *name* matches a distro in the cached distros list."""
-    for distro, _release in get_cached_distros():
+    for distro, _release in get_distros():
         if distro == name:
             return True
     return False
@@ -44,7 +44,7 @@ def _get_distro_release(url_distro=None, url_release=None):
     """Resolve distro/release: URL params > default."""
     if url_distro and url_release:
         return url_distro, url_release
-    pairs = list(get_cached_distros())
+    pairs = list(get_distros())
     if pairs:
         pairs.sort(key=lambda dr: (dr[0] == "ubuntu", dr[1]), reverse=True)
         return pairs[0]
@@ -92,7 +92,7 @@ def inject_distros():
     if qs:
         suffix += "?" + qs
     return {
-        "available_distros": get_cached_distros(),
+        "available_distros": get_distros(),
         "explain_prefix": prefix,
         "distro_switch_suffix": suffix,
         "active_distro": active_distro,
@@ -111,7 +111,7 @@ debug_bp = Blueprint("manpage", __name__)
 @debug_bp.route("/manpage/<distro>/")
 def manpage_releases(distro):
     """List available releases for a distro."""
-    releases = sorted(release for d, release in get_cached_distros() if d == distro)
+    releases = sorted(release for d, release in get_distros() if d == distro)
     return render_template(
         "manpage_releases.html",
         distro=distro,
@@ -260,7 +260,7 @@ def _handle_explain_cmd(url_distro, url_release):
         # No explicit distro — let the preference list drive lookups.
         distro, release = None, None
         distro_preference = sorted(
-            get_cached_distros(),
+            get_distros(),
             key=lambda dr: (dr[0] == "ubuntu", dr[1]),
             reverse=True,
         )
@@ -281,7 +281,7 @@ def _handle_explain_cmd(url_distro, url_release):
             sets = [set(get_store().distros_for_name(n)) for n in cmd_names]
             cmd_distros = sorted(sets[0].intersection(*sets[1:]))
         else:
-            cmd_distros = list(get_cached_distros())
+            cmd_distros = list(get_distros())
 
         return render_template(
             "explain.html",
@@ -333,7 +333,7 @@ def _handle_explain_program(section, program, url_distro, url_release):
         distros_to_try = [(url_distro, url_release)]
     else:
         distros_to_try = sorted(
-            get_cached_distros(),
+            get_distros(),
             key=lambda dr: (dr[0] == "ubuntu", dr[1]),
             reverse=True,
         )

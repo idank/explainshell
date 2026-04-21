@@ -1,17 +1,11 @@
 import logging
 import os
 import subprocess
-import time
 
-from flask import Flask, current_app, g
+from flask import Flask, current_app, g, jsonify
 from explainshell import config, store
 
 logger = logging.getLogger(__name__)
-
-# Cache distros() result; refreshed at most every 5 minutes.
-_distros_cache = None
-_distros_cache_time = 0
-_DISTROS_TTL = 300
 
 
 def get_store() -> store.Store:
@@ -60,13 +54,14 @@ def _get_git_sha(project_root: str) -> str:
         return "local"
 
 
-def get_cached_distros():
-    global _distros_cache, _distros_cache_time
-    now = time.monotonic()
-    if _distros_cache is None or now - _distros_cache_time > _DISTROS_TTL:
-        _distros_cache = get_store().distros()
-        _distros_cache_time = now
-    return _distros_cache
+def get_distros() -> list[tuple[str, str]]:
+    """Return the (distro, release) pairs snapshotted at app startup.
+
+    The DB is read-only and baked into the Docker image in prod, so the
+    snapshot is valid for the lifetime of the process. Rebuilding the
+    DB in dev requires a server restart to pick up new distros.
+    """
+    return current_app.config["STARTUP_DISTROS"]
 
 
 def create_app(db_path=None):
@@ -105,9 +100,9 @@ def create_app(db_path=None):
     # APP_VERSION captures the deployed code identity. Combined with
     # per-row parsed_sha256 at serve time, this forms the ETag so
     # caches invalidate on either axis (content or code). The DB sha
-    # lives on /db for admin debugging but isn't part of the validator
-    # — it would churn caches on routine DB refreshes whose parsed rows
-    # for a given manpage are unchanged.
+    # is exposed on /health for admin/smoke-test use but isn't part of
+    # the validator — it would churn caches on routine DB refreshes
+    # whose parsed rows for a given manpage are unchanged.
     project_root = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )
@@ -118,8 +113,28 @@ def create_app(db_path=None):
     hex_part, sep, tail = git_sha.partition("-")
     app.config["APP_VERSION"] = hex_part[:8] + (sep + tail if sep else "")
 
-    @app.route("/db")
-    def db_info():
-        return db_sha256 + "\n", 200, {"Content-Type": "text/plain"}
+    # Snapshot the distro list at startup. Used by get_distros() and
+    # /health — both are served from memory, no per-request DB work.
+    # The DB is read-only and baked into the Docker image, so distros
+    # only change when a new process boots.
+    startup_distros: list[tuple[str, str]] = []
+    db_path = app.config.get("DB_PATH")
+    if db_path and os.path.isfile(db_path):
+        boot_store = store.Store(db_path, read_only=True)
+        try:
+            startup_distros = list(boot_store.distros())
+        finally:
+            boot_store.close()
+    app.config["STARTUP_DISTROS"] = startup_distros
+
+    health_body = {
+        "db_sha256": db_sha256,
+        "app_version": app.config["APP_VERSION"],
+        "distros": [{"distro": d, "release": r} for d, r in startup_distros],
+    }
+
+    @app.route("/health")
+    def health():
+        return jsonify(health_body)
 
     return app
