@@ -72,7 +72,7 @@ arch-archive:
 	python tools/fetch_manned.py --log INFO extract --data-dir $(MANNED_DATA_DIR) \
 		--distro arch --sections 1,1p,8 --output-dir manpages
 
-LIVE_DB := explainshell.db
+LIVE_DB ?= explainshell.db
 
 download-latest-db:
 	tools/download-latest-db.sh $(LIVE_DB)
