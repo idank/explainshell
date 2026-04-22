@@ -619,8 +619,6 @@ class Store:
             "DELETE FROM mappings WHERE src LIKE '% %' "
             "AND src NOT IN (SELECT name FROM parsed_manpages WHERE name LIKE '% %')"
         ).rowcount
-        if deleted:
-            logger.debug("deleted %d existing subcommand mapping(s)", deleted)
 
         mappings_to_add = sorted(valid_mappings)
         self._conn.executemany(
@@ -628,6 +626,14 @@ class Store:
             [(src, dst) for src, dst in mappings_to_add],
         )
         self._conn.commit()
+
+        added = len(mappings_to_add)
+        logger.info(
+            "subcommand mapping reconciliation: %d removed, %d added (net %+d)",
+            deleted,
+            added,
+            added - deleted,
+        )
 
         return SubcommandMappingResult(mappings_to_add, parents)
 
