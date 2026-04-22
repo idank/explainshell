@@ -14,7 +14,11 @@
 	# Cloudflare puts it in CF-Connecting-IP. Caddy uses the first header
 	# in the list that's present, so both platforms log real client IPs.
 	servers {
-		trusted_proxies static private_ranges
+		# private_ranges covers RFC1918 + loopback but NOT CGNAT (100.64.0.0/10).
+		# DO App Platform's internal proxy hop uses CGNAT (e.g. 100.127.x.x),
+		# so without this addition trusted_proxies_strict refuses to read
+		# Do-Connecting-Ip and client_ip falls back to the proxy IP.
+		trusted_proxies static private_ranges 100.64.0.0/10
 		trusted_proxies_strict
 		client_ip_headers Do-Connecting-Ip CF-Connecting-IP
 	}
