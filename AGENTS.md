@@ -21,7 +21,6 @@ A web tool that parses man pages and explains command-line arguments by matching
    - If e2e tests fail due to snapshot diffs, assess whether the diff is expected, and get user confirmation before running `make e2e-update`
 1. Update README.md if the change adds/removes/renames CLI commands, env vars, or user-facing features
 1. Update AGENTS.md if the change affects structure, convention, workflow, etc.
-1. Provide a draft commit message using Conventional Commits format
 
 ### LLM Benchmarking
 
