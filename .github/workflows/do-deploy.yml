@@ -1,6 +1,7 @@
-# Deploys to DigitalOcean App Platform. Mirrors fly-deploy.yml: waits
-# for CI to pass on master, resolves the newest db-latest asset name,
-# renders the app spec with DB_NAME + GIT_SHA, then applies it.
+# Deploys to DigitalOcean App Platform. Waits for CI to pass on
+# master, resolves the newest db-latest asset name, renders the app
+# spec with DB_NAME + GIT_SHA, then applies it with a force-rebuild
+# so DO's cached branch head doesn't leave us deploying a stale commit.
 
 name: DO Deploy
 on:
@@ -28,9 +29,10 @@ jobs:
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
       - id: db
-        # Same DB-pinning approach as fly-deploy.yml: resolve the exact
-        # asset name from the db-latest release and pass it through as
-        # a build arg so the image is pinned to what CI captured.
+        # Resolve the exact db-latest asset name and pass it through
+        # as a build arg so the image is pinned to what CI captured
+        # (rather than "whatever is newest at remote-build time",
+        # which would race with concurrent uploads).
         run: |
           NAME=$(gh api "repos/${{ github.repository }}/releases/tags/db-latest" \
             --jq '[.assets[] | select(.name | test("^explainshell-.*\\.db\\.zst$"))] | sort_by(.created_at) | last | .name')

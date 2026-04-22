@@ -227,22 +227,20 @@ Hermetic setup: uses a dedicated `tests/e2e/e2e.db` and random port selection. S
 
 ### Deployment
 
-The app is deployed to [Fly.io](https://fly.io). The SQLite database is baked into the Docker image at build time (downloaded as `.zst` from the GitHub release, decompressed during `docker build`).
+The app is deployed to [DigitalOcean App Platform](https://www.digitalocean.com/products/app-platform). The SQLite database is baked into the Docker image at build time (downloaded as `.zst` from the GitHub release, decompressed during `docker build`).
 
 **Production infrastructure:**
 
-- **Domain:** `explainshell.com` → Cloudflare (orange cloud proxy) → Fly.io
+- **Domain:** `explainshell.com` → Cloudflare (orange cloud proxy) → DigitalOcean App Platform
 - **Cloudflare:** DNS + proxy, SSL mode set to **Full (Strict)**
-- **Fly app:** `explainshell` — VM size, region, and machine config are in `prod/fly/fly.toml`
-- **DigitalOcean App Platform spec:** `prod/digitalocean/app.yaml` (alternative deploy target; see `.github/workflows/do-deploy.yml`)
-- **Shared container artifacts:** `prod/docker/` (Dockerfile, Caddyfile, start.sh) — used by both deploy targets
-- **Direct origin access:** The `.fly.dev` hostname is disabled (`auto_assign_hostname = false`) so all traffic must pass through Cloudflare. Use `fly proxy 8080` to reach the origin directly for debugging.
+- **App spec:** `prod/digitalocean/app.yaml` — region, instance size/count, env vars, custom domain. `doctl apps update --spec` does a full replace, so anything configured out-of-band gets wiped on the next deploy; check it in here instead.
+- **Container artifacts:** `prod/docker/` (Dockerfile, Caddyfile, start.sh)
 
 **Deploy code changes:**
 
-Deploys are driven by CI: merging to `master` triggers `.github/workflows/fly-deploy.yml`, which fetches the newest `db-latest` asset name and passes it as `DB_NAME` along with the commit SHA as `GIT_SHA`. For an ad-hoc deploy from a local checkout, use `make deploy-local` — it does the same lookup and adds interactive guards for dirty working trees.
+Deploys are driven by CI: merging to `master` triggers `.github/workflows/do-deploy.yml`, which resolves the newest `db-latest` asset name, renders the spec via `envsubst` with `DB_NAME` and `GIT_SHA`, applies it with `doctl apps update --spec`, then forces a fresh build with `doctl apps create-deployment --force-rebuild --wait`. The force-rebuild step is load-bearing: `deploy_on_push` is off, so without it DO deploys from its cached (stale) branch head instead of the current commit.
 
 **Update the database:**
 
 1. `make upload-live-db` — uploads an `explainshell-{date}.db.zst` asset to the `db-latest` release (skipped if digest matches the current newest).
-2. Trigger a deploy (merge to `master`, or `make deploy-local`). The deploy pipeline resolves the newest asset name, passes it as the Docker `DB_NAME` build-arg, and the download layer cache-busts to fetch it.
+2. Push to `master` — the deploy pipeline resolves the newest asset name, passes it as the Docker `DB_NAME` build-arg, and the download layer cache-busts to fetch it.

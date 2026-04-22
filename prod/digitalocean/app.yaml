@@ -7,9 +7,11 @@
 #
 # First-time setup (one-off, manual):
 #   DB_NAME=$(...) GIT_SHA=$(git rev-parse HEAD) envsubst \
-#     < prod/digitalocean/app.yaml > /tmp/app.yaml
-#   doctl apps create --spec /tmp/app.yaml
-# Save the returned app id as the DO_APP_ID repo secret.
+#     < prod/digitalocean/app.yaml > ~/app.yaml
+#   doctl apps create --spec ~/app.yaml
+# Save the returned app id as the DO_APP_ID repo/environment secret.
+# (Snap-installed doctl can't read /tmp — keep the rendered spec under
+# $HOME.)
 name: explainshell
 region: nyc
 # Checked in here because `doctl apps update --spec` does a full replace —

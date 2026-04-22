@@ -80,13 +80,15 @@ download-latest-db:
 upload-live-db:
 	tools/upload-live-db.sh $(LIVE_DB)
 
-# Deploy to Fly from the local machine, passing the current commit as
-# GIT_SHA so the serving-path ETag flips on code changes (the regular
-# CI deploy does the same via github.sha), and the newest db-latest
-# release asset's name as DB_NAME so the image is pinned to a specific
-# DB (cache bust + content pin in one arg). Two interactive gates: one
-# for "yes, I'm deploying from local", one for a dirty working tree.
+# Deploy to DigitalOcean App Platform from the local machine. Mirrors
+# do-deploy.yml: resolves the newest db-latest asset name, renders the
+# spec with envsubst (DB_NAME + GIT_SHA), applies it, then forces a
+# fresh build from the current branch head. Two interactive gates:
+# one for "yes, I'm deploying from local", one for a dirty working
+# tree. DO_APP_ID must be set (see prod/digitalocean/app.yaml header
+# for the one-time setup).
 deploy-local:
+	@test -n "$$DO_APP_ID" || { echo "DO_APP_ID is not set"; exit 1; }
 	@printf "Deploy to production from LOCAL? [y/N] "; \
 	read ans; [ "$$ans" = "y" ] || [ "$$ans" = "Y" ] || { echo "aborted"; exit 1; }
 	@if [ -n "$$(git status --porcelain)" ]; then \
@@ -99,10 +101,10 @@ deploy-local:
 	 if [ -n "$$(git status --porcelain)" ]; then sha="$${sha}-dirty"; fi; \
 	 name=$$(gh api "repos/idank/explainshell/releases/tags/db-latest" \
 	   --jq '[.assets[] | select(.name | test("^explainshell-.*\\.db\\.zst$$"))] | sort_by(.created_at) | last | .name'); \
-	 flyctl deploy --remote-only \
-	   --config prod/fly/fly.toml \
-	   --dockerfile prod/docker/Dockerfile \
-	   --build-arg GIT_SHA=$$sha \
-	   --build-arg DB_NAME=$$name
+	 tmp=$$(mktemp "$${HOME:-/tmp}/app-local.XXXXXX.yaml"); \
+	 trap 'rm -f "$$tmp"' EXIT; \
+	 DB_NAME="$$name" GIT_SHA="$$sha" envsubst < prod/digitalocean/app.yaml > "$$tmp"; \
+	 doctl apps update "$$DO_APP_ID" --spec "$$tmp"; \
+	 doctl apps create-deployment "$$DO_APP_ID" --force-rebuild --wait
 
 .PHONY: tests e2e e2e-db e2e-update test-llm tests-all tests-quick lint serve parsing-regression parsing-update db-check ubuntu-archive arch-archive download-latest-db upload-live-db deploy-local

@@ -10,9 +10,10 @@
 	# the request as InvalidSchemeHeaders. trusted_proxies_strict parses
 	# X-Forwarded-For right-to-left to resist spoofing from appending edges.
 	# client_ip_headers resolves request.client_ip in access logs to the
-	# real user IP. DO App Platform puts it in Do-Connecting-Ip; Fly behind
-	# Cloudflare puts it in CF-Connecting-IP. Caddy uses the first header
-	# in the list that's present, so both platforms log real client IPs.
+	# real user IP. DO App Platform puts it in Do-Connecting-Ip; the
+	# Cloudflare fallback (CF-Connecting-IP) covers direct-origin probes
+	# if we ever front the app with our own CF. Caddy uses the first
+	# header in the list that's present.
 	servers {
 		# private_ranges covers RFC1918 + loopback but NOT CGNAT (100.64.0.0/10).
 		# DO App Platform's internal proxy hop uses CGNAT (e.g. 100.127.x.x),
@@ -26,9 +27,9 @@
 
 :8080 {
 	# Structured access log. Default caddy json is ~1.5 KB/line; this filter
-	# drops well-known noise (cookie, accept-*, sec-fetch-*, fly-*, resp
-	# headers) to keep each line under ~400 bytes. client_ip + User-Agent +
-	# Cf-Ray are preserved for debugging and correlation with CF analytics.
+	# drops well-known noise (cookie, accept-*, sec-fetch-*, resp headers)
+	# to keep each line under ~400 bytes. client_ip + User-Agent + Cf-Ray
+	# are preserved for debugging and correlation with CF analytics.
 	log {
 		output stdout
 		format filter {
@@ -61,12 +62,6 @@
 				request>headers>X-Forwarded-Proto delete
 				request>headers>Cf-Connecting-Ip delete
 				request>headers>Do-Connecting-Ip delete
-				request>headers>Fly-Forwarded-For delete
-				request>headers>Fly-Forwarded-Port delete
-				request>headers>Fly-Forwarded-Ssl delete
-				request>headers>Fly-Forwarded-Proto delete
-				request>headers>Fly-Region delete
-				request>headers>Fly-Request-Id delete
 				request>headers>Cdn-Loop delete
 			}
 		}
