@@ -12,6 +12,12 @@
 # Save the returned app id as the DO_APP_ID repo secret.
 name: explainshell
 region: nyc
+# Checked in here because `doctl apps update --spec` does a full replace —
+# anything set via the dashboard and missing from the spec gets wiped on
+# the next CI deploy.
+domains:
+  - domain: explainshell.com
+    type: PRIMARY
 services:
   - name: web
     dockerfile_path: prod/docker/Dockerfile
