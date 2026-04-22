@@ -3,18 +3,20 @@
 	admin off
 	persist_config off
 
-	# Trust fly's private network so caddy preserves X-Forwarded-Proto/For/Host
-	# from the fly edge instead of overwriting them. Without this, caddy sets
-	# X-Forwarded-Proto=http (its own hop is plaintext), contradicting fly's
-	# https value, and gunicorn rejects the request as InvalidSchemeHeaders.
-	# trusted_proxies_strict parses X-Forwarded-For right-to-left to resist
-	# spoofing from appending edges (CF/Fly). client_ip_headers makes
-	# request.client_ip in access logs resolve to CF-Connecting-IP (the real
-	# user) rather than the closest untrusted hop, which is fly's public edge.
+	# Trust the platform's private network so caddy preserves
+	# X-Forwarded-Proto/For/Host from the edge instead of overwriting them.
+	# Without this, caddy sets X-Forwarded-Proto=http (its own hop is
+	# plaintext), contradicting the edge's https value, and gunicorn rejects
+	# the request as InvalidSchemeHeaders. trusted_proxies_strict parses
+	# X-Forwarded-For right-to-left to resist spoofing from appending edges.
+	# client_ip_headers resolves request.client_ip in access logs to the
+	# real user IP. DO App Platform puts it in Do-Connecting-Ip; Fly behind
+	# Cloudflare puts it in CF-Connecting-IP. Caddy uses the first header
+	# in the list that's present, so both platforms log real client IPs.
 	servers {
 		trusted_proxies static private_ranges
 		trusted_proxies_strict
-		client_ip_headers CF-Connecting-IP
+		client_ip_headers Do-Connecting-Ip CF-Connecting-IP
 	}
 }
 
@@ -54,6 +56,7 @@
 				request>headers>X-Forwarded-For delete
 				request>headers>X-Forwarded-Proto delete
 				request>headers>Cf-Connecting-Ip delete
+				request>headers>Do-Connecting-Ip delete
 				request>headers>Fly-Forwarded-For delete
 				request>headers>Fly-Forwarded-Port delete
 				request>headers>Fly-Forwarded-Ssl delete
