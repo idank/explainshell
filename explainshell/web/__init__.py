@@ -2,7 +2,7 @@ import logging
 import os
 import subprocess
 
-from flask import Flask, current_app, g, jsonify
+from flask import Flask, current_app, g, jsonify, send_from_directory
 from explainshell import config, store
 
 logger = logging.getLogger(__name__)
@@ -133,5 +133,11 @@ def create_app(db_path=None):
     @app.route("/health")
     def health():
         return jsonify(health_body)
+
+    @app.route("/favicon.ico")
+    def favicon():
+        return send_from_directory(
+            app.root_path, "favicon.ico", mimetype="image/vnd.microsoft.icon"
+        )
 
     return app
