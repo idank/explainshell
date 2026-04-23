@@ -67,28 +67,24 @@
 		}
 	}
 
-	reverse_proxy [::1]:8081 {
-		# Drain gunicorn's response as fast as possible into caddy's memory
-		# so a slow client cannot park the upstream worker. 256 KB is well
-		# above the ~67 KB worst-case explain response observed in prod.
-		response_buffers 256KB
-		transport http {
-			# Bound how long caddy waits on gunicorn. A wedged worker gets
-			# a prompt 504 back to the client and frees caddy's client
-			# socket, instead of holding the connection until gunicorn's
-			# own --timeout fires. gunicorn continues processing the
-			# killed request — this is a client-facing latency cap, not
-			# an origin capacity cap.
-			read_timeout 10s
-			# Admission control: caddy holds at most 8 concurrent
-			# upstream connections — matches gunicorn's 2 workers × 4
-			# threads = 8 request slots. Arrival #9 waits briefly in
-			# caddy instead of piling into gunicorn's accept queue; if
-			# caddy can't dispatch, the client gets a fast 503 instead
-			# of a 30s hang-then-504. Not a prioritization tool — every
-			# path shares the same 8 slots — but bounds the failure
-			# mode and lets the pool drain instantly once ingress drops.
-			max_conns_per_host 8
+	@assets path /static/* /favicon.ico
+	handle @assets {
+		root * /opt/webapp/explainshell/web
+		header Cache-Control "public, max-age=86400"
+		file_server
+	}
+
+	handle {
+		reverse_proxy [::1]:8081 {
+			# 256 KB covers the ~67 KB worst-case explain response.
+			response_buffers 256KB
+			transport http {
+				# Per-read timeout, not a whole-request deadline.
+				read_timeout 10s
+				# Matches gunicorn's 2w × 4t = 8 slots. Queue for waiters
+				# is unbounded — wall clock cap lives above this layer.
+				max_conns_per_host 8
+			}
 		}
 	}
 }
