@@ -24,6 +24,12 @@ services:
   - name: web
     dockerfile_path: prod/docker/Dockerfile
     source_dir: /
+    # Forwards stdout/stderr to Better Stack. Token is rendered by
+    # envsubst in CI from the LOGTAIL_TOKEN GitHub secret.
+    log_destinations:
+      - name: betterstack
+        logtail:
+          token: ${LOGTAIL_TOKEN}
     github:
       repo: idank/explainshell
       branch: master

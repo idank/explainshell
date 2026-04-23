@@ -43,6 +43,7 @@ jobs:
         env:
           DB_NAME: ${{ steps.db.outputs.name }}
           GIT_SHA: ${{ github.sha }}
+          LOGTAIL_TOKEN: ${{ secrets.LOGTAIL_TOKEN }}
         run: envsubst < prod/digitalocean/app.yaml > /tmp/app.yaml
       - name: Apply app spec and deploy
         # `apps update --spec` alone triggers a deploy, but with
