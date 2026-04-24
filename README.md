@@ -1,5 +1,8 @@
 # [explainshell.com](http://www.explainshell.com) - match command-line arguments to their help text
 
+[![CI](https://github.com/idank/explainshell/actions/workflows/ci.yml/badge.svg)](https://github.com/idank/explainshell/actions/workflows/ci.yml)
+[![Deploy](https://img.shields.io/github/actions/workflow/status/idank/explainshell/do-deploy.yml?label=deploy&logo=digitalocean&logoColor=white)](https://github.com/idank/explainshell/actions/workflows/do-deploy.yml)
+
 explainshell is a tool (with a web interface) capable of parsing manpages, extracting options and
 explaining a given command-line by matching each argument to the relevant help text in the manpage.
 
