@@ -36,15 +36,10 @@
     {% if d.suggestions|length > 0 or available_distros|length > 1 -%}
                 <span class="dropdown">
                     <span style="word-spacing: 0px;">
-                    <b class="caret" data-toggle="dropdown"></b>
+                    <b class="caret" data-toggle="dropdown"
+                       {% if d.suggestions|length > 0 %}data-cmd-suggestions='{{ d.suggestions|tojson }}' data-explain-prefix="{{ explain_prefix }}"{% endif %}></b>
                     <span {{ spanclasses(d) }}><a href="{{ explain_prefix }}/{{ d.section }}/{{ d.source }}">{{ d.match|safe }}</a></span>
                     <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu">
-                      {% if d.suggestions|length > 0 %}
-                      <li class="dropdown-header">other manpages</li>
-                      {% for dd in d.suggestions -%}
-                      <li><a tabindex="-1" rel="nofollow" href="{{ explain_prefix }}?cmd={{ dd.cmd|urlencode }}">{{ dd.text|e }}</a></li>
-                      {%- endfor %}
-                      {% endif %}
                       {{ distro_items() }}
                     </ul>
                     </span>

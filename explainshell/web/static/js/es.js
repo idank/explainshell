@@ -1189,3 +1189,33 @@ $(document).ready(() => {
         setTheme(this.dataset.themeName);
     });
 });
+
+// Variant-manpage links are emitted as JSON in data-cmd-suggestions instead of
+// rendered <a href> anchors, so plain-HTTP crawlers can't enumerate the
+// combinatoric ?cmd= link graph. Materialize on first click.
+$(document).on(
+    'click',
+    '[data-toggle=dropdown][data-cmd-suggestions]',
+    function () {
+        const $caret = $(this);
+        if ($caret.data('suggestionsLoaded')) return;
+        $caret.data('suggestionsLoaded', true);
+        const items = $caret.data('cmd-suggestions') || [];
+        if (!items.length) return;
+        const prefix = $caret.attr('data-explain-prefix') || '';
+        const $menu = $caret
+            .closest('.dropdown')
+            .find('.dropdown-menu')
+            .first();
+        const nodes = items.map((s) =>
+            $('<li>').append(
+                $('<a tabindex="-1" rel="nofollow">')
+                    .attr('href', `${prefix}?cmd=${encodeURIComponent(s.cmd)}`)
+                    .text(s.text),
+            ),
+        );
+        $menu
+            .prepend(nodes)
+            .prepend('<li class="dropdown-header">other manpages</li>');
+    },
+);
