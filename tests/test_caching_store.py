@@ -199,3 +199,13 @@ class TestFindManpageCache:
     def test_create_is_not_supported(self) -> None:
         with pytest.raises(TypeError):
             CachingStore.create(":memory:")
+
+    def test_inherited_read_methods_work(
+        self, cached_store_factory: _CachedStoreFactory
+    ) -> None:
+        """Non-overridden Store reads must route through the per-thread
+        connection — the ``_conn`` property is the load-bearing piece."""
+        mp = _make_manpage("printf", "1", distro="ubuntu", release="26.04")
+        store = cached_store_factory([mp])
+
+        assert ("ubuntu", "26.04") in list(store.distros())

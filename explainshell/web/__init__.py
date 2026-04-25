@@ -150,7 +150,11 @@ def create_app(db_path=None):
 
     @app.route("/health")
     def health():
-        return jsonify(health_body)
+        body = dict(health_body)
+        cached = app.extensions.get(STORE_EXTENSION_KEY)
+        if isinstance(cached, CachingStore):
+            body["manpage_cache"] = cached.manpage_cache_info()._asdict()
+        return jsonify(body)
 
     @app.route("/favicon.ico")
     def favicon():

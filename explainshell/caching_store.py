@@ -14,7 +14,10 @@ from explainshell.store import Store
 class _FindManpageMiss(NamedTuple):
     """Cached miss for find_man_page lookups."""
 
-    args: tuple[object, ...]
+    # Only ProgramDoesNotExist.args (currently a single message string) is
+    # preserved — if the exception ever gains structured fields they'll be
+    # silently lost on cache hits.
+    args: tuple[str, ...]
 
 
 class ManpageCacheInfo(NamedTuple):
@@ -27,9 +30,10 @@ class ManpageCacheInfo(NamedTuple):
     max_bytes: int
 
 
-_MANPAGE_CACHE_MAX_BYTES = 4 * 1024 * 1024
-_MANPAGE_CACHE_MAX_ENTRY_BYTES = 512 * 1024
-_MANPAGE_CACHE_MAX_ENTRIES = 256
+# Sized for our current prod instances.
+_MANPAGE_CACHE_MAX_BYTES = 32 * 1024 * 1024
+_MANPAGE_CACHE_MAX_ENTRY_BYTES = 1024 * 1024
+_MANPAGE_CACHE_MAX_ENTRIES = 1024
 _CacheKey = tuple[str, str | None, str | None]
 _CacheValue = tuple[ParsedManpage, ...] | _FindManpageMiss
 

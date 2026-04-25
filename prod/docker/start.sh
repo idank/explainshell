@@ -9,7 +9,7 @@ set -e
 # threads can still chug on slow requests past it.
 gunicorn -w 2 --threads 4 \
   --timeout 15 --graceful-timeout 5 \
-  --max-requests 1000 --max-requests-jitter 200 --preload \
+  --max-requests 10000 --max-requests-jitter 2000 --preload \
   -b [::1]:8081 \
   "explainshell.web:create_app()" &
 GUNI_PID=$!
