@@ -20,7 +20,7 @@
             {% if suggestions|length > 0 %}
               <li class="dropdown-header">other manpages</li>
             {% for d in suggestions %}
-              <li><a tabindex="-1" href="{{ explain_prefix }}/{{ d.link }}">{{ d.text|e }}</a></li>
+              <li><a tabindex="-1" rel="nofollow" href="{{ explain_prefix }}/{{ d.link }}">{{ d.text|e }}</a></li>
             {% endfor %}
             {% endif %}
               {{ distro_items() }}
@@ -42,7 +42,7 @@
                       {% if d.suggestions|length > 0 %}
                       <li class="dropdown-header">other manpages</li>
                       {% for dd in d.suggestions -%}
-                      <li><a tabindex="-1" href="{{ explain_prefix }}?cmd={{ dd.cmd|urlencode }}">{{ dd.text|e }}</a></li>
+                      <li><a tabindex="-1" rel="nofollow" href="{{ explain_prefix }}?cmd={{ dd.cmd|urlencode }}">{{ dd.text|e }}</a></li>
                       {%- endfor %}
                       {% endif %}
                       {{ distro_items() }}
