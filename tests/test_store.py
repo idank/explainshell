@@ -39,7 +39,7 @@ def _make_manpage(name, section, aliases=None, distro="ubuntu", release="26.04")
     )
 
 
-class TestFindManPageScoring:
+class TestFindManpageScoring:
     def test_primary_name_preferred_over_alias(self, store):
         """A manpage looked up by its primary name (score 10) should rank above
         one where the lookup name is only an alias (score 1)."""
@@ -85,7 +85,7 @@ class TestFindManPageScoring:
         assert sections == {"1", "3"}
 
 
-class TestFindManPageSection:
+class TestFindManpageSection:
     def test_section_filter(self, store):
         """Specifying a section should return that section first."""
         mp1 = _make_manpage("printf", "1", aliases=[("printf", 10)])
@@ -125,7 +125,7 @@ class TestFindManPageSection:
         assert results[0].section == "2"
 
 
-class TestFindManPageExactSource:
+class TestFindManpageExactSource:
     def test_gz_lookup(self, store):
         """Looking up by .gz source path should return an exact match."""
         mp = _make_manpage("tar", "1")
@@ -139,7 +139,7 @@ class TestFindManPageExactSource:
             store.find_man_page("nonexistent.1.gz")
 
 
-class TestFindManPageNotFound:
+class TestFindManpageNotFound:
     def test_unknown_name_raises(self, store):
         with pytest.raises(errors.ProgramDoesNotExist):
             store.find_man_page("nosuchprogram")
@@ -246,7 +246,7 @@ class TestAddManpageDuplicatePrevention:
         store.add_manpage(mp3, _make_raw())  # should not raise
 
 
-class TestFindManPageDistroScoping:
+class TestFindManpageDistroScoping:
     def test_filter_by_distro(self, store):
         """find_man_page with distro/release should only return matching manpages."""
         mp_ubuntu = _make_manpage("ps", "1", distro="ubuntu", release="26.04")

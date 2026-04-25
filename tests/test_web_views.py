@@ -1,33 +1,70 @@
 import datetime
 import unittest
+from pathlib import Path
 
-from flask import g
+from explainshell.caching_store import CachingStore
 from explainshell.models import Option, ParsedManpage, RawManpage
 from explainshell.store import Store
-from explainshell.web import create_app
+from explainshell.web import STORE_EXTENSION_KEY, create_app, get_store
 from explainshell.web.views import explain_program, manpage_url, render_markdown
 from tests.helpers import create_test_store
 
 
 def _use_store(app: object, store: Store) -> None:
-    """Inject *store* into Flask's ``g`` for every request so that
-    ``get_store()`` returns it instead of opening a real database.
+    """Inject *store* into Flask's app extensions so ``get_store()`` returns it
+    instead of opening a real database.
 
-    The store is popped from ``g`` in ``after_request`` (before the
-    teardown hook runs) so that the app's teardown doesn't close the
-    shared test connection. Also refreshes ``STARTUP_DISTROS`` from
-    *store* so ``get_distros()`` reflects the test fixture.
+    Also refreshes ``STARTUP_DISTROS`` from *store* so ``get_distros()``
+    reflects the test fixture.
     """
+    app.extensions[STORE_EXTENSION_KEY] = store
     app.config["STARTUP_DISTROS"] = list(store.distros())
 
-    @app.before_request
-    def _inject() -> None:
-        g.store = store
 
-    @app.after_request
-    def _preserve(response):
-        g.pop("store", None)
-        return response
+def _create_empty_store_file(db_path: Path) -> None:
+    store = Store.create(str(db_path))
+    store.close()
+
+
+def test_get_store_uses_per_request_store_in_debug(tmp_path: Path) -> None:
+    db_path = tmp_path / "debug.db"
+    _create_empty_store_file(db_path)
+    app = create_app(str(db_path))
+    app.config["DEBUG"] = True
+
+    with app.test_request_context("/"):
+        first = get_store()
+        assert isinstance(first, Store)
+        assert not isinstance(first, CachingStore)
+        assert first._conn is not None
+    assert first._conn is None
+
+    with app.test_request_context("/"):
+        second = get_store()
+        assert isinstance(second, Store)
+        assert not isinstance(second, CachingStore)
+        assert second is not first
+    assert second._conn is None
+
+
+def test_get_store_uses_app_scoped_cache_when_debug_disabled(tmp_path: Path) -> None:
+    db_path = tmp_path / "prod.db"
+    _create_empty_store_file(db_path)
+    app = create_app(str(db_path))
+    app.config["DEBUG"] = False
+
+    try:
+        with app.test_request_context("/"):
+            first = get_store()
+        with app.test_request_context("/"):
+            second = get_store()
+
+        assert first is second
+        assert isinstance(first, CachingStore)
+    finally:
+        cached = app.extensions.pop(STORE_EXTENSION_KEY, None)
+        if cached is not None:
+            cached.close()
 
 
 class TestExplainRouter(unittest.TestCase):
@@ -158,6 +195,14 @@ class TestExplainRouter(unittest.TestCase):
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b"/explain/2/dup", rv.data)
         self.assertNotIn(b"/explain/ubuntu/26.04/2/dup", rv.data)
+
+    def test_store_is_app_scoped(self):
+        with self.app.test_request_context("/"):
+            first = get_store()
+        with self.app.test_request_context("/"):
+            second = get_store()
+
+        self.assertIs(first, second)
 
 
 class TestDistroFallback(unittest.TestCase):

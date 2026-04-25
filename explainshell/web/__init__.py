@@ -1,18 +1,36 @@
 import logging
 import os
 import subprocess
+from threading import Lock
 
 from flask import Flask, current_app, g, jsonify, send_from_directory
 from explainshell import config, store
+from explainshell.caching_store import CachingStore
 
 logger = logging.getLogger(__name__)
+STORE_EXTENSION_KEY = "explainshell_store"
+_STORE_CREATE_LOCK = Lock()
 
 
 def get_store() -> store.Store:
-    """Return a per-request read-only Store, creating one if needed."""
-    if "store" not in g:
-        g.store = store.Store(current_app.config["DB_PATH"], read_only=True)
-    return g.store
+    """Return the serving Store for the current Flask app.
+
+    Production keeps one read-only CachingStore per worker process. Debug/dev
+    keeps the old per-request Store behavior so DB rebuilds do not leave stale
+    positive or negative lookup cache entries behind.
+    """
+    if STORE_EXTENSION_KEY not in current_app.extensions:
+        if current_app.config["DEBUG"]:
+            if "store" not in g:
+                g.store = store.Store(current_app.config["DB_PATH"], read_only=True)
+            return g.store
+
+        with _STORE_CREATE_LOCK:
+            if STORE_EXTENSION_KEY not in current_app.extensions:
+                current_app.extensions[STORE_EXTENSION_KEY] = CachingStore(
+                    current_app.config["DB_PATH"]
+                )
+    return current_app.extensions[STORE_EXTENSION_KEY]
 
 
 def _get_git_sha(project_root: str) -> str:
@@ -80,7 +98,7 @@ def create_app(db_path=None):
         app.register_blueprint(debug_bp)
 
     @app.teardown_appcontext
-    def close_store(exc: BaseException | None) -> None:
+    def close_request_store(exc: BaseException | None) -> None:
         s = g.pop("store", None)
         if s is not None:
             s.close()

@@ -7,3 +7,4 @@ openai>=1.0.0
 google-genai>=1.0.0
 cmarkgfm>=2025.10.22
 humanize>=4.0
+cachetools>=5.0

@@ -144,6 +144,7 @@ python -m explainshell.manager extract --mode source /path/to/manpage.1.gz
   - `matcher.py` - Core logic: walks bash AST and matches tokens to help text
   - `models.py` - Core domain types (Option, ParsedManpage, RawManpage) as Pydantic/dataclass models
   - `store.py` - SQLite storage layer
+  - `caching_store.py` - Read-only size-aware cached Store variant for production web serving; when `DEBUG=false`, the Flask app stores one per worker process in `app.extensions`
   - `errors.py` - Exception hierarchy (ProgramDoesNotExist, DuplicateManpage, InvalidSourcePath, ExtractionError, SkippedExtraction, LowConfidenceError)
   - `diff.py` - Man page comparison and diff formatting
   - `tree_parser.py` - Mandoc -T tree output parser with confidence assessment
@@ -223,6 +224,10 @@ Uses bashlex AST visitor pattern:
 ### E2E Tests
 
 Hermetic setup: uses a dedicated `tests/e2e/e2e.db` and random port selection. Server is started fresh per run (`reuseExistingServer: false`).
+
+### Web Store Lifecycle
+
+The web app uses `CachingStore` only when `DEBUG=false` (production and e2e). The cached store is created lazily per worker process and stored in `app.extensions`. Local dev (`DEBUG=true`, the default for `make serve`) uses a per-request plain `Store` so DB rebuilds are visible without restarting the server. Tooling such as `explainshell.manager` and `tools/llm_bench.py` should continue using plain `Store`, not `CachingStore`.
 
 ### Deployment
 

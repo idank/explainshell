@@ -111,8 +111,9 @@ class Store:
         logger.info("creating store, db_path = %r, read_only = %s", db_path, read_only)
         # check_same_thread=False: the default sqlite3 driver raises if a
         # connection is used from a thread other than the one that created it.
-        # Each Store instance is used by a single thread (the web layer
-        # creates a per-request Store), so this is safe.
+        # Plain Store instances are expected to be used by one caller at a
+        # time. Production web serving uses CachingStore, which supplies
+        # per-thread read-only connections around the shared lookup cache.
         if read_only:
             self._conn = sqlite3.connect(
                 f"file:{db_path}?mode=ro", uri=True, check_same_thread=False
