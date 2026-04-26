@@ -163,3 +163,7 @@ $ python tools/llm_bench.py compare
 # List all saved reports
 $ python tools/llm_bench.py list
 ```
+
+### Markdown render eval
+
+A review-oriented harness for `mandoc -T markdown` changes lives in `tests/evals/render/`. It renders a vendored manpage corpus with two mandoc binaries, compares structural metrics, and builds a screenshot diff report with a draggable expected/actual slider. It is intentionally not part of `make tests-all` - run it manually when changing the markdown rendering path. See [tests/evals/render/README.md](tests/evals/render/README.md) for usage.

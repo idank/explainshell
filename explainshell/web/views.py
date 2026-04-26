@@ -1,11 +1,9 @@
 import logging
 import itertools
 import os
-import re
 import urllib
-import markupsafe
 
-import cmarkgfm
+import markupsafe
 from flask import (
     Blueprint,
     current_app,
@@ -19,6 +17,7 @@ import bashlex.errors
 
 from explainshell import matcher, errors, util, config
 from explainshell.web import get_distros, get_store, helpers
+from explainshell.web.markdown import render_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -65,18 +64,6 @@ def _get_current_url_distro_release():
     if len(parts) >= 2 and _is_known_distro(parts[0]):
         return parts[0], parts[1]
     return None, None
-
-
-def render_markdown(text: str) -> str:
-    """Convert markdown text to HTML. Falls through to escaped text on error."""
-    try:
-        # Escape bare <word> placeholders (e.g. <newbase>, <file>) so the
-        # markdown library doesn't swallow them as HTML tags.  Leave
-        # blockquote '>' at line starts and already-escaped &lt;/&gt; alone.
-        text = re.sub(r"<([^>]+)>", r"&lt;\1&gt;", text)
-        return cmarkgfm.markdown_to_html(text)
-    except Exception:
-        return markupsafe.escape(text)
 
 
 @bp.app_context_processor
