@@ -23,3 +23,22 @@ manpages/arch/latest/1/magick-script.1.gz
 manpages/arch/latest/1/magick.1.gz
 manpages/arch/latest/1/convert.1.gz
 manpages/arch/latest/1/mogrify.1.gz
+
+# Heavy .IP/.TP with continuations
+manpages/ubuntu/26.04/1/git.1.gz
+manpages/ubuntu/26.04/1/git-commit.1.gz
+manpages/ubuntu/26.04/1/git-log.1.gz
+
+# Auto-generated, large
+manpages/ubuntu/26.04/1/ffmpeg.1.gz
+manpages/ubuntu/26.04/1/python3.1.gz
+
+# Tbl-heavy / nested
+manpages/ubuntu/26.04/1/gawk.1.gz
+manpages/ubuntu/26.04/1/perl.1.gz
+
+# Section 8 sysadmin
+manpages/ubuntu/26.04/8/lsof.8.gz
+manpages/ubuntu/26.04/8/tcpdump.8.gz
+manpages/ubuntu/26.04/8/iptables.8.gz
+manpages/ubuntu/26.04/1/strace.1.gz
