@@ -143,11 +143,8 @@ The idea is to run it before making changes that affect the LLM extractor pipeli
 with the changes. Some variance between runs is expected due to LLM indeterminism.
 
 ```bash
-# Run on the default corpus
-$ python tests/evals/llm/llm_eval.py run --label baseline --model openai/gpt-5-mini
-
-# Run with batch API
-$ python tests/evals/llm/llm_eval.py run --label change --model openai/gpt-5-mini --batch 50
+# Run on the default corpus, parallelizing realtime calls
+$ python tests/evals/llm/llm_eval.py run --label baseline --model openai/gpt-5-mini --jobs 10
 
 # Compare two run directories (oldest first)
 $ python tests/evals/llm/llm_eval.py compare tests/evals/llm/runs/<baseline-run> tests/evals/llm/runs/<current-run>
@@ -155,6 +152,8 @@ $ python tests/evals/llm/llm_eval.py compare tests/evals/llm/runs/<baseline-run>
 # List all saved runs
 $ python tests/evals/llm/llm_eval.py list
 ```
+
+Use `--batch <size>` instead of `--jobs` to route through the provider's batch API — cheaper but minutes-to-hours of queue latency, so it pays off only on much larger corpora than the default 12-page one.
 
 ### Markdown render eval
 
