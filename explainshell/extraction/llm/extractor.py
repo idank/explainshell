@@ -434,7 +434,12 @@ class LLMExtractor:
             extraction_meta=ExtractionMeta(model=self._model),
         )
 
-        raw_mp = build_raw_manpage(prepared.plain_text, "mandoc -T markdown", gz_path)
+        raw_mp = build_raw_manpage(
+            config.MANDOC_PATH,
+            prepared.plain_text,
+            "mandoc -T markdown",
+            gz_path,
+        )
 
         return ExtractionResult(gz_path=gz_path, mp=mp, raw=raw_mp, stats=stats)
 
