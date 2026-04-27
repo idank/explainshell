@@ -35,13 +35,13 @@ Use the LLM eval (`tests/evals/llm/llm_eval.py`) to compare before/after metrics
 git stash push -- explainshell/extraction/llm/
 
 # 2. Run on the old code
-python tests/evals/llm/llm_eval.py run --label baseline --model openai/gpt-5-mini --batch 50 -d "baseline before <short summary of change>"
+python tests/evals/llm/llm_eval.py run --label baseline --model openai/gpt-5-mini --jobs 10 -d "baseline before <short summary of change>"
 
 # 3. Restore your changes
 git stash pop
 
 # 4. Run on the new code
-python tests/evals/llm/llm_eval.py run --label change --model openai/gpt-5-mini --batch 50 -d "<short summary of change>"
+python tests/evals/llm/llm_eval.py run --label change --model openai/gpt-5-mini --jobs 10 -d "<short summary of change>"
 
 # 5. Compare the two run directories (oldest first)
 python tests/evals/llm/llm_eval.py compare tests/evals/llm/runs/<baseline-run> tests/evals/llm/runs/<change-run>
@@ -50,14 +50,14 @@ python tests/evals/llm/llm_eval.py compare tests/evals/llm/runs/<baseline-run> t
 **Usage:**
 
 ```bash
-# Run on the default corpus
-python tests/evals/llm/llm_eval.py run --label smoke --model openai/gpt-5-mini
-
-# Run with batch API
-python tests/evals/llm/llm_eval.py run --label smoke --model openai/gpt-5-mini --batch 50
+# Run on the default corpus, parallelizing realtime calls
+python tests/evals/llm/llm_eval.py run --label smoke --model openai/gpt-5-mini --jobs 10
 
 # Run on specific files (overrides --corpus)
-python tests/evals/llm/llm_eval.py run --label probe --model openai/gpt-5-mini path/to/file.1.gz
+python tests/evals/llm/llm_eval.py run --label probe --model openai/gpt-5-mini --jobs 10 path/to/file.1.gz
+
+# Use --batch <size> instead of --jobs to route through the provider's batch API
+# (cheaper, but minutes-to-hours of queue latency; pays off only on much larger corpora).
 
 # Compare two run directories
 python tests/evals/llm/llm_eval.py compare tests/evals/llm/runs/<baseline-run> tests/evals/llm/runs/<current-run>

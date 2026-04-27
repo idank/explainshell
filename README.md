@@ -153,7 +153,7 @@ $ python tests/evals/llm/llm_eval.py compare tests/evals/llm/runs/<baseline-run>
 $ python tests/evals/llm/llm_eval.py list
 ```
 
-Use `--batch <size>` instead of `--jobs` to route through the provider's batch API — cheaper but minutes-to-hours of queue latency, so it pays off only on much larger corpora than the default 12-page one.
+Use `--batch <size>` instead of `--jobs` to route through the provider's batch API - cheaper but minutes-to-hours of queue latency, so it pays off only on much larger corpora than the default 12-page one.
 
 ### Markdown render eval
 
