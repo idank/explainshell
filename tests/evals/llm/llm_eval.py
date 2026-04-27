@@ -284,13 +284,23 @@ def _print_summary(summary: dict[str, Any]) -> None:
     print()
 
 
-# Suspicious-change checks for ``compare``.  Tokens deliberately absent: cross-
-# model token deltas would otherwise dominate the verdict on a model swap.
-_PAGE_CHECKS: dict[str, tuple[float, str]] = {
-    # key: (tolerance, direction); direction is "down" (drop is bad), "up"
-    # (rise is bad), or "any" (any change is flagged).
-    "extraction.success": (0.0, "any"),
+# Suspicious-change checks for ``compare``.  Tokens deliberately absent:
+# cross-model token deltas would otherwise dominate the verdict on a model
+# swap. plain_text_len is also absent — it reflects input size, not extraction
+# quality, and only changes when the corpus or upstream rendering changes.
+_PAGE_BOOL_CHECKS: list[str] = [
+    # Any flip is a regression worth surfacing.
+    "extraction.success",
+    "extraction.has_synopsis",
+    "extraction.dashless_opts",
+]
+
+_PAGE_NUMERIC_CHECKS: dict[str, tuple[float, str]] = {
+    # key: (tolerance, direction); direction is "down" (drop flagged),
+    # "up" (rise flagged), or "any" (any change flagged).
     "extraction.n_options": (0.0, "down"),
+    "extraction.n_aliases": (0.0, "down"),
+    "extraction.n_chunks": (0.0, "any"),
 }
 
 _AGGREGATE_CHECKS: list[tuple[str, str, str]] = [
@@ -320,6 +330,16 @@ _AGGREGATE_DELTA_KEYS: list[tuple[str, str]] = [
 ]
 
 
+def _get_field(page: dict[str, Any], key: str) -> Any:
+    """Dotted-path lookup that preserves the raw value (incl. bools)."""
+    value: Any = page.get("metrics", {})
+    for part in key.split("."):
+        if not isinstance(value, dict) or part not in value:
+            return None
+        value = value[part]
+    return value
+
+
 def _suspicious_page_changes(
     old: dict[str, Any] | None, new: dict[str, Any] | None
 ) -> list[str]:
@@ -329,31 +349,21 @@ def _suspicious_page_changes(
         return ["page removed"]
 
     reasons: list[str] = []
-    for key, (tolerance, direction) in _PAGE_CHECKS.items():
+    for key in _PAGE_BOOL_CHECKS:
+        b = _get_field(old, key)
+        a = _get_field(new, key)
+        if bool(b) != bool(a):
+            reasons.append(f"{key}: {bool(b)} -> {bool(a)}")
+
+    for key, (tolerance, direction) in _PAGE_NUMERIC_CHECKS.items():
         before = _get_metric(old, key)
         after = _get_metric(new, key)
         if before == after:
             continue
-
-        # extraction.success is a bool; _get_metric returns 0 for it. Read
-        # directly so flips surface explicitly.
-        if key == "extraction.success":
-            b = bool(old.get("metrics", {}).get("extraction", {}).get("success"))
-            a = bool(new.get("metrics", {}).get("extraction", {}).get("success"))
-            if b != a:
-                reasons.append(f"{key}: {b} -> {a}")
-            continue
-
         delta = after - before
-        if direction == "down" and delta < 0:
-            flagged = True
-        elif direction == "up" and delta > 0:
-            flagged = True
-        elif direction == "any":
-            flagged = True
-        else:
-            flagged = False
-        if not flagged:
+        if direction == "down" and delta >= 0:
+            continue
+        if direction == "up" and delta <= 0:
             continue
         if tolerance > 0:
             denominator = max(abs(before), 1)
