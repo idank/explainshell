@@ -12,18 +12,12 @@ def build_manpage_metadata(
     gz_path: str,
     options: list[models.Option],
     *,
-    dashless_opts: bool | None = None,
-    nested_cmd: bool | str | None = None,
+    dashless_opts: bool = False,
     subcommands: list[str] | None = None,
     extractor: str | None = None,
     extraction_meta: models.ExtractionMeta | None = None,
 ) -> models.ParsedManpage:
-    """One place to assemble synopsis, aliases, and detection metadata.
-
-    ``dashless_opts`` and ``nested_cmd`` fall back to roff-based detection
-    when not supplied.  The LLM extractor passes its own model-derived
-    values via these keyword args.
-    """
+    """One place to assemble synopsis, aliases, and detection metadata."""
     synopsis, aliases = manpage.get_synopsis_and_aliases(gz_path)
     return models.ParsedManpage(
         source=config.source_from_path(gz_path),
@@ -31,16 +25,8 @@ def build_manpage_metadata(
         synopsis=synopsis,
         options=options,
         aliases=aliases,
-        dashless_opts=(
-            dashless_opts
-            if dashless_opts is not None
-            else roff_utils.detect_dashless_opts(gz_path)
-        ),
-        nested_cmd=(
-            nested_cmd
-            if nested_cmd is not None
-            else roff_utils.detect_nested_cmd(gz_path)
-        ),
+        dashless_opts=dashless_opts,
+        nested_cmd=roff_utils.detect_nested_cmd(gz_path),
         subcommands=subcommands or [],
         extractor=extractor,
         extraction_meta=extraction_meta,

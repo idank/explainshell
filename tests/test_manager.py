@@ -72,7 +72,7 @@ def _make_manpage(
         synopsis=f"{name} - do things",
         aliases=aliases,
         options=options or [],
-        extractor="source",
+        extractor="llm",
     )
 
 
@@ -1170,26 +1170,6 @@ class TestFilterFlag(unittest.TestCase):
         self.assertNotEqual(result.exit_code, 0)
         self.assertIn("requires --overwrite", result.output)
 
-    def test_filter_db_rejects_hybrid(self):
-        runner = CliRunner()
-        with _temp_db() as db_path:
-            result = runner.invoke(
-                cli,
-                [
-                    "--db",
-                    db_path,
-                    "extract",
-                    "--mode",
-                    "llm:openai/new",
-                    "--overwrite",
-                    "--filter-db",
-                    "hybrid:openai/gpt-5",
-                    "/fake/file.gz",
-                ],
-            )
-        self.assertNotEqual(result.exit_code, 0)
-        self.assertIn("hybrid", result.output)
-
     def test_filter_db_rejects_bogus_spec(self):
         runner = CliRunner()
         with _temp_db() as db_path:
@@ -1328,56 +1308,7 @@ class TestFilterFlag(unittest.TestCase):
     @patch("explainshell.manager.make_extractor")
     @patch("explainshell.util.collect_gz_files")
     @patch("explainshell.manager.config.source_from_path")
-    def test_filter_db_mandoc_matches_empty_meta(
-        self,
-        mock_source,
-        mock_collect,
-        mock_make_ext,
-        mock_run,
-        _mock_sha,
-    ):
-        """--filter-db mandoc matches extractor='mandoc', meta={}."""
-        with _temp_db() as db_path:
-            gz_files = ["/fake/ubuntu/26.04/1/m.1.gz"]
-            mock_collect.return_value = gz_files
-            mock_source.side_effect = lambda p: "/".join(p.split("/")[-4:])
-
-            pre = Store.create(db_path)
-            pre.add_manpage(
-                _make_manpage_with_extractor("m", "mandoc", {}),
-                _make_raw(),
-            )
-            pre.close()
-
-            mock_make_ext.return_value = MagicMock()
-            mock_run.return_value = BatchResult()
-
-            runner = CliRunner()
-            result = runner.invoke(
-                cli,
-                [
-                    "--db",
-                    db_path,
-                    "extract",
-                    "--mode",
-                    "llm:openai/new",
-                    "--overwrite",
-                    "--filter-db",
-                    "mandoc",
-                    "/fake/file.gz",
-                ],
-            )
-
-            self.assertEqual(result.exit_code, 0, result.output)
-            (_, call_files), _ = mock_run.call_args
-            self.assertEqual(len(call_files), 1)
-
-    @patch("explainshell.extraction.common.gz_sha256", side_effect=lambda p: p)
-    @patch("explainshell.manager.run")
-    @patch("explainshell.manager.make_extractor")
-    @patch("explainshell.util.collect_gz_files")
-    @patch("explainshell.manager.config.source_from_path")
-    def test_filter_db_matches_hybrid_fallback_shape(
+    def test_filter_db_matches_extra_meta_keys(
         self,
         mock_source,
         mock_collect,
@@ -1626,7 +1557,15 @@ class TestDiffDbCli(unittest.TestCase):
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["--db", "/tmp/test.db", "diff", "db", "--mode", "source", "/fake/a.1.gz"],
+            [
+                "--db",
+                "/tmp/test.db",
+                "diff",
+                "db",
+                "--mode",
+                "llm:test-model",
+                "/fake/a.1.gz",
+            ],
         )
 
         self.assertEqual(result.exit_code, 0)
@@ -1657,7 +1596,7 @@ class TestDiffDbCli(unittest.TestCase):
                 "diff",
                 "db",
                 "--mode",
-                "source",
+                "llm:test-model",
                 "--debug",
                 "/fake/a.1.gz",
             ],
@@ -1705,7 +1644,7 @@ class TestDiffExtractorsCli(unittest.TestCase):
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["diff", "extractors", "source..mandoc", "/fake/a.1.gz"],
+            ["diff", "extractors", "llm:m1..llm:m2", "/fake/a.1.gz"],
         )
 
         self.assertEqual(result.exit_code, 0)
@@ -1717,7 +1656,7 @@ class TestDiffExtractorsCli(unittest.TestCase):
 
         runner = CliRunner()
         result = runner.invoke(
-            cli, ["diff", "extractors", "source-mandoc", "/fake/a.1.gz"]
+            cli, ["diff", "extractors", "llm:m1-llm:m2", "/fake/a.1.gz"]
         )
 
         self.assertNotEqual(result.exit_code, 0)
@@ -1728,7 +1667,7 @@ class TestDiffExtractorsCli(unittest.TestCase):
 
         runner = CliRunner()
         result = runner.invoke(
-            cli, ["diff", "extractors", "source..bogus", "/fake/a.1.gz"]
+            cli, ["diff", "extractors", "llm:m1..bogus", "/fake/a.1.gz"]
         )
 
         self.assertNotEqual(result.exit_code, 0)
@@ -1793,8 +1732,8 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
 
         result = _run_diff_extractors(
             ["/fake/a.1.gz", "/fake/b.1.gz"],
-            ("source", None),
-            ("mandoc", None),
+            ("llm", "m1"),
+            ("llm", "m2"),
             None,
         )
 
@@ -1842,8 +1781,8 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
 
         result = _run_diff_extractors(
             ["/fake/a.1.gz"],
-            ("source", None),
-            ("mandoc", None),
+            ("llm", "m1"),
+            ("llm", "m2"),
             None,
         )
 
@@ -1887,8 +1826,8 @@ class TestDiffExtractorsFailureHandling(unittest.TestCase):
 
         result = _run_diff_extractors(
             ["/fake/a.1.gz"],
-            ("source", None),
-            ("mandoc", None),
+            ("llm", "m1"),
+            ("llm", "m2"),
             None,
         )
 
@@ -1998,7 +1937,7 @@ class TestDiffDbSourceMatch(unittest.TestCase):
             mock_run.side_effect = _fake_run
 
             with self.assertLogs("explainshell.manager", level=logging.INFO) as cm:
-                _run_diff_db([gz_path], "source", None, None, False, store)
+                _run_diff_db([gz_path], "llm", "test-model", None, False, store)
 
         return cm.output
 
@@ -2120,7 +2059,7 @@ class TestDbPathValidation(unittest.TestCase):
 
             result = runner.invoke(
                 cli,
-                ["extract", "--mode", "source", "--dry-run", "/fake/a.1.gz"],
+                ["extract", "--mode", "llm:test-model", "--dry-run", "/fake/a.1.gz"],
             )
 
         self.assertEqual(result.exit_code, 0)
@@ -2276,7 +2215,7 @@ class TestShowCli(unittest.TestCase):
                 "command": "extract",
                 "timestamp": "2026-04-14T10:30:00+00:00",
                 "git": {"commit": None, "commit_short": None, "dirty": None},
-                "config": {"mode": "source"},
+                "config": {"mode": "llm"},
                 "elapsed_seconds": 1.0,
                 "summary": {"succeeded": 0, "skipped": 0, "failed": 0},
             },
@@ -2330,7 +2269,7 @@ class TestShowCli(unittest.TestCase):
                     "command": "extract",
                     "timestamp": f"2026-04-{10 + i}T10:00:00+00:00",
                     "git": {"commit": None, "commit_short": None, "dirty": None},
-                    "config": {"mode": "source"},
+                    "config": {"mode": "llm"},
                     "elapsed_seconds": 1.0,
                     "summary": {"succeeded": i, "skipped": 0, "failed": 0},
                 },
@@ -2978,7 +2917,7 @@ class TestExtractLimit(unittest.TestCase):
                 "/tmp/test.db",
                 "extract",
                 "--mode",
-                "source",
+                "llm:test-model",
                 "--limit",
                 "0",
                 "/fake/file.gz",

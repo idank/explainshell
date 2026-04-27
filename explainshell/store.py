@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS parsed_manpages (
     subcommands   TEXT    NOT NULL DEFAULT '[]',  -- JSON list of subcommand names (e.g. ["build","run","push"])
     updated       INTEGER NOT NULL DEFAULT 0,     -- manually edited, skip during bulk imports
     nested_cmd    TEXT    NOT NULL DEFAULT 'false', -- positional args start a nested command (e.g. sudo, xargs)
-    extractor     TEXT,                            -- extractor mode: "source", "mandoc", "llm"
+    extractor     TEXT,                            -- extractor mode: "llm"
     extraction_meta TEXT NOT NULL DEFAULT '{}',    -- JSON dict of additional extraction metadata
     FOREIGN KEY (source) REFERENCES manpages(source) ON DELETE CASCADE
 );

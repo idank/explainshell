@@ -6,7 +6,7 @@ A web tool that parses man pages and explains command-line arguments by matching
 
 - Python 3.12, Flask, SQLite, bashlex, OpenAI SDK, Google Gemini SDK, LiteLLM (fallback)
 - Linting: ruff (Python), biome (JS)
-- Testing: pytest (unit + doctests + parsing regression), JS Playwright Test (e2e)
+- Testing: pytest (unit + doctests), JS Playwright Test (e2e)
 - Dependencies: `requirements.txt` (main), `package.json` (Playwright e2e)
 
 ## Workflow Requirements
@@ -15,8 +15,8 @@ A web tool that parses man pages and explains command-line arguments by matching
 
 1. Run `make format`
 1. Run tests — choose the right suite based on what changed:
-   - `make tests-quick` (lint + unit + parsing regression) — use when changes clearly cannot affect what the web app serves (e.g., extraction pipeline, CLI tooling, tests themselves)
-   - `make tests-all` (lint + unit + e2e + parsing regression) — use when changes might affect the web serving path (rendering, matching, storage, templates, static assets, config)
+   - `make tests-quick` (lint + unit) — use when changes clearly cannot affect what the web app serves (e.g., extraction pipeline, CLI tooling, tests themselves)
+   - `make tests-all` (lint + unit + e2e) — use when changes might affect the web serving path (rendering, matching, storage, templates, static assets, config)
    - When in doubt, run `make tests-all`
    - If e2e tests fail due to snapshot diffs, assess whether the diff is expected, and get user confirmation before running `make e2e-update`
 1. Update README.md if the change adds/removes/renames CLI commands, env vars, or user-facing features
@@ -108,16 +108,10 @@ make e2e-update
 # Run LLM integration test (requires API key in .env)
 make test-llm
 
-# Run parsing regression tests (requires DB)
-make parsing-regression
-
-# Update DB to accept current parser output for regression manpages
-make parsing-update
-
-# Run quick tests (unit + parsing regression, no e2e)
+# Run quick tests (lint + unit, no e2e)
 make tests-quick
 
-# Run all tests (unit + e2e + parsing regression)
+# Run all tests (lint + unit + e2e)
 make tests-all
 
 # Run DB integrity checks
@@ -133,7 +127,7 @@ make ubuntu-archive UBUNTU_RELEASE=resolute
 make arch-archive
 
 # Process a man page into the database
-python -m explainshell.manager extract --mode source /path/to/manpage.1.gz
+python -m explainshell.manager extract --mode llm:openai/gpt-5-mini /path/to/manpage.1.gz
 ```
 
 ## Project Structure
@@ -145,10 +139,9 @@ python -m explainshell.manager extract --mode source /path/to/manpage.1.gz
   - `models.py` - Core domain types (Option, ParsedManpage, RawManpage) as Pydantic/dataclass models
   - `store.py` - SQLite storage layer
   - `caching_store.py` - Read-only size-aware cached Store variant for production web serving; when `DEBUG=false`, the Flask app stores one per worker process in `app.extensions`
-  - `errors.py` - Exception hierarchy (ProgramDoesNotExist, DuplicateManpage, InvalidSourcePath, ExtractionError, SkippedExtraction, LowConfidenceError)
+  - `errors.py` - Exception hierarchy (ProgramDoesNotExist, DuplicateManpage, InvalidSourcePath, ExtractionError, SkippedExtraction, FatalExtractionError)
   - `diff.py` - Man page comparison and diff formatting
-  - `tree_parser.py` - Mandoc -T tree output parser with confidence assessment
-  - `roff_parser.py` - Roff macro parser (man/mdoc dialects)
+  - `roff_parser.py` - Roff macro parser (used by `roff_utils.py` for detection helpers)
   - `roff_utils.py` - Roff source detection (dashless opts, nested cmd)
   - `manpage.py` - Man page reading and HTML conversion
   - `help_constants.py` - Shell constant definitions for help text
@@ -157,9 +150,6 @@ python -m explainshell.manager extract --mode source /path/to/manpage.1.gz
   - `extraction/` - Man page option extraction pipeline
     - `__init__.py` - Public API: `make_extractor(mode)` factory
     - `types.py` - Shared types (ExtractionResult, ExtractionStats, BatchResult, ExtractorConfig, Extractor protocol)
-    - `source.py` - Roff-based extractor (via `roff_parser.py`)
-    - `mandoc.py` - Mandoc-based extractor (via `tree_parser.py`)
-    - `hybrid.py` - Hybrid extractor: mandoc with LLM fallback
     - `runner.py` - Execution orchestration (sequential, parallel, batch)
     - `common.py` - Shared metadata assembly for all extractors
     - `postprocess.py` - Extractor-agnostic option post-processing
@@ -176,7 +166,7 @@ python -m explainshell.manager extract --mode source /path/to/manpage.1.gz
   - `mandoc-md` - Custom mandoc binary with markdown output support
 - `tests/` - Unit tests (`test_*.py`), fixtures
 - `tests/e2e/` - Playwright e2e tests, snapshots, and dedicated `e2e.db`
-- `tests/regression/` - Parsing regression tests and manpage .gz fixtures
+- `tests/regression/llm-bench/` - LLM benchmark corpus and historical reports
 - `runserver.py` - Flask app entry point
 - `manpages/` - Git submodule ([explainshell-manpages](https://github.com/idank/explainshell-manpages))
   - `ubuntu-manpages-operator/` - Go pipeline that fetches Ubuntu `.deb` packages, extracts manpages, and converts them to markdown
@@ -196,12 +186,9 @@ The CLI uses subcommands. Most commands require a database path, set via `DB_PAT
 - `db-check` — Run database integrity checks
 
 Extraction modes (passed via `--mode` to `extract` or `diff db`):
-- `source` - Parses roff macros directly via `roff_parser.py` + `extraction/source.py`
-- `mandoc` - Uses mandoc -T tree parser via `extraction/mandoc.py`
 - `llm:<provider/model>` - Sends man page text to an LLM (e.g., `llm:openai/gpt-5-mini`, `llm:azure/my-deployment`). Supports Gemini, OpenAI, Azure OpenAI, and LiteLLM (fallback) providers. For `azure/...`, the model suffix is the Azure deployment name and requires `AZURE_OPENAI_API_KEY` plus either `AZURE_OPENAI_BASE_URL` or `AZURE_OPENAI_ENDPOINT`.
-- `hybrid:<provider/model>` - Tries mandoc first, falls back to LLM on low confidence
 
-Extract flags: `--overwrite`, `--filter-db <spec>` (conditional overwrite; requires `--overwrite`; same syntax as `--mode` minus hybrid), `--dry-run`, `--debug`, `--drop`, `-j/--jobs <int>` (parallel extraction, default 1), `--batch <int>` (provider batch API). All run output (logs, debug artifacts, manifests) goes to `logs/{timestamp}/`.
+Extract flags: `--overwrite`, `--filter-db <spec>` (conditional overwrite; requires `--overwrite`; same syntax as `--mode`), `--dry-run`, `--debug`, `--drop`, `-j/--jobs <int>` (parallel extraction, default 1), `--batch <int>` (provider batch API). All run output (logs, debug artifacts, manifests) goes to `logs/{timestamp}/`.
 
 ### Data Model (models.py, store.py)
 

@@ -1,5 +1,5 @@
 tests:
-	pytest --doctest-modules tests/ explainshell/ --ignore=tests/e2e --ignore=tests/regression
+	pytest --doctest-modules tests/ explainshell/ --ignore=tests/e2e
 
 E2E_MANPAGES_25 := tests/e2e/manpages/ubuntu/26.04/1
 E2E_MANPAGES_24 := tests/e2e/manpages/ubuntu/24.04/1
@@ -8,8 +8,7 @@ E2E_DB := tests/e2e/e2e.db
 
 e2e-db:
 	rm -f $(E2E_DB)
-	python -m explainshell.manager --db $(E2E_DB) extract --mode source $(E2E_MANPAGES_25)/tar.1.gz $(E2E_MANPAGES_25)/echo.1.gz $(E2E_MANPAGES_25)/grep.1.gz $(E2E_MANPAGES_24)/tar.1.gz $(E2E_MANPAGES_24)/echo.1.gz $(E2E_MANPAGES_24)/grep.1.gz $(E2E_MANPAGES_ARCH)/tar.1.gz
-	python -m explainshell.manager --db $(E2E_DB) extract --mode llm:openai/gpt-5.2 $(E2E_MANPAGES_25)/git-rebase.1.gz
+	python -m explainshell.manager --db $(E2E_DB) extract --mode llm:openai/gpt-5.2 $(E2E_MANPAGES_25)/tar.1.gz $(E2E_MANPAGES_25)/echo.1.gz $(E2E_MANPAGES_25)/grep.1.gz $(E2E_MANPAGES_24)/tar.1.gz $(E2E_MANPAGES_24)/echo.1.gz $(E2E_MANPAGES_24)/grep.1.gz $(E2E_MANPAGES_ARCH)/tar.1.gz $(E2E_MANPAGES_25)/git-rebase.1.gz
 
 e2e:
 	@npx playwright --version >/dev/null 2>&1 || (echo "playwright is required. Install with: npm install && npx playwright install chromium"; exit 1)
@@ -24,16 +23,9 @@ e2e-update:
 test-llm:
 	RUN_LLM_TESTS=1 pytest tests/extraction/llm/test_extractor.py::test_real_llm_echo_manpage -v
 
-parsing-regression:
-	python -m pytest tests/regression/test_parsing_regression.py -v
+tests-all: lint tests e2e
 
-parsing-update:
-	rm -f tests/regression/regression.db
-	python -m explainshell.manager --db tests/regression/regression.db extract --mode source tests/regression/manpages/
-
-tests-all: lint tests e2e parsing-regression
-
-tests-quick: lint tests parsing-regression
+tests-quick: lint tests
 
 lint:
 	ruff check explainshell tests tools
@@ -107,4 +99,4 @@ deploy-local:
 	 doctl apps update "$$DO_APP_ID" --spec "$$tmp"; \
 	 doctl apps create-deployment "$$DO_APP_ID" --force-rebuild --wait
 
-.PHONY: tests e2e e2e-db e2e-update test-llm tests-all tests-quick lint serve parsing-regression parsing-update db-check ubuntu-archive arch-archive download-latest-db upload-live-db deploy-local
+.PHONY: tests e2e e2e-db e2e-update test-llm tests-all tests-quick lint serve db-check ubuntu-archive arch-archive download-latest-db upload-live-db deploy-local

@@ -1,11 +1,9 @@
-"""
-Roff source detection utilities.
+"""Roff source detection utilities.
 
-Reads raw roff source to detect manpage properties (dashless options,
-nested commands) — not tied to any specific extractor.
+Reads raw roff source to detect manpage properties that the LLM
+extractor doesn't supply directly.
 
 Public API:
-    detect_dashless_opts(gz_path) -> bool
     detect_nested_cmd(gz_path) -> bool
 """
 
@@ -13,19 +11,51 @@ import gzip
 import logging
 import re
 
-from explainshell import roff_parser
-
 logger = logging.getLogger(__name__)
 
-# Pattern for bare option letters: {A|c|d|...}
-_BARE_LETTERS_BRACES = re.compile(r"\{([A-Za-z0-9](?:\|[A-Za-z0-9])*)\}")
+
+def _clean_roff(text: str) -> str:
+    """Strip roff escape sequences and formatting from text."""
+    # Remove font escapes: \fB, \fI, \fR, \fP, \f(xx
+    text = re.sub(r"\\f[BIRP]", "", text)
+    text = re.sub(r"\\f\(..", "", text)
+    # \- → -
+    text = text.replace("\\-", "-")
+    # \(en, \(em → -
+    text = re.sub(r"\\\(en|\\\(em", "-", text)
+    # \& (zero-width space) → empty
+    text = text.replace("\\&", "")
+    # \e → backslash
+    text = text.replace("\\e", "\\")
+    # \(aq, \(cq → '
+    text = text.replace("\\(aq", "'")
+    text = text.replace("\\(cq", "'")
+    # \(lq, \(rq → "
+    text = re.sub(r"\\\(lq|\\\(rq", '"', text)
+    # \(bu → bullet (just remove)
+    text = text.replace("\\(bu", "")
+    # \~, \0, \<space> → space
+    text = text.replace("\\~", " ")
+    text = text.replace("\\0", " ")
+    text = text.replace("\\ ", " ")
+    # Remove \m[...] color directives
+    text = re.sub(r"\\m\[[^\]]*\]", "", text)
+    # Remove \s-N and \s+N size changes
+    text = re.sub(r"\\s[-+]?\d+", "", text)
+    # Remove \u (superscript), \d (subscript), \c, \:, \^, \|
+    for esc in ("\\u", "\\d", "\\c", "\\:", "\\^", "\\|"):
+        text = text.replace(esc, "")
+    # Remove \n(.x register references
+    text = re.sub(r"\\n\(?\w+", "", text)
+    # Collapse multiple spaces
+    text = re.sub(r"  +", " ", text)
+    return text.strip()
 
 
-def _is_section_header(line, name):
+def _is_section_header(line: str, name: str) -> bool:
     """Check if a roff line is a section header (.SH or .Sh) matching name."""
     stripped = line.strip()
-    # man(7) format: .SH NAME / .SH "NAME"
-    # mdoc(7) format: .Sh NAME
+    # man(7): .SH NAME / .SH "NAME"; mdoc(7): .Sh NAME
     for macro in (".SH", ".Sh"):
         if stripped.startswith(macro):
             rest = stripped[len(macro) :].strip().strip('"').strip()
@@ -34,20 +64,14 @@ def _is_section_header(line, name):
     return False
 
 
-def _is_any_section_header(line):
-    """Check if a roff line is any section header (.SH or .Sh)."""
+def _is_any_section_header(line: str) -> bool:
     stripped = line.strip()
     return stripped.startswith(".SH ") or stripped.startswith(".Sh ")
 
 
-def _is_subsection_header(line):
-    """Check if a roff line is a subsection header (.SS)."""
-    return line.strip().startswith(".SS ")
-
-
-def _extract_section(lines, section_name):
+def _extract_section(lines: list[str], section_name: str) -> list[str]:
     """Extract lines between a section header and the next section header."""
-    result = []
+    result: list[str] = []
     in_section = False
     for line in lines:
         if in_section:
@@ -57,52 +81,6 @@ def _extract_section(lines, section_name):
         elif _is_section_header(line, section_name):
             in_section = True
     return result
-
-
-def detect_dashless_opts(gz_path: str) -> bool:
-    """Detect whether a man page supports dashless (old-style/BSD) options.
-
-    Checks the SYNOPSIS and DESCRIPTION sections for indicators that
-    options can be specified without a leading dash.
-    """
-    try:
-        with gzip.open(gz_path, "rt", errors="replace") as f:
-            lines = f.readlines()
-    except Exception as e:
-        logger.warning("Failed to read %s for dashless detection: %s", gz_path, e)
-        return False
-
-    # --- A. Check SYNOPSIS section ---
-    synopsis_lines = _extract_section(lines, "SYNOPSIS")
-    for line in synopsis_lines:
-        # A1: Subsection keyword containing "traditional" or "old"
-        if _is_subsection_header(line):
-            header_text = line.strip()[4:].strip().strip('"').lower()
-            if "traditional" in header_text or "old" in header_text:
-                logger.info(
-                    "dashless_opts: found traditional/old subsection in SYNOPSIS"
-                )
-                return True
-
-        # A2: Bare option letters like {A|c|d|...}
-        cleaned = roff_parser.clean_roff(line)
-        if _BARE_LETTERS_BRACES.search(cleaned):
-            logger.info("dashless_opts: found bare letters in braces in SYNOPSIS")
-            return True
-
-    # --- B. Check DESCRIPTION section ---
-    desc_lines = _extract_section(lines, "DESCRIPTION")
-    desc_text = " ".join(roff_parser.clean_roff(line) for line in desc_lines).lower()
-
-    # B1: "BSD" near "option" and "without"/"must not" near "dash"
-    if "bsd" in desc_text and "option" in desc_text:
-        if ("without" in desc_text or "must not" in desc_text) and "dash" in desc_text:
-            logger.info(
-                "dashless_opts: found BSD-style dashless option mention in DESCRIPTION"
-            )
-            return True
-
-    return False
 
 
 # Matches "command" as a standalone word, case-insensitive
@@ -128,7 +106,7 @@ def detect_nested_cmd(gz_path: str) -> bool:
 
     synopsis_lines = _extract_section(lines, "SYNOPSIS")
     for line in synopsis_lines:
-        cleaned = roff_parser.clean_roff(line)
+        cleaned = _clean_roff(line)
         if not _COMMAND_WORD.search(cleaned):
             continue
         # Exclude <command> (git-style subcommand pattern)

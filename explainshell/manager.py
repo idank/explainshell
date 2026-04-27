@@ -10,10 +10,7 @@ Commands:
     diff extractors <A..B> files...      Compare two extractors head-to-head
 
 Extraction modes (--mode):
-    source              Use the roff parser
-    mandoc              Use mandoc -T tree parser
     llm:<model>         Use an LLM (e.g. llm:openai/gpt-5-mini, llm:codex/gpt-5.4-mini)
-    hybrid:<model>      Try tree parser first, fall back to LLM when confidence is low
 
 Reasoning effort can be appended to the model string:
     openai/<model>/<effort>     e.g. llm:openai/o3/medium (low, medium, high)
@@ -87,33 +84,18 @@ def _fmt_elapsed(seconds: float) -> str:
 def _parse_mode(raw: str | None) -> tuple[str | None, str | None]:
     """Parse a mode value into (mode, model).
 
-    Returns ("source", None), ("mandoc", None), ("llm", "<model>"),
-    or ("hybrid", "<model>").
+    Returns ("llm", "<model>").
 
     Raises ValueError on invalid input.
     """
     if raw is None:
         return None, None
-    if raw == "source":
-        return "source", None
-    if raw == "mandoc":
-        return "mandoc", None
     if raw.startswith("llm:"):
         model = raw[4:]
         if not model:
             raise ValueError("llm:<model> requires a model name (e.g. llm:gpt-5-mini)")
         return "llm", model
-    if raw.startswith("hybrid:"):
-        model = raw[7:]
-        if not model:
-            raise ValueError(
-                "hybrid:<model> requires a model name (e.g. hybrid:gpt-5-mini)"
-            )
-        return "hybrid", model
-    raise ValueError(
-        f"invalid mode value: {raw!r} "
-        f"(expected 'source', 'mandoc', 'llm:<model>', or 'hybrid:<model>')"
-    )
+    raise ValueError(f"invalid mode value: {raw!r} (expected 'llm:<model>')")
 
 
 def _matches_filter(
@@ -157,8 +139,8 @@ def _run_diff_extractors(
     left_files: list[ExtractionResult] = []
     right_files: list[ExtractionResult] = []
 
-    left_bs = batch_size if left_mode == "llm" else None
-    right_bs = batch_size if right_mode == "llm" else None
+    left_bs = batch_size
+    right_bs = batch_size
 
     logger.info("running %s extractor on %d file(s)...", left_label, len(gz_files))
     run(
@@ -543,7 +525,7 @@ def _require_db(ctx: click.Context, *, must_exist: bool = False) -> str:
     "-m",
     "--mode",
     required=True,
-    help="Extraction strategy: source, mandoc, llm:<model>, or hybrid:<model>.",
+    help="Extraction strategy: llm:<model>.",
 )
 @click.option("--dry-run", is_flag=True, help="Extract but don't write to DB.")
 @click.option(
@@ -555,7 +537,7 @@ def _require_db(ctx: click.Context, *, must_exist: bool = False) -> str:
     default=None,
     help=(
         "With --overwrite, only re-extract existing manpages whose DB row's "
-        "extractor matches <spec>. Same syntax as --mode, excluding hybrid."
+        "extractor matches <spec>. Same syntax as --mode."
     ),
 )
 @click.option(
@@ -623,11 +605,6 @@ def extract(
             filter_mode, filter_model = _parse_mode(filter_db)
         except ValueError as e:
             raise click.UsageError(f"--filter-db: {e}")
-        if filter_mode == "hybrid":
-            raise click.UsageError(
-                "--filter-db doesn't accept hybrid; filter by the underlying extractor "
-                "instead (e.g. llm:<model> or mandoc)"
-            )
 
     if batch is not None:
         if batch < 1:
@@ -640,8 +617,6 @@ def extract(
             raise click.UsageError(
                 "--batch only supports gemini/, openai/, and azure/ models"
             )
-        if parsed_mode != "llm":
-            raise click.UsageError("--batch only works with llm:<model> mode")
 
     try:
         gz_files = util.collect_gz_files(list(files))
@@ -890,10 +865,7 @@ def extract(
 
         added = batch_result.n_succeeded
         if added > 0 or symlinks_mapped > 0 or content_deduped > 0:
-            if parsed_mode == "llm":
-                s.update_subcommand_mappings_llm()
-            else:
-                s.update_subcommand_mappings_heuristic()
+            s.update_subcommand_mappings_llm()
     except KeyboardInterrupt:
         logger.info("interrupted by user (Ctrl+C)")
         batch_result.interrupted = True
@@ -1135,8 +1107,8 @@ def salvage(
     except ValueError as e:
         raise click.UsageError(str(e))
 
-    if parsed_mode != "llm" or not model:
-        raise click.UsageError("salvage only works with llm:<model> mode")
+    if not model:
+        raise click.UsageError("salvage requires llm:<model>")
     if not model.startswith(_BATCH_MODEL_PREFIXES):
         raise click.UsageError(
             "salvage only supports gemini/, openai/, and azure/ models"
@@ -1187,7 +1159,7 @@ def diff() -> None:
     "-m",
     "--mode",
     required=True,
-    help="Extraction strategy: source, mandoc, llm:<model>, or hybrid:<model>.",
+    help="Extraction strategy: llm:<model>.",
 )
 @click.option(
     "--batch",
@@ -1227,8 +1199,6 @@ def diff_db_cmd(
             raise click.UsageError(
                 "--batch only supports gemini/, openai/, and azure/ models"
             )
-        if parsed_mode != "llm":
-            raise click.UsageError("--batch only works with llm:<model> mode")
 
     db_path = _require_db(ctx)
     try:
@@ -1268,11 +1238,12 @@ def diff_extractors_cmd(
 ) -> None:
     """Compare two extractors head-to-head.
 
-    SPEC is A..B format (e.g. source..mandoc, source..llm:openai/gpt-5-mini).
+    SPEC is A..B format (e.g. llm:openai/gpt-5-mini..llm:openai/gpt-5).
     """
     if ".." not in spec:
         raise click.UsageError(
-            f"invalid spec: {spec!r} (expected A..B, e.g. source..mandoc)"
+            f"invalid spec: {spec!r} "
+            "(expected A..B, e.g. llm:openai/gpt-5-mini..llm:openai/gpt-5)"
         )
     parts = spec.split("..", 1)
     try:
@@ -1284,20 +1255,15 @@ def diff_extractors_cmd(
     if batch is not None:
         if batch < 1:
             raise click.UsageError("--batch must be >= 1")
-        left_mode, left_model = left
-        right_mode, right_model = right
-        has_batch_side = False
-        for mode, model in [(left_mode, left_model), (right_mode, right_model)]:
-            if (
-                mode == "llm"
-                and model is not None
-                and model.startswith(_BATCH_MODEL_PREFIXES)
-            ):
-                has_batch_side = True
-                break
+        _, left_model = left
+        _, right_model = right
+        has_batch_side = any(
+            m is not None and m.startswith(_BATCH_MODEL_PREFIXES)
+            for m in (left_model, right_model)
+        )
         if not has_batch_side:
             raise click.UsageError(
-                "--batch requires at least one llm: side with a batch-capable model "
+                "--batch requires at least one side with a batch-capable model "
                 "(gemini/, openai/, or azure/)"
             )
 

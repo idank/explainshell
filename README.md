@@ -40,9 +40,11 @@ $ python3 -m venv .venv
 $ source .venv/bin/activate
 $ pip install -r requirements-dev.txt
 
-# Download the live db, or parse a manpage.
+# Download the live db
 $ make download-latest-db
-$ python -m explainshell.manager extract --mode source manpages/ubuntu/26.04/1/tar.1.gz
+
+# Or parse a manpage
+$ python -m explainshell.manager extract --mode llm:codex/gpt-5.2/medium manpages/ubuntu/26.04/1/tar.1.gz
 
 # Run the web server
 $ make serve
@@ -84,32 +86,31 @@ The manager CLI requires a database path for most commands. Set it via the `DB_P
 Use the manager to extract options from gzipped manpages and save them to the database:
 
 ```bash
-# Uses the source extractor and writes the result to test.db.
-$ python -m explainshell.manager --db test.db extract --mode source manpages/ubuntu/26.04/1/tar.1.gz
+# Calls out to 'codex exec' to extract the manpage and writes the result to test.db.
+$ python -m explainshell.manager --db test.db extract --mode llm:codex/gpt-5.2/medium manpages/ubuntu/26.04/1/tar.1.gz
 
 # Or set DB_PATH:
 $ export DB_PATH=$(pwd)/test.db
 
-# LLM extraction requires an API key
+# Can also use an API key (see .env.example).
 $ python -m explainshell.manager extract --mode llm:openai/gpt-5-mini manpages/ubuntu/26.04/1/find.1.gz
 $ python -m explainshell.manager extract --mode llm:openai/gpt-5-mini --batch 50 manpages/ubuntu/26.04/
 ```
 
 The `--mode` flag selects the extraction strategy:
 
-- `source`: parses roff macros directly. Fast, no external dependencies beyond `lexgrog`, but struggles with some manpage formats.
-- `llm:<provider/model>`: sends the manpage text (converted to markdown via `mandoc -T markdown`) to an LLM for extraction. More accurate, especially for complex or non-standard manpages. The LLM returns line ranges into the source text, not generated descriptions, so hallucinations are structurally impossible - the actual help text is always sliced from the original manpage. Example: `--mode llm:openai/gpt-5-mini`.
+- `llm:<provider/model>`: sends the manpage text (converted to markdown via `mandoc -T markdown`) to an LLM for extraction. The LLM returns line ranges into the source text, not generated descriptions, so hallucinations are structurally impossible - the actual help text is always sliced from the original manpage. Example: `--mode llm:openai/gpt-5-mini`.
 
-Other `extract` flags: `--overwrite` (re-process existing entries), `--filter-db <spec>` (with `--overwrite`, only re-extract rows whose stored extractor matches `<spec>`; same syntax as `--mode` minus hybrid), `--dry-run` (extract without writing to DB), `-j <N>` (parallel workers), `--batch <N>` (provider batch API for LLM modes, including `gemini/`, `openai/`, and `azure/`).
+Other `extract` flags: `--overwrite` (re-process existing entries), `--filter-db <spec>` (with `--overwrite`, only re-extract rows whose stored extractor matches `<spec>`; same syntax as `--mode`), `--dry-run` (extract without writing to DB), `-j <N>` (parallel workers), `--batch <N>` (provider batch API for LLM modes, including `gemini/`, `openai/`, and `azure/`).
 
 To compare extraction results, use the `diff` subcommand:
 
 ```bash
 # Diff against the database
-$ python -m explainshell.manager diff db --mode source manpages/ubuntu/26.04/1/tar.1.gz
+$ python -m explainshell.manager diff db --mode llm:openai/gpt-5-mini manpages/ubuntu/26.04/1/tar.1.gz
 
 # Compare two extractors head-to-head
-$ python -m explainshell.manager diff extractors source..llm:openai/gpt-5-mini manpages/ubuntu/26.04/1/tar.1.gz
+$ python -m explainshell.manager diff extractors llm:openai/gpt-5-mini..llm:openai/gpt-5 manpages/ubuntu/26.04/1/tar.1.gz
 ```
 
 ### Querying the database
@@ -131,16 +132,7 @@ $ python -m explainshell.manager db-check
 ## Tests
 
 ```bash
-$ make tests-all          # lint + unit tests + e2e + parsing regression
-```
-
-### Parsing regression
-
-The parsing regression suite re-extracts manpages from a fixed corpus and compares against a stored baseline DB. Any difference in options, fields, or option metadata is reported as a failure.
-
-```bash
-$ make parsing-regression           # run with the source (roff) extractor
-$ make parsing-update               # regenerate the source baseline DB
+$ make tests-all          # lint + unit tests + e2e
 ```
 
 ### LLM benchmarking
