@@ -35,8 +35,12 @@ __all__ = [
 
 
 def _repo_relative(path: Path) -> str:
+    # Don't resolve symlinks — the corpus path is the canonical key. Resolving
+    # would surface the symlink target (e.g. echo.1.gz → rust-echo.1.gz),
+    # which surprises grep and breaks compare against runs keyed by the
+    # corpus name.
     try:
-        return path.resolve().relative_to(REPO_ROOT).as_posix()
+        return path.absolute().relative_to(REPO_ROOT).as_posix()
     except ValueError:
         return path.as_posix()
 
