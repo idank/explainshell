@@ -38,7 +38,7 @@ services:
       # step and ship an image with no DB pinning guarantee.
       deploy_on_push: false
     http_port: 8080
-    instance_count: 2
+    instance_count: 4
     # apps-s-1vcpu-1gb: 1 shared vCPU / 1 GiB, professional tier.
     # Same hardware as basic-xs ($10) but $12/mo, and the basic tier
     # caps basic-xs at 1 instance — this slug is the cheapest one that
