@@ -163,7 +163,6 @@ python -m explainshell.manager extract --mode llm:openai/gpt-5-mini /path/to/man
   - `_common.py` - Shared helpers (corpus reading, summary loading, metric lookup)
   - `llm/` - LLM extractor eval (`llm_eval.py`, `corpus.txt`, `runs/`)
   - `render/` - Mandoc markdown render eval (`render_eval.py`, `corpus.txt`, `runs/`)
-- `tests/regression/llm-bench/` - Pre-migration LLM benchmark history (orphaned; new runs land under `tests/evals/llm/runs/`)
 - `runserver.py` - Flask app entry point
 - `manpages/` - Git submodule ([explainshell-manpages](https://github.com/idank/explainshell-manpages))
   - `ubuntu-manpages-operator/` - Go pipeline that fetches Ubuntu `.deb` packages, extracts manpages, and converts them to markdown
