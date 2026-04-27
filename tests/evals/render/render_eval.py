@@ -9,8 +9,6 @@ compares two runs for structural changes that deserve human inspection.
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 import os
 import re
 import subprocess
@@ -23,7 +21,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+_HERE = Path(__file__).resolve()
+REPO_ROOT = _HERE.parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -33,6 +32,17 @@ from explainshell.extraction.llm.text import (  # noqa: E402
     filter_sections,
 )
 from explainshell.web.markdown import render_markdown  # noqa: E402
+from tests.evals._common import (  # noqa: E402
+    _format_delta,
+    _get_metric,
+    _git_metadata,
+    _load_summary,
+    _page_map,
+    _read_corpus,
+    _repo_relative,
+    _safe_name,
+    _write_json,
+)
 
 EVAL_DIR = Path(__file__).resolve().parent
 DEFAULT_CORPUS = EVAL_DIR / "corpus.txt"
@@ -101,55 +111,6 @@ class RenderedPage:
     markdown: str
     html: str
     metrics: dict[str, Any]
-
-
-def _repo_relative(path: Path) -> str:
-    try:
-        return path.resolve().relative_to(REPO_ROOT).as_posix()
-    except ValueError:
-        return path.as_posix()
-
-
-def _safe_name(path: str) -> str:
-    digest = hashlib.sha1(path.encode()).hexdigest()[:10]
-    name = Path(path).name
-    for suffix in (".gz", ".1", ".8", ".7", ".5"):
-        if name.endswith(suffix):
-            name = name[: -len(suffix)]
-    clean = re.sub(r"[^A-Za-z0-9_.-]+", "_", name).strip("._") or "page"
-    return f"{clean}-{digest}"
-
-
-def _read_corpus(corpus_path: Path) -> list[Path]:
-    paths: list[Path] = []
-    for raw_line in corpus_path.read_text().splitlines():
-        line = raw_line.split("#", 1)[0].strip()
-        if not line:
-            continue
-        path = Path(line).expanduser()
-        if not path.is_absolute():
-            path = REPO_ROOT / path
-        paths.append(path)
-    return paths
-
-
-def _git_metadata() -> dict[str, Any]:
-    def run_git(args: list[str]) -> str | None:
-        result = subprocess.run(
-            ["git", *args],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode != 0:
-            return None
-        return result.stdout.strip()
-
-    return {
-        "commit": run_git(["rev-parse", "--short", "HEAD"]),
-        "dirty": bool(run_git(["status", "--porcelain"])),
-    }
 
 
 def _mandoc_markdown(mandoc_path: str, manpage: Path) -> str:
@@ -233,10 +194,6 @@ def _render_page(mandoc_path: str, manpage: Path) -> RenderedPage:
     )
 
 
-def _write_json(path: Path, data: Any) -> None:
-    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
-
-
 def render_run(args: argparse.Namespace) -> int:
     mandoc_path = os.path.expanduser(args.mandoc or config.MANDOC_PATH)
     corpus = [Path(p).expanduser() for p in args.paths]
@@ -290,30 +247,6 @@ def render_run(args: argparse.Namespace) -> int:
     print(f"rendered pages: {len(pages)}")
     print(f"failures: {len(failures)}")
     return 1 if failures and args.fail_on_failure else 0
-
-
-def _load_summary(run_dir: Path) -> dict[str, Any]:
-    return json.loads((run_dir / "summary.json").read_text())
-
-
-def _page_map(summary: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return {page["path"]: page for page in summary["pages"]}
-
-
-def _get_metric(page: dict[str, Any], key: str) -> int | float:
-    """Read a dotted metric path, returning 0 if any segment is missing.
-
-    Older runs may not contain every key the current schema tracks; treating
-    them as 0 keeps cross-version comparisons running instead of crashing.
-    """
-    value: Any = page.get("metrics", {})
-    for part in key.split("."):
-        if not isinstance(value, dict) or part not in value:
-            return 0
-        value = value[part]
-    if not isinstance(value, int | float):
-        return 0
-    return value
 
 
 def _suspicious_changes(
@@ -377,13 +310,6 @@ def _suspicious_changes(
         )
 
     return reasons
-
-
-def _format_delta(before: int | float, after: int | float) -> str:
-    delta = after - before
-    if isinstance(before, float) or isinstance(after, float):
-        return f"{before:.2f} -> {after:.2f} ({delta:+.2f})"
-    return f"{before} -> {after} ({delta:+})"
 
 
 def _changed_metric_lines(old: dict[str, Any], new: dict[str, Any]) -> list[str]:

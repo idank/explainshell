@@ -22,11 +22,11 @@ A web tool that parses man pages and explains command-line arguments by matching
 1. Update README.md if the change adds/removes/renames CLI commands, env vars, or user-facing features
 1. Update AGENTS.md if the change affects structure, convention, workflow, etc.
 
-### LLM Benchmarking
+### LLM Evaluation
 
-Use the benchmark tool (`tools/llm_bench.py`) to compare before/after metrics when making changes to the LLM extractor. It runs extraction on a default 10-file corpus (`tests/regression/llm-bench/manpages/`) and produces a JSON report with aggregate metrics: extracted files, failed files, total options, zero-option pages, multi-chunk pages, and token usage. Each run creates a timestamped directory under `tests/regression/llm-bench/` containing the report and raw LLM responses (prompts and response text per chunk) for post-hoc investigation. Reports include git metadata (commit, dirty state).
+Use the LLM eval (`tests/evals/llm/llm_eval.py`) to compare before/after metrics when making changes to the LLM extractor. It runs extraction on the corpus listed in `tests/evals/llm/corpus.txt` (paths into the `manpages/` submodule) and writes `summary.json` plus per-page artifacts under `markdown/`, `prompts/`, and `responses/` to a timestamped directory under `tests/evals/llm/runs/`. Summaries include git metadata, model, label, description, aggregate metrics (extracted/failed files, total options, zero-option pages, multi-chunk pages, token usage), and per-page metrics keyed by repo-relative path.
 
-Each run accepts an optional `-d "..."` to label what this run represents. When running benchmarks, always provide a description inferred from context — e.g. the task you're working on, the nature of local changes, or "baseline (clean)" for a pre-change run. This makes `list` and `compare` output self-explanatory.
+`run` requires `--label <tag>` (folded into the run dir name) and accepts `-d "..."` for a longer description. Always pass a meaningful label and description inferred from context — e.g. the task you're working on, or "baseline" for a pre-change run — so `list` and `compare` output stay self-explanatory.
 
 **Workflow for code changes (API, prompt, chunking, post-processing):**
 
@@ -34,42 +34,36 @@ Each run accepts an optional `-d "..."` to label what this run represents. When 
 # 1. Stash your changes to get a clean baseline
 git stash push -- explainshell/extraction/llm/
 
-# 2. Run benchmark on the old code
-python tools/llm_bench.py run --model openai/gpt-5-mini --batch 50 -d "baseline before <short summary of change>"
+# 2. Run on the old code
+python tests/evals/llm/llm_eval.py run --label baseline --model openai/gpt-5-mini --batch 50 -d "baseline before <short summary of change>"
 
 # 3. Restore your changes
 git stash pop
 
-# 4. Run benchmark on the new code
-python tools/llm_bench.py run --model openai/gpt-5-mini --batch 50 -d "<short summary of change>"
+# 4. Run on the new code
+python tests/evals/llm/llm_eval.py run --label change --model openai/gpt-5-mini --batch 50 -d "<short summary of change>"
 
-# 5. Compare the two most recent reports
-python tools/llm_bench.py compare
+# 5. Compare the two run directories (oldest first)
+python tests/evals/llm/llm_eval.py compare tests/evals/llm/runs/<baseline-run> tests/evals/llm/runs/<change-run>
 ```
 
 **Usage:**
 
 ```bash
-# Run on the default corpus (auto-saves to report directory)
-python tools/llm_bench.py run --model openai/gpt-5-mini
+# Run on the default corpus
+python tests/evals/llm/llm_eval.py run --label smoke --model openai/gpt-5-mini
 
 # Run with batch API
-python tools/llm_bench.py run --model openai/gpt-5-mini --batch 50
+python tests/evals/llm/llm_eval.py run --label smoke --model openai/gpt-5-mini --batch 50
 
-# Run on specific files
-python tools/llm_bench.py run --model openai/gpt-5-mini path/to/file.1.gz
+# Run on specific files (overrides --corpus)
+python tests/evals/llm/llm_eval.py run --label probe --model openai/gpt-5-mini path/to/file.1.gz
 
-# Save to a specific directory instead of the default report directory
-python tools/llm_bench.py run --model openai/gpt-5-mini -o runs/my-test/report.json tests/regression/manpages/
+# Compare two run directories
+python tests/evals/llm/llm_eval.py compare tests/evals/llm/runs/<baseline-run> tests/evals/llm/runs/<current-run>
 
-# Compare the two most recent reports
-python tools/llm_bench.py compare
-
-# Compare two specific reports
-python tools/llm_bench.py compare report1.json report2.json
-
-# List all reports
-python tools/llm_bench.py list
+# List all saved runs
+python tests/evals/llm/llm_eval.py list
 ```
 
 ## Code Style
@@ -161,12 +155,15 @@ python -m explainshell.manager extract --mode llm:openai/gpt-5-mini /path/to/man
       - `providers/` - LLM provider implementations (OpenAI, Gemini, LiteLLM fallback)
   - `web/views.py` - Flask routes with URL-based distro/release routing
 - `tools/` - Standalone scripts
-  - `llm_bench.py` - LLM extractor benchmark tool (run/compare metrics reports)
   - `fetch_manned.py` - Fetch man pages from manned.org weekly dump
   - `mandoc-md` - Custom mandoc binary with markdown output support
 - `tests/` - Unit tests (`test_*.py`), fixtures
 - `tests/e2e/` - Playwright e2e tests, snapshots, and dedicated `e2e.db`
-- `tests/regression/llm-bench/` - LLM benchmark corpus and historical reports
+- `tests/evals/` - Manual review-oriented evals (not in `make tests-all`)
+  - `_common.py` - Shared helpers (corpus reading, summary loading, metric lookup)
+  - `llm/` - LLM extractor eval (`llm_eval.py`, `corpus.txt`, `runs/`)
+  - `render/` - Mandoc markdown render eval (`render_eval.py`, `corpus.txt`, `runs/`)
+- `tests/regression/llm-bench/` - Pre-migration LLM benchmark history (orphaned; new runs land under `tests/evals/llm/runs/`)
 - `runserver.py` - Flask app entry point
 - `manpages/` - Git submodule ([explainshell-manpages](https://github.com/idank/explainshell-manpages))
   - `ubuntu-manpages-operator/` - Go pipeline that fetches Ubuntu `.deb` packages, extracts manpages, and converts them to markdown
@@ -214,7 +211,7 @@ Hermetic setup: uses a dedicated `tests/e2e/e2e.db` and random port selection. S
 
 ### Web Store Lifecycle
 
-The web app uses `CachingStore` only when `DEBUG=false` (production and e2e). The cached store is created lazily per worker process and stored in `app.extensions`. Local dev (`DEBUG=true`, the default for `make serve`) uses a per-request plain `Store` so DB rebuilds are visible without restarting the server. Tooling such as `explainshell.manager` and `tools/llm_bench.py` should continue using plain `Store`, not `CachingStore`.
+The web app uses `CachingStore` only when `DEBUG=false` (production and e2e). The cached store is created lazily per worker process and stored in `app.extensions`. Local dev (`DEBUG=true`, the default for `make serve`) uses a per-request plain `Store` so DB rebuilds are visible without restarting the server. Tooling such as `explainshell.manager` and `tests/evals/llm/llm_eval.py` should continue using plain `Store`, not `CachingStore`.
 
 ### Deployment
 

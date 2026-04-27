@@ -16,5 +16,6 @@ dump.gz
 docs/
 ignore/
 todos/
-tests/regression/llm-bench/*
-!tests/regression/llm-bench/manpages/
+tests/regression/llm-bench/
+tests/evals/llm/runs/
+tests/evals/render/runs/

@@ -1,0 +1,17 @@
+# LLM extractor evaluation corpus.
+# Paths are relative to the repo root and resolve through the explainshell-manpages
+# git submodule mounted at `manpages/`. Run `git submodule update --init` if missing.
+# Blank lines and `#` comments are ignored.
+
+manpages/ubuntu/26.04/1/avrdude.1.gz
+manpages/ubuntu/26.04/1/curl.1.gz
+manpages/ubuntu/26.04/1/docker.1.gz
+manpages/ubuntu/26.04/1/echo.1.gz
+manpages/ubuntu/26.04/1/find.1.gz
+manpages/ubuntu/26.04/1/grep.1.gz
+manpages/ubuntu/26.04/1/ps.1.gz
+manpages/ubuntu/26.04/1/sed.1.gz
+manpages/ubuntu/26.04/1/ssh.1.gz
+manpages/ubuntu/26.04/1/tar.1.gz
+manpages/ubuntu/26.04/1/xargs.1.gz
+manpages/ubuntu/26.04/1/xz.1.gz

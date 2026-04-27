@@ -135,25 +135,25 @@ $ python -m explainshell.manager db-check
 $ make tests-all          # lint + unit tests + e2e
 ```
 
-### LLM benchmarking
+### LLM evaluation
 
-The benchmark tool (`tools/llm_bench.py`) runs the LLM extractor on a corpus of manpages and produces a JSON metrics report (extracted/failed files, total options, token usage, etc.). Reports are auto-saved with timestamps to `tests/regression/llm-bench/` and include git metadata.
+The LLM eval (`tests/evals/llm/llm_eval.py`) runs the LLM extractor on the corpus listed in `tests/evals/llm/corpus.txt` and produces a `summary.json` plus per-page artifacts (`markdown/`, `prompts/`, `responses/`). Runs are auto-saved with timestamps to `tests/evals/llm/runs/<timestamp>-<label>/` and include git metadata.
 
 The idea is to run it before making changes that affect the LLM extractor pipeline (producing a baseline), and then again
 with the changes. Some variance between runs is expected due to LLM indeterminism.
 
 ```bash
-# Run on the default 10-file corpus
-$ python tools/llm_bench.py run --model openai/gpt-5-mini
+# Run on the default corpus
+$ python tests/evals/llm/llm_eval.py run --label baseline --model openai/gpt-5-mini
 
 # Run with batch API
-$ python tools/llm_bench.py run --model openai/gpt-5-mini --batch 50
+$ python tests/evals/llm/llm_eval.py run --label change --model openai/gpt-5-mini --batch 50
 
-# Compare the two most recent reports
-$ python tools/llm_bench.py compare
+# Compare two run directories (oldest first)
+$ python tests/evals/llm/llm_eval.py compare tests/evals/llm/runs/<baseline-run> tests/evals/llm/runs/<current-run>
 
-# List all saved reports
-$ python tools/llm_bench.py list
+# List all saved runs
+$ python tests/evals/llm/llm_eval.py list
 ```
 
 ### Markdown render eval
