@@ -98,7 +98,7 @@ def _dr_prefix(source: str) -> str:
 
 
 class SubcommandMappingResult(NamedTuple):
-    """Result of update_subcommand_mappings_llm / _heuristic."""
+    """Result of update_subcommand_mappings."""
 
     mappings_added: list[tuple[str, str]]  # (src, dst) pairs added
     parents: dict[str, str]  # parent name -> source
@@ -561,14 +561,7 @@ class Store:
         for row in self._conn.execute("SELECT src, dst FROM mappings"):
             yield row["src"], row["dst"]
 
-    def _set_subcommands(self, source: str, subcommands: list[str]) -> None:
-        self._conn.execute(
-            "UPDATE parsed_manpages SET subcommands = ? WHERE source = ?",
-            (json.dumps(subcommands), source),
-        )
-        self._conn.commit()
-
-    def update_subcommand_mappings_llm(self) -> SubcommandMappingResult:
+    def update_subcommand_mappings(self) -> SubcommandMappingResult:
         """Reconcile subcommand mappings using declared subcommands from LLM-extracted pages.
 
         For each parent manpage that has a non-empty ``subcommands`` list,
@@ -635,65 +628,6 @@ class Store:
             added,
             added - deleted,
         )
-
-        return SubcommandMappingResult(mappings_to_add, parents)
-
-    def update_subcommand_mappings_heuristic(self) -> SubcommandMappingResult:
-        """Create subcommand mappings using a naming-convention heuristic.
-
-        If a manpage name contains a hyphen (e.g. ``git-commit``) and the
-        prefix (``git``) exists as another manpage in the same distro/release,
-        create a ``"git commit"`` → child mapping.  Also sets the
-        ``subcommands`` list on the parent.
-        """
-        manpages: dict[str, list[str]] = {}  # name -> [source, ...]
-        hyphenated: dict[str, list[str]] = {}  # full hyphenated name -> [source, ...]
-
-        rows = self._conn.execute("SELECT source, name FROM parsed_manpages").fetchall()
-        for row in rows:
-            name = row["name"]
-            source = row["source"]
-            if "-" in name:
-                hyphenated.setdefault(name, []).append(source)
-            else:
-                manpages.setdefault(name, []).append(source)
-
-        existing_mappings = {(src, dst) for src, dst in self.mappings()}
-        new_mappings: set[tuple[str, str]] = set()
-        parents: dict[str, str] = {}
-
-        for name, sources in hyphenated.items():
-            for source in sources:
-                joined = name.replace("-", " ")
-                parent_name = name.split("-", 1)[0]
-                if parent_name not in manpages:
-                    continue
-                prefix = _dr_prefix(source)
-                if not any(p.startswith(prefix) for p in manpages[parent_name]):
-                    continue
-                if (joined, source) in existing_mappings:
-                    continue
-                new_mappings.add((joined, source))
-                parents[parent_name] = next(
-                    p for p in manpages[parent_name] if p.startswith(prefix)
-                )
-
-        mappings_to_add = sorted(new_mappings)
-        for src, dst in mappings_to_add:
-            self.add_mapping(src, dst, 1)
-            logger.debug("inserting mapping (subcommand) %s -> %s", src, dst)
-
-        # Set subcommands on parents that don't already have them.
-        for name, source in parents.items():
-            prefix = name + "-"
-            children = [
-                child_name[len(prefix) :]
-                for child_name in hyphenated
-                if child_name.startswith(prefix)
-            ]
-            if children:
-                self._set_subcommands(source, children)
-                logger.debug("setting subcommands on %r: %s", name, children)
 
         return SubcommandMappingResult(mappings_to_add, parents)
 

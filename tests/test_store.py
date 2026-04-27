@@ -480,53 +480,8 @@ class _SubcommandTestBase:
         return json.loads(row["subcommands"]) if row else []
 
 
-class TestUpdateSubcommandMappingsHeuristic(_SubcommandTestBase):
-    """Tests for update_subcommand_mappings_heuristic()."""
-
-    def test_creates_mapping_for_hyphenated_child(self, store):
-        """git + git-commit → mapping 'git commit' -> git-commit source."""
-        store.add_manpage(self._make_mp("git", extractor="source"), _make_raw())
-        store.add_manpage(self._make_mp("git-commit", extractor="source"), _make_raw())
-
-        mappings_added, parents = store.update_subcommand_mappings_heuristic()
-
-        assert ("git commit", "ubuntu/26.04/1/git-commit.1.gz") in mappings_added
-        assert "git" in parents
-
-    def test_sets_subcommands_on_parent(self, store):
-        """Heuristic path should set the subcommands list on the parent."""
-        store.add_manpage(self._make_mp("git", extractor="source"), _make_raw())
-        store.add_manpage(self._make_mp("git-commit", extractor="source"), _make_raw())
-        store.add_manpage(self._make_mp("git-push", extractor="source"), _make_raw())
-
-        store.update_subcommand_mappings_heuristic()
-
-        subs = self._get_subcommands(store, "ubuntu/26.04/1/git.1.gz")
-        assert sorted(subs) == ["commit", "push"]
-
-    def test_no_mapping_without_parent(self, store):
-        """A hyphenated name with no matching parent should not create a mapping."""
-        store.add_manpage(self._make_mp("cd-discid", extractor="source"), _make_raw())
-
-        mappings_added, parents = store.update_subcommand_mappings_heuristic()
-
-        assert mappings_added == []
-        assert parents == {}
-
-    def test_skips_existing_mappings(self, store):
-        """Should not duplicate mappings that already exist."""
-        store.add_manpage(self._make_mp("git", extractor="source"), _make_raw())
-        store.add_manpage(self._make_mp("git-commit", extractor="source"), _make_raw())
-
-        store.update_subcommand_mappings_heuristic()
-        # Run a second time — should add nothing new.
-        mappings_added, _ = store.update_subcommand_mappings_heuristic()
-
-        assert mappings_added == []
-
-
 class TestUpdateSubcommandMappingsLlm(_SubcommandTestBase):
-    """Tests for update_subcommand_mappings_llm()."""
+    """Tests for update_subcommand_mappings()."""
 
     def test_uses_declared_subcommands(self, store):
         """LLM parent with subcommands=['commit','push'] creates mappings
@@ -541,7 +496,7 @@ class TestUpdateSubcommandMappingsLlm(_SubcommandTestBase):
         store.add_manpage(self._make_mp("git-push", extractor="llm"), _make_raw())
         # git-stash does NOT exist — should be silently skipped.
 
-        mappings_added, parents = store.update_subcommand_mappings_llm()
+        mappings_added, parents = store.update_subcommand_mappings()
 
         srcs = {src for src, _ in mappings_added}
         assert "git commit" in srcs
@@ -560,21 +515,20 @@ class TestUpdateSubcommandMappingsLlm(_SubcommandTestBase):
             self._make_mp("python-socketio", extractor="llm"), _make_raw()
         )
 
-        mappings_added, parents = store.update_subcommand_mappings_llm()
+        mappings_added, parents = store.update_subcommand_mappings()
 
         srcs = {src for src, _ in mappings_added}
         assert "python socketio" not in srcs
 
     def test_does_not_set_subcommands_on_parent(self, store):
-        """LLM parents already have their subcommands; the method should not
-        overwrite them."""
+        """The method must leave the parent's existing subcommands list alone."""
         store.add_manpage(
             self._make_mp("git", extractor="llm", subcommands=["commit"]),
             _make_raw(),
         )
         store.add_manpage(self._make_mp("git-commit", extractor="llm"), _make_raw())
 
-        store.update_subcommand_mappings_llm()
+        store.update_subcommand_mappings()
 
         subs = self._get_subcommands(store, "ubuntu/26.04/1/git.1.gz")
         assert subs == ["commit"]  # unchanged from the original value
@@ -587,8 +541,8 @@ class TestUpdateSubcommandMappingsLlm(_SubcommandTestBase):
         )
         store.add_manpage(self._make_mp("git-commit", extractor="llm"), _make_raw())
 
-        first_added, _ = store.update_subcommand_mappings_llm()
-        second_added, _ = store.update_subcommand_mappings_llm()
+        first_added, _ = store.update_subcommand_mappings()
+        second_added, _ = store.update_subcommand_mappings()
 
         assert set(first_added) == set(second_added)
         # No duplicate rows in the DB.
@@ -605,7 +559,7 @@ class TestUpdateSubcommandMappingsLlm(_SubcommandTestBase):
         store.add_manpage(self._make_mp("git-commit", extractor="llm"), _make_raw())
         store.add_manpage(self._make_mp("git-push", extractor="llm"), _make_raw())
 
-        store.update_subcommand_mappings_llm()
+        store.update_subcommand_mappings()
         srcs = {src for src, _ in store.mappings()}
         assert "git commit" in srcs
         assert "git push" in srcs
@@ -615,7 +569,7 @@ class TestUpdateSubcommandMappingsLlm(_SubcommandTestBase):
             self._make_mp("git", extractor="llm", subcommands=["commit"]),
             _make_raw(),
         )
-        store.update_subcommand_mappings_llm()
+        store.update_subcommand_mappings()
 
         srcs = {src for src, _ in store.mappings()}
         assert "git commit" in srcs
@@ -633,7 +587,7 @@ class TestUpdateSubcommandMappingsLlm(_SubcommandTestBase):
         )
         store.add_manpage(mp, _make_raw())
 
-        store.update_subcommand_mappings_llm()
+        store.update_subcommand_mappings()
 
         srcs = {src for src, _ in store.mappings()}
         assert "pg_autoctl activate" in srcs
@@ -667,7 +621,7 @@ class TestUpdateSubcommandMappingsLlm(_SubcommandTestBase):
             mp("gh-cache", "arch", "latest", extractor="llm"), _make_raw()
         )
 
-        mappings_added, _ = store.update_subcommand_mappings_llm()
+        mappings_added, _ = store.update_subcommand_mappings()
 
         dsts = {dst for _, dst in mappings_added}
         assert "ubuntu/26.04/1/gh-cache.1.gz" in dsts
