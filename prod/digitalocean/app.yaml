@@ -45,11 +45,11 @@ services:
     # allows instance_count > 1. Mirrors Fly's 1 GiB × 2 layout.
     instance_size_slug: apps-s-1vcpu-1gb
     health_check:
-      http_path: /
+      http_path: /health
       initial_delay_seconds: 60
       period_seconds: 10
-      timeout_seconds: 2
-      failure_threshold: 3
+      timeout_seconds: 10
+      failure_threshold: 5
     envs:
       - key: DB_PATH
         value: /opt/webapp/explainshell.db
