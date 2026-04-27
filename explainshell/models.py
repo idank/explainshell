@@ -31,13 +31,9 @@ class ExtractionMeta(BaseModel):
     matching DB column); this model holds everything else.
 
     model - for llm rows, the provider/model identifier (e.g. 'openai/gpt-5-mini').
-    fallback - True when hybrid fell back from mandoc to LLM.
-    fallback_reason - short message explaining why hybrid fell back.
     """
 
     model: str | None = None
-    fallback: bool | None = None
-    fallback_reason: str | None = None
 
 
 class Option(BaseModel):

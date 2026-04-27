@@ -1316,7 +1316,7 @@ class TestFilterFlag(unittest.TestCase):
         mock_run,
         _mock_sha,
     ):
-        """LLM filter matches rows with extra meta keys (e.g. fallback=True)."""
+        """LLM filter matches rows that carry meta keys outside the schema."""
         with _temp_db() as db_path:
             gz_files = ["/fake/ubuntu/26.04/1/fb.1.gz"]
             mock_collect.return_value = gz_files
@@ -1329,7 +1329,7 @@ class TestFilterFlag(unittest.TestCase):
                     "llm",
                     {
                         "model": "openai/gpt-5-mini",
-                        "fallback": True,
+                        "legacy_field": True,
                         "reason": "low-confidence",
                     },
                 ),

@@ -43,13 +43,9 @@ class ExtractionStats:
     # Options removed as duplicates (exact-match or strict-subset) by
     # dedup_options in postprocessing.
     deduped_options: int = 0
-    # Whether hybrid mode fell back from mandoc to LLM.
-    fallback_used: bool = False
-    # Reason for the fallback (e.g. low confidence).
-    fallback_reason: str | None = None
 
     def __iadd__(self, other: ExtractionStats) -> ExtractionStats:
-        """Accumulate numeric fields, OR boolean fields."""
+        """Accumulate numeric fields."""
         self.input_tokens += other.input_tokens
         self.output_tokens += other.output_tokens
         self.reasoning_tokens += other.reasoning_tokens
@@ -60,7 +56,6 @@ class ExtractionStats:
         self.normalized_options += other.normalized_options
         self.dropped_empty += other.dropped_empty
         self.deduped_options += other.deduped_options
-        self.fallback_used = self.fallback_used or other.fallback_used
         return self
 
 
