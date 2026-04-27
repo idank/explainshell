@@ -61,7 +61,7 @@ Use `run_in_background: true`. The diff report path is `<candidate-run>/diff-rep
 
 ## Step 5: Apply the rubric
 
-- **merge** ⇢ every flagged page classified as improvement. Recommend the user run `cp <candidate-mandoc> tools/mandoc-md` and commit. Suggest running the llm benchmark as a follow-up gut-check.
+- **merge** ⇢ every flagged page classified as improvement. Recommend the user run `cp <candidate-mandoc> tools/mandoc-md` and commit. Suggest running `/eval-llm` as a follow-up gut-check.
 - **regression** ⇢ any regression-classified page. Produce the handoff prompt (Step 6).
 - **defer** ⇢ any ambiguous page or reviewer uncertainty. Ask the user how to proceed.
 
