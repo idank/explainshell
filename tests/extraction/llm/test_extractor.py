@@ -183,9 +183,9 @@ class TestExtractIntegration(unittest.TestCase):
             ext = self._make_extractor(run_dir=tmpdir, debug=True)
             result = ext.extract("dummy.1.gz")
             self.assertEqual(len(result.mp.options), 1)
-            md_path = os.path.join(tmpdir, "dummy.md")
+            md_path = os.path.join(tmpdir, "markdown", "dummy.md")
             self.assertTrue(os.path.exists(md_path))
-            prompt_path = os.path.join(tmpdir, "dummy.prompt.json")
+            prompt_path = os.path.join(tmpdir, "prompts", "dummy.prompt.json")
             self.assertTrue(os.path.exists(prompt_path))
             with open(prompt_path) as f:
                 import json
@@ -193,7 +193,7 @@ class TestExtractIntegration(unittest.TestCase):
                 msgs = json.load(f)
                 self.assertEqual(len(msgs), 2)
                 self.assertEqual(msgs[0]["role"], "system")
-            response_path = os.path.join(tmpdir, "dummy.response.txt")
+            response_path = os.path.join(tmpdir, "responses", "dummy.response.txt")
             self.assertTrue(os.path.exists(response_path))
             with open(response_path) as f:
                 self.assertEqual(f.read(), raw_response)
@@ -353,9 +353,10 @@ class TestMultiChunkExtract(unittest.TestCase):
             with self.assertRaises(ExtractionError):
                 ext.extract("dummy.1.gz")
 
-            failed_files = os.listdir(fail_dir)
+            responses_dir = os.path.join(fail_dir, "responses")
+            failed_files = os.listdir(responses_dir)
             self.assertEqual(len(failed_files), 1)
-            with open(os.path.join(fail_dir, failed_files[0])) as f:
+            with open(os.path.join(responses_dir, failed_files[0])) as f:
                 self.assertEqual(f.read(), bad_response)
 
 

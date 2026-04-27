@@ -8,9 +8,7 @@ that both evals would otherwise duplicate.
 
 from __future__ import annotations
 
-import hashlib
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -22,7 +20,7 @@ if str(REPO_ROOT) not in sys.path:
 
 __all__ = [
     "REPO_ROOT",
-    "_safe_name",
+    "_path_stem",
     "_repo_relative",
     "_git_metadata",
     "_read_corpus",
@@ -45,14 +43,15 @@ def _repo_relative(path: Path) -> str:
         return path.as_posix()
 
 
-def _safe_name(path: str) -> str:
-    digest = hashlib.sha1(path.encode()).hexdigest()[:10]
-    name = Path(path).name
-    for suffix in (".gz", ".1", ".8", ".7", ".5"):
-        if name.endswith(suffix):
-            name = name[: -len(suffix)]
-    clean = re.sub(r"[^A-Za-z0-9_.-]+", "_", name).strip("._") or "page"
-    return f"{clean}-{digest}"
+def _path_stem(rel_path: str) -> str:
+    """Encode a repo-relative .gz path as a flat artifact-filename stem.
+
+    `/` is replaced with `__` (no manpage filename in the corpus contains
+    `__`, so the encoding stays reversible) and the `.gz` suffix is stripped.
+    """
+    if rel_path.endswith(".gz"):
+        rel_path = rel_path[:-3]
+    return rel_path.replace("/", "__")
 
 
 def _read_corpus(corpus_path: Path) -> list[Path]:

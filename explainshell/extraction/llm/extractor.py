@@ -196,6 +196,7 @@ class LLMExtractor:
     def __init__(self, config: ExtractorConfig) -> None:
         self._model = config.model or ""
         self._run_dir = config.run_dir
+        self._repo_root = config.repo_root
         self._debug = config.debug
         self.provider: LLMProvider = make_provider(self._model)
         try:
@@ -250,7 +251,7 @@ class LLMExtractor:
                 cr = self._call_llm(user_content)
             except ExtractionError as e:
                 if e.raw_response:
-                    self._dump_failed_response(basename, i, e.raw_response)
+                    self._dump_failed_response(gz_path, i, e.raw_response)
                 raise
 
             stats.input_tokens += cr.usage.input_tokens
@@ -343,9 +344,7 @@ class LLMExtractor:
                 chunk_data, raw = process_llm_result(response_text)
             except ExtractionError as e:
                 if e.raw_response:
-                    self._dump_failed_response(
-                        prepared.basename, chunk_idx, e.raw_response
-                    )
+                    self._dump_failed_response(gz_path, chunk_idx, e.raw_response)
                 raise
 
             messages = self._build_messages(prepared.requests[chunk_idx])
@@ -373,9 +372,9 @@ class LLMExtractor:
         n_chunks = prepared.n_chunks
         numbered_text = prepared.numbered_text
 
+        stem = self._artifact_stem(gz_path)
         if self._run_dir and self._debug:
-            os.makedirs(self._run_dir, exist_ok=True)
-            with open(os.path.join(self._run_dir, f"{basename}.md"), "w") as f:
+            with open(self._artifact_path("markdown", stem, ".md"), "w") as f:
                 f.write(numbered_text)
 
         all_raw: list[dict] = []
@@ -388,15 +387,18 @@ class LLMExtractor:
             all_subcommands.extend(cr.data.get("subcommands") or [])
 
             if self._run_dir and self._debug:
-                if n_chunks == 1:
-                    prompt_name = f"{basename}.prompt.json"
-                    response_name = f"{basename}.response.txt"
-                else:
-                    prompt_name = f"{basename}.chunk-{i}.prompt.json"
-                    response_name = f"{basename}.chunk-{i}.response.txt"
-                with open(os.path.join(self._run_dir, prompt_name), "w") as f:
+                chunk_suffix = "" if n_chunks == 1 else f".chunk-{i}"
+                with open(
+                    self._artifact_path("prompts", stem, f"{chunk_suffix}.prompt.json"),
+                    "w",
+                ) as f:
                     json.dump(cr.messages, f, indent=2)
-                with open(os.path.join(self._run_dir, response_name), "w") as f:
+                with open(
+                    self._artifact_path(
+                        "responses", stem, f"{chunk_suffix}.response.txt"
+                    ),
+                    "w",
+                ) as f:
                     f.write(cr.raw_response)
 
         all_raw = dedup_ref_options(all_raw)
@@ -502,15 +504,40 @@ class LLMExtractor:
             {"role": "user", "content": user_content},
         ]
 
+    def _artifact_stem(self, gz_path: str) -> str:
+        """Encode the gz file as a flat artifact-filename stem.
+
+        With ``repo_root`` set, returns the repo-relative path with ``/``
+        replaced by ``__`` and ``.gz`` stripped — so same-basename pages
+        from different paths can't collide.  Without it, falls back to the
+        bare basename.
+        """
+        if self._repo_root:
+            try:
+                rel = os.path.relpath(gz_path, self._repo_root)
+            except ValueError:
+                rel = os.path.basename(gz_path)
+            if rel.endswith(".gz"):
+                rel = rel[:-3]
+            return rel.replace(os.sep, "__")
+        return os.path.splitext(os.path.splitext(os.path.basename(gz_path))[0])[0]
+
+    def _artifact_path(self, kind: str, stem: str, suffix: str) -> str:
+        """Return ``<run_dir>/<kind>/<stem><suffix>``, creating the subdir."""
+        sub = os.path.join(self._run_dir or "", kind)
+        os.makedirs(sub, exist_ok=True)
+        return os.path.join(sub, f"{stem}{suffix}")
+
     def _dump_failed_response(
-        self, basename: str, chunk_idx: int, raw_response: str
+        self, gz_path: str, chunk_idx: int, raw_response: str
     ) -> None:
         """Write a failed LLM response to output_dir for inspection."""
         if not self._run_dir:
             return
-        os.makedirs(self._run_dir, exist_ok=True)
-        name = f"{basename}.chunk-{chunk_idx}.failed-response.txt"
-        path = os.path.join(self._run_dir, name)
+        stem = self._artifact_stem(gz_path)
+        path = self._artifact_path(
+            "responses", stem, f".chunk-{chunk_idx}.failed-response.txt"
+        )
         with open(path, "w") as f:
             f.write(raw_response)
         logger.error("raw LLM response saved to %s", path)

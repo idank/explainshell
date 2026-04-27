@@ -13,7 +13,6 @@ import argparse
 import logging
 import os
 import re
-import shutil
 import sys
 import time
 from datetime import UTC, datetime
@@ -40,9 +39,9 @@ from tests.evals._common import (  # noqa: E402
     _git_metadata,
     _load_summary,
     _page_map,
+    _path_stem,
     _read_corpus,
     _repo_relative,
-    _safe_name,
     _write_json,
 )
 
@@ -57,29 +56,6 @@ EVAL_DIR = _HERE.parent
 DEFAULT_CORPUS = EVAL_DIR / "corpus.txt"
 DEFAULT_RUNS_DIR = EVAL_DIR / "runs"
 DEFAULT_MODEL = "openai/gpt-5-mini"
-
-
-def _basename(gz_path: str) -> str:
-    return os.path.splitext(os.path.splitext(os.path.basename(gz_path))[0])[0]
-
-
-def _relocate_artifacts(raw_dir: Path, run_dir: Path, basename: str, safe: str) -> None:
-    """Move per-file artifacts the LLM extractor wrote to ``raw_dir`` into the
-    eval's named subdirs, renaming the basename prefix to ``safe``."""
-    md = raw_dir / f"{basename}.md"
-    if md.exists():
-        shutil.move(str(md), str(run_dir / "markdown" / f"{safe}.md"))
-    for src in raw_dir.iterdir():
-        if not src.name.startswith(f"{basename}."):
-            continue
-        suffix = src.name[len(basename) + 1 :]
-        if suffix.endswith("prompt.json"):
-            dst = run_dir / "prompts" / f"{safe}.{suffix}"
-        elif suffix.endswith("response.txt") or suffix.endswith("failed-response.txt"):
-            dst = run_dir / "responses" / f"{safe}.{suffix}"
-        else:
-            continue
-        shutil.move(str(src), str(dst))
 
 
 def run_bench(args: argparse.Namespace) -> int:
@@ -103,22 +79,24 @@ def run_bench(args: argparse.Namespace) -> int:
     timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     label = re.sub(r"[^A-Za-z0-9_.-]+", "-", args.label).strip("-") or "llm"
     run_dir = Path(args.output or DEFAULT_RUNS_DIR / f"{timestamp}-{label}")
-    raw_dir = run_dir / "raw"
-    for subdir in ("markdown", "prompts", "responses", "raw"):
-        (run_dir / subdir).mkdir(parents=True, exist_ok=True)
+    run_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("benchmarking %d file(s)...", len(gz_files))
 
-    config = ExtractorConfig(model=args.model, run_dir=str(raw_dir), debug=True)
+    config = ExtractorConfig(
+        model=args.model,
+        run_dir=str(run_dir),
+        repo_root=str(REPO_ROOT),
+        debug=True,
+    )
     extractor = make_extractor("llm", config)
 
-    pages_by_safe: dict[str, dict[str, Any]] = {}
+    pages_by_path: dict[str, dict[str, Any]] = {}
     failures: list[dict[str, str]] = []
 
     def _on_result(gz_path: str, fe: ExtractionResult) -> None:
         rel_path = _repo_relative(Path(fe.gz_path))
-        basename = _basename(fe.gz_path)
-        safe = _safe_name(rel_path)
+        stem = _path_stem(rel_path)
 
         extraction: dict[str, Any] = {
             "n_chunks": fe.stats.chunks,
@@ -145,7 +123,7 @@ def run_bench(args: argparse.Namespace) -> int:
         # API only returns aggregate usage, so batch runs leave these at 0.
         page = {
             "path": rel_path,
-            "safe_name": safe,
+            "stem": stem,
             "metrics": {
                 "extraction": extraction,
                 "tokens": {
@@ -155,12 +133,7 @@ def run_bench(args: argparse.Namespace) -> int:
                 },
             },
         }
-        pages_by_safe[safe] = page
-
-        try:
-            _relocate_artifacts(raw_dir, run_dir, basename, safe)
-        except OSError as exc:
-            logger.warning("failed to relocate artifacts for %s: %s", basename, exc)
+        pages_by_path[rel_path] = page
 
     manifest = None
     if args.batch is not None:
@@ -180,7 +153,7 @@ def run_bench(args: argparse.Namespace) -> int:
     )
     elapsed = time.monotonic() - t0
 
-    pages = sorted(pages_by_safe.values(), key=lambda p: p["path"])
+    pages = sorted(pages_by_path.values(), key=lambda p: p["path"])
     extracted = [p for p in pages if p["metrics"]["extraction"].get("success")]
     failed = [p for p in pages if not p["metrics"]["extraction"].get("success")]
 
@@ -227,12 +200,6 @@ def run_bench(args: argparse.Namespace) -> int:
         "pages": pages,
     }
     _write_json(run_dir / "summary.json", summary)
-
-    try:
-        if raw_dir.exists() and not any(raw_dir.iterdir()):
-            raw_dir.rmdir()
-    except OSError:
-        pass
 
     _print_summary(summary)
     print(f"  Run directory: {run_dir}")

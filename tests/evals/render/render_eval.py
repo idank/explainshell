@@ -38,9 +38,9 @@ from tests.evals._common import (  # noqa: E402
     _git_metadata,
     _load_summary,
     _page_map,
+    _path_stem,
     _read_corpus,
     _repo_relative,
-    _safe_name,
     _write_json,
 )
 
@@ -107,7 +107,7 @@ class TagCounter(HTMLParser):
 @dataclass(frozen=True)
 class RenderedPage:
     path: str
-    safe_name: str
+    stem: str
     markdown: str
     html: str
     metrics: dict[str, Any]
@@ -187,7 +187,7 @@ def _render_page(mandoc_path: str, manpage: Path) -> RenderedPage:
     html = render_markdown(markdown)
     return RenderedPage(
         path=rel_path,
-        safe_name=_safe_name(rel_path),
+        stem=_path_stem(rel_path),
         markdown=markdown,
         html=html,
         metrics=_metrics(rel_path, markdown, html),
@@ -220,13 +220,13 @@ def render_run(args: argparse.Namespace) -> int:
         except Exception as exc:  # noqa: BLE001 - report per-page render failures.
             failures.append({"path": rel_path, "error": str(exc)})
             continue
-        (run_dir / "markdown" / f"{page.safe_name}.md").write_text(page.markdown)
-        (run_dir / "html" / f"{page.safe_name}.html").write_text(page.html)
-        _write_json(run_dir / "metrics" / f"{page.safe_name}.json", page.metrics)
+        (run_dir / "markdown" / f"{page.stem}.md").write_text(page.markdown)
+        (run_dir / "html" / f"{page.stem}.html").write_text(page.html)
+        _write_json(run_dir / "metrics" / f"{page.stem}.json", page.metrics)
         pages.append(
             {
                 "path": page.path,
-                "safe_name": page.safe_name,
+                "stem": page.stem,
                 "metrics": page.metrics,
             }
         )
@@ -434,7 +434,7 @@ def compare_runs(args: argparse.Namespace) -> int:
 
 
 def _artifact_path(run_dir: Path, page: dict[str, Any], kind: str, suffix: str) -> Path:
-    return run_dir / kind / f"{page['safe_name']}.{suffix}"
+    return run_dir / kind / f"{page['stem']}.{suffix}"
 
 
 def _pad_screenshots_to_match(expected: Path, actual: Path) -> None:
@@ -585,7 +585,7 @@ def _write_diff_index(
             "".join(f"<li>{m}</li>" for m in metric_items)
             or "<li>No tracked metric deltas</li>"
         )
-        card_id = f"card-{card['safe_name']}"
+        card_id = f"card-{card['stem']}"
         active_attr = " active" if index == 0 else ""
         options_html.append(
             f'<option value="{html_escape(card_id)}">'
@@ -810,13 +810,13 @@ def diff_report(args: argparse.Namespace) -> int:
             side = "baseline" if new is None else "current"
             print(f"skipping {path}: only present in {side}")
             continue
-        safe_name = new["safe_name"]
+        stem = new["stem"]
         expected_fragment = _artifact_path(base_dir, old, "html", "html").read_text()
         actual_fragment = _artifact_path(current_dir, new, "html", "html").read_text()
-        expected_page = pages_dir / f"{safe_name}-expected.html"
-        actual_page = pages_dir / f"{safe_name}-actual.html"
-        expected_png = shots_dir / f"{safe_name}-expected.png"
-        actual_png = shots_dir / f"{safe_name}-actual.png"
+        expected_page = pages_dir / f"{stem}-expected.html"
+        actual_page = pages_dir / f"{stem}-actual.html"
+        expected_png = shots_dir / f"{stem}-expected.png"
+        actual_png = shots_dir / f"{stem}-actual.png"
         _write_review_page(
             expected_page,
             title=f"expected: {path}",
@@ -847,7 +847,7 @@ def diff_report(args: argparse.Namespace) -> int:
         cards.append(
             {
                 "path": path,
-                "safe_name": safe_name,
+                "stem": stem,
                 "reasons": suspicious.get(path, []),
                 "metric_lines": _changed_metric_lines(old, new),
                 "expected_png": _rel(report_dir, expected_png),

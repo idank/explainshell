@@ -108,7 +108,14 @@ class ExtractorConfig:
     """Shared configuration for all extractors.
 
     ``run_dir``: single directory for all run artifacts (logs, debug
-    files, failed responses).
+    files, failed responses).  When set, debug artifacts land in
+    ``markdown/``, ``prompts/``, ``responses/`` subdirs keyed by an
+    encoded form of the input path (see ``repo_root``).
+
+    ``repo_root``: when set, per-page artifact filenames encode the
+    .gz file's repo-relative path (slashes replaced with ``__``) so
+    same-basename pages from different distros/sections don't collide.
+    When unset, falls back to the bare basename.
 
     ``debug``: when True, ``_finalize()`` writes full prompt/response
     artifacts (.md, .prompt.json, .response.txt) into *run_dir*.
@@ -117,6 +124,7 @@ class ExtractorConfig:
 
     model: str | None = None
     run_dir: str | None = None
+    repo_root: str | None = None
     debug: bool = False
 
 
