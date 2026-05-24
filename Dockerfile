@@ -1,4 +1,4 @@
-FROM python:2.7
+FROM python:3.11-slim
 
 RUN apt-get update \
   && apt-get install man-db -y \
@@ -15,4 +15,4 @@ ADD ./ /opt/webapp/
 WORKDIR /opt/webapp
 EXPOSE 5000
 
-CMD ["make", "serve"]
+CMD ["python", "runserver.py"]
