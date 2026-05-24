@@ -1,4 +1,5 @@
-import os, subprocess, re, logging, collections, urllib
+import os, subprocess, re, logging, collections
+from urllib.parse import urlencode
 
 from explainshell import config, store, errors
 
@@ -123,12 +124,6 @@ def _parsetext(lines):
         l = re.sub(_href, r'<a href="http://manpages.ubuntu.com/manpages/precise/en/man\2/\1.\2.html">', l)
         for lookfor, replacewith in _replacements:
             l = re.sub(lookfor, replacewith, l)
-        # confirm the line is valid utf8
-        lreplaced = l.decode('utf8', 'ignore').encode('utf8')
-        if lreplaced != l:
-            logger.error('line %r contains invalid utf8', l)
-            l = lreplaced
-            raise ValueError
         if l.startswith('<b>'): # section
             section = re.sub(_section, r'\1', l)
         else:
@@ -180,16 +175,16 @@ class manpage(object):
     def read(self):
         '''Read the content from a local manpage file and store it in usable formats
         on the class instance.'''
-        cmd = [config.MAN2HTML, urllib.urlencode({'local' : os.path.abspath(self.path)})]
+        cmd = [config.MAN2HTML, urlencode({'local' : os.path.abspath(self.path)})]
         logger.info('executing %r', ' '.join(cmd))
         self._text = subprocess.check_output(cmd, stderr=devnull, env=ENV)
         try:
-            self.synopsis = subprocess.check_output(['lexgrog', self.path], stderr=devnull).rstrip()
+            self.synopsis = subprocess.check_output(['lexgrog', self.path], stderr=devnull).decode('utf-8', 'ignore').rstrip()
         except subprocess.CalledProcessError:
             logger.error('failed to extract synopsis for %s', self.name)
 
     def parse(self):
-        self.paragraphs = list(_parsetext(self._text.splitlines()[7:-3]))
+        self.paragraphs = list(_parsetext(self._text.decode('utf-8', 'ignore').splitlines()[7:-3]))
         if not self.paragraphs:
             raise errors.EmptyManpage(self.shortpath)
         if self.synopsis:
@@ -199,7 +194,7 @@ class manpage(object):
             d = collections.OrderedDict()
             for prog, text in self.synopsis:
                 d.setdefault(text, []).append(prog)
-            text, progs = d.items()[0]
+            text, progs = list(d.items())[0]
             self.synopsis = text
             self.aliases.update(progs)
         self.aliases.remove(self.name)

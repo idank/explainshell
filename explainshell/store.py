@@ -33,7 +33,7 @@ class paragraph(object):
 
     @staticmethod
     def from_store(d):
-        p = paragraph(d.get('idx', 0), d['text'].encode('utf8'), d['section'], d['is_option'])
+        p = paragraph(d.get('idx', 0), d['text'], d['section'], d['is_option'])
         return p
 
     def to_store(self):
@@ -159,7 +159,7 @@ class manpage(object):
                 groups.setdefault(opt.argument, []).append(opt)
 
         # merge all the paragraphs under the same argument to a single string
-        for k, l in groups.iteritems():
+        for k, l in groups.items():
             groups[k] = '\n\n'.join([p.text for p in l])
 
         return groups
@@ -191,9 +191,7 @@ class manpage(object):
             paragraphs.append(pp)
 
         synopsis = d['synopsis']
-        if synopsis:
-            synopsis = synopsis.encode('utf8')
-        else:
+        if not synopsis:
             synopsis = helpconstants.NOSYNOPSIS
 
         return manpage(d['source'], d['name'], synopsis, paragraphs,
@@ -289,7 +287,7 @@ class store(object):
         logger.info('got %s', results)
         if section is not None:
             if len(results) > 1:
-                results.sort(key=lambda (oid, m): m.section == section, reverse=True)
+                results.sort(key=lambda x: x[1].section == section, reverse=True)
                 logger.info(r'sorting %r so %s is first', results, section)
             if not results[0][1].section == section:
                 raise errors.ProgramDoesNotExist(origname)

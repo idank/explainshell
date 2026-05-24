@@ -1,4 +1,5 @@
-import logging, itertools, urllib
+import logging, itertools
+from urllib.parse import quote_plus, urlencode
 import markupsafe
 
 from flask import render_template, request, redirect
@@ -36,12 +37,12 @@ def explain():
                                helptext=helptext,
                                getargs=command)
 
-    except errors.ProgramDoesNotExist, e:
+    except errors.ProgramDoesNotExist as e:
         return render_template('errors/missingmanpage.html', title='missing man page', e=e)
-    except bashlex.errors.ParsingError, e:
-        logger.warn('%r parsing error: %s', command, e.message)
+    except bashlex.errors.ParsingError as e:
+        logger.warn('%r parsing error: %s', command, str(e))
         return render_template('errors/parsingerror.html', title='parsing error!', e=e)
-    except NotImplementedError, e:
+    except NotImplementedError as e:
         logger.warn('not implemented error trying to explain %r', command)
         msg = ("the parser doesn't support %r constructs in the command you tried. you may "
                "<a href='https://github.com/idank/explainshell/issues'>report a "
@@ -66,12 +67,12 @@ def explainold(section, program):
     if 'args' in request.args:
         args = request.args['args']
         command = '%s %s' % (program, args)
-        return redirect('/explain?cmd=%s' % urllib.quote_plus(command), 301)
+        return redirect('/explain?cmd=%s' % quote_plus(command), 301)
     else:
         try:
             mp, suggestions = explainprogram(program, s)
             return render_template('options.html', mp=mp, suggestions=suggestions)
-        except errors.ProgramDoesNotExist, e:
+        except errors.ProgramDoesNotExist as e:
             return render_template('errors/missingmanpage.html', title='missing man page', e=e)
 
 def explainprogram(program, store):
@@ -80,14 +81,11 @@ def explainprogram(program, store):
     program = mp.namesection
 
     synopsis = mp.synopsis
-    if synopsis:
-        synopsis = synopsis.decode('utf-8')
-
     mp = {'source' : mp.source[:-3],
           'section' : mp.section,
           'program' : program,
           'synopsis' : synopsis,
-          'options' : [o.text.decode('utf-8') for o in mp.options]}
+          'options' : [o.text for o in mp.options]}
 
     suggestions = []
     for othermp in mps:
@@ -125,7 +123,6 @@ def explaincommand(command, store):
         helpclass = 'help-%d' % len(texttoid)
         text = m.text
         if text:
-            text = text.decode('utf-8')
             helpclass = texttoid.setdefault(text, helpclass)
         else:
             # unknowns in the shell group are possible when our parser left
@@ -148,7 +145,6 @@ def explaincommand(command, store):
             helpclass = 'help-%d' % len(texttoid)
             text = m.text
             if text:
-                text = text.decode('utf-8')
                 helpclass = texttoid.setdefault(text, helpclass)
             else:
                 commandclass += ' unknown'
@@ -186,7 +182,7 @@ def explaincommand(command, store):
             spaces = it.peek()['start'] - m['end']
         m['spaces'] = ' ' * spaces
 
-    helptext = sorted(texttoid.iteritems(), key=lambda (k, v): idstartpos[v])
+    helptext = sorted(texttoid.items(), key=lambda kv: idstartpos[kv[1]])
 
     return matches, helptext
 
@@ -253,7 +249,7 @@ def _substitutionmarkup(cmd):
     >>> _substitutionmarkup('cat <&3')
     '<a href="/explain?cmd=cat+%3C%263" title="Zoom in to nested command">cat <&3</a>'
     '''
-    encoded = urllib.urlencode({'cmd': cmd})
+    encoded = urlencode({'cmd': cmd})
     return ('<a href="/explain?{query}" title="Zoom in to nested command">{cmd}'
             '</a>').format(cmd=cmd, query=encoded)
 
