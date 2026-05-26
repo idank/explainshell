@@ -44,9 +44,9 @@ def explain():
         return render_template('errors/parsingerror.html', title='parsing error!', e=e)
     except NotImplementedError as e:
         logger.warn('not implemented error trying to explain %r', command)
-        msg = ("the parser doesn't support %r constructs in the command you tried. you may "
+        msg = ("the parser doesn't support %s constructs in the command you tried. you may "
                "<a href='https://github.com/idank/explainshell/issues'>report a "
-               "bug</a> to have this added, if one doesn't already exist.") % e.args[0]
+               "bug</a> to have this added, if one doesn't already exist.") % markupsafe.escape(str(e.args[0]))
 
         return render_template('errors/error.html', title='error!', message=msg)
     except:
@@ -251,7 +251,7 @@ def _substitutionmarkup(cmd):
     '''
     encoded = urlencode({'cmd': cmd})
     return ('<a href="/explain?{query}" title="Zoom in to nested command">{cmd}'
-            '</a>').format(cmd=cmd, query=encoded)
+            '</a>').format(cmd=markupsafe.escape(cmd), query=encoded)
 
 def _checkoverlaps(s, matches):
     explained = [None]*len(s)
