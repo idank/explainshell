@@ -165,3 +165,11 @@ Use `--batch <size>` instead of `--jobs` to route through the provider's batch A
 ### Markdown render eval
 
 A review-oriented harness for `mandoc -T markdown` changes lives in `tests/evals/render/`. It renders a vendored manpage corpus with two mandoc binaries, compares structural metrics, and builds a screenshot diff report with a draggable expected/actual slider. It is intentionally not part of `make tests-all` - run it manually when changing the markdown rendering path. See [tests/evals/render/README.md](tests/evals/render/README.md) for usage.
+
+## License
+
+The explainshell **code** is licensed under [GPLv3](LICENSE).
+
+The released **database** is a different matter: it contains the (near-)verbatim text of tens of thousands of man pages extracted from Ubuntu and Arch Linux packages. Each of those pages keeps its own upstream license (GPL, BSD, MIT, and many others) held by its respective authors - the GPLv3 above does **not** cover them, and I can't relicense them. My own contribution to the database (the selection, schema, and extracted option structure) is a thin layer on top of that content.
+
+If you want to redistribute the database (or a derivative of it), the permission has to come from the licenses of the individual man pages - do your own compliance review, and preserve the upstream authors' copyright notices as their licenses require. The `source` column tells you which distro/release each page came from.
