@@ -1,8 +1,9 @@
-import logging
 import itertools
+import logging
 import os
 import urllib
 
+import bashlex.errors
 import markupsafe
 from flask import (
     Blueprint,
@@ -13,9 +14,7 @@ from flask import (
     request,
 )
 
-import bashlex.errors
-
-from explainshell import matcher, errors, util, config
+from explainshell import config, errors, matcher, util
 from explainshell.web import get_distros, get_store, helpers
 from explainshell.web.markdown import render_markdown
 
@@ -300,7 +299,7 @@ def _handle_explain_cmd(url_distro, url_release):
         return render_template("errors/error.html", title="error!", message=msg)
     except Exception as error_msg:
         logger.error(error_msg)
-        logger.error("uncaught exception trying to explain %r", command, exc_info=True)
+        logger.exception("uncaught exception trying to explain %r", command)
         msg = "something went wrong... this was logged and will be checked"
         return render_template("errors/error.html", title="error!", message=msg)
 
@@ -641,6 +640,4 @@ def _substitution_markup(cmd, explain_prefix="/explain"):
     '<a href="/explain?cmd=cat+%3C%263" title="Zoom in to nested command">cat <&3</a>'
     """
     encoded = urllib.parse.urlencode({"cmd": cmd})
-    return (
-        '<a href="{prefix}?{query}" title="Zoom in to nested command">{cmd}</a>'
-    ).format(prefix=explain_prefix, cmd=cmd, query=encoded)
+    return f'<a href="{explain_prefix}?{encoded}" title="Zoom in to nested command">{cmd}</a>'

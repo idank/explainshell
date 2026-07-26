@@ -66,7 +66,7 @@ def _is_section_header(line: str, name: str) -> bool:
 
 def _is_any_section_header(line: str) -> bool:
     stripped = line.strip()
-    return stripped.startswith(".SH ") or stripped.startswith(".Sh ")
+    return stripped.startswith((".SH ", ".Sh "))
 
 
 def _extract_section(lines: list[str], section_name: str) -> list[str]:

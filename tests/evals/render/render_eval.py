@@ -13,13 +13,14 @@ import os
 import re
 import subprocess
 import sys
-from html import escape as html_escape
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from html import escape as html_escape
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 _HERE = Path(__file__).resolve()
 REPO_ROOT = _HERE.parents[3]
@@ -229,7 +230,7 @@ def render_run(args: argparse.Namespace) -> int:
             continue
         try:
             page = _render_page(mandoc_path, manpage)
-        except Exception as exc:  # noqa: BLE001 - report per-page render failures.
+        except Exception as exc:
             failures.append({"path": rel_path, "error": str(exc)})
             continue
         (run_dir / "markdown" / f"{page.stem}.md").write_text(page.markdown)

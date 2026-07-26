@@ -64,6 +64,7 @@ class CodexProvider:
             capture_output=True,
             text=True,
             timeout=CODEX_TIMEOUT_SECONDS,
+            check=False,
         )
 
         content, usage = _parse_jsonl(result.stdout)

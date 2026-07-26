@@ -15,7 +15,6 @@ import sqlite3
 import statistics
 import time
 
-
 # ---------------------------------------------------------------------------
 # The three query shapes exercised by /explain?cmd= that benefit from the
 # idx_mappings_src index:

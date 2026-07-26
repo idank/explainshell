@@ -56,7 +56,6 @@ import dotenv
 from pydantic import ValidationError
 
 from explainshell import config, manpage
-from explainshell.models import ExtractionMeta
 from explainshell.errors import ExtractionError, FailureReason, SkippedExtraction
 from explainshell.extraction.common import build_manpage_metadata, build_raw_manpage
 from explainshell.extraction.llm.prompt import SYSTEM_PROMPT
@@ -68,10 +67,10 @@ from explainshell.extraction.llm.providers import (
     make_provider,
 )
 from explainshell.extraction.llm.response import (
-    normalize_option_fields,
-    normalize_subcommands,
     dedup_ref_options,
     llm_option_to_store_option,
+    normalize_option_fields,
+    normalize_subcommands,
     process_llm_result,
 )
 from explainshell.extraction.llm.text import (
@@ -87,9 +86,10 @@ from explainshell.extraction.postprocess import postprocess
 from explainshell.extraction.types import (
     ExtractionResult,
     ExtractionStats,
-    ExtractorConfig,
     Extractor,
+    ExtractorConfig,
 )
+from explainshell.models import ExtractionMeta
 
 dotenv.load_dotenv()
 dotenv.load_dotenv(dotenv.find_dotenv(".env.example"))
@@ -542,8 +542,7 @@ class LLMExtractor:
                 rel = os.path.relpath(gz_path, self._repo_root)
             except ValueError:
                 rel = os.path.basename(gz_path)
-            if rel.endswith(".gz"):
-                rel = rel[:-3]
+            rel = rel.removesuffix(".gz")
             return rel.replace(os.sep, "__")
         return os.path.splitext(os.path.splitext(os.path.basename(gz_path))[0])[0]
 

@@ -3,9 +3,9 @@ import json
 
 import pytest
 
+from explainshell.db_check import check as db_check
 from explainshell.models import ParsedManpage, RawManpage
 from explainshell.store import Store
-from explainshell.db_check import check as db_check
 
 
 def _make_raw():

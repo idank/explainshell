@@ -32,8 +32,10 @@ def check(db_path: str) -> list[tuple[str, str]]:
             issues.append(
                 (
                     "error",
-                    f"malformed source path: {row['source']!r} "
-                    f"(manpage {row['name']!r})",
+                    (
+                        f"malformed source path: {row['source']!r} "
+                        f"(manpage {row['name']!r})"
+                    ),
                 )
             )
 
@@ -53,8 +55,10 @@ def check(db_path: str) -> list[tuple[str, str]]:
             issues.append(
                 (
                     "error",
-                    f"shadowed duplicate: {name}({section}) in {distro}/{release} "
-                    f"from both {seen[key]!r} and {source!r}",
+                    (
+                        f"shadowed duplicate: {name}({section}) in {distro}/{release} "
+                        f"from both {seen[key]!r} and {source!r}"
+                    ),
                 )
             )
         else:
@@ -69,8 +73,10 @@ def check(db_path: str) -> list[tuple[str, str]]:
         issues.append(
             (
                 "error",
-                f"orphaned mapping: src={row['src']!r} -> dst={row['dst']!r} "
-                f"(manpage does not exist)",
+                (
+                    f"orphaned mapping: src={row['src']!r} -> dst={row['dst']!r} "
+                    f"(manpage does not exist)"
+                ),
             )
         )
 
@@ -98,8 +104,10 @@ def check(db_path: str) -> list[tuple[str, str]]:
                 issues.append(
                     (
                         "warning",
-                        f"positional on flagged option: {row['name']!r} has "
-                        f"positional={positional!r} on option {flags}",
+                        (
+                            f"positional on flagged option: {row['name']!r} has "
+                            f"positional={positional!r} on option {flags}"
+                        ),
                     )
                 )
 
@@ -129,8 +137,10 @@ def check(db_path: str) -> list[tuple[str, str]]:
             issues.append(
                 (
                     "error",
-                    f"stale subcommand mapping: {src!r} -> {dst!r} "
-                    f"(parent {parent_name!r} does not exist)",
+                    (
+                        f"stale subcommand mapping: {src!r} -> {dst!r} "
+                        f"(parent {parent_name!r} does not exist)"
+                    ),
                 )
             )
         else:
@@ -139,9 +149,11 @@ def check(db_path: str) -> list[tuple[str, str]]:
                 issues.append(
                     (
                         "warning",
-                        f"stale subcommand mapping: {src!r} -> {dst!r} "
-                        f"(parent {parent_name!r} does not declare "
-                        f"{sub_name!r} in subcommands)",
+                        (
+                            f"stale subcommand mapping: {src!r} -> {dst!r} "
+                            f"(parent {parent_name!r} does not declare "
+                            f"{sub_name!r} in subcommands)"
+                        ),
                     )
                 )
 
@@ -154,8 +166,10 @@ def check(db_path: str) -> list[tuple[str, str]]:
         issues.append(
             (
                 "warning",
-                f"unreachable manpage: {row['name']!r} ({row['source']!r}) "
-                f"has no mappings",
+                (
+                    f"unreachable manpage: {row['name']!r} ({row['source']!r}) "
+                    f"has no mappings"
+                ),
             )
         )
 

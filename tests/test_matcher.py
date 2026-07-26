@@ -1,9 +1,9 @@
 import unittest
 
-import bashlex.errors
 import bashlex.ast
+import bashlex.errors
 
-from explainshell import help_constants, matcher, errors
+from explainshell import errors, help_constants, matcher
 from tests import helpers
 
 s = helpers.create_test_store()

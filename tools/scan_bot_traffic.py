@@ -272,7 +272,9 @@ def build_prompt(window: str, summary: dict[str, list[dict]]) -> str:
 
 def _which(binary: str) -> bool:
     return (
-        subprocess.run(["which", binary], capture_output=True, text=True).returncode
+        subprocess.run(
+            ["which", binary], capture_output=True, text=True, check=False
+        ).returncode
         == 0
     )
 
@@ -283,13 +285,15 @@ def run_agent(agent: str, prompt: str) -> str:
             raise SystemExit("codex CLI not found in PATH")
         cmd = ["codex", "exec", "--skip-git-repo-check", "-"]
         log.info("invoking %s ...", " ".join(cmd))
-        proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True)
+        proc = subprocess.run(
+            cmd, input=prompt, capture_output=True, text=True, check=False
+        )
     elif agent == "claude":
         if not _which("claude"):
             raise SystemExit("claude CLI not found in PATH")
         cmd = ["claude", "-p", prompt]
         log.info("invoking claude -p (prompt elided) ...")
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     else:
         raise SystemExit(f"unknown agent: {agent}")
 

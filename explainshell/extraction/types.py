@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
+from typing import Protocol, Self, runtime_checkable
 
 from explainshell.errors import FailureReason
 from explainshell.models import ParsedManpage, RawManpage
@@ -45,7 +45,7 @@ class ExtractionStats:
     # dedup_options in postprocessing.
     deduped_options: int = 0
 
-    def __iadd__(self, other: ExtractionStats) -> ExtractionStats:
+    def __iadd__(self, other: ExtractionStats) -> Self:
         """Accumulate numeric fields."""
         self.input_tokens += other.input_tokens
         self.output_tokens += other.output_tokens

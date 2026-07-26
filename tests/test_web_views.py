@@ -594,7 +594,7 @@ class TestExplainProgram(unittest.TestCase):
         self.store = create_test_store()
 
     def test_explain_program_returns_str_options(self):
-        mp, suggestions, *_ = explain_program("bar", self.store)
+        mp, _suggestions, *_ = explain_program("bar", self.store)
         self.assertEqual(mp["program"], "bar(1)")
         self.assertEqual(mp["synopsis"], "bar synopsis")
         self.assertEqual(mp["section"], "1")
@@ -607,12 +607,12 @@ class TestExplainProgram(unittest.TestCase):
             self.assertIsInstance(opt, str)
 
     def test_explain_program_no_synopsis(self):
-        mp, suggestions, *_ = explain_program("nosynopsis", self.store)
+        mp, _suggestions, *_ = explain_program("nosynopsis", self.store)
         # The Store replaces NULL synopsis with a placeholder string.
         self.assertEqual(mp["synopsis"], "no synopsis found")
 
     def test_explain_program_with_suggestions(self):
-        mp, suggestions, *_ = explain_program("dup", self.store)
+        _mp, suggestions, *_ = explain_program("dup", self.store)
         self.assertEqual(len(suggestions), 1)
         self.assertEqual(suggestions[0]["text"], "dup(2)")
         self.assertEqual(suggestions[0]["link"], "2/dup")

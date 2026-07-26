@@ -20,14 +20,14 @@ if str(REPO_ROOT) not in sys.path:
 
 __all__ = [
     "REPO_ROOT",
-    "_path_stem",
-    "_repo_relative",
+    "_format_delta",
+    "_get_metric",
     "_git_metadata",
-    "_read_corpus",
     "_load_summary",
     "_page_map",
-    "_get_metric",
-    "_format_delta",
+    "_path_stem",
+    "_read_corpus",
+    "_repo_relative",
     "_write_json",
 ]
 
@@ -49,8 +49,7 @@ def _path_stem(rel_path: str) -> str:
     `/` is replaced with `__` (no manpage filename in the corpus contains
     `__`, so the encoding stays reversible) and the `.gz` suffix is stripped.
     """
-    if rel_path.endswith(".gz"):
-        rel_path = rel_path[:-3]
+    rel_path = rel_path.removesuffix(".gz")
     return rel_path.replace("/", "__")
 
 
@@ -106,7 +105,7 @@ def _get_metric(page: dict[str, Any], key: str) -> int | float:
     return value
 
 
-def _format_delta(before: int | float, after: int | float) -> str:
+def _format_delta(before: float, after: float) -> str:
     delta = after - before
     if isinstance(before, float) or isinstance(after, float):
         return f"{before:.2f} -> {after:.2f} ({delta:+.2f})"

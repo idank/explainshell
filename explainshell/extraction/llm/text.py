@@ -51,6 +51,7 @@ def get_manpage_text(gz_path: str) -> str:
         capture_output=True,
         text=True,
         timeout=60,
+        check=False,
     )
     if result.returncode != 0 or not result.stdout.strip():
         raise ExtractionError(

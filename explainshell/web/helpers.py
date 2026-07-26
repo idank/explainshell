@@ -10,7 +10,7 @@ def suggestions(matches, command):
                 mid = f"{other_mp.name}.{other_mp.section}"
                 new_suggestions.append(
                     {
-                        "cmd": "".join([before, mid, after]),
+                        "cmd": f"{before}{mid}{after}",
                         "text": other_mp.name_section,
                     }
                 )

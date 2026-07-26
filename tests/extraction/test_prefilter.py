@@ -5,8 +5,8 @@ from unittest.mock import patch
 
 from explainshell.extraction.prefilter import (
     AlreadyStored,
-    Classifier,
     Classified,
+    Classifier,
     ContentDup,
     FilterSkip,
     SizeSkip,

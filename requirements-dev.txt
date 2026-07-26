@@ -1,7 +1,7 @@
 -r requirements.txt
 pytest>=9.0.3
 pytest-cov>=7.1.0
-ruff>=0.15.10
+ruff>=0.16.0
 python-dotenv>=1.2.2
 aiohttp>=3.13
 pillow>=12.1

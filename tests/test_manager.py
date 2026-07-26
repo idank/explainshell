@@ -16,26 +16,25 @@ from explainshell.extraction import ExtractorConfig
 from explainshell.extraction.report import (
     DbCounts,
     ExtractConfig,
-    ExtractSummary,
     ExtractionReport,
+    ExtractSummary,
     GitInfo,
 )
 from explainshell.extraction.types import (
     BatchResult,
+    ExtractionOutcome,
     ExtractionResult,
     ExtractionStats,
-    ExtractionOutcome,
 )
 from explainshell.manager import (
-    cli,
     _run_diff_db,
     _run_diff_extractors,
     _write_report,
+    cli,
 )
 from explainshell.models import ExtractionMeta, Option, ParsedManpage, RawManpage
 from explainshell.store import Store
 from explainshell.util import collect_gz_files, name_section
-
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -607,7 +606,7 @@ class TestSymlinkMapping(unittest.TestCase):
 
             self.assertEqual(result.exit_code, 0, result.output)
             # Only the canonical should be passed to run(), not the symlink.
-            (_, call_files), call_kwargs = mock_run.call_args
+            (_, call_files), _call_kwargs = mock_run.call_args
             self.assertEqual(call_files, [canonical])
             # Mapping inserted for symlink.
             result_store = Store(db_path, read_only=True)
@@ -2649,15 +2648,15 @@ class TestExtractionReport(unittest.TestCase):
             return json.load(f)
 
     def _make_report(self, **overrides):
-        defaults = dict(
-            timestamp="2026-03-30T12:00:00+00:00",
-            git=GitInfo(commit="abc123", commit_short="abc123", dirty=False),
-            config=ExtractConfig(mode="llm", model="openai/test-model"),
-            elapsed_seconds=1.0,
-            summary=ExtractSummary(succeeded=1, skipped=0, failed=0),
-            db_before=DbCounts(manpages=10, mappings=50),
-            db_after=DbCounts(manpages=11, mappings=55),
-        )
+        defaults = {
+            "timestamp": "2026-03-30T12:00:00+00:00",
+            "git": GitInfo(commit="abc123", commit_short="abc123", dirty=False),
+            "config": ExtractConfig(mode="llm", model="openai/test-model"),
+            "elapsed_seconds": 1.0,
+            "summary": ExtractSummary(succeeded=1, skipped=0, failed=0),
+            "db_before": DbCounts(manpages=10, mappings=50),
+            "db_after": DbCounts(manpages=11, mappings=55),
+        }
         defaults.update(overrides)
         return ExtractionReport(**defaults)
 
@@ -3001,9 +3000,11 @@ class TestThrowSitesTagged(unittest.TestCase):
             mock_subp.run.return_value = MagicMock(
                 returncode=1, stdout="", stderr="mandoc: parse error"
             )
-            with patch("os.path.isfile", return_value=True):
-                with self.assertRaises(ExtractionError) as cm:
-                    text_mod.get_manpage_text("/fake/path.gz")
+            with (
+                patch("os.path.isfile", return_value=True),
+                self.assertRaises(ExtractionError) as cm,
+            ):
+                text_mod.get_manpage_text("/fake/path.gz")
         self.assertEqual(cm.exception.reason_class, FailureReason.MANDOC_FAILED)
 
     def test_blacklisted_skip(self) -> None:
@@ -3015,9 +3016,11 @@ class TestThrowSitesTagged(unittest.TestCase):
         blacklisted = next(iter(ext_mod._BLACKLISTED_SOURCES))
         e = ext_mod.LLMExtractor.__new__(ext_mod.LLMExtractor)
 
-        with patch("explainshell.config.source_from_path", return_value=blacklisted):
-            with self.assertRaises(SkippedExtraction) as cm:
-                e.prepare("/fake/blacklisted.gz")
+        with (
+            patch("explainshell.config.source_from_path", return_value=blacklisted),
+            self.assertRaises(SkippedExtraction) as cm,
+        ):
+            e.prepare("/fake/blacklisted.gz")
         self.assertEqual(cm.exception.reason_class, FailureReason.BLACKLISTED)
 
     def test_classify_provider_error(self) -> None:

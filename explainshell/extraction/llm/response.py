@@ -20,7 +20,7 @@ def normalize_subcommands(basename: str, raw: list[str]) -> list[str]:
     present and deduplicates while preserving order.
     """
     prefix = f"{basename}-"
-    stripped = [s[len(prefix) :] if s.startswith(prefix) else s for s in raw]
+    stripped = [s.removeprefix(prefix) for s in raw]
     return list(dict.fromkeys(stripped))
 
 
@@ -67,11 +67,15 @@ def validate_llm_response(data: dict) -> None:
     """Raises ValueError if data is missing 'options' or options have wrong types."""
     if "options" not in data:
         raise ValueError("LLM response missing 'options' key")
+    # These stay ValueError rather than TypeError: they describe a malformed
+    # LLM payload, and callers convert ValueError into ExtractionError.
     if not isinstance(data["options"], list):
-        raise ValueError("'options' must be a list")
+        raise ValueError("'options' must be a list")  # noqa: TRY004
     for item in data["options"]:
         if not isinstance(item, dict):
-            raise ValueError(f"Each option must be a dict, got {type(item)}")
+            raise ValueError(  # noqa: TRY004
+                f"Each option must be a dict, got {type(item)}"
+            )
 
 
 def process_llm_result(content: str) -> tuple[dict, str]:
@@ -105,8 +109,7 @@ def extract_text_from_lines(
     selected: list[str] = []
     for i in range(start, end + 1):
         line = original_lines.get(i, "")
-        if line.startswith("> "):
-            line = line[2:]
+        line = line.removeprefix("> ")
         selected.append(line)
 
     if not selected:
@@ -216,9 +219,9 @@ def llm_option_to_store_option(
     nested_cmd = bool(raw.get("nested_cmd", False))
 
     if not isinstance(short, list):
-        raise ValueError(f"'short' must be a list, got {type(short)}")
+        raise ValueError(f"'short' must be a list, got {type(short)}")  # noqa: TRY004
     if not isinstance(long, list):
-        raise ValueError(f"'long' must be a list, got {type(long)}")
+        raise ValueError(f"'long' must be a list, got {type(long)}")  # noqa: TRY004
 
     lines = raw.get("lines")
     if not lines or not isinstance(lines, list) or len(lines) != 2:

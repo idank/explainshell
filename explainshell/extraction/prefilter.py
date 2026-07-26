@@ -15,7 +15,6 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Union
 
 from explainshell import config, models, store
 from explainshell.extraction import common
@@ -73,7 +72,7 @@ class ContentDup:
     canonical_source: str
 
 
-Decision = Union[Work, SizeSkip, AlreadyStored, FilterSkip, Symlink, ContentDup]
+Decision = Work | SizeSkip | AlreadyStored | FilterSkip | Symlink | ContentDup
 
 
 # ---------------------------------------------------------------------------

@@ -63,6 +63,7 @@ def resolve_dump_url(base_url):
         ["curl", "-sfL", f"{base_url}/current"],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode != 0:
         raise RuntimeError(f"Failed to fetch {base_url}/current")
@@ -81,6 +82,7 @@ def download_file(url, dest_path):
     tmp_path = dest_path + ".tmp"
     result = subprocess.run(
         ["curl", "-fL", "-o", tmp_path, url],
+        check=False,
     )
     if result.returncode != 0:
         if os.path.exists(tmp_path):
@@ -98,7 +100,7 @@ def decompress_zst(zst_path):
         logger.info("Already decompressed, skipping: %s", tsv_path)
         return tsv_path
     logger.info("Decompressing %s", zst_path)
-    result = subprocess.run(["zstd", "-d", "-k", zst_path])
+    result = subprocess.run(["zstd", "-d", "-k", zst_path], check=False)
     if result.returncode != 0:
         raise RuntimeError(f"Failed to decompress {zst_path}")
     return tsv_path
@@ -114,7 +116,10 @@ def parse_tsv(path):
 def cmd_download(args):
     """Download all dump files from manned.org."""
     for cmd in ["curl", "zstd"]:
-        if subprocess.run(["which", cmd], capture_output=True).returncode != 0:
+        if (
+            subprocess.run(["which", cmd], capture_output=True, check=False).returncode
+            != 0
+        ):
             logger.error("Required command '%s' not found. Please install it.", cmd)
             sys.exit(1)
 
@@ -132,7 +137,10 @@ def cmd_download(args):
 def cmd_extract(args):
     """Extract man pages from the downloaded dump files."""
     for cmd in ["zstd"]:
-        if subprocess.run(["which", cmd], capture_output=True).returncode != 0:
+        if (
+            subprocess.run(["which", cmd], capture_output=True, check=False).returncode
+            != 0
+        ):
             logger.error("Required command '%s' not found. Please install it.", cmd)
             sys.exit(1)
 
@@ -167,7 +175,7 @@ def cmd_extract(args):
         if distro in name.lower():
             distro_systems[sys_id] = (name, release, short)
     if not distro_systems:
-        available = sorted(set(name.lower() for name, _, _ in systems.values()))
+        available = sorted({name.lower() for name, _, _ in systems.values()})
         logger.error(
             "No systems found matching distro '%s'. Available: %s", distro, available
         )
@@ -177,7 +185,7 @@ def cmd_extract(args):
     release = args.release
     if release == "latest":
         # Pick the latest release by sorting version strings
-        releases = set(r for _, r, _ in distro_systems.values() if r)
+        releases = {r for _, r, _ in distro_systems.values() if r}
         if not releases:
             # Rolling-release distro (e.g. Arch Linux) — no versioned releases.
             # Use "latest" as a synthetic release label so the on-disk layout
@@ -186,7 +194,7 @@ def cmd_extract(args):
             release = "latest"
             logger.info("Rolling-release distro, using 'latest' as release label")
         else:
-            release = sorted(releases, key=parse_version)[-1]
+            release = max(releases, key=parse_version)
             logger.info("Auto-selected latest release: %s", release)
 
     matching_sys_ids = set()
@@ -195,7 +203,7 @@ def cmd_extract(args):
         if r == match_release:
             matching_sys_ids.add(sys_id)
     if not matching_sys_ids:
-        available = sorted(set(r for _, r, _ in distro_systems.values() if r))
+        available = sorted({r for _, r, _ in distro_systems.values() if r})
         logger.error(
             "No systems found for release '%s'. Available releases: %s",
             release,
@@ -312,6 +320,7 @@ def resolve_so_redirects(root: Path) -> dict[str, int]:
             with gzip.open(gz_path, "rt", encoding="utf-8", errors="replace") as f:
                 content = f.read()
         except Exception:
+            logger.debug("unreadable manpage %s, skipping", gz_path, exc_info=True)
             continue
         so_target = _parse_so_redirect(content)
         if so_target is None:
@@ -423,9 +432,7 @@ def _is_standard_manpath(filename):
     installed to standard paths over application-specific directories (e.g.
     fish, zsh).
     """
-    return filename.startswith("/usr/share/man/man") or filename.startswith(
-        "/usr/local/man/man"
-    )
+    return filename.startswith(("/usr/share/man/man", "/usr/local/man/man"))
 
 
 def _parse_date(s: str) -> tuple[int, int, int]:
@@ -624,6 +631,7 @@ def extract_contents(data_dir, content_to_manpages, content_to_released, output_
         try:
             line = line_bytes.decode("utf-8", errors="replace")
         except Exception:
+            logger.debug("undecodable dump line, skipping", exc_info=True)
             continue
 
         # Split on first two tabs only (content may contain tabs)
@@ -645,8 +653,7 @@ def extract_contents(data_dir, content_to_manpages, content_to_released, output_
             raw_content.replace("\\n", "\n").replace("\\t", "\t").replace("\\\\", "\\")
         )
         # Remove trailing newline from the TSV row itself
-        if raw_content.endswith("\n"):
-            raw_content = raw_content[:-1]
+        raw_content = raw_content.removesuffix("\n")
 
         # Write out as .gz files; first entry is the real file, rest are symlinks
         pages = content_to_manpages[content_id]
@@ -659,11 +666,13 @@ def extract_contents(data_dir, content_to_manpages, content_to_released, output_
         canonical_gz = f"{canonical_name}.{canonical_section}.gz"
         canonical_path = os.path.join(canonical_section_dir, canonical_gz)
         mtime = _released_to_epoch(content_to_released.get(content_id, (0, 0, 0)))
-        with open(canonical_path, "wb") as raw_file:
-            with gzip.GzipFile(
+        with (
+            open(canonical_path, "wb") as raw_file,
+            gzip.GzipFile(
                 filename="", fileobj=raw_file, mode="wb", mtime=mtime
-            ) as gz_file:
-                gz_file.write(raw_content.encode("utf-8"))
+            ) as gz_file,
+        ):
+            gz_file.write(raw_content.encode("utf-8"))
 
         for name, section in pages[1:]:
             section_dir = os.path.join(output_dir, section)

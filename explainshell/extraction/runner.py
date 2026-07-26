@@ -11,23 +11,24 @@ import logging
 import threading
 from collections.abc import Callable
 from typing import Any, Literal, NamedTuple
+
 from explainshell.errors import (
     ExtractionError,
     FailureReason,
     FatalExtractionError,
     SkippedExtraction,
 )
-from explainshell.util import fmt_tokens
 from explainshell.extraction.llm.extractor import BatchExtractor, PreparedFile
 from explainshell.extraction.llm.providers import BatchEntry, TokenUsage
 from explainshell.extraction.manifest import BatchManifestWriter
 from explainshell.extraction.types import (
     BatchResult,
-    Extractor,
     ExtractionOutcome,
     ExtractionResult,
     ExtractionStats,
+    Extractor,
 )
+from explainshell.util import fmt_tokens
 
 logger = logging.getLogger(__name__)
 

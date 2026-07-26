@@ -4,13 +4,11 @@ import os
 import unittest
 from unittest.mock import MagicMock, patch
 
-from tests.helpers import TESTS_DIR
-
 from explainshell.errors import ExtractionError
 from explainshell.extraction.llm.text import (
-    CHUNK_SIZE_CHARS,
     _BLACKLISTED_SECTIONS,
     _MAX_PREAMBLE_CHARS,
+    CHUNK_SIZE_CHARS,
     _build_preamble,
     chunk_text,
     clean_mandoc_artifacts,
@@ -18,7 +16,7 @@ from explainshell.extraction.llm.text import (
     get_manpage_text,
     number_lines,
 )
-
+from tests.helpers import TESTS_DIR
 
 # ---------------------------------------------------------------------------
 # TestGetManpageText
@@ -280,7 +278,7 @@ class TestNumberLines(unittest.TestCase):
 
     def test_preserves_empty_lines(self):
         text = "a\n\nb"
-        numbered, orig = number_lines(text)
+        _numbered, orig = number_lines(text)
         self.assertEqual(orig[1], "a")
         self.assertEqual(orig[2], "")
         self.assertEqual(orig[3], "b")
@@ -289,7 +287,7 @@ class TestNumberLines(unittest.TestCase):
         # 100 lines -> 3-digit width
         lines = [f"line{i}" for i in range(100)]
         text = "\n".join(lines)
-        numbered, orig = number_lines(text)
+        numbered, _orig = number_lines(text)
         first_line = numbered.split("\n")[0]
         # "  1| line0" — padded to 3 digits
         self.assertTrue(first_line.startswith("  1| "))
@@ -329,7 +327,7 @@ class TestFilterSections(unittest.TestCase):
             "## Known Issues\n\nIssue 1\n\n"
             "# OPTIONS\n\n**-v**"
         )
-        filtered, counts = filter_sections(text)
+        filtered, _counts = filter_sections(text)
         self.assertNotIn("BUGS", filtered)
         self.assertNotIn("Known Issues", filtered)
         self.assertIn("# OPTIONS", filtered)

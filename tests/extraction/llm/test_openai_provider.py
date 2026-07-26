@@ -14,9 +14,9 @@ from explainshell.errors import ExtractionError
 from explainshell.extraction.llm.providers import make_batch_provider, make_provider
 from explainshell.extraction.llm.providers.openai import (
     CANCEL_WAIT_TIMEOUT,
+    LLM_TIMEOUT_SECONDS,
     MAX_ERROR_BACKOFF,
     MAX_POLL_ERRORS,
-    LLM_TIMEOUT_SECONDS,
     OpenAIProvider,
 )
 

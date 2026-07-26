@@ -53,7 +53,7 @@ def _rewrite_target(target: str, src_dir: Path) -> str | None:
         # target name must exist as a real file in the source section
         # directory — that is verified by the caller.  Anything else
         # (absolute paths, ``../../`` chains) is considered broken.
-        if target.startswith("/") or target.startswith("../"):
+        if target.startswith(("/", "../")):
             return None
         return target
 

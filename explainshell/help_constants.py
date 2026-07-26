@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 NO_SYNOPSIS = 'no synopsis found'
 
 PIPELINES = '''A *pipeline* is a sequence of one or more commands separated by one of the control operators

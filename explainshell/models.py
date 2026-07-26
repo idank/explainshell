@@ -111,7 +111,7 @@ class ParsedManpage(BaseModel):
 
     @property
     def section(self):
-        name, section = util.name_section(os.path.basename(self.source)[:-3])
+        _name, section = util.name_section(os.path.basename(self.source)[:-3])
         return section
 
     @property

@@ -94,7 +94,7 @@ class TestParseJsonl(unittest.TestCase):
             '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}\n'
             "\n"
         )
-        content, usage = _parse_jsonl(jsonl)
+        _content, usage = _parse_jsonl(jsonl)
         assert usage.input_tokens == 10
         assert usage.output_tokens == 5
 

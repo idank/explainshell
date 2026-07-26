@@ -83,5 +83,3 @@ class SkippedExtraction(ExtractionError):
 
 class FatalExtractionError(ExtractionError):
     """Unrecoverable error that should abort the entire run."""
-
-    pass

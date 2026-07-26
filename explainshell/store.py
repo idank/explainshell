@@ -12,7 +12,7 @@ import zlib
 from collections.abc import Iterator
 from typing import NamedTuple
 
-from explainshell import errors, util, config
+from explainshell import config, errors, util
 from explainshell.models import ExtractionMeta, ParsedManpage, RawManpage
 
 logger = logging.getLogger(__name__)

@@ -1,10 +1,10 @@
 import collections
-import logging
 import itertools
+import logging
 from dataclasses import dataclass, field
 
-import bashlex.parser
 import bashlex.ast
+import bashlex.parser
 
 from explainshell import errors, help_constants, util
 
@@ -28,7 +28,7 @@ class MatchGroup:
     positional_index: int = field(default=0, repr=False)
 
     def __repr__(self):
-        return "<matchgroup %r with %d results>" % (self.name, len(self.results))
+        return f"<matchgroup {self.name!r} with {len(self.results)} results>"
 
 
 @dataclass(frozen=True, slots=True)
@@ -929,10 +929,8 @@ class Matcher(bashlex.ast.nodevisitor):
         """return a mapping of `MatchResult`s to their index among all
         matches, sorted by the start position of the `MatchResult`"""
         d = {}
-        i = 0
-        for result in sorted(self.all_matches, key=lambda mr: mr.start):
+        for i, result in enumerate(sorted(self.all_matches, key=lambda mr: mr.start)):
             d[result] = i
-            i += 1
         return d
 
     def _merge_adjacent(self, matches):

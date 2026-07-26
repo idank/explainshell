@@ -7,19 +7,17 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests.helpers import TESTS_DIR
-
 from explainshell import models
 from explainshell.errors import ExtractionError, SkippedExtraction
 from explainshell.extraction import ExtractorConfig
 from explainshell.extraction.llm.extractor import (
+    _BLACKLISTED_SOURCES,
     LLMExtractor,
     PreparedFile,
-    _BLACKLISTED_SOURCES,
 )
 from explainshell.extraction.llm.providers import TokenUsage
 from explainshell.extraction.llm.response import normalize_subcommands
-
+from tests.helpers import TESTS_DIR
 
 # ---------------------------------------------------------------------------
 # TestExtractIntegration
@@ -80,10 +78,12 @@ class TestExtractIntegration(unittest.TestCase):
         )
         ext = self._make_extractor()
         ext.provider.call.return_value = (
-            '{"dashless_opts": false, "options": ['
-            '{"short": ["-n"], "long": [], "has_argument": false, "lines": [1, 3]},'
-            '{"short": ["-e"], "long": [], "has_argument": false, "lines": [5, 7]}'
-            "]}",
+            (
+                '{"dashless_opts": false, "options": ['
+                '{"short": ["-n"], "long": [], "has_argument": false, "lines": [1, 3]},'
+                '{"short": ["-e"], "long": [], "has_argument": false, "lines": [5, 7]}'
+                "]}"
+            ),
             TokenUsage(0, 0),
         )
         result = ext.extract("dummy.1.gz")
@@ -120,10 +120,12 @@ class TestExtractIntegration(unittest.TestCase):
         mock_text.return_value = "**-v**\n\nVerbose."
         ext = self._make_extractor()
         ext.provider.call.return_value = (
-            '{"options": ['
-            '{"short": ["-x"], "long": [], "lines": "bad"},'
-            '{"short": ["-v"], "long": [], "has_argument": false, "lines": [1, 3]}'
-            "]}",
+            (
+                '{"options": ['
+                '{"short": ["-x"], "long": [], "lines": "bad"},'
+                '{"short": ["-v"], "long": [], "has_argument": false, "lines": [1, 3]}'
+                "]}"
+            ),
             TokenUsage(0, 0),
         )
         result = ext.extract("dummy.1.gz")

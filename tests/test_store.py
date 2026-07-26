@@ -515,7 +515,7 @@ class TestUpdateSubcommandMappingsLlm(_SubcommandTestBase):
             self._make_mp("python-socketio", extractor="llm"), _make_raw()
         )
 
-        mappings_added, parents = store.update_subcommand_mappings()
+        mappings_added, _parents = store.update_subcommand_mappings()
 
         srcs = {src for src, _ in mappings_added}
         assert "python socketio" not in srcs

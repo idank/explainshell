@@ -1,8 +1,8 @@
-import os
-import subprocess
-import re
-import logging
 import collections
+import logging
+import os
+import re
+import subprocess
 
 SPLIT_SYNOP = re.compile(r"([^ ]+) - (.*)$")
 
@@ -51,7 +51,7 @@ def _run_lexgrog(gz_path: str, name: str) -> str:
     if not os.path.isfile(gz_path):
         raise FileNotFoundError(f"manpage file not found: {gz_path}")
     proc = subprocess.run(
-        ["lexgrog", gz_path], capture_output=True, text=True, timeout=300
+        ["lexgrog", gz_path], capture_output=True, text=True, timeout=300, check=False
     )
     if proc.stderr:
         logger.warning("lexgrog stderr for %s: %s", name, proc.stderr)
@@ -79,7 +79,7 @@ def get_synopsis_and_aliases(gz_path: str) -> tuple[str | None, list[tuple[str, 
         d = collections.OrderedDict()
         for prog, text in parsed:
             d.setdefault(text, []).append(prog)
-        text, progs = list(dict(d).items())[0]
+        text, progs = next(iter(dict(d).items()))
         synopsis = text
         alias_names = set(progs)
         alias_names.discard(name)

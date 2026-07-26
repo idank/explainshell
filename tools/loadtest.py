@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import cProfile
 import io
 import json as _json
@@ -533,11 +534,9 @@ async def _slow_reader(
             )
         finally:
             if writer is not None:
-                try:
+                with contextlib.suppress(Exception):
                     writer.close()
                     await writer.wait_closed()
-                except Exception:
-                    pass
 
 
 async def _witness(

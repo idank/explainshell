@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 # Allow importing from tools/
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 from postprocess_ubuntu_archive import postprocess

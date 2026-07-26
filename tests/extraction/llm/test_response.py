@@ -5,11 +5,11 @@ import unittest
 from explainshell import models
 from explainshell.errors import ExtractionError
 from explainshell.extraction.llm.response import (
-    normalize_option_fields,
     dedup_options,
     dedup_ref_options,
     extract_text_from_lines,
     llm_option_to_store_option,
+    normalize_option_fields,
     parse_json_response,
     process_llm_result,
     sanitize_option_fields,
@@ -275,44 +275,44 @@ class TestLlmOptionToStoreOption(unittest.TestCase):
 
 class TestSanitizeOptionFields(unittest.TestCase):
     def test_argument_cleared_when_short_present(self):
-        short, long, ea, arg, nc, prefix = sanitize_option_fields(
+        _short, _long, _ea, arg, _nc, _prefix = sanitize_option_fields(
             ["-D"], [], True, "debugopts", False
         )
         self.assertIsNone(arg)
 
     def test_argument_cleared_when_long_present(self):
-        short, long, ea, arg, nc, prefix = sanitize_option_fields(
+        _short, _long, _ea, arg, _nc, _prefix = sanitize_option_fields(
             [], ["--type"], True, "c", False
         )
         self.assertIsNone(arg)
 
     def test_argument_kept_for_positional(self):
-        short, long, ea, arg, nc, prefix = sanitize_option_fields(
+        _short, _long, _ea, arg, _nc, _prefix = sanitize_option_fields(
             [], [], False, "FILE", False
         )
         self.assertEqual(arg, "FILE")
 
     def test_nested_cmd_forces_has_argument(self):
-        short, long, ea, arg, nc, prefix = sanitize_option_fields(
+        _short, _long, ea, _arg, _nc, _prefix = sanitize_option_fields(
             ["-exec"], [], False, None, True
         )
         self.assertTrue(ea)
 
     def test_prefix_kept_for_positional(self):
-        short, long, ea, arg, nc, prefix = sanitize_option_fields(
+        _short, _long, _ea, _arg, _nc, prefix = sanitize_option_fields(
             [], [], False, "server", False, "@"
         )
         self.assertEqual(prefix, "@")
 
     def test_prefix_cleared_without_positional(self):
-        short, long, ea, arg, nc, prefix = sanitize_option_fields(
+        _short, _long, _ea, _arg, _nc, prefix = sanitize_option_fields(
             ["-D"], [], True, None, False, "@"
         )
         self.assertIsNone(prefix)
 
     def test_prefix_cleared_when_positional_cleared(self):
         """positional cleared due to flags also drops the prefix"""
-        short, long, ea, arg, nc, prefix = sanitize_option_fields(
+        _short, _long, _ea, arg, _nc, prefix = sanitize_option_fields(
             ["-D"], [], True, "server", False, "@"
         )
         self.assertIsNone(arg)
@@ -320,7 +320,7 @@ class TestSanitizeOptionFields(unittest.TestCase):
 
     def test_prefix_outside_allowlist_dropped(self):
         for bad in ("<", "=", "%", "user@", "@@"):
-            short, long, ea, arg, nc, prefix = sanitize_option_fields(
+            _short, _long, _ea, _arg, _nc, prefix = sanitize_option_fields(
                 [], [], False, "FILE", False, bad
             )
             self.assertIsNone(prefix, f"prefix {bad!r} should have been dropped")

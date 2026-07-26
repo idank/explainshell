@@ -1,5 +1,5 @@
 tests:
-	pytest --doctest-modules tests/ explainshell/ --ignore=tests/e2e
+	pytest --doctest-modules tests/ explainshell/ --ignore=tests/e2e --ignore=tests/parse_conformance/corpus
 
 E2E_MANPAGES_25 := tests/e2e/manpages/ubuntu/26.04/1
 E2E_MANPAGES_24 := tests/e2e/manpages/ubuntu/24.04/1

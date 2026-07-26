@@ -2,9 +2,11 @@
 
 import threading
 import unittest
+from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 from explainshell.errors import ExtractionError, FatalExtractionError, SkippedExtraction
+from explainshell.extraction.llm.extractor import PreparedFile
 from explainshell.extraction.llm.providers import BatchResults, TokenUsage
 from explainshell.extraction.runner import (
     WorkItem,
@@ -14,7 +16,6 @@ from explainshell.extraction.runner import (
     run_batch_collected,
     run_collected,
 )
-from explainshell.extraction.llm.extractor import PreparedFile
 from explainshell.extraction.types import (
     ExtractionOutcome,
     ExtractionResult,
@@ -158,7 +159,7 @@ class TestRunBatchStatsContract(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        batch, files = run_batch_collected(
+        batch, _files = run_batch_collected(
             ext, [gz_a, gz_b], manifest=_NullBatchManifestWriter()
         )
 
@@ -604,7 +605,7 @@ class TestRunDispatcher(unittest.TestCase):
         result = _make_result("/fake/a.1.gz")
         ext.extract.return_value = result
 
-        batch, files = run_collected(ext, ["/fake/a.1.gz"])
+        batch, _files = run_collected(ext, ["/fake/a.1.gz"])
 
         ext.extract.assert_called_once_with("/fake/a.1.gz")
         self.assertEqual(batch.n_succeeded, 1)
@@ -615,7 +616,7 @@ class TestRunDispatcher(unittest.TestCase):
         result = _make_result("/fake/a.1.gz")
         ext.extract.return_value = result
 
-        batch, files = run_collected(ext, ["/fake/a.1.gz"], jobs=2)
+        batch, _files = run_collected(ext, ["/fake/a.1.gz"], jobs=2)
 
         ext.extract.assert_called_once_with("/fake/a.1.gz")
         self.assertEqual(batch.n_succeeded, 1)
@@ -628,7 +629,7 @@ class TestRunDispatcher(unittest.TestCase):
 
         class RecordingExecutor:
             # Fresh class per test invocation, so this list is also fresh.
-            instances: list["RecordingExecutor"] = []
+            instances: ClassVar[list["RecordingExecutor"]] = []
 
             def __init__(self, max_workers: int) -> None:
                 self._executor = real_executor(max_workers=max_workers)
@@ -801,7 +802,7 @@ class TestRunDispatcher(unittest.TestCase):
         )
         ext.batch_provider = bp
 
-        batch, files = run_collected(
+        batch, _files = run_collected(
             ext, [gz], batch_size=50, jobs=4, manifest=_NullBatchManifestWriter()
         )
 
@@ -1023,7 +1024,7 @@ class TestParallelBatchMode(unittest.TestCase):
         ext.batch_provider = bp
 
         # batch_size=1 → 2 batches. With jobs=2, both submitted.
-        batch, files = run_collected(
+        batch, _files = run_collected(
             ext, [gz_a, gz_b], batch_size=1, jobs=2, manifest=_NullBatchManifestWriter()
         )
 

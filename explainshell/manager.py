@@ -33,9 +33,9 @@ from explainshell import config, errors, store, util
 from explainshell.diff import format_diff
 from explainshell.extraction import (
     BatchResult,
-    ExtractorConfig,
     ExtractionOutcome,
     ExtractionResult,
+    ExtractorConfig,
     make_extractor,
     prefilter,
 )
@@ -43,8 +43,8 @@ from explainshell.extraction.manifest import FileBatchManifestWriter
 from explainshell.extraction.report import (
     DbCounts,
     ExtractConfig,
-    ExtractSummary,
     ExtractionReport,
+    ExtractSummary,
     FailureEntry,
     GitInfo,
     OptionCountSummary,
@@ -456,7 +456,8 @@ def _attach_run_log(log_level_str: str) -> str:
     import datetime
 
     log_level = getattr(logging, log_level_str.upper())
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    # local wall-clock on purpose — these dir names are read by humans
+    timestamp = datetime.datetime.now(tz=None).astimezone().strftime("%Y%m%d_%H%M%S")
     run_dir = os.path.join(_LOGS_ROOT, timestamp)
     os.makedirs(run_dir, exist_ok=True)
     log_path = os.path.join(run_dir, "run.log")

@@ -1,2 +1,18 @@
+# Vendored upstream repos used as parser-conformance corpora — not our code.
+extend-exclude = ["tests/parse_conformance/corpus", "tests/parse_conformance/runs"]
+
+[lint]
+# ruff 0.16 dropped E4/E7/E9 from the default rule set; keep them enabled since
+# the repo relied on them (e.g. the `noqa: E402` suppressions in the evals).
+extend-select = ["E4", "E7", "E9"]
+
+# Every `except Exception` in this repo is a deliberate resilience boundary that
+# logs and continues: per-file extraction failure isolation, batch cleanup,
+# best-effort git metadata, markdown fallback, loadtest measurement. Narrowing
+# them would turn an unanticipated error into an aborted run instead of a
+# recorded FAILED entry. S110/S112 stay enabled, so a silently swallowed
+# exception is still caught.
+ignore = ["BLE001"]
+
 [format]
 exclude = ["explainshell/help_constants.py"]
