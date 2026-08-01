@@ -889,6 +889,19 @@ class test_matcher(unittest.TestCase):
         self.assertEqual(groups[0].results, shellresults)
         self.assertEqual(groups[1].results, matchresults)
 
+        cmd = "bar;#a comment"
+        shellresults = [
+            MR(3, 4, help_constants.OPSEMICOLON, ";"),
+            MR(4, 14, help_constants.COMMENT, "#a comment"),
+        ]
+        matchresults = [MR(0, 3, "bar synopsis", "bar")]
+
+        m = matcher.Matcher(cmd, s)
+        groups = m.match()
+        self.assertEqual(len(groups), 2)
+        self.assertEqual(groups[0].results, shellresults)
+        self.assertEqual(groups[1].results, matchresults)
+
         cmd = "# just a comment"
 
         shellresults = [MR(0, 16, help_constants.COMMENT, "# just a comment")]
