@@ -184,14 +184,13 @@ class Store:
         # mapping keys. Only interpret a suffix as a section after the exact
         # command lookup misses.
         if not mapping_rows and name != ".":
-            name, separator, section = name.rpartition(".")
+            head, separator, tail = name.rpartition(".")
             if separator:
+                name, section = head, tail
                 logger.debug("looking up manpage in mappings with src %r", name)
                 mapping_rows = self._conn.execute(
                     "SELECT dst, score FROM mappings WHERE src = ?", (name,)
                 ).fetchall()
-            else:
-                section = None
 
         if not mapping_rows:
             raise errors.ProgramDoesNotExist(name)

@@ -151,6 +151,17 @@ class TestFindManpageNotFound:
         with pytest.raises(errors.ProgramDoesNotExist):
             store.find_man_page("nosuchprogram")
 
+    def test_unknown_name_is_reported(self, store):
+        """The raised error names the program, even without a dotted section."""
+        with pytest.raises(errors.ProgramDoesNotExist) as excinfo:
+            store.find_man_page("nosuchprogram")
+        assert excinfo.value.args[0] == "nosuchprogram"
+
+    def test_unknown_dotted_name_is_reported(self, store):
+        with pytest.raises(errors.ProgramDoesNotExist) as excinfo:
+            store.find_man_page("nosuchprogram.1")
+        assert excinfo.value.args[0] == "nosuchprogram"
+
     def test_dot_command(self, store):
         """The '.' command (source) should be looked up without splitting on dot."""
         mp = ParsedManpage(
