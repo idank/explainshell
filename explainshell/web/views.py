@@ -637,7 +637,7 @@ def _substitution_markup(cmd, explain_prefix="/explain"):
     >>> _substitution_markup('foo')
     '<a href="/explain?cmd=foo" title="Zoom in to nested command">foo</a>'
     >>> _substitution_markup('cat <&3')
-    '<a href="/explain?cmd=cat+%3C%263" title="Zoom in to nested command">cat <&3</a>'
+    '<a href="/explain?cmd=cat+%3C%263" title="Zoom in to nested command">cat &lt;&amp;3</a>'
     """
     encoded = urllib.parse.urlencode({"cmd": cmd})
-    return f'<a href="{explain_prefix}?{encoded}" title="Zoom in to nested command">{cmd}</a>'
+    return f'<a href="{explain_prefix}?{encoded}" title="Zoom in to nested command">{markupsafe.escape(cmd)}</a>'
