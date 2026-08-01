@@ -166,6 +166,20 @@ Use `--batch <size>` instead of `--jobs` to route through the provider's batch A
 
 A review-oriented harness for `mandoc -T markdown` changes lives in `tests/evals/render/`. It renders a vendored manpage corpus with two mandoc binaries, compares structural metrics, and builds a screenshot diff report with a draggable expected/actual slider. It is intentionally not part of `make tests-all` - run it manually when changing the markdown rendering path. See [tests/evals/render/README.md](tests/evals/render/README.md) for usage.
 
+## Thanks
+
+Thanks to the following companies for including explainshell in their open source programs:
+
+<p align="center">
+  <a href="https://claude.com/contact-sales/claude-for-oss"><picture><source media="(prefers-color-scheme: dark)" srcset="https://api.iconify.design/simple-icons/anthropic.svg?color=%23ffffff&height=56"><img src="https://api.iconify.design/simple-icons/anthropic.svg?color=%23191919&height=56" alt="Anthropic" height="56"></picture></a>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://www.datadoghq.com/partner/open-source/"><picture><source media="(prefers-color-scheme: dark)" srcset="https://api.iconify.design/simple-icons/datadog.svg?color=%239b72d0&height=56"><img src="https://api.iconify.design/simple-icons/datadog.svg?color=%23632ca6&height=56" alt="Datadog" height="56"></picture></a>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://www.digitalocean.com/open-source"><img src="https://api.iconify.design/simple-icons/digitalocean.svg?color=%230080ff&height=56" alt="DigitalOcean" height="56"></a>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://openai.com/form/codex-for-oss/"><picture><source media="(prefers-color-scheme: dark)" srcset="https://api.iconify.design/simple-icons/openai.svg?color=%23ffffff&height=56"><img src="https://api.iconify.design/simple-icons/openai.svg?color=%23412991&height=56" alt="OpenAI" height="56"></picture></a>
+</p>
+
 ## License
 
 The explainshell **code** is licensed under [GPLv3](LICENSE).
