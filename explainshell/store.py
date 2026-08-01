@@ -151,8 +151,10 @@ class Store:
     def find_man_page(
         self, name: str, distro: str | None = None, release: str | None = None
     ) -> list[ParsedManpage]:
-        """find a man page by its name, everything following the last dot (.) in name,
-        is taken as the section of the man page
+        """Find a man page by name.
+
+        An exact mapping takes precedence. When there is no exact mapping,
+        everything following the last dot (.) is taken as the man page section.
 
         we return the man page found with the highest score, and a list of
         suggestions that also matched the given name (only the first item
@@ -171,20 +173,25 @@ class Store:
             logger.debug("returning %s", m)
             return [m]
 
-        section = None
         orig_name = name
-
-        # don't try to look for a section if it's . (source)
-        if name != ".":
-            splitted = name.rsplit(".", 1)
-            name = splitted[0]
-            if len(splitted) > 1:
-                section = splitted[1]
-
         logger.debug("looking up manpage in mappings with src %r", name)
         mapping_rows = self._conn.execute(
             "SELECT dst, score FROM mappings WHERE src = ?", (name,)
         ).fetchall()
+
+        section = None
+        # Dotted command names (for example, ``systemd.exec``) are valid
+        # mapping keys. Only interpret a suffix as a section after the exact
+        # command lookup misses.
+        if not mapping_rows and name != ".":
+            name, separator, section = name.rpartition(".")
+            if separator:
+                logger.debug("looking up manpage in mappings with src %r", name)
+                mapping_rows = self._conn.execute(
+                    "SELECT dst, score FROM mappings WHERE src = ?", (name,)
+                ).fetchall()
+            else:
+                section = None
 
         if not mapping_rows:
             raise errors.ProgramDoesNotExist(name)
@@ -607,11 +614,16 @@ class Store:
                         parents[parent_name] = parent_source
 
         # Delete all existing subcommand mappings and re-insert the valid set
-        # in a single transaction.  Exclude alias mappings where src matches
-        # the manpage name (e.g. "pg_autoctl activate" whose name has a space).
+        # in a single transaction. Keep canonical mappings for multiword
+        # manpage names (e.g. "pg_autoctl activate") only when they point to
+        # that manpage itself.
         deleted = self._conn.execute(
             "DELETE FROM mappings WHERE src LIKE '% %' "
-            "AND src NOT IN (SELECT name FROM parsed_manpages WHERE name LIKE '% %')"
+            "AND NOT EXISTS ("
+            "SELECT 1 FROM parsed_manpages "
+            "WHERE parsed_manpages.source = mappings.dst "
+            "AND parsed_manpages.name = mappings.src"
+            ")"
         ).rowcount
 
         mappings_to_add = sorted(valid_mappings)
