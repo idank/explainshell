@@ -83,6 +83,15 @@ class TestExplainRouter(unittest.TestCase):
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b"bar", rv.data)
 
+    def test_command_substitution_escapes_nested_command(self):
+        rv = self.client.get(
+            "/explain",
+            query_string={"cmd": "withargs $(printf '<img src=x onerror=alert(1)>')"},
+        )
+        self.assertEqual(rv.status_code, 200)
+        self.assertNotIn(b"<img src=x onerror=alert(1)>", rv.data)
+        self.assertIn(b"&lt;img src=x onerror=alert(1)&gt;", rv.data)
+
     def test_explain_no_cmd_redirects(self):
         rv = self.client.get("/explain")
         self.assertEqual(rv.status_code, 302)
