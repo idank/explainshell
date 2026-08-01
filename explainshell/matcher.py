@@ -909,8 +909,10 @@ class Matcher(bashlex.ast.nodevisitor):
                 parsed[i] = True
 
             # the parser ignores comments but we can use a trick to see if this
-            # starts a comment and is beyond the ending index of the parsed
-            # portion of the input
+            # starts a comment and is at or beyond the ending index of the
+            # parsed portion of the input. pos[1] is exclusive, so a comment
+            # butting right against the parsed portion (e.g. 'bar;#c') starts
+            # exactly at it
             if (not self.ast or i >= self.ast.pos[1]) and c == "#":
                 comment = MatchResult(
                     i, len(parsed), help_constants.COMMENT, None, {"kind": "comment"}
