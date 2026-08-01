@@ -86,6 +86,13 @@ class TestFindManpageScoring:
 
 
 class TestFindManpageSection:
+    def test_dotted_command_uses_exact_mapping_before_section(self, store):
+        mp = _make_manpage("systemd.exec", "5")
+        store.add_manpage(mp, _make_raw())
+
+        assert store.find_man_page("systemd.exec")[0].source == mp.source
+        assert store.find_man_page("systemd.exec.5")[0].source == mp.source
+
     def test_section_filter(self, store):
         """Specifying a section should return that section first."""
         mp1 = _make_manpage("printf", "1", aliases=[("printf", 10)])
@@ -549,6 +556,23 @@ class TestUpdateSubcommandMappingsLlm(_SubcommandTestBase):
         all_mappings = store.mappings()
         subcmd = [(s, d) for s, d in all_mappings if " " in s]
         assert len(subcmd) == len(set(subcmd))
+
+    def test_rerun_replaces_subcommand_mapping_with_multiword_name_collision(
+        self, store
+    ):
+        """A real multiword manpage must not preserve a stale subcommand row."""
+        store.add_manpage(
+            self._make_mp("foo", extractor="llm", subcommands=["bar"]),
+            _make_raw(),
+        )
+        child = self._make_mp("foo-bar", extractor="llm")
+        store.add_manpage(child, _make_raw())
+        store.add_manpage(self._make_mp("foo bar", extractor="llm"), _make_raw())
+
+        store.update_subcommand_mappings()
+        mappings_added, _ = store.update_subcommand_mappings()
+
+        assert mappings_added == [("foo bar", child.source)]
 
     def test_removes_stale_mappings(self, store):
         """Reconciliation removes subcommand mappings no longer declared by parent."""
