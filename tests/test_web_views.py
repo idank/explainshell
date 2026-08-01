@@ -92,6 +92,16 @@ class TestExplainRouter(unittest.TestCase):
         self.assertNotIn(b"<img src=x onerror=alert(1)>", rv.data)
         self.assertIn(b"&lt;img src=x onerror=alert(1)&gt;", rv.data)
 
+    def test_command_substitution_escapes_explain_prefix(self):
+        """The release segment is unvalidated, so it must not escape the href."""
+        rv = self.client.get(
+            '/explain/ubuntu/"onmouseover=alert(1) x="',
+            query_string={"cmd": "withargs $(echo hi)"},
+        )
+        self.assertEqual(rv.status_code, 200)
+        self.assertNotIn(b'"onmouseover=alert(1)', rv.data)
+        self.assertIn(b"&#34;onmouseover=alert(1)", rv.data)
+
     def test_explain_no_cmd_redirects(self):
         rv = self.client.get("/explain")
         self.assertEqual(rv.status_code, 302)

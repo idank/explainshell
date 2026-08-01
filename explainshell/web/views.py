@@ -616,7 +616,7 @@ def format_match(d, m, expansions, explain_prefix="/explain"):
             s = m.match[rel_start:rel_end]
 
             if kind == "substitution":
-                content = markupsafe.Markup(_substitution_markup(s, explain_prefix))
+                content = _substitution_markup(s, explain_prefix)
             else:
                 content = s
 
@@ -632,12 +632,23 @@ def format_match(d, m, expansions, explain_prefix="/explain"):
     d["match"] = expanded_match
 
 
-def _substitution_markup(cmd, explain_prefix="/explain"):
-    """
+def _substitution_markup(
+    cmd: str, explain_prefix: str = "/explain"
+) -> markupsafe.Markup:
+    """Build the link shown for a nested command inside a substitution.
+
+    Every interpolated value is escaped. ``explain_prefix`` is derived from
+    the request path by `_explain_prefix`, and its release segment is not
+    validated, so it must not be treated as trusted markup either.
+
     >>> _substitution_markup('foo')
-    '<a href="/explain?cmd=foo" title="Zoom in to nested command">foo</a>'
+    Markup('<a href="/explain?cmd=foo" title="Zoom in to nested command">foo</a>')
     >>> _substitution_markup('cat <&3')
-    '<a href="/explain?cmd=cat+%3C%263" title="Zoom in to nested command">cat &lt;&amp;3</a>'
+    Markup('<a href="/explain?cmd=cat+%3C%263" title="Zoom in to nested command">cat &lt;&amp;3</a>')
+    >>> _substitution_markup('ls', '/explain/ubuntu/"onmouseover=alert(1) x="')
+    Markup('<a href="/explain/ubuntu/&#34;onmouseover=alert(1) x=&#34;?cmd=ls" title="Zoom in to nested command">ls</a>')
     """
     encoded = urllib.parse.urlencode({"cmd": cmd})
-    return f'<a href="{explain_prefix}?{encoded}" title="Zoom in to nested command">{markupsafe.escape(cmd)}</a>'
+    return markupsafe.Markup(
+        '<a href="{prefix}?{query}" title="Zoom in to nested command">{cmd}</a>'
+    ).format(prefix=explain_prefix, query=encoded, cmd=cmd)
