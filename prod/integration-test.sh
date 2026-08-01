@@ -6,7 +6,7 @@
 #                  canned response.
 #
 # The two paths are distinguished by the Cache-Control max-age value:
-# Flask emits max-age=604800 (views.py:_EXPLAIN_CACHE_CONTROL), botshed
+# Flask emits max-age=300 (views.py:_EXPLAIN_CACHE_CONTROL), botshed
 # emits max-age=86400 (module.go ServeHTTP).
 #
 # Usage: prod/integration-test.sh [image-tag]
@@ -62,8 +62,8 @@ hdrs=$(curl -sS -D- -o /dev/null "http://localhost:$PORT/explain?cmd=ls")
 status=$(echo "$hdrs" | head -1 | awk '{print $2}')
 if [ "$status" != "200" ]; then
   echo "    FAIL: status=$status"; fail=1
-elif ! echo "$hdrs" | grep -i '^cache-control' | grep -q 'max-age=604800'; then
-  echo "    FAIL: expected Flask cache header (max-age=604800)"
+elif ! echo "$hdrs" | grep -i '^cache-control' | grep -q 'max-age=300'; then
+  echo "    FAIL: expected Flask cache header (max-age=300)"
   echo "$hdrs" | sed 's/^/      /'
   fail=1
 else

@@ -100,6 +100,9 @@ def inject_distros():
 
 @bp.route("/")
 def index():
+    not_modified = _not_modified_if_fresh()
+    if not_modified is not None:
+        return not_modified
     return _cacheable_explain_response(render_template("index.html"))
 
 
@@ -256,6 +259,10 @@ def _handle_explain_cmd(url_distro, url_release):
             "errors/error.html", title="parsing error!", message="no newlines please"
         )
 
+    not_modified = _not_modified_if_fresh()
+    if not_modified is not None:
+        return not_modified
+
     prefix = _explain_prefix(url_distro, url_release)
     if url_distro:
         # Explicit URL distro — strict scoping, no fallback.
@@ -335,6 +342,10 @@ def _handle_explain_program(section, program, url_distro, url_release):
     if section is not None:
         program = f"{program}.{section}"
 
+    not_modified = _not_modified_if_fresh()
+    if not_modified is not None:
+        return not_modified
+
     if url_distro:
         distros_to_try = [(url_distro, url_release)]
     else:
@@ -369,32 +380,72 @@ def _handle_explain_program(section, program, url_distro, url_release):
     )
 
 
-# 7 days for both browser and CDN, with a 1-day grace window for
-# stale-while-revalidate so Cloudflare can serve slightly-stale HTML
-# while refreshing in the background.
-_EXPLAIN_CACHE_CONTROL = (
-    "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400"
-)
+# 5 minutes in the browser, 7 days at the CDN, so a fix reaches clients
+# within minutes instead of being pinned in their cache for a week. The
+# ETag flips on every deploy, so the revalidations this costs are answered
+# with a 304 short-circuit before any rendering work (see
+# `_not_modified_if_fresh`).
+#
+# No stale-while-revalidate: it is not scopable to shared caches, so a grace
+# window here would let browsers keep serving the stale copy we just
+# shortened max-age to get rid of. Worth reintroducing alongside a
+# Cloudflare cache rule for HTML, which today bypasses /explain entirely.
+_EXPLAIN_CACHE_CONTROL = "public, max-age=300, s-maxage=604800"
+
+
+def _explain_etag() -> str | None:
+    """Return the ETag for cacheable explain responses, or None in DEBUG.
+
+    ``<db_sha256[:16]>-<app_version>`` — two deploy-wide constants, so it
+    flips on any DB rebuild or code change and stays stable otherwise. It
+    deliberately does not depend on the request: caches key on the URL and
+    only use the ETag to validate that key, so one value per deploy is
+    enough to tell a client whether its copy is current.
+    """
+    if current_app.config.get("DEBUG"):
+        return None
+    db_sha = current_app.config.get("DB_SHA256", "local")
+    app_ver = current_app.config.get("APP_VERSION", "local")
+    return f"{db_sha[:16]}-{app_ver}"
+
+
+def _not_modified_if_fresh():
+    """Return a 304 when the client's cached copy is current, else None.
+
+    Because the ETag is request-independent, this can run before the page
+    is built — a match means the render would be byte-identical to what the
+    client already holds, so the parse, matcher walk, DB lookups and
+    template render are all skipped. Without it a revalidation costs the
+    same CPU as a miss and only saves bandwidth.
+
+    Only responses from `_cacheable_explain_response` carry an ETag, so a
+    validator can only have come from a cacheable 200 for this same URL;
+    error pages stay uncached and unaffected.
+    """
+    etag = _explain_etag()
+    if etag is None or not request.if_none_match.contains_weak(etag):
+        return None
+    response = current_app.response_class(status=304)
+    response.set_etag(etag, weak=True)
+    response.headers["Cache-Control"] = _EXPLAIN_CACHE_CONTROL
+    response.headers["Vary"] = "Accept-Encoding"
+    return response
 
 
 def _cacheable_explain_response(body: str):
     """Wrap *body* in a Response with ETag + Cache-Control headers.
 
-    The ETag is ``<db_sha256[:16]>-<app_version>`` — two deploy-wide
-    constants, so it flips on any DB rebuild or code change and stays
-    stable otherwise. Error paths don't go through this helper; they
-    stay uncached.
+    Error paths don't go through this helper; they stay uncached.
 
     ``Vary: Accept-Encoding`` is set explicitly: we never emit
     ``Set-Cookie`` and don't use Flask sessions, so cookies must not
     enter CF's cache key.
     """
-    if current_app.config.get("DEBUG"):
+    etag = _explain_etag()
+    if etag is None:
         return make_response(body)
     response = make_response(body)
-    db_sha = current_app.config.get("DB_SHA256", "local")
-    app_ver = current_app.config.get("APP_VERSION", "local")
-    response.set_etag(f"{db_sha[:16]}-{app_ver}", weak=True)
+    response.set_etag(etag, weak=True)
     response.headers["Cache-Control"] = _EXPLAIN_CACHE_CONTROL
     response.headers["Vary"] = "Accept-Encoding"
     response.make_conditional(request)

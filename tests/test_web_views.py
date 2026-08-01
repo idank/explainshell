@@ -1,5 +1,6 @@
 import datetime
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from explainshell.caching_store import CachingStore
@@ -413,9 +414,7 @@ class TestExplainCacheHeaders(unittest.TestCase):
         self.client = self.app.test_client()
 
     _EXPECTED_ETAG = 'W/"abcdef0123456789-deadbeef"'
-    _EXPECTED_CC = (
-        "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400"
-    )
+    _EXPECTED_CC = "public, max-age=300, s-maxage=604800"
 
     def test_manpage_view_sets_etag_and_cache_control(self):
         rv = self.client.get("/explain/bar")
@@ -431,6 +430,57 @@ class TestExplainCacheHeaders(unittest.TestCase):
         self.assertEqual(rv.headers.get("ETag"), self._EXPECTED_ETAG)
         self.assertEqual(rv.headers.get("Cache-Control"), self._EXPECTED_CC)
         self.assertEqual(rv.headers.get("Vary"), "Accept-Encoding")
+
+    def test_browser_lifetime_is_shorter_than_cdn(self):
+        """Browsers revalidate quickly so a deploy reaches them within minutes.
+
+        The CDN keeps the long lifetime, and no stale-while-revalidate grace
+        window: it applies to private caches too, which would undo the short
+        browser max-age.
+        """
+        cc = self.client.get("/explain?cmd=bar+-a").headers["Cache-Control"]
+        directives = dict(
+            part.split("=", 1)
+            for part in (p.strip() for p in cc.split(","))
+            if "=" in part
+        )
+        self.assertLess(int(directives["max-age"]), int(directives["s-maxage"]))
+        self.assertLessEqual(int(directives["max-age"]), 600)
+        self.assertNotIn("stale-while-revalidate", cc)
+
+    def test_if_none_match_skips_rendering(self):
+        """A revalidation must cost nothing but the header check.
+
+        The ETag is deploy-wide, so a match is decided before the page is
+        built; if the matcher still ran, a 304 would cost as much CPU as a
+        miss and only save bandwidth.
+        """
+        etag = self.client.get("/explain?cmd=bar+-a").headers["ETag"]
+        with unittest.mock.patch(
+            "explainshell.web.views.explain_cmd",
+            side_effect=AssertionError("rendered despite a fresh ETag"),
+        ) as explain:
+            rv = self.client.get("/explain?cmd=bar+-a", headers={"If-None-Match": etag})
+        self.assertEqual(rv.status_code, 304)
+        explain.assert_not_called()
+
+    def test_if_none_match_skips_rendering_for_program(self):
+        etag = self.client.get("/explain/bar").headers["ETag"]
+        with unittest.mock.patch(
+            "explainshell.web.views.explain_program",
+            side_effect=AssertionError("rendered despite a fresh ETag"),
+        ) as explain:
+            rv = self.client.get("/explain/bar", headers={"If-None-Match": etag})
+        self.assertEqual(rv.status_code, 304)
+        explain.assert_not_called()
+
+    def test_stale_etag_still_renders(self):
+        """A validator from an older deploy must not short-circuit."""
+        rv = self.client.get(
+            "/explain?cmd=bar+-a", headers={"If-None-Match": 'W/"stale-etag"'}
+        )
+        self.assertEqual(rv.status_code, 200)
+        self.assertEqual(rv.headers.get("ETag"), self._EXPECTED_ETAG)
 
     def test_if_none_match_returns_304(self):
         etag = self.client.get("/explain/bar").headers["ETag"]
