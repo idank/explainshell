@@ -911,7 +911,7 @@ class Matcher(bashlex.ast.nodevisitor):
             # the parser ignores comments but we can use a trick to see if this
             # starts a comment and is beyond the ending index of the parsed
             # portion of the input
-            if (not self.ast or i > self.ast.pos[1]) and c == "#":
+            if (not self.ast or i >= self.ast.pos[1]) and c == "#":
                 comment = MatchResult(
                     i, len(parsed), help_constants.COMMENT, None, {"kind": "comment"}
                 )
