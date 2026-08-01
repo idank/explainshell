@@ -31,6 +31,18 @@ def _is_known_distro(name):
     return False
 
 
+def _is_known_distro_release(distro: str, release: str) -> bool:
+    """Return True if *distro*/*release* is a pair in the cached distros list.
+
+    URL path segments reach `_explain_prefix`, so a release is only bound
+    from the URL once it is known to name a real release.
+    """
+    for known_distro, known_release in get_distros():
+        if known_distro == distro and known_release == release:
+            return True
+    return False
+
+
 def _explain_prefix(distro, release):
     """Return the URL prefix for explain routes, with or without distro."""
     if distro and release:
@@ -60,7 +72,7 @@ def _get_current_url_distro_release():
         return None, None
     rest = path[len("/explain/") :]
     parts = rest.split("/")
-    if len(parts) >= 2 and _is_known_distro(parts[0]):
+    if len(parts) >= 2 and _is_known_distro_release(parts[0], parts[1]):
         return parts[0], parts[1]
     return None, None
 
@@ -182,6 +194,10 @@ def explain_router(path):
     - With ?cmd=: 0 segments = no distro, 2 segments = distro/release
     - Without ?cmd=: 1=program, 2=section/program, 3=distro/release/program,
       4=distro/release/section/program
+
+    A distro/release pair is only accepted when it names a real release;
+    anything else redirects to the index rather than being bound into the
+    URLs the page builds.
     """
     parts = [p for p in path.split("/") if p] if path else []
     has_cmd = "cmd" in request.args
@@ -194,7 +210,7 @@ def explain_router(path):
     if has_cmd:
         if len(parts) == 0:
             pass  # no distro
-        elif len(parts) == 2 and _is_known_distro(parts[0]):
+        elif len(parts) == 2 and _is_known_distro_release(parts[0], parts[1]):
             url_distro, url_release = parts[0], parts[1]
         else:
             # invalid path with ?cmd
@@ -205,13 +221,16 @@ def explain_router(path):
         elif len(parts) == 1:
             program = parts[0]
         elif len(parts) == 2:
+            # distro-vs-section disambiguation only; no release is bound here,
+            # so an unknown release (/explain/ubuntu/bogus) still redirects to
+            # the index rather than being read as section "ubuntu"
             if _is_known_distro(parts[0]):
                 # /explain/ubuntu/26.04 with no ?cmd → redirect to index
                 return redirect("/")
             section, program = parts[0], parts[1]
-        elif len(parts) == 3 and _is_known_distro(parts[0]):
+        elif len(parts) == 3 and _is_known_distro_release(parts[0], parts[1]):
             url_distro, url_release, program = parts[0], parts[1], parts[2]
-        elif len(parts) == 4 and _is_known_distro(parts[0]):
+        elif len(parts) == 4 and _is_known_distro_release(parts[0], parts[1]):
             url_distro, url_release, section, program = (
                 parts[0],
                 parts[1],

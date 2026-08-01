@@ -6,7 +6,12 @@ from explainshell.caching_store import CachingStore
 from explainshell.models import Option, ParsedManpage, RawManpage
 from explainshell.store import Store
 from explainshell.web import STORE_EXTENSION_KEY, create_app, get_store
-from explainshell.web.views import explain_program, manpage_url, render_markdown
+from explainshell.web.views import (
+    _substitution_markup,
+    explain_program,
+    manpage_url,
+    render_markdown,
+)
 from tests.helpers import create_test_store
 
 
@@ -93,14 +98,34 @@ class TestExplainRouter(unittest.TestCase):
         self.assertIn(b"&lt;img src=x onerror=alert(1)&gt;", rv.data)
 
     def test_command_substitution_escapes_explain_prefix(self):
-        """The release segment is unvalidated, so it must not escape the href."""
+        """A hostile prefix must not break out of the href attribute."""
+        markup = _substitution_markup("ls", '/explain/ubuntu/"onmouseover=alert(1) x="')
+        self.assertNotIn('"onmouseover=alert(1)', markup)
+        self.assertIn("&#34;onmouseover=alert(1)", markup)
+
+    def test_unknown_release_with_cmd_redirects(self):
         rv = self.client.get(
             '/explain/ubuntu/"onmouseover=alert(1) x="',
             query_string={"cmd": "withargs $(echo hi)"},
         )
-        self.assertEqual(rv.status_code, 200)
-        self.assertNotIn(b'"onmouseover=alert(1)', rv.data)
-        self.assertIn(b"&#34;onmouseover=alert(1)", rv.data)
+        self.assertEqual(rv.status_code, 302)
+        self.assertEqual(rv.headers["Location"], "/")
+
+    def test_unknown_release_with_program_redirects(self):
+        rv = self.client.get("/explain/ubuntu/bogus/bar")
+        self.assertEqual(rv.status_code, 302)
+        self.assertEqual(rv.headers["Location"], "/")
+
+    def test_unknown_release_with_section_and_program_redirects(self):
+        rv = self.client.get("/explain/ubuntu/bogus/1/bar")
+        self.assertEqual(rv.status_code, 302)
+        self.assertEqual(rv.headers["Location"], "/")
+
+    def test_unknown_release_without_cmd_redirects(self):
+        """Two segments bind no release, but should still not be a section."""
+        rv = self.client.get("/explain/ubuntu/bogus")
+        self.assertEqual(rv.status_code, 302)
+        self.assertEqual(rv.headers["Location"], "/")
 
     def test_explain_no_cmd_redirects(self):
         rv = self.client.get("/explain")
