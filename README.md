@@ -44,7 +44,7 @@ $ pip install -r requirements-dev.txt
 $ make download-latest-db
 
 # Or parse a manpage
-$ python -m explainshell.manager extract --mode llm:codex/gpt-5.2/medium manpages/ubuntu/26.04/1/tar.1.gz
+$ python -m explainshell.manager extract --mode llm:codex/gpt-5.6-sol/medium manpages/ubuntu/26.04/1/tar.1.gz
 
 # Run the web server
 $ make serve
@@ -87,7 +87,7 @@ Use the manager to extract options from gzipped manpages and save them to the da
 
 ```bash
 # Calls out to 'codex exec' to extract the manpage and writes the result to test.db.
-$ python -m explainshell.manager --db test.db extract --mode llm:codex/gpt-5.2/medium manpages/ubuntu/26.04/1/tar.1.gz
+$ python -m explainshell.manager --db test.db extract --mode llm:codex/gpt-5.6-sol/medium manpages/ubuntu/26.04/1/tar.1.gz
 
 # Or set DB_PATH:
 $ export DB_PATH=$(pwd)/test.db
@@ -105,9 +105,9 @@ Other `extract` flags: `--overwrite` (re-process existing entries), `--filter-db
 
 ```bash
 # pass 1 - cheap model on small pages
-$ python -m explainshell.manager extract --mode llm:codex/gpt-5.4-mini/medium --small-only manpages/...
+$ python -m explainshell.manager extract --mode llm:codex/gpt-5.6-luna/medium --small-only manpages/...
 # pass 2 - capable model on the rest (already-stored small pages are skipped)
-$ python -m explainshell.manager extract --mode llm:codex/gpt-5.4/medium --large-only manpages/...
+$ python -m explainshell.manager extract --mode llm:codex/gpt-5.6-sol/medium --large-only manpages/...
 ```
 
 To compare extraction results, use the `diff` subcommand:
