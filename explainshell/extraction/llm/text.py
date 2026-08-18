@@ -194,6 +194,27 @@ def number_lines(text: str) -> tuple[str, dict[int, str]]:
     return "\n".join(numbered), original_lines
 
 
+_BARE_HEADING_RE = re.compile(r"^\s*\d+\|\s*\*\*[-+]")
+
+
+def _is_bare_option_heading(numbered_block: str) -> bool:
+    """True when a block is an option heading with no description of its own.
+
+    Such a block must not be left at the end of a chunk: the model is told to
+    extract only from an option's defining documentation, so a heading split
+    from its body is dropped by both the chunk that holds the heading and the
+    one that holds the body.
+    """
+    lines = [ln for ln in numbered_block.splitlines() if ln.strip()]
+    return len(lines) == 1 and bool(_BARE_HEADING_RE.match(lines[0]))
+
+
+def _is_bare_option_heading_raw(paragraph: str) -> bool:
+    """Same as :func:`_is_bare_option_heading` for un-numbered paragraph text."""
+    lines = [ln for ln in paragraph.splitlines() if ln.strip()]
+    return len(lines) == 1 and lines[0].lstrip().startswith(("**-", "**+"))
+
+
 def chunk_text(text: str) -> list[str]:
     """Split text into numbered chunks at section boundaries.
 
@@ -261,9 +282,15 @@ def chunk_text(text: str) -> list[str]:
                 candidate = "\n\n".join(cur_paras + [para])
                 numbered_candidate = _number_block(cur_start, candidate)
                 if len(numbered_candidate) > budget and cur_paras:
-                    blocks.append((cur_start, "\n\n".join(cur_paras)))
-                    cur_start = cur_start + "\n\n".join(cur_paras).count("\n") + 2
-                    cur_paras = []
+                    carried: list[str] = []
+                    while len(cur_paras) > 1 and _is_bare_option_heading_raw(
+                        cur_paras[-1]
+                    ):
+                        carried.insert(0, cur_paras.pop())
+                    emitted = "\n\n".join(cur_paras)
+                    blocks.append((cur_start, emitted))
+                    cur_start = cur_start + emitted.count("\n") + 2
+                    cur_paras = carried
                 cur_paras.append(para)
             if cur_paras:
                 blocks.append((cur_start, "\n\n".join(cur_paras)))
@@ -285,9 +312,13 @@ def chunk_text(text: str) -> list[str]:
         block_len = len(numbered_block) + 1
 
         if current_len + block_len > budget and current_parts:
-            chunks.append("\n".join(current_parts))
-            current_parts = []
-            current_len = 0
+            carried: list[str] = []
+            while current_parts and _is_bare_option_heading(current_parts[-1]):
+                carried.insert(0, current_parts.pop())
+            if current_parts:
+                chunks.append("\n".join(current_parts))
+            current_parts = carried
+            current_len = sum(len(c) + 1 for c in carried)
 
         current_parts.append(numbered_block)
         current_len += block_len

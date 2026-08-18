@@ -1,6 +1,7 @@
 """Tests for explainshell.extraction.llm.text — mandoc text processing."""
 
 import os
+import re
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -163,16 +164,16 @@ class TestChunkText(unittest.TestCase):
             sections.append(f"## Section {i}\n\n{section_body}")
         text = "# NAME\n\ntest\n\n" + "\n".join(sections)
         chunks = chunk_text(text)
-        if len(chunks) >= 2:
-            # Last numbered line in chunk 0 + 1 == first numbered line in chunk 1
-            import re
+        self.assertGreaterEqual(len(chunks), 2)
 
-            last_match = list(re.finditer(r"^\s*(\d+)\|", chunks[0], re.MULTILINE))
-            first_match = list(re.finditer(r"^\s*(\d+)\|", chunks[1], re.MULTILINE))
-            if last_match and first_match:
-                last_line = int(last_match[-1].group(1))
-                first_line = int(first_match[0].group(1))
-                self.assertEqual(first_line, last_line + 1)
+        # Last numbered line in chunk 0 + 1 == first numbered line in chunk 1
+        last_match = list(re.finditer(r"^\s*(\d+)\|", chunks[0], re.MULTILINE))
+        first_match = list(re.finditer(r"^\s*(\d+)\|", chunks[1], re.MULTILINE))
+        self.assertTrue(last_match)
+        self.assertTrue(first_match)
+        last_line = int(last_match[-1].group(1))
+        first_line = int(first_match[0].group(1))
+        self.assertEqual(first_line, last_line + 1)
 
     def test_preamble_on_later_chunks(self):
         section_body = ("line\n") * 800
@@ -203,6 +204,117 @@ class TestChunkText(unittest.TestCase):
             20,
             f"Expected few chunks but got {len(chunks)} — preamble cap may not be working",
         )
+
+
+# ---------------------------------------------------------------------------
+# TestChunkBoundaryIntegrity
+# ---------------------------------------------------------------------------
+
+
+# A numbered line holding nothing but an option heading, e.g. "3492| **--foo**".
+_NUMBERED_HEADING_RE = re.compile(r"^\s*\d+\|\s*\*\*[-+]")
+
+
+class TestChunkBoundaryIntegrity(unittest.TestCase):
+    """A chunk must never end on an option heading split from its description.
+
+    The extraction prompt tells the model to extract options only from their
+    *defining* documentation. A heading stranded at the end of one chunk, with
+    its body at the start of the next, is therefore dropped by both: the first
+    chunk sees a name with no description, the second a description with no
+    name. See ``_is_bare_option_heading`` in the chunker.
+    """
+
+    @staticmethod
+    def _manpage(n_options: int, body_chars: int, headings_per_option: int = 1) -> str:
+        """A synthetic man page of `heading(s) + body` option blocks."""
+        parts = ["# NAME", "", "testcmd - a test command", "", "# OPTIONS", ""]
+        for i in range(n_options):
+            for h in range(headings_per_option):
+                parts.append(f"**--option-{i}-{h}**")
+                parts.append("")
+            parts.append("> " + "x" * body_chars)
+            parts.append("")
+        return "\n".join(parts)
+
+    @staticmethod
+    def _numbered(chunk: str) -> list[tuple[int, str]]:
+        return [
+            (int(m.group(1)), m.group(2))
+            for m in re.finditer(r"^\s*(\d+)\|(.*)$", chunk, re.MULTILINE)
+        ]
+
+    def _assert_no_orphan_heading(self, chunks: list[str], msg: str) -> None:
+        for i, chunk in enumerate(chunks):
+            lines = [ln for ln in chunk.strip().splitlines() if ln.strip()]
+            if not lines:
+                continue
+            self.assertIsNone(
+                _NUMBERED_HEADING_RE.match(lines[-1]),
+                f"{msg}: chunk {i} ends on an orphaned option heading: {lines[-1]!r}",
+            )
+
+    def _assert_lines_intact(self, text: str, chunks: list[str], msg: str) -> None:
+        """Every numbered line must match the source, exactly once, in order."""
+        original = text.split("\n")
+        seen: dict[int, int] = {}
+        for i, chunk in enumerate(chunks):
+            previous = 0
+            for n, content in self._numbered(chunk):
+                self.assertTrue(
+                    1 <= n <= len(original), f"{msg}: line {n} out of range"
+                )
+                self.assertEqual(
+                    content.strip(),
+                    original[n - 1].strip(),
+                    f"{msg}: line {n} does not match the source",
+                )
+                self.assertGreater(n, previous, f"{msg}: line {n} out of order")
+                previous = n
+                self.assertNotIn(n, seen, f"{msg}: line {n} duplicated across chunks")
+                seen[n] = i
+        for n, line in enumerate(original, start=1):
+            if line.strip():
+                self.assertIn(n, seen, f"{msg}: line {n} missing from every chunk")
+
+    def test_headings_never_stranded_at_chunk_end(self):
+        # Vary the body size so boundaries land at many different offsets;
+        # at some of these a boundary falls right after an option heading.
+        for body_chars in (500, 900, 1500, 2000, 3000):
+            with self.subTest(body_chars=body_chars):
+                text = self._manpage(n_options=120, body_chars=body_chars)
+                chunks = chunk_text(text)
+                self.assertGreater(len(chunks), 1)
+                msg = f"body_chars={body_chars}"
+                self._assert_no_orphan_heading(chunks, msg)
+                self._assert_lines_intact(text, chunks, msg)
+
+    def test_run_of_consecutive_headings_stays_with_its_body(self):
+        """Several headings may share one description (e.g. gcc's -mfoo/-mno-foo).
+
+        The whole run has to travel to the next chunk, not just the last one.
+        """
+        for headings in (2, 3):
+            for body_chars in (500, 900, 1500, 2000, 3000):
+                with self.subTest(headings=headings, body_chars=body_chars):
+                    text = self._manpage(
+                        n_options=120,
+                        body_chars=body_chars,
+                        headings_per_option=headings,
+                    )
+                    chunks = chunk_text(text)
+                    self.assertGreater(len(chunks), 1)
+                    msg = f"headings={headings} body_chars={body_chars}"
+                    self._assert_no_orphan_heading(chunks, msg)
+                    self._assert_lines_intact(text, chunks, msg)
+
+    def test_carrying_a_heading_does_not_add_chunks(self):
+        """Moving a heading forward must not cost an extra chunk per boundary."""
+        text = self._manpage(n_options=120, body_chars=1500)
+        chunks = chunk_text(text)
+        total = len("\n".join(chunks))
+        # A sane packing keeps chunk count near the size-implied minimum.
+        self.assertLessEqual(len(chunks), total // CHUNK_SIZE_CHARS + 2)
 
 
 # ---------------------------------------------------------------------------
