@@ -35,13 +35,13 @@ Use the LLM eval (`tests/evals/llm/llm_eval.py`) to compare before/after metrics
 git stash push -- explainshell/extraction/llm/
 
 # 2. Run on the old code
-python tests/evals/llm/llm_eval.py run --label baseline --model codex/gpt-5.4/medium --jobs 10 -d "baseline before <short summary of change>"
+python tests/evals/llm/llm_eval.py run --label baseline --model codex/gpt-5.6-sol/medium --jobs 10 -d "baseline before <short summary of change>"
 
 # 3. Restore your changes
 git stash pop
 
 # 4. Run on the new code
-python tests/evals/llm/llm_eval.py run --label change --model codex/gpt-5.4/medium --jobs 10 -d "<short summary of change>"
+python tests/evals/llm/llm_eval.py run --label change --model codex/gpt-5.6-sol/medium --jobs 10 -d "<short summary of change>"
 
 # 5. Compare the two run directories (oldest first)
 python tests/evals/llm/llm_eval.py compare tests/evals/llm/runs/<baseline-run> tests/evals/llm/runs/<change-run>
@@ -51,10 +51,10 @@ python tests/evals/llm/llm_eval.py compare tests/evals/llm/runs/<baseline-run> t
 
 ```bash
 # Run on the default corpus, parallelizing realtime calls
-python tests/evals/llm/llm_eval.py run --label smoke --model codex/gpt-5.4/medium --jobs 10
+python tests/evals/llm/llm_eval.py run --label smoke --model codex/gpt-5.6-sol/medium --jobs 10
 
 # Run on specific files (overrides --corpus)
-python tests/evals/llm/llm_eval.py run --label probe --model codex/gpt-5.4/medium --jobs 10 path/to/file.1.gz
+python tests/evals/llm/llm_eval.py run --label probe --model codex/gpt-5.6-sol/medium --jobs 10 path/to/file.1.gz
 
 # Use --batch <size> instead of --jobs to route through the provider's batch API
 # (cheaper, but minutes-to-hours of queue latency; pays off only on much larger corpora).
@@ -121,7 +121,7 @@ make ubuntu-archive UBUNTU_RELEASE=resolute
 make arch-archive
 
 # Process a man page into the database
-python -m explainshell.manager extract --mode llm:codex/gpt-5.4/medium /path/to/manpage.1.gz
+python -m explainshell.manager extract --mode llm:codex/gpt-5.6-sol/medium /path/to/manpage.1.gz
 ```
 
 ## Project Structure
