@@ -2,18 +2,15 @@ FROM caddy:2-builder AS caddy-builder
 COPY prod/botshed /src/botshed
 RUN xcaddy build --with explainshell.com/botshed=/src/botshed
 
-FROM python:3.12-slim
+# Fetch the DB in its own stage: wget/zstd/jq are needed only to download
+# and unpack it, and would otherwise sit in the runtime image forever.
+FROM python:3.12-slim AS db-builder
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends wget zstd jq \
   && rm -rf /var/lib/apt/lists/*
 
-COPY --from=caddy-builder /usr/bin/caddy /usr/local/bin/caddy
-
-WORKDIR /opt/webapp
-COPY requirements.txt .
-RUN pip3 install --no-cache-dir --no-warn-script-location -r requirements.txt
-
+WORKDIR /db
 COPY tools/download-latest-db.sh tools/
 # DB_NAME pins the release asset this image baked in. The deploy
 # pipeline (CI workflow and `make deploy-local`) looks it up from the
@@ -26,6 +23,21 @@ COPY tools/download-latest-db.sh tools/
 #      concurrent uploads).
 ARG DB_NAME
 RUN tools/download-latest-db.sh --asset "$DB_NAME" explainshell.db
+
+FROM python:3.12-slim
+
+COPY --from=caddy-builder /usr/bin/caddy /usr/local/bin/caddy
+
+WORKDIR /opt/webapp
+# requirements.txt is the web-serving set only. The LLM provider SDKs live
+# in requirements-extraction.txt and are deliberately not installed here —
+# the serving path imports none of them, and they cost ~65MB.
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir --no-warn-script-location -r requirements.txt
+
+# The .sha256 sidecar is read at startup and folded into the ETag
+# (see explainshell/web/__init__.py), so it has to travel with the DB.
+COPY --from=db-builder /db/explainshell.db /db/explainshell.db.sha256 ./
 
 COPY prod/docker/Caddyfile /etc/caddy/Caddyfile
 COPY prod/docker/start.sh .

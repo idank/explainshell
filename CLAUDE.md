@@ -7,7 +7,7 @@ A web tool that parses man pages and explains command-line arguments by matching
 - Python 3.12, Flask, SQLite, bashlex, OpenAI SDK, Google Gemini SDK, LiteLLM (fallback)
 - Linting: ruff (Python), biome (JS)
 - Testing: pytest (unit + doctests), JS Playwright Test (e2e)
-- Dependencies: `requirements.txt` (main), `package.json` (Playwright e2e)
+- Dependencies: `requirements.txt` (web serving), `requirements-extraction.txt` (LLM SDKs, offline tooling only), `requirements-dev.txt` (everything + test/lint), `package.json` (Playwright e2e)
 
 ## Workflow Requirements
 

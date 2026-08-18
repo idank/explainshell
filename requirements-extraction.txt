@@ -1,0 +1,7 @@
+# LLM provider SDKs, used only by the offline extraction tooling.
+# Deliberately kept out of requirements.txt: the production web image
+# installs that file alone (see prod/docker/Dockerfile), and the serving
+# path imports none of these.
+-r requirements.txt
+openai>=1.0.0
+google-genai>=1.0.0
