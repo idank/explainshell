@@ -768,6 +768,48 @@ class TestAzureRouting(unittest.TestCase):
 
         self.assertIn("AZURE_OPENAI_BASE_URL", str(ctx.exception))
 
+    def test_azure_endpoint_with_api_path_is_rejected(self) -> None:
+        """An endpoint carrying its own /openai/ path would be doubled.
+
+        The resulting URL is only wrong at request time, as a 404, so reject it
+        while the cause is still visible.
+        """
+        for endpoint in (
+            "https://example.services.ai.azure.com/openai/v1/responses",
+            "https://example.services.ai.azure.com/openai/v1/",
+            "https://example.openai.azure.com/openai/",
+        ):
+            with self.subTest(endpoint=endpoint):
+                env = {
+                    "AZURE_OPENAI_API_KEY": "azure-key",
+                    "AZURE_OPENAI_ENDPOINT": endpoint,
+                }
+                with patch.dict("os.environ", env, clear=True):
+                    with self.assertRaises(ValueError) as ctx:
+                        OpenAIProvider("azure/my-deployment")
+                    self.assertIn("bare resource host", str(ctx.exception))
+
+    @patch.dict(
+        "os.environ",
+        {
+            "AZURE_OPENAI_API_KEY": "azure-key",
+            "AZURE_OPENAI_BASE_URL": "https://example.services.ai.azure.com/openai/v1/",
+        },
+        clear=True,
+    )
+    @patch("explainshell.extraction.llm.providers.openai.OpenAI")
+    def test_azure_base_url_may_carry_the_api_path(
+        self, mock_openai_cls: MagicMock
+    ) -> None:
+        """The check applies to ENDPOINT only — BASE_URL is used verbatim."""
+        OpenAIProvider("azure/my-deployment")
+
+        mock_openai_cls.assert_called_once_with(
+            api_key="azure-key",
+            base_url="https://example.services.ai.azure.com/openai/v1/",
+            timeout=LLM_TIMEOUT_SECONDS,
+        )
+
 
 @patch("explainshell.extraction.llm.providers.openai.OpenAI")
 class TestBatchFileCleanup(unittest.TestCase):

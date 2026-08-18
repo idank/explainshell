@@ -45,6 +45,15 @@ def _azure_base_url() -> str:
 
     endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
     if endpoint:
+        # We append the API path ourselves, so an endpoint that already carries
+        # one yields a doubled URL that only fails later, as a 404 from the
+        # first request. Reject it here, where the cause is still obvious.
+        if "/openai/" in endpoint:
+            raise ValueError(
+                f"AZURE_OPENAI_ENDPOINT must be the bare resource host, not a "
+                f"full API URL (got {endpoint!r}). Drop the '/openai/...' path, "
+                f"or set AZURE_OPENAI_BASE_URL to use a URL verbatim."
+            )
         return endpoint.rstrip("/") + "/openai/v1/"
 
     raise ValueError(
